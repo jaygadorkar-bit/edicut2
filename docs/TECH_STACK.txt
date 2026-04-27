@@ -1,0 +1,109 @@
+
+  ╔═══════════════════════════════════════════════════════════════════════╗
+  ║                    EdiCut — Final Tech Stack                        ║
+  ║  All technologies are "No-Card Required" (Free Tier / Personal)     ║
+  ║  Architecture: Cloudflare Pages + Vercel Functions + Neon           ║
+  ╚═══════════════════════════════════════════════════════════════════════╝
+
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  CORE                                                              │
+  ├──────────────────────┬──────────────────────────────────────────────┤
+  │ Language             │ TypeScript                                   │
+  │ Package Manager      │ pnpm                                        │
+  │ Runtime              │ Node.js (Vercel) / Cloudflare Edge           │
+  │ Cloud Backend        │ Vercel Functions (Full Node.js Runtime)      │
+  │ Web Hosting          │ Cloudflare Pages (via @opennextjs/cloudflare)│
+  └──────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  FRONTEND                                                          │
+  ├──────────────────────┬──────────────────────────────────────────────┤
+  │ Framework            │ Next.js 16 (React 19 — App Router, SSR)     │
+  │ UI Components        │ shadcn/ui (Radix + Tailwind)                │
+  │ CSS                  │ Tailwind CSS 3.4 (v4 ready)                  │
+  │ Animations           │ Lucide Icons / Tailwind Animate             │
+  │ Client State         │ Zustand                                     │
+  │ Server State         │ TanStack Query (React Query)                │
+  │ Forms                │ React Hook Form + Zod                       │
+  │ Captcha              │ Google reCAPTCHA v2                         │
+  └──────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  BACKEND                                                           │
+  ├──────────────────────┬──────────────────────────────────────────────┤
+  │ API Layers           │ Next.js API / Hono (Node-API)               │
+  │ ORM                  │ Drizzle ORM                                 │
+  │ Compute              │ Vercel Serverless / Cloudflare Workers      │
+  │ Image Processing     │ Cloudinary API / Sharp                      │
+  └──────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  DATA                                                              │
+  ├──────────────────────┬──────────────────────────────────────────────┤
+  │ Primary Database     │ PostgreSQL (Neon Serverless - No Card Req)  │
+  │ Object Storage       │ Cloudinary (Images) / YouTube (Videos)      │
+  │ Cache & Sessions     │ Upstash Redis (Free Tier - No Card Req)     │
+  │ Image CDN            │ Cloudinary (No-Card Tier / Edge CDN)        │
+  │ Video Hosting        │ YouTube (Unlisted - Free & Unlimited)        │
+  │ Local File Storage   │ MinIO (S3-Compatible Local Stack)           │
+  └──────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  AUTH & PAYMENT                                                    │
+  ├──────────────────────┬──────────────────────────────────────────────┤
+  │ Authentication       │ Auth.js v5 (Beta) / NextAuth.js             │
+  │ Security             │ Cloudflare WAF (Bot & DDoS Protection)      │
+  │ Payment Gateway      │ SSLCommerz (per-transaction fee only)       │
+  └──────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  EMAIL                                                             │
+  ├──────────────────────┬──────────────────────────────────────────────┤
+  │ Service              │ Gmail API (via Google OAuth2)               │
+  │ Templates            │ HTML / Tailwind Templates                   │
+  │ Local Testing        │ tsx scripts/test-send-email.ts              │
+  └──────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  PRODUCTION HOSTING (THE "NO-CARD" HYBRID)                         │
+  ├──────────────────────┬──────────────────────────────────────────────┤
+  │ Web App Hosting      │ Cloudflare Pages                            │
+  │ Backend Hosting      │ Cloudflare Workers / Vercel Functions       │
+  │ Database Hosting     │ Neon (Free: 512MB / Shared)                 │
+  └──────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  DEVOPS & QUALITY                                                  │
+  ├──────────────────────┬──────────────────────────────────────────────┤
+  │ CI/CD                │ GitHub Actions                              │
+  │ Quality Control      │ ESLint                                      │
+  │ Type Checking        │ TypeScript (tsc)                            │
+  └──────────────────────┴──────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  ARCHITECTURAL NOTES                                               │
+  ├──────────────────────┴──────────────────────────────────────────────┤
+  │ 1. NO CARD REQUIRED: All services used (Cloudflare, Neon, Upstash, │
+  │    Cloudinary, YouTube) have free tiers with no CC info.           │
+  │ 2. EDGE FIRST: The web app runs on Cloudflare Edge using OpenNext  │
+  │    for ultra-fast global delivery.                                 │
+  │ 3. MEDIA STRATEGY: Images are served via Cloudinary's optimized    │
+  │    CDN. Massive video files are hosted on YouTube (Unlisted).      │
+  │ 4. HYBRID INFRA: Vercel handles complex Node.js API tasks, while   │
+  │    Cloudflare serves the static and edge content. Neon provides    │
+  │    the SQL power, and Upstash handles fast Redis caching.          │
+  └─────────────────────────────────────────────────────────────────────┘
+ 
+ 
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │  WORKSPACE LOCATIONS                                                │
+   ├──────────────────────┬──────────────────────────────────────────────┤
+   │ Primary Web App      │ apps/cf-web (Next.js 16 + OpenNext)          │
+   │ Legacy/Admin Web     │ apps/web (React Router 7)                    │
+   │ Vercel API           │ apps/vercel-api (Next.js API)                │
+   │ Node/Hono API        │ apps/node-api (Hono)                         │
+   │ Shared Logic         │ packages/shared                              │
+   │ Database Schema      │ packages/db                                  │
+   └──────────────────────┴──────────────────────────────────────────────┘
+ 

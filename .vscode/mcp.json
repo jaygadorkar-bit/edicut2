@@ -1,0 +1,10 @@
+{
+  "servers": {
+    "googleStitch": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "google-stitch-mcp", "proxy"],
+      "envFile": "${workspaceFolder}/.env.local"
+    }
+  }
+}

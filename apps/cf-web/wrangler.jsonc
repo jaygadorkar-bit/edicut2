@@ -1,0 +1,32 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "edicut-cf-web",
+  "main": ".open-next/worker.js",
+  "routes": [
+    {
+      "pattern": "edicut.com",
+      "custom_domain": true,
+      "zone_name": "edicut.com"
+    },
+    {
+      "pattern": "www.edicut.com",
+      "custom_domain": true,
+      "zone_name": "edicut.com"
+    }
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "compatibility_date": "2026-04-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "NEXT_PUBLIC_APP_URL": "https://edicut.com",
+    "NEXT_PUBLIC_API_BASE_URL": "https://edicut.com",
+    "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME": "doseyuwfa",
+    "HYBRID_RUNTIME_TARGET": "cloudflare"
+  }
+}

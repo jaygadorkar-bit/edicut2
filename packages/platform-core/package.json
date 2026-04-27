@@ -1,0 +1,50 @@
+{
+  "name": "@edicut/platform-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./auth": "./src/auth.ts",
+    "./auth-edge": "./src/auth-edge.ts",
+    "./auth.config": "./src/auth.config.ts",
+    "./db": "./src/db/index.ts",
+    "./db/schema": "./src/db/schema.ts",
+    "./lib/admin-mutations": "./src/lib/admin-mutations.ts",
+    "./lib/admin-queries": "./src/lib/admin-queries.ts",
+    "./lib/auth-flows": "./src/lib/auth-flows.ts",
+    "./lib/crypto": "./src/lib/crypto.ts",
+    "./lib/dashboard-queries": "./src/lib/dashboard-queries.ts",
+    "./lib/env": "./src/lib/env.ts",
+    "./lib/gmail": "./src/lib/gmail.ts",
+    "./lib/security-settings": "./src/lib/security-settings.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "npx tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "@auth/drizzle-adapter": "^1.11.2",
+    "@neondatabase/serverless": "^0.10.4",
+    "bcryptjs": "^2.4.3",
+    "drizzle-orm": "^0.36.3",
+    "next": "16.2.4",
+    "next-auth": "5.0.0-beta.31",
+    "postgres": "^3.4.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.17.6",
+    "dotenv": "^16.4.5",
+    "drizzle-kit": "^0.28.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

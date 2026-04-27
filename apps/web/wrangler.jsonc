@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "edicut-web",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2026-04-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "edicut.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.edicut.com",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./build/client",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "observability": {
+    "enabled": true
+  }
+}
