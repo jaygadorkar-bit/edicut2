@@ -45,7 +45,8 @@ EdiCut uses a "Best of Both Worlds" hybrid stack:
 ### Step 1: Deploy Backend (Vercel)
 Vercel owns the Node-heavy API endpoints.
 ```bash
-# From root or apps/vercel-api
+# Run from the monorepo root if the Vercel project root directory is apps/vercel-api.
+# Running inside apps/vercel-api can make Vercel look for apps/vercel-api/apps/vercel-api.
 pnpm dlx vercel deploy --prod
 ```
 
@@ -54,11 +55,13 @@ We use OpenNext to transform the Next.js app into a Cloudflare-compatible Worker
 ```bash
 # 1. Build the OpenNext output
 cd apps/cf-web
-pnpm build
+pnpm cf:build
 
 # 2. Deploy to Cloudflare
 pnpm exec wrangler deploy
 ```
+
+If `wrangler whoami` says you are not logged in but `.env` contains `CLOUDFLARE_EMAIL` and `CLOUDFLARE_API_KEY`, load those variables before running Wrangler. Do not print the values.
 
 ### Step 3: Verification
 Run the smoke tests to ensure both runtimes are communicating correctly:
@@ -66,6 +69,16 @@ Run the smoke tests to ensure both runtimes are communicating correctly:
 pnpm health:new
 pnpm smoke:new
 ```
+
+Also verify the public production routes directly after every deploy:
+```bash
+# PowerShell examples
+Invoke-WebRequest https://edicut.com -UseBasicParsing
+Invoke-WebRequest https://edicut.com/admin -UseBasicParsing
+Invoke-WebRequest https://edicut.com/dashboard -UseBasicParsing
+```
+
+For the barebone frontend baseline, confirm the returned HTML has no `class=` or inline `style=` attributes.
 
 ╔═══════════════════════════════════════════════════════════════════════╗
 ║                    4. OPERATIONAL RULES                               ║
@@ -83,3 +96,10 @@ pnpm smoke:new
 - **Image not loading**: Check `next.config.ts` for Cloudinary `remotePatterns` and CSP settings.
 - **Vercel timeout**: Check if the task should be moved to a background queue or optimized.
 - **Cloudflare Worker size**: Ensure only necessary dependencies are included in `cf-web`.
+- **Vercel build fails with `invalid-token-value`**: Check whether `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_ORG_ID`, or `VERCEL_TEAM_ID` were uploaded as production runtime environment variables. They are deployment metadata, not app runtime variables. A `VERCEL_TOKEN` value in Vercel project env can break `vercel build`, especially if it contains a newline. Remove those deployment-only variables from Vercel project env and pass the token only to the CLI locally or in CI.
+- **Vercel deploy path is duplicated**: If the project root in Vercel is `apps/vercel-api`, deploy from the monorepo root. Running `vercel deploy` from `apps/vercel-api` can produce a path like `apps/vercel-api/apps/vercel-api`.
+- **Vercel deployment is ready but returns `401`**: Inspect the deployment first. A ready deployment with public `401` is often Vercel Deployment Protection, not a failed build. Use `pnpm dlx vercel inspect <deployment-url>` to confirm status and aliases.
+- **Cloudflare OpenNext returns `500` with `Dynamic require of "/.next/server/middleware-manifest.json" is not supported`**: Tail the Worker with `pnpm exec wrangler tail edicut-cf-web --format json`. A no-op `src/middleware.ts` can trigger this path; remove unused middleware. Explicit `export const runtime = "edge"` on otherwise static pages can also keep routes dynamic; remove it when OpenNext/Cloudflare already supplies the edge runtime.
+- **Cloudflare OpenNext still fails on a static barebone site**: If production only needs a temporary static starter shell, use a small Worker entrypoint such as `apps/cf-web/src/worker.ts` and point `wrangler.jsonc` `main` to it. This keeps `edicut.com` healthy while the Next app remains available locally for design work.
+- **Neon deploy check**: `pnpm db:push` reporting `No changes detected` means the Drizzle schema matched the Neon database at deploy time.
+- **Cloudinary deploy check**: Run `node scripts/upload_to_cloudinary.mjs`, then verify the returned `https://res.cloudinary.com/...` URL with a HEAD or GET request.

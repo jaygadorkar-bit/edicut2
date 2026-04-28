@@ -5,11 +5,13 @@ Status: Finalized implementation strategy
 ║                    GLOBAL DESIGN SYSTEM                               ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 
-- Aesthetic: Clean, modern, premium dark cinematic interface.
+- Aesthetic: Clean, minimal, modern white theme tailored for YouTubers. Highly pleasing to the eye.
+- Framework: Modern Tailwind CSS (utility-first, minimal custom CSS).
+- Typography: Roboto (YouTube's primary font) and system sans-serif fallbacks.
 - Palette: 
-    - Base: Deep Obsidian (#0D0D0D)
-    - Accents: Electric Cyan (#22D3EE) / Slate Grays (#1E293B, #334155)
-- Borders & Corners: Rounded-xl (12-16px) with subtle border-white/10 or border-slate-800.
+    - Base: Pure White (#FFFFFF) / Light Gray (#F9F9F9)
+    - Accents: YouTube Red (#FF0000) / Deep Black (#0F0F0F) / Neutral Grays (#717171, #282828)
+- Borders & Corners: Rounded-xl (12-16px) with subtle border-black/5 or border-gray-200.
 - Effects: Glassmorphism (heavy backdrop blurs) for nav/panels, soft shadow-2xl for depth.
 - Navigation: Top sticky nav for public pages, collapsible sidebar for dashboards.
 
@@ -31,36 +33,20 @@ Status: Finalized implementation strategy
 
 PUBLIC PAGES
 ------------
-- Home (/) - Full landing flow with cinematic hero.
+- Home (/) -
 - Pricing (/pricing) - Package catalog showing all available tiers.
 - Package Product (/pricing/[slug]) - Dedicated Fiverr-style detail pages.
 - Portfolio (/portfolio) - Bento-grid showcase of previous work.
 - About (/about) - Team vision and studio snapshots.
 - Contact (/contact) - High-fidelity inquiry form.
 
-CUSTOMER DASHBOARD (/dashboard)
--------------------------------
-- Overview: Project status (Pending/Progress/Done) and activity feed.
-- Projects (/projects): Kanban or list board of all active edits.
-- New Project (/new): 4-step wizard (Package -> Brief -> Upload -> Payment).
-- Chat (/chat): Direct communication with the assigned editor.
-- Review (/review): Large video player with annotation/canvas tools.
-- Billing (/invoices): Payment history and manual receipt uploads.
-
-ADMIN & PM DASHBOARD (/admin)
------------------------------
-- Overview: Revenue metrics and project volume charts.
-- Master Board (/projects): Global overview of all client projects.
-- Package Editor (/packages): Tool to modify pricing and features.
-- User Management (/users): Control over customers and staff roles.
-- Finance (/finance): Payment approval and verification workflow.
 
 ╔═══════════════════════════════════════════════════════════════════════╗
 ║                    PAGE SEGMENT DETAILS                               ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 
 HOME PAGE SECTIONS
-1. Hero: Moody production background, trust badge, centered headline, Dual CTAs.
+1. Hero: Bright, clean background, trust badge, centered headline, Dual CTAs.
 2. Trust Strip: Horizontal logo row of partners/clients.
 3. Workflow: 3-step grid (Choose -> Upload -> Review) with large icons.
 4. Differentiators: 4-card grid (Team, Speed, Retention, Repurposing).

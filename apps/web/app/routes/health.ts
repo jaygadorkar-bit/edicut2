@@ -1,15 +1,16 @@
-import { fetchNodeApi } from "../lib/api.server";
-import type { LoaderContext } from "../types";
+import type { LoaderFunctionArgs } from "react-router";
 
-export async function loader({ context }: { context?: LoaderContext }) {
-  const nodeHealth = context
-    ? await fetchNodeApi<{ ok: boolean; runtime: string }>(context, "/api/node/health").catch(() => null)
-    : null;
-
-  return Response.json({
-    ok: true,
-    runtime: "cloudflare-workers",
-    nodeApi: nodeHealth?.ok ?? false,
-    nodeRuntime: nodeHealth?.runtime ?? "unavailable",
-  });
+export async function loader(_args: LoaderFunctionArgs) {
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      service: "web",
+      timestamp: new Date().toISOString(),
+    }),
+    {
+      headers: {
+        "content-type": "application/json",
+      },
+    }
+  );
 }

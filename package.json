@@ -8,15 +8,12 @@
     "typescript": "^5.6.3"
   },
   "scripts": {
-    "dev": "pnpm dev:cf-web",
-    "dev:cf-web": "pnpm --filter @edicut/cf-web dev",
+    "dev": "pnpm dev:web",
     "dev:web": "pnpm --filter @edicut/web dev",
     "dev:node-api": "pnpm --filter @edicut/node-api dev",
-    "cf:audit": "node scripts/audit-cloudflare.mjs",
     "build": "pnpm --filter @edicut/shared --filter @edicut/db --filter @edicut/web --filter @edicut/node-api build",
     "typecheck": "pnpm --filter @edicut/shared --filter @edicut/db --filter @edicut/web --filter @edicut/node-api typecheck",
-    "health:new": "node scripts/health-check-new-stack.mjs",
-    "smoke:new": "node scripts/smoke-new-stack.mjs",
+    "health": "node scripts/health-check-new-stack.mjs",
     "db:typecheck": "pnpm --filter @edicut/db typecheck",
     "db:generate": "pnpm --filter @edicut/db db:generate",
     "db:push": "pnpm --filter @edicut/db db:push",

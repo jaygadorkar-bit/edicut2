@@ -12,8 +12,33 @@ const handleRequest = createRequestHandler({
   },
 });
 
+const IMMUTABLE_ASSET_PATH = /^\/assets\/.+\.[a-z0-9]+$/i;
+const PUBLIC_ASSET_PATH = /^\/(?:images\/.+|[^/]+\.(?:ico|svg|png|jpg|jpeg|webp|avif))$/i;
+
+function withStaticCacheHeaders(response: Response, pathname: string) {
+  if (!response.ok) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+
+  if (IMMUTABLE_ASSET_PATH.test(pathname)) {
+    headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  } else {
+    headers.set("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
+  }
+
+  headers.set("X-Content-Type-Options", "nosniff");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
-  fetch(
+  async fetch(
     request: Request,
     env: Record<string, string | undefined> & { ASSETS?: Fetcher },
     ctx: ExecutionContext
@@ -27,11 +52,12 @@ export default {
 
     const isStaticAssetRequest =
       request.method === "GET" || request.method === "HEAD"
-        ? url.pathname === "/_root.data" || url.pathname.startsWith("/assets/")
+        ? IMMUTABLE_ASSET_PATH.test(url.pathname) || PUBLIC_ASSET_PATH.test(url.pathname)
         : false;
 
     if (isStaticAssetRequest && env.ASSETS) {
-      return env.ASSETS.fetch(request.url, request);
+      const assetResponse = await env.ASSETS.fetch(request.url, request);
+      return withStaticCacheHeaders(assetResponse, url.pathname);
     }
 
     return handleRequest({

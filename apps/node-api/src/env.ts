@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 const nodeApiEnvSchema = z.object({
-  DATABASE_URL: z.string().url(),
-  SERVICE_SHARED_SECRET: z.string().min(32),
+  NODE_ENV: z.string().optional(),
   APP_URL: z.string().url().optional(),
+  SERVICE_SHARED_SECRET: z.string().min(1).optional(),
 });
 
 export type NodeApiEnv = z.infer<typeof nodeApiEnvSchema>;
