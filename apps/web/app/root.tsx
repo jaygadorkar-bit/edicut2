@@ -16,7 +16,7 @@ import type { LoaderContext } from "./types";
 import { getAdminSession, getSession } from "./lib/session.server";
 import { ADMIN_BASE_PATH } from "./lib/admin-paths";
 import { getDbFromContext } from "./lib/db.server";
-import { getAdminToolbarEnabled } from "./lib/site-settings.server";
+import { getAdminToolbarEnabled, getPromoBarSettings } from "./lib/site-settings.server";
 import { AdminToolbar } from "./components/admin/AdminToolbar";
 
 export function links() {
@@ -42,9 +42,12 @@ export async function loader({
   const userId = session.get("userId");
   const adminUserId = adminSession.get("adminUserId");
   const isAdminSignedIn = typeof adminUserId === "string" && adminUserId.length > 0;
+  const db = getDbFromContext(context ?? {});
   const adminToolbarEnabled = isAdminSignedIn
-    ? await getAdminToolbarEnabled(getDbFromContext(context ?? {}))
+    ? await getAdminToolbarEnabled(db)
     : false;
+  
+  const promoBarSettings = await getPromoBarSettings(db);
 
   return {
     appName: "EdiCut",
@@ -53,6 +56,7 @@ export async function loader({
     isSignedIn: Boolean(userId),
     isAdminSignedIn,
     adminToolbarEnabled,
+    promoBarSettings,
   };
 }
 

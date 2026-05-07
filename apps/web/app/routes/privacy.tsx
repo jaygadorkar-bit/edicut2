@@ -23,14 +23,14 @@ function LegalPage({ eyebrow, title, sections: items }: { eyebrow: string; title
   return (
     <section className="px-5 pb-20 pt-32 sm:px-6">
       <div className="mx-auto max-w-4xl">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FF0000]">{eyebrow}</p>
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">{eyebrow}</p>
         <h1 className="mt-4 text-5xl font-black tracking-tight">{title}</h1>
-        <p className="mt-5 text-sm font-bold text-[#717171]">Last updated: May 5, 2026</p>
+        <p className="mt-5 text-sm font-bold text-muted-foreground">Last updated: May 5, 2026</p>
         <div className="mt-10 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
           {items.map(([heading, copy]) => (
             <article key={heading} className="p-6">
               <h2 className="text-xl font-black">{heading}</h2>
-              <p className="mt-3 leading-7 text-[#717171]">{copy}</p>
+              <p className="mt-3 leading-7 text-muted-foreground">{copy}</p>
             </article>
           ))}
         </div>

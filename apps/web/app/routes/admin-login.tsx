@@ -178,11 +178,11 @@ export default function AdminLoginRoute() {
   const isSubmitting = navigation.state === "submitting";
 
   return (
-    <main className="min-h-screen bg-[#F6F7F8] px-5 py-8 text-[#0F0F0F] sm:px-6">
+    <main className="min-h-screen bg-[#F6F7F8] px-5 py-8 text-foreground sm:px-6">
       <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 lg:grid-cols-[0.9fr_1fr]">
         <div>
           <div className="inline-flex items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-black shadow-sm">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F0F0F] text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-white">
               <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
             </span>
             EdiCut Admin
@@ -200,7 +200,7 @@ export default function AdminLoginRoute() {
               ["Short session", "2 hour window"],
             ].map(([label, value]) => (
               <div key={label} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                <p className="text-xs font-black uppercase text-[#717171]">{label}</p>
+                <p className="text-xs font-black uppercase text-muted-foreground">{label}</p>
                 <p className="mt-2 text-sm font-black">{value}</p>
               </div>
             ))}
@@ -210,10 +210,10 @@ export default function AdminLoginRoute() {
         <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase text-[#717171]">Secure area</p>
+              <p className="text-xs font-black uppercase text-muted-foreground">Secure area</p>
               <h2 className="mt-1 text-2xl font-black">Admin sign in</h2>
             </div>
-            <span className="material-symbols-outlined text-[#FF0000]">lock</span>
+            <span className="material-symbols-outlined text-primary">lock</span>
           </div>
 
           {actionData?.error ? (
@@ -231,7 +231,7 @@ export default function AdminLoginRoute() {
                 type="email"
                 required
                 autoComplete="email"
-                className="h-12 rounded-lg border border-gray-200 px-4 font-medium outline-none focus:border-[#0F0F0F]"
+                className="h-12 rounded-lg border border-gray-200 px-4 font-medium outline-none focus:border-foreground"
               />
             </label>
             <label className="grid gap-2 text-sm font-black">
@@ -241,13 +241,13 @@ export default function AdminLoginRoute() {
                 type="password"
                 required
                 autoComplete="current-password"
-                className="h-12 rounded-lg border border-gray-200 px-4 font-medium outline-none focus:border-[#0F0F0F]"
+                className="h-12 rounded-lg border border-gray-200 px-4 font-medium outline-none focus:border-foreground"
               />
             </label>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#0F0F0F] px-5 text-sm font-black text-white shadow-lg shadow-black/10 [#FF0000] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-foreground px-5 text-sm font-black text-white shadow-lg shadow-black/10 primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-[20px]">login</span>
               {isSubmitting ? "Checking access..." : "Enter admin panel"}

@@ -31,7 +31,7 @@ import {
   type CloudinaryImageResource,
   type CloudinaryUsage,
 } from "../lib/cloudinary.server";
-import { getAdminToolbarEnabled, saveAdminToolbarEnabled } from "../lib/site-settings.server";
+import { getAdminToolbarEnabled, saveAdminToolbarEnabled, getPromoBarSettings, savePromoBarSettings } from "../lib/site-settings.server";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, count as drizzleCount } from "drizzle-orm";
 import { useState, useEffect, type ReactNode } from "react";
 
@@ -166,6 +166,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     trashCount,
     pricingPackages,
     adminToolbarEnabled,
+    promoBarSettings,
     cloudinaryImages,
     cloudinaryUsage,
     cloudinaryError
@@ -178,6 +179,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     db.select({ count: drizzleCount() }).from(usersTable).where(isNotNull(usersTable.deletedAt)),
     getPricingPackages(db),
     getAdminToolbarEnabled(db),
+    getPromoBarSettings(db),
     listCloudinaryImages(context).catch((error) => {
       console.error("Cloudinary image list error:", error);
       return [] as CloudinaryImageResource[];
@@ -200,6 +202,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     view,
     pricingPackages,
     adminToolbarEnabled,
+    promoBarSettings,
     cloudinaryImages,
     cloudinaryUsage,
     cloudinaryError,
@@ -409,6 +412,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return { success: "Settings updated." };
   }
 
+  if (intent === "update-promo-bar") {
+    const enabled = formData.get("promoBarEnabled") === "on";
+    const message = String(formData.get("promoBarMessage") || "");
+    await savePromoBarSettings(db, enabled, message);
+    return { success: "Promo bar settings updated." };
+  }
+
   if (intent === "upload-images") {
     const imageFiles = formData
       .getAll("imageFiles")
@@ -450,7 +460,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function AdminRoute() {
-  const { adminUser, users, adminUsers, totalPages, currentPage, stats, tab, view, pricingPackages, adminToolbarEnabled, cloudinaryImages, cloudinaryUsage, cloudinaryError } = useLoaderData<typeof loader>();
+  const { adminUser, users, adminUsers, totalPages, currentPage, stats, tab, view, pricingPackages, adminToolbarEnabled, promoBarSettings, cloudinaryImages, cloudinaryUsage, cloudinaryError } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const actionError = actionData && "error" in actionData ? actionData.error : null;
   const actionSuccess = actionData && "success" in actionData ? actionData.success : null;
@@ -843,7 +853,7 @@ export default function AdminRoute() {
           ) : tab === "images" ? (
             <ImagesPanel images={cloudinaryImages} usage={cloudinaryUsage} error={cloudinaryError} actionData={actionData} navigationState={navigation.state} />
           ) : tab === "settings" ? (
-            <SettingsPanel adminToolbarEnabled={adminToolbarEnabled} actionData={actionData} navigationState={navigation.state} />
+            <SettingsPanel adminToolbarEnabled={adminToolbarEnabled} promoBarSettings={promoBarSettings} actionData={actionData} navigationState={navigation.state} />
           ) : (
             <div className="flex flex-col items-center justify-center py-32 rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">
               <span className="material-symbols-outlined text-[64px] mb-4">construction</span>
@@ -1176,10 +1186,12 @@ function formatUsage(value: { usage?: number; limit?: number; used_percent?: num
 
 function SettingsPanel({
   adminToolbarEnabled,
+  promoBarSettings,
   actionData,
   navigationState,
 }: {
   adminToolbarEnabled: boolean;
+  promoBarSettings: { enabled: boolean; message: string };
   actionData: { error?: string; success?: string } | undefined;
   navigationState: "idle" | "submitting" | "loading";
 }) {
@@ -1217,6 +1229,40 @@ function SettingsPanel({
             <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-black text-white disabled:opacity-50">
               <span className="material-symbols-outlined text-[18px]">save</span>
               {isSubmitting ? "Saving..." : "Save Settings"}
+            </button>
+          </Form>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
+              <span className="material-symbols-outlined text-[22px]">campaign</span>
+            </div>
+            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">Site Header</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">Promo Bar</h3>
+            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+              Display a slim black bar above the main navigation to share important announcements, discounts, or updates with your visitors.
+            </p>
+          </div>
+
+          <Form method="post" reloadDocument className="w-full rounded-2xl bg-slate-50 p-5 md:w-96">
+            <input type="hidden" name="intent" value="update-promo-bar" />
+            <label className="flex cursor-pointer items-center justify-between gap-4">
+              <span>
+                <span className="block text-sm font-black text-slate-900">Enable</span>
+                <span className="mt-1 block text-xs font-bold text-slate-500">{promoBarSettings.enabled ? "Currently visible" : "Currently hidden"}</span>
+              </span>
+              <input name="promoBarEnabled" type="checkbox" defaultChecked={promoBarSettings.enabled} className="h-5 w-5 accent-black" />
+            </label>
+            <div className="mt-4">
+               <label className="block text-sm font-black text-slate-900 mb-2">Message</label>
+               <input type="text" name="promoBarMessage" defaultValue={promoBarSettings.message} placeholder="Enter your promo message..." className="flex w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-medium text-slate-900 shadow-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black" />
+            </div>
+            <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+              <span className="material-symbols-outlined text-[18px]">save</span>
+              {isSubmitting ? "Saving..." : "Save Promo Bar"}
             </button>
           </Form>
         </div>

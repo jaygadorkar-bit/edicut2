@@ -19,9 +19,9 @@ export default function PortfolioPage() {
   return (
     <PageShell active="Portfolio">
       <section className="px-5 pb-10 pt-32 text-center sm:px-6">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FF0000]">Creator proof</p>
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Creator proof</p>
         <h1 className="mx-auto mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-6xl">Edits built to keep viewers watching.</h1>
-        <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[#717171]">Long-form videos, Shorts, podcasts, fashion stories, music videos, and commercial launches.</p>
+        <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">Long-form videos, Shorts, podcasts, fashion stories, music videos, and commercial launches.</p>
       </section>
       <PortfolioSection full />
       <section className="px-5 py-16 sm:px-6">

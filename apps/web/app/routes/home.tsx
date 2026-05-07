@@ -36,14 +36,14 @@ export default function HomePage() {
     <PageShell>
       <section className="bg-white px-5 pb-16 pt-32 text-center sm:px-6 lg:pb-20 lg:pt-36">
         <div className="mx-auto max-w-5xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#717171]">
-            <span className="h-2 w-2 rounded-full bg-[#FF0000]" />
+          <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-primary" />
             Editing built for YouTubers
           </div>
-          <h1 className="mx-auto mt-7 max-w-4xl text-5xl font-black leading-[1.02] tracking-tight text-[#0F0F0F] sm:text-6xl lg:text-7xl">
+          <h1 className="mx-auto mt-7 max-w-4xl text-5xl font-black leading-[1.02] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
             Publish better videos without living in the timeline.
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[#717171]">
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
             A creator-first editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables.
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
@@ -54,7 +54,7 @@ export default function HomePage() {
             {["48h first cuts", "500+ videos edited", "4.9 creator rating"].map((stat) => (
               <div key={stat} className="px-3">
                 <p className="text-2xl font-black">{stat.split(" ")[0]}</p>
-                <p className="mt-1 text-xs font-bold uppercase tracking-wide text-[#717171]">{stat.split(" ").slice(1).join(" ")}</p>
+                <p className="mt-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">{stat.split(" ").slice(1).join(" ")}</p>
               </div>
             ))}
           </div>

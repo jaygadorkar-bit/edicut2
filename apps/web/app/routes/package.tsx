@@ -36,38 +36,38 @@ export default function PackagePage() {
       <section className="px-5 pb-16 pt-32 sm:px-6">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_380px]">
           <div>
-            {pkg.badge ? <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black uppercase text-[#FF0000]">{pkg.badge}</span> : null}
+            {pkg.badge ? <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black uppercase text-primary">{pkg.badge}</span> : null}
             <h1 className="mt-5 text-5xl font-black tracking-tight sm:text-6xl">{pkg.name} Editing Package</h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-[#717171]">{pkg.description}</p>
-            <div className="mt-8 flex flex-wrap gap-4 text-sm font-black text-[#717171]">
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">{pkg.description}</p>
+            <div className="mt-8 flex flex-wrap gap-4 text-sm font-black text-muted-foreground">
               <span>{pkg.turnaround || "Custom"} turnaround</span>
               <span>{pkg.revisions || "Revisions included"}</span>
               <span>{pkg.features[0] || "Creator-ready edits"}</span>
             </div>
           </div>
           <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-6 shadow-xl shadow-black/5 lg:sticky lg:top-24">
-            <p className="text-sm font-black uppercase tracking-wide text-[#717171]">{pkg.name} plan</p>
+            <p className="text-sm font-black uppercase tracking-wide text-muted-foreground">{pkg.name} plan</p>
             <p className="mt-3 text-5xl font-black">
-              {pkg.price}<span className="text-sm text-[#717171]">{pkg.interval}</span>
+              {pkg.price}<span className="text-sm text-muted-foreground">{pkg.interval}</span>
             </p>
-            <ul className="mt-6 space-y-3 text-sm font-bold text-[#282828]">
+            <ul className="mt-6 space-y-3 text-sm font-bold text-slate-800">
               {pkg.features.map((item) => (
                 <li key={item} className="flex gap-2">
-                  <span className="material-symbols-outlined text-[18px] text-[#FF0000]">check</span>
+                  <span className="material-symbols-outlined text-[18px] text-primary">check</span>
                   {item}
                 </li>
               ))}
             </ul>
-            <Link to="/contact" className="mt-7 inline-flex w-full justify-center rounded-2xl bg-[#FF0000] px-5 py-4 text-sm font-black text-white">Start package</Link>
+            <Link to="/contact" className="mt-7 inline-flex w-full justify-center rounded-2xl bg-primary px-5 py-4 text-sm font-black text-white">Start package</Link>
             <Link to="/pricing" className="mt-3 inline-flex w-full justify-center rounded-2xl border border-gray-200 px-5 py-4 text-sm font-black">Compare packages</Link>
           </aside>
         </div>
       </section>
 
       {pkg.galleryImages.length ? (
-        <section className="bg-[#F9F9F9] px-5 py-20 sm:px-6">
+        <section className="bg-secondary px-5 py-20 sm:px-6">
           <div className="mx-auto max-w-7xl">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FF0000]">Gallery</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Gallery</p>
             <h2 className="mt-3 text-4xl font-black tracking-tight">Package preview</h2>
             <div className="mt-8 grid gap-4 md:grid-cols-3">
               {pkg.galleryImages.map((imageUrl, index) => (
@@ -83,11 +83,11 @@ export default function PackagePage() {
         </section>
       ) : null}
 
-      <section className="bg-[#F9F9F9] px-5 py-20 sm:px-6">
+      <section className="bg-secondary px-5 py-20 sm:px-6">
         <div className="mx-auto grid max-w-7xl gap-5 md:grid-cols-4">
           {featureCards.map(([icon, text]) => (
             <article key={text} className="rounded-2xl border border-gray-200 bg-white p-6">
-              <span className="material-symbols-outlined text-[#FF0000]">{icon}</span>
+              <span className="material-symbols-outlined text-primary">{icon}</span>
               <p className="mt-4 text-xl font-black">{text}</p>
             </article>
           ))}
@@ -97,9 +97,9 @@ export default function PackagePage() {
       <section className="px-5 py-20 sm:px-6">
         <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-2">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FF0000]">Best for</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Best for</p>
             <h2 className="mt-3 text-4xl font-black tracking-tight">{pkg.bestFor || "Creators who need a predictable editing lane."}</h2>
-            <p className="mt-5 leading-8 text-[#717171]">
+            <p className="mt-5 leading-8 text-muted-foreground">
               This package keeps scope, delivery, and review expectations visible before a project starts, so your upload calendar stays predictable.
             </p>
           </div>
@@ -107,8 +107,8 @@ export default function PackagePage() {
             <h3 className="text-2xl font-black">Deliverables</h3>
             <ul className="mt-5 grid gap-3 sm:grid-cols-2">
               {(pkg.deliverables.length ? pkg.deliverables : pkg.features).map((item) => (
-                <li key={item} className="flex gap-2 rounded-xl bg-[#F9F9F9] p-3 text-sm font-bold">
-                  <span className="material-symbols-outlined text-[18px] text-[#FF0000]">check</span>
+                <li key={item} className="flex gap-2 rounded-xl bg-secondary p-3 text-sm font-bold">
+                  <span className="material-symbols-outlined text-[18px] text-primary">check</span>
                   {item}
                 </li>
               ))}
@@ -117,15 +117,15 @@ export default function PackagePage() {
         </div>
       </section>
 
-      <section className="bg-[#F9F9F9] px-5 py-16 sm:px-6">
+      <section className="bg-secondary px-5 py-16 sm:px-6">
         <div className="mx-auto max-w-7xl">
           <h2 className="text-3xl font-black tracking-tight">Other packages</h2>
           <div className="mt-6 grid gap-5 md:grid-cols-3">
             {packages.filter((item) => item.id !== pkg.id).map((item) => (
               <Link key={item.id} to={`/pricing/${item.slug}`} className="rounded-2xl border border-gray-200 bg-white p-6 ">
                 <p className="text-xl font-black">{item.name}</p>
-                <p className="mt-2 text-sm font-bold text-[#717171]">{item.description}</p>
-                <p className="mt-5 text-3xl font-black">{item.price}<span className="text-sm text-[#717171]">{item.interval}</span></p>
+                <p className="mt-2 text-sm font-bold text-muted-foreground">{item.description}</p>
+                <p className="mt-5 text-3xl font-black">{item.price}<span className="text-sm text-muted-foreground">{item.interval}</span></p>
               </Link>
             ))}
           </div>

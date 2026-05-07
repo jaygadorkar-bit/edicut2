@@ -113,16 +113,16 @@ export default function DashboardRoute() {
   const roleLabel = normalizeRole(user.role);
 
   return (
-    <div className="min-h-screen bg-[#F6F7F8] font-sans text-[#0F0F0F]">
+    <div className="min-h-screen bg-[#F6F7F8] font-sans text-foreground">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-gray-200 bg-white lg:block">
         <div className="flex h-full flex-col p-4">
-          <Link to="/" className="flex items-center gap-3 rounded-lg px-2 py-2 [#F9F9F9]">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#FF0000] text-white shadow-lg shadow-red-500/20">
+          <Link to="/" className="flex items-center gap-3 rounded-lg px-2 py-2 secondary">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-red-500/20">
               <span className="material-symbols-outlined text-[22px]">play_arrow</span>
             </span>
             <span>
               <span className="block text-lg font-black uppercase tracking-tight">EdiCut</span>
-              <span className="block text-xs font-bold text-[#717171]">Operations workspace</span>
+              <span className="block text-xs font-bold text-muted-foreground">Operations workspace</span>
             </span>
           </Link>
 
@@ -133,8 +133,8 @@ export default function DashboardRoute() {
                 href="#"
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold ${
                   index === 0
-                    ? "bg-[#0F0F0F] text-white"
-                    : "text-[#575757] [#F9F9F9] [#0F0F0F]"
+                    ? "bg-foreground text-white"
+                    : "text-[#575757] secondary foreground"
                 }`}
               >
                 <span className="material-symbols-outlined text-[20px]">{icon}</span>
@@ -143,10 +143,10 @@ export default function DashboardRoute() {
             ))}
           </nav>
 
-          <div className="mt-auto rounded-lg border border-gray-200 bg-[#F9F9F9] p-4">
-            <p className="text-xs font-black uppercase text-[#717171]">Signed in as</p>
+          <div className="mt-auto rounded-lg border border-gray-200 bg-secondary p-4">
+            <p className="text-xs font-black uppercase text-muted-foreground">Signed in as</p>
             <p className="mt-2 truncate text-sm font-black">{displayName}</p>
-            <p className="mt-1 text-xs font-bold text-[#717171]">{roleLabel}</p>
+            <p className="mt-1 text-xs font-bold text-muted-foreground">{roleLabel}</p>
           </div>
         </div>
       </aside>
@@ -155,20 +155,20 @@ export default function DashboardRoute() {
         <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur sm:px-6">
           <div className="mx-auto flex max-w-[1500px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-xs font-black uppercase text-[#717171]">Welcome back</p>
+              <p className="text-xs font-black uppercase text-muted-foreground">Welcome back</p>
               <h1 className="text-2xl font-black tracking-tight sm:text-3xl">{displayName}</h1>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <label className="relative min-w-0 sm:w-80">
-                <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-[#717171]">
+                <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-muted-foreground">
                   search
                 </span>
                 <input
                   placeholder="Search projects, clients, files, referrals"
-                  className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-3 text-sm font-medium outline-none focus:border-[#0F0F0F]"
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-3 text-sm font-medium outline-none focus:border-foreground"
                 />
               </label>
-              <button className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#FF0000] px-4 text-sm font-black text-white shadow-lg shadow-red-500/15 [#D90000]">
+              <button className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-black text-white shadow-lg shadow-red-500/15 [#D90000]">
                 <span className="material-symbols-outlined text-[20px]">add_circle</span>
                 New project
               </button>
@@ -176,7 +176,7 @@ export default function DashboardRoute() {
                 <input type="hidden" name="intent" value="logout" />
                 <button
                   type="submit"
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-black [#0F0F0F]"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-black foreground"
                 >
                   <span className="material-symbols-outlined text-[20px]">logout</span>
                   Sign out
@@ -190,7 +190,7 @@ export default function DashboardRoute() {
                 key={label}
                 href="#"
                 className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-black ${
-                  index === 0 ? "bg-[#0F0F0F] text-white" : "border border-gray-200 bg-white text-[#575757]"
+                  index === 0 ? "bg-foreground text-white" : "border border-gray-200 bg-white text-[#575757]"
                 }`}
               >
                 <span className="material-symbols-outlined text-[18px]">{icon}</span>
@@ -211,14 +211,14 @@ export default function DashboardRoute() {
             <section>
               <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
                 <div>
-                  <p className="text-xs font-black uppercase text-[#717171]">Role cockpit</p>
+                  <p className="text-xs font-black uppercase text-muted-foreground">Role cockpit</p>
                   <h2 className="mt-1 text-xl font-black">Workspaces for clients, managers, and affiliates</h2>
                 </div>
-                <div className="inline-flex rounded-lg border border-gray-200 bg-[#F9F9F9] p-1 text-xs font-black">
+                <div className="inline-flex rounded-lg border border-gray-200 bg-secondary p-1 text-xs font-black">
                   {["Today", "7 days", "30 days"].map((item, index) => (
                     <button
                       key={item}
-                      className={`rounded-md px-3 py-1.5 ${index === 0 ? "bg-white text-[#0F0F0F] shadow-sm" : "text-[#717171]"}`}
+                      className={`rounded-md px-3 py-1.5 ${index === 0 ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"}`}
                     >
                       {item}
                     </button>
@@ -254,24 +254,24 @@ export default function DashboardRoute() {
             <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <h2 className="font-black">Recent activity</h2>
-                <span className="material-symbols-outlined text-[20px] text-[#717171]">history</span>
+                <span className="material-symbols-outlined text-[20px] text-muted-foreground">history</span>
               </div>
               <div className="mt-4 grid gap-4">
                 {activity.map(([event, subject, time]) => (
-                  <div key={`${event}-${subject}`} className="border-l-2 border-[#FF0000] pl-3">
+                  <div key={`${event}-${subject}`} className="border-l-2 border-primary pl-3">
                     <p className="text-sm font-black">{event}</p>
-                    <p className="mt-1 text-xs font-bold text-[#717171]">{subject} - {time}</p>
+                    <p className="mt-1 text-xs font-bold text-muted-foreground">{subject} - {time}</p>
                   </div>
                 ))}
               </div>
             </section>
-            <section className="rounded-lg border border-gray-200 bg-[#0F0F0F] p-4 text-white shadow-sm">
+            <section className="rounded-lg border border-gray-200 bg-foreground p-4 text-white shadow-sm">
               <p className="text-xs font-black uppercase text-white/60">Next best action</p>
               <h2 className="mt-2 text-xl font-black">Clear the client review queue</h2>
               <p className="mt-2 text-sm font-medium text-white/70">
                 Three approvals unlock five exports and free two editor slots for new client work.
               </p>
-              <button className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-black text-[#0F0F0F]">
+              <button className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-white px-4 text-sm font-black text-foreground">
                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
                 Open reviews
               </button>
@@ -302,14 +302,14 @@ function MetricCard({ label, value, hint, icon }: { label: string; value: string
     <article className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase text-[#717171]">{label}</p>
+          <p className="text-xs font-black uppercase text-muted-foreground">{label}</p>
           <p className="mt-2 text-3xl font-black tracking-tight">{value}</p>
         </div>
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFF0F0] text-[#FF0000]">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#FFF0F0] text-primary">
           <span className="material-symbols-outlined text-[20px]">{icon}</span>
         </span>
       </div>
-      <p className="mt-3 text-xs font-bold text-[#717171]">{hint}</p>
+      <p className="mt-3 text-xs font-bold text-muted-foreground">{hint}</p>
     </article>
   );
 }
@@ -328,21 +328,21 @@ function RoleCard({
   rows: string[];
 }) {
   return (
-    <article className="rounded-lg border border-gray-200 bg-[#F9F9F9] p-4">
+    <article className="rounded-lg border border-gray-200 bg-secondary p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-[#0F0F0F] shadow-sm">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-foreground shadow-sm">
             <span className="material-symbols-outlined text-[21px]">{icon}</span>
           </span>
           <h3 className="font-black">{title}</h3>
         </div>
-        <span className="rounded-md bg-[#0F0F0F] px-2.5 py-1 text-xs font-black text-white">{stat}</span>
+        <span className="rounded-md bg-foreground px-2.5 py-1 text-xs font-black text-white">{stat}</span>
       </div>
       <p className="mt-3 text-sm font-medium leading-6 text-[#575757]">{copy}</p>
       <div className="mt-4 grid gap-2">
         {rows.map((row) => (
-          <p key={row} className="flex items-center gap-2 text-sm font-bold text-[#282828]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#FF0000]" />
+          <p key={row} className="flex items-center gap-2 text-sm font-bold text-slate-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             {row}
           </p>
         ))}
@@ -356,7 +356,7 @@ function PipelinePanel() {
     <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="font-black">Production pipeline</h2>
-        <span className="text-xs font-black uppercase text-[#717171]">24 open</span>
+        <span className="text-xs font-black uppercase text-muted-foreground">24 open</span>
       </div>
       <div className="mt-4 grid gap-3">
         {pipeline.map(([stage, count, hint], index) => (
@@ -364,13 +364,13 @@ function PipelinePanel() {
             <div className="mb-2 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black">{stage}</p>
-                <p className="text-xs font-bold text-[#717171]">{hint}</p>
+                <p className="text-xs font-bold text-muted-foreground">{hint}</p>
               </div>
               <p className="text-sm font-black">{count}</p>
             </div>
             <div className="h-2 rounded-full bg-[#F1F1F1]">
               <div
-                className="h-2 rounded-full bg-[#FF0000]"
+                className="h-2 rounded-full bg-primary"
                 style={{ width: `${Math.max(22, 88 - index * 13)}%` }}
               />
             </div>
@@ -386,11 +386,11 @@ function ActionQueue() {
     <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="font-black">Priority action queue</h2>
-        <button className="text-xs font-black text-[#FF0000]">View all</button>
+        <button className="text-xs font-black text-primary">View all</button>
       </div>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[620px] text-left text-sm">
-          <thead className="text-xs font-black uppercase text-[#717171]">
+          <thead className="text-xs font-black uppercase text-muted-foreground">
             <tr className="border-b border-gray-100">
               <th className="pb-3">Task</th>
               <th className="pb-3">Workspace</th>
@@ -424,7 +424,7 @@ function ProjectTable() {
       <div className="flex flex-col justify-between gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="font-black">Client project command center</h2>
-          <p className="mt-1 text-sm font-bold text-[#717171]">Owners, packages, deadlines, and next actions.</p>
+          <p className="mt-1 text-sm font-bold text-muted-foreground">Owners, packages, deadlines, and next actions.</p>
         </div>
         <button className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 text-sm font-black">
           <span className="material-symbols-outlined text-[20px]">filter_list</span>
@@ -433,7 +433,7 @@ function ProjectTable() {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[820px] text-left text-sm">
-          <thead className="bg-[#F9F9F9] text-xs font-black uppercase text-[#717171]">
+          <thead className="bg-secondary text-xs font-black uppercase text-muted-foreground">
             <tr>
               {["Client", "Package", "Editor", "Stage", "Due", "Risk", "Next action"].map((header) => (
                 <th key={header} className="px-4 py-3">{header}</th>
@@ -445,7 +445,7 @@ function ProjectTable() {
               <tr key={row[0]} className="border-t border-gray-100">
                 {row.map((cell, index) => (
                   <td key={`${row[0]}-${cell}`} className="px-4 py-4 font-bold text-[#575757]">
-                    {index === 0 ? <span className="font-black text-[#0F0F0F]">{cell}</span> : index === 5 ? <StatusPill label={cell} tone={cell === "High" ? "red" : "dark"} /> : cell}
+                    {index === 0 ? <span className="font-black text-foreground">{cell}</span> : index === 5 ? <StatusPill label={cell} tone={cell === "High" ? "red" : "dark"} /> : cell}
                   </td>
                 ))}
               </tr>
@@ -462,13 +462,13 @@ function ContextPanel({ title, icon, items }: { title: string; icon: string; ite
     <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
         <h2 className="font-black">{title}</h2>
-        <span className="material-symbols-outlined text-[20px] text-[#717171]">{icon}</span>
+        <span className="material-symbols-outlined text-[20px] text-muted-foreground">{icon}</span>
       </div>
       <div className="mt-4 grid gap-3">
         {items.map((item) => (
           <div key={item} className="flex items-center justify-between gap-3 border-t border-gray-100 pt-3 first:border-t-0 first:pt-0">
             <p className="text-sm font-bold text-[#575757]">{item}</p>
-            <span className="material-symbols-outlined text-[18px] text-[#717171]">chevron_right</span>
+            <span className="material-symbols-outlined text-[18px] text-muted-foreground">chevron_right</span>
           </div>
         ))}
       </div>
@@ -480,7 +480,7 @@ function StatusPill({ label, tone }: { label: string; tone: "red" | "dark" }) {
   return (
     <span
       className={`inline-flex rounded-md px-2.5 py-1 text-xs font-black ${
-        tone === "red" ? "bg-[#FFF0F0] text-[#FF0000]" : "bg-[#F1F1F1] text-[#282828]"
+        tone === "red" ? "bg-[#FFF0F0] text-primary" : "bg-[#F1F1F1] text-slate-800"
       }`}
     >
       {label}

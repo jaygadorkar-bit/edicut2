@@ -9,19 +9,19 @@ export function Footer() {
         <Link to="/" className="-opacity ">
           <LogoMark />
         </Link>
-        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-bold text-[#717171]">
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-bold text-muted-foreground">
           {navLinks.map((item) => (
-            <Link key={item.label} to={item.to} className="[#0F0F0F]">
+            <Link key={item.label} to={item.to} className="foreground">
               {item.label}
             </Link>
           ))}
           {legalLinks.map((item) => (
-            <Link key={item.label} to={item.to} className="[#0F0F0F]">
+            <Link key={item.label} to={item.to} className="foreground">
               {item.label}
             </Link>
           ))}
         </div>
-        <p className="text-sm font-medium text-[#717171]">© 2026 EdiCut Studios. All rights reserved.</p>
+        <p className="text-sm font-medium text-muted-foreground">© 2026 EdiCut Studios. All rights reserved.</p>
       </div>
     </footer>
   );
