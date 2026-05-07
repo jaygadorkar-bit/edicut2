@@ -164,7 +164,7 @@ export default function Signin() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#FF0000] to-[#D90000] px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-500/20 transition hover:-translate-y-0.5 hover:from-[#D90000] hover:to-[#A80000] hover:shadow-red-500/30 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#FF0000] to-[#D90000] px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-500/20 [#D90000] [#A80000] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   {isSignUp ? "person_add" : "login"}
@@ -178,7 +178,7 @@ export default function Signin() {
               <button
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
-                className="ml-1 inline-flex items-center gap-1 rounded-full border border-[#FF0000]/15 bg-[#FFF5F5] px-3 py-1.5 font-black text-[#FF0000] transition hover:bg-[#FFE8E8]"
+                className="ml-1 inline-flex items-center gap-1 rounded-full border border-[#FF0000]/15 bg-[#FFF5F5] px-3 py-1.5 font-black text-[#FF0000] [#FFE8E8]"
               >
                 <span className="material-symbols-outlined text-[18px]">
                   {isSignUp ? "login" : "person_add"}

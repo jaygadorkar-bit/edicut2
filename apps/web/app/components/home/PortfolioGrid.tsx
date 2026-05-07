@@ -20,7 +20,7 @@ export function PortfolioGrid() {
               <img
                 src={item.image}
                 alt={`${item.title} video edit`}
-                className="h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                className="h-full w-full object-cover group-"
                 loading="lazy"
                 decoding="async"
               />

@@ -16,7 +16,7 @@ export function Differentiators() {
 
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {differentiators.map((item) => (
-            <article key={item.title} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition hover:border-red-100 hover:shadow-xl hover:shadow-red-500/5">
+            <article key={item.title} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm ">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F9F9F9] text-[#FF0000]">
                 <span className="material-symbols-outlined">{item.icon}</span>
               </span>

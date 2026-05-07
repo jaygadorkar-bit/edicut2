@@ -71,7 +71,7 @@ function getAdminSessionStorage(context?: SessionContext) {
     cookie: {
       name: "_edicut_admin",
       sameSite: "strict",
-      path: ADMIN_BASE_PATH,
+      path: "/",
       httpOnly: true,
       secrets: [secret],
       secure: isSecureCookie(),

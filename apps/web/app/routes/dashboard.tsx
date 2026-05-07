@@ -116,7 +116,7 @@ export default function DashboardRoute() {
     <div className="min-h-screen bg-[#F6F7F8] font-sans text-[#0F0F0F]">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-gray-200 bg-white lg:block">
         <div className="flex h-full flex-col p-4">
-          <Link to="/" className="flex items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-[#F9F9F9]">
+          <Link to="/" className="flex items-center gap-3 rounded-lg px-2 py-2 [#F9F9F9]">
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#FF0000] text-white shadow-lg shadow-red-500/20">
               <span className="material-symbols-outlined text-[22px]">play_arrow</span>
             </span>
@@ -131,10 +131,10 @@ export default function DashboardRoute() {
               <a
                 key={label}
                 href="#"
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition ${
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold ${
                   index === 0
                     ? "bg-[#0F0F0F] text-white"
-                    : "text-[#575757] hover:bg-[#F9F9F9] hover:text-[#0F0F0F]"
+                    : "text-[#575757] [#F9F9F9] [#0F0F0F]"
                 }`}
               >
                 <span className="material-symbols-outlined text-[20px]">{icon}</span>
@@ -165,10 +165,10 @@ export default function DashboardRoute() {
                 </span>
                 <input
                   placeholder="Search projects, clients, files, referrals"
-                  className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-3 text-sm font-medium outline-none transition focus:border-[#0F0F0F]"
+                  className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-3 text-sm font-medium outline-none focus:border-[#0F0F0F]"
                 />
               </label>
-              <button className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#FF0000] px-4 text-sm font-black text-white shadow-lg shadow-red-500/15 transition hover:bg-[#D90000]">
+              <button className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#FF0000] px-4 text-sm font-black text-white shadow-lg shadow-red-500/15 [#D90000]">
                 <span className="material-symbols-outlined text-[20px]">add_circle</span>
                 New project
               </button>
@@ -176,7 +176,7 @@ export default function DashboardRoute() {
                 <input type="hidden" name="intent" value="logout" />
                 <button
                   type="submit"
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-black transition hover:border-[#0F0F0F]"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-black [#0F0F0F]"
                 >
                   <span className="material-symbols-outlined text-[20px]">logout</span>
                   Sign out

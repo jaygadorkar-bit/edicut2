@@ -133,7 +133,7 @@ export default function AdminAccountRoute() {
           <div className="flex items-center gap-4">
             <Link
               to={returnTo}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 "
               title="Back to admin panel"
             >
               <span className="material-symbols-outlined text-[20px]">arrow_back</span>
@@ -186,11 +186,11 @@ export default function AdminAccountRoute() {
               </label>
             </div>
             <div className="flex justify-end border-t border-slate-100 pt-5">
-              <Link to={returnTo} className="mr-3 flex h-11 items-center gap-2 rounded-lg border border-slate-200 px-5 text-sm font-black text-slate-700 hover:bg-slate-50">
+              <Link to={returnTo} className="mr-3 flex h-11 items-center gap-2 rounded-lg border border-slate-200 px-5 text-sm font-black text-slate-700 ">
                 <span className="material-symbols-outlined text-[18px]">arrow_back</span>
                 Back
               </Link>
-              <button disabled={isSubmitting} className="flex h-11 items-center gap-2 rounded-lg bg-black px-5 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-50">
+              <button disabled={isSubmitting} className="flex h-11 items-center gap-2 rounded-lg bg-black px-5 text-sm font-black text-white disabled:opacity-50">
                 <span className="material-symbols-outlined text-[18px]">save</span>
                 {isSubmitting ? "Saving..." : "Save details"}
               </button>
@@ -209,7 +209,7 @@ export default function AdminAccountRoute() {
             <Field label="Current password" name="currentPassword" type="password" required defaultValue="" disabled={isSubmitting} />
             <Field label="New password" name="password" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} />
             <Field label="Confirm new password" name="confirmPassword" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} />
-            <button disabled={isSubmitting} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-900 text-sm font-black text-white hover:bg-black disabled:opacity-50">
+            <button disabled={isSubmitting} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-900 text-sm font-black text-white disabled:opacity-50">
               <span className="material-symbols-outlined text-[18px]">lock_reset</span>
               {isSubmitting ? "Updating..." : "Update password"}
             </button>

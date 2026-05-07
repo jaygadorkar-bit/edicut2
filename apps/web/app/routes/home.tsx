@@ -1,4 +1,5 @@
-import type { MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useLoaderData } from "react-router";
 import {
   ButtonLink,
   ContactSection,
@@ -11,6 +12,8 @@ import {
   TrustStrip,
   WorkflowSection,
 } from "../components/site/Marketing.js";
+import { getDbFromContext } from "../lib/db.server";
+import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
 
 export const meta: MetaFunction = () => {
   return [
@@ -19,7 +22,16 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+export async function loader({ context }: LoaderFunctionArgs) {
+  const db = getDbFromContext(context);
+  const packages = publicPricingPackages(await getPricingPackages(db));
+
+  return { packages };
+}
+
 export default function HomePage() {
+  const { packages } = useLoaderData<typeof loader>();
+
   return (
     <PageShell>
       <section className="bg-white px-5 pb-16 pt-32 text-center sm:px-6 lg:pb-20 lg:pt-36">
@@ -53,7 +65,7 @@ export default function HomePage() {
       <PortfolioSection />
       <DifferentiatorsSection />
       <TestimonialsSection />
-      <PricingSection />
+      <PricingSection plans={packages} />
       <FAQSection />
       <ContactSection compact />
     </PageShell>

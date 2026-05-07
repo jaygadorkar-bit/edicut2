@@ -1,9 +1,21 @@
-import type { MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useLoaderData } from "react-router";
 import { PageShell, PortfolioSection, PricingSection } from "../components/site/Marketing.js";
+import { getDbFromContext } from "../lib/db.server";
+import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
 
 export const meta: MetaFunction = () => [{ title: "EdiCut Portfolio | Creator video edits" }];
 
+export async function loader({ context }: LoaderFunctionArgs) {
+  const db = getDbFromContext(context);
+  const packages = publicPricingPackages(await getPricingPackages(db));
+
+  return { packages };
+}
+
 export default function PortfolioPage() {
+  const { packages } = useLoaderData<typeof loader>();
+
   return (
     <PageShell active="Portfolio">
       <section className="px-5 pb-10 pt-32 text-center sm:px-6">
@@ -17,7 +29,7 @@ export default function PortfolioPage() {
           {["500+ videos edited", "1.2M views generated", "32 shorts exported", "4.9 creator rating"].map((stat) => <article key={stat} className="rounded-2xl border border-gray-200 bg-white p-6 text-center text-2xl font-black">{stat}</article>)}
         </div>
       </section>
-      <PricingSection />
+      <PricingSection plans={packages} />
     </PageShell>
   );
 }

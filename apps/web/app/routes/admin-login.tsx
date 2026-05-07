@@ -231,7 +231,7 @@ export default function AdminLoginRoute() {
                 type="email"
                 required
                 autoComplete="email"
-                className="h-12 rounded-lg border border-gray-200 px-4 font-medium outline-none transition focus:border-[#0F0F0F]"
+                className="h-12 rounded-lg border border-gray-200 px-4 font-medium outline-none focus:border-[#0F0F0F]"
               />
             </label>
             <label className="grid gap-2 text-sm font-black">
@@ -241,13 +241,13 @@ export default function AdminLoginRoute() {
                 type="password"
                 required
                 autoComplete="current-password"
-                className="h-12 rounded-lg border border-gray-200 px-4 font-medium outline-none transition focus:border-[#0F0F0F]"
+                className="h-12 rounded-lg border border-gray-200 px-4 font-medium outline-none focus:border-[#0F0F0F]"
               />
             </label>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#0F0F0F] px-5 text-sm font-black text-white shadow-lg shadow-black/10 transition hover:bg-[#FF0000] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-[#0F0F0F] px-5 text-sm font-black text-white shadow-lg shadow-black/10 [#FF0000] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-[20px]">login</span>
               {isSubmitting ? "Checking access..." : "Enter admin panel"}

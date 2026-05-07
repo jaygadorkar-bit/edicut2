@@ -8,6 +8,7 @@ import { isAdminRole, requireAdminUser } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "../lib/admin-paths";
 import { toPublicAdminUser } from "../lib/admin-public";
 import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES } from "../lib/admin-user-roles";
+import { optimizeCloudinaryUrl } from "../lib/cloudinary";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -213,7 +214,7 @@ export default function AdminUserRoute() {
           <div className="flex items-center gap-4">
             <Link
               to={returnTo}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 "
               title="Back to accounts"
             >
               <span className="material-symbols-outlined text-[20px]">arrow_back</span>
@@ -235,7 +236,7 @@ export default function AdminUserRoute() {
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-4">
               {user.profileImageUrl ? (
-                <img src={user.profileImageUrl} alt="" className="h-20 w-20 rounded-full object-cover ring-4 ring-slate-100" />
+                <img src={optimizeCloudinaryUrl(user.profileImageUrl)} alt="" className="h-20 w-20 rounded-full object-cover ring-4 ring-slate-100" />
               ) : (
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-900 text-2xl font-black text-white ring-4 ring-slate-100">
                   {initials}
@@ -284,7 +285,7 @@ export default function AdminUserRoute() {
                 disabled={!canEdit || isSubmitting}
                 className="h-11 w-full rounded-lg border border-slate-200 px-3 text-sm font-bold outline-none focus:border-black disabled:bg-slate-50"
               />
-              <button disabled={!canEdit || isSubmitting} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-sm font-black text-white hover:bg-black disabled:opacity-50">
+              <button disabled={!canEdit || isSubmitting} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-sm font-black text-white disabled:opacity-50">
                 <span className="material-symbols-outlined text-[18px]">lock_reset</span>
                 Reset password
               </button>
@@ -344,7 +345,7 @@ export default function AdminUserRoute() {
               </label>
             </div>
             <div className="flex justify-end border-t border-slate-100 pt-5">
-              <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg bg-black px-5 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-50">
+              <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg bg-black px-5 text-sm font-black text-white disabled:opacity-50">
                 <span className="material-symbols-outlined text-[18px]">save</span>
                 {isSubmitting ? "Saving..." : "Save changes"}
               </button>
@@ -357,7 +358,7 @@ export default function AdminUserRoute() {
               {user.deletedAt ? (
                 <Form method="post">
                   <input type="hidden" name="intent" value="restore" />
-                  <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg border border-emerald-200 px-4 text-sm font-black text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                  <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg border border-emerald-200 px-4 text-sm font-black text-emerald-700 disabled:opacity-50">
                     <span className="material-symbols-outlined text-[18px]">restore_from_trash</span>
                     Restore account
                   </button>
@@ -365,7 +366,7 @@ export default function AdminUserRoute() {
               ) : (
                 <Form method="post" onSubmit={(event) => !confirm("Move this account to trash?") && event.preventDefault()}>
                   <input type="hidden" name="intent" value="move-to-trash" />
-                  <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg border border-red-200 px-4 text-sm font-black text-red-600 hover:bg-red-50 disabled:opacity-50">
+                  <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg border border-red-200 px-4 text-sm font-black text-red-600 disabled:opacity-50">
                     <span className="material-symbols-outlined text-[18px]">delete</span>
                     Move to trash
                   </button>

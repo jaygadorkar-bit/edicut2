@@ -55,13 +55,13 @@ export default function FAQ() {
           <p className="text-lg text-gray-500 mb-8 font-medium">Search our knowledge base or browse categories below.</p>
           
           <div className="relative group max-w-xl">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 -colors">
               search
             </span>
             <input 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-14 pl-12 pr-4 bg-gray-50 border border-gray-200 rounded-full focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-base outline-none" 
+              className="w-full h-14 pl-12 pr-4 bg-gray-50 border border-gray-200 rounded-full focus:ring-2 focus:ring-red-500 focus:border-red-500 -all text-base outline-none" 
               placeholder="Search questions..." 
               type="text"
             />
@@ -71,7 +71,7 @@ export default function FAQ() {
         <section className="mb-12 overflow-x-auto no-scrollbar flex gap-2 flex-wrap">
           <button 
             onClick={() => setActiveCategory("All")}
-            className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${activeCategory === "All" ? "bg-red-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            className={`px-5 py-2 rounded-full font-bold text-sm -colors ${activeCategory === "All" ? "bg-red-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 "}`}
           >
             All
           </button>
@@ -79,7 +79,7 @@ export default function FAQ() {
             <button 
               key={category}
               onClick={() => setActiveCategory(category)}
-              className={`px-5 py-2 rounded-full font-bold text-sm transition-colors ${activeCategory === category ? "bg-red-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+              className={`px-5 py-2 rounded-full font-bold text-sm -colors ${activeCategory === category ? "bg-red-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 "}`}
             >
               {category}
             </button>
@@ -92,10 +92,10 @@ export default function FAQ() {
               <div key={index} className="border-b border-gray-100 pb-4">
                 <details className="group [&_summary::-webkit-details-marker]:hidden" open={index === 0}>
                   <summary className="flex justify-between items-center cursor-pointer list-none py-2">
-                    <span className="text-lg font-bold text-black group-open:text-red-600 transition-colors pr-4">
+                    <span className="text-lg font-bold text-black group-open:text-red-600 -colors pr-4">
                       {faq.question}
                     </span>
-                    <span className="material-symbols-outlined text-gray-400 group-open:rotate-180 transition-transform">
+                    <span className="material-symbols-outlined text-gray-400 group-open:rotate-180 -transform">
                       expand_more
                     </span>
                   </summary>

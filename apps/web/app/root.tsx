@@ -6,12 +6,18 @@ import {
   Scripts,
   ScrollRestoration,
   isRouteErrorResponse,
+  useLoaderData,
+  useLocation,
   useRouteError,
 } from "react-router";
 import stylesheetUrl from "./styles/global.css?url";
 import { resolveWebEnv } from "./lib/context.server";
 import type { LoaderContext } from "./types";
-import { getSession } from "./lib/session.server";
+import { getAdminSession, getSession } from "./lib/session.server";
+import { ADMIN_BASE_PATH } from "./lib/admin-paths";
+import { getDbFromContext } from "./lib/db.server";
+import { getAdminToolbarEnabled } from "./lib/site-settings.server";
+import { AdminToolbar } from "./components/admin/AdminToolbar";
 
 export function links() {
   return [
@@ -32,13 +38,21 @@ export async function loader({
 }) {
   const env = resolveWebEnv(context);
   const session = await getSession(request.headers.get("Cookie"), context);
+  const adminSession = await getAdminSession(request.headers.get("Cookie"), context);
   const userId = session.get("userId");
+  const adminUserId = adminSession.get("adminUserId");
+  const isAdminSignedIn = typeof adminUserId === "string" && adminUserId.length > 0;
+  const adminToolbarEnabled = isAdminSignedIn
+    ? await getAdminToolbarEnabled(getDbFromContext(context ?? {}))
+    : false;
 
   return {
     appName: "EdiCut",
     appUrl: env.APP_URL ?? "http://localhost:3000",
     nodeApiBaseUrl: env.NODE_API_BASE_URL ?? "http://localhost:8787/api/node",
     isSignedIn: Boolean(userId),
+    isAdminSignedIn,
+    adminToolbarEnabled,
   };
 }
 
@@ -61,9 +75,14 @@ export function Layout({ children }: { children: ReactNode }) {
 }
 
 export default function AppRoot() {
+  const data = useLoaderData<typeof loader>();
+  const location = useLocation();
+  const isAdminArea = location.pathname.startsWith(ADMIN_BASE_PATH);
+
   return (
     <>
       <Outlet />
+      {data.isAdminSignedIn && data.adminToolbarEnabled && !isAdminArea ? <AdminToolbar /> : null}
       <ScrollRestoration />
       <Scripts />
     </>

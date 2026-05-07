@@ -14,14 +14,14 @@ export function FinalCTA() {
         <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
           <a
             href="#pricing"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#FF0000] px-7 py-4 font-black text-white transition hover:bg-[#D90000]"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#FF0000] px-7 py-4 font-black text-white [#D90000]"
           >
             View pricing
             <span className="material-symbols-outlined text-[20px]">arrow_upward</span>
           </a>
           <Link
             to="/dashboard"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-7 py-4 font-black text-[#0F0F0F] transition hover:bg-gray-100"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-7 py-4 font-black text-[#0F0F0F] "
           >
             Login/Signup
             <span className="material-symbols-outlined text-[20px]">login</span>

@@ -4,7 +4,7 @@ export function HeroSection() {
   return (
     <section className="hero-grid overflow-hidden px-5 pb-16 pt-28 sm:px-6 lg:pb-20 lg:pt-32">
       <div className="mx-auto grid w-full max-w-7xl items-center gap-12 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="reveal-up min-w-0 max-w-[calc(100vw-2.5rem)] lg:max-w-none">
+        <div className="min-w-0 max-w-[calc(100vw-2.5rem)] lg:max-w-none">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-[#717171] shadow-sm">
             <span className="h-2 w-2 rounded-full bg-[#FF0000]" />
             Editing built for YouTubers
@@ -21,14 +21,14 @@ export function HeroSection() {
           <div className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <a
               href="#pricing"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#FF0000] px-7 py-4 text-base font-black text-white shadow-xl shadow-red-500/20 transition hover:bg-[#D90000]"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#FF0000] px-7 py-4 text-base font-black text-white shadow-xl shadow-red-500/20 [#D90000]"
             >
               Compare packages
               <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
             </a>
             <a
               href="#portfolio"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-7 py-4 text-base font-black text-[#0F0F0F] shadow-sm transition hover:border-gray-300 hover:bg-[#F9F9F9]"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-7 py-4 text-base font-black text-[#0F0F0F] shadow-sm [#F9F9F9]"
             >
               Watch the reel
               <span className="material-symbols-outlined text-[20px]">play_circle</span>
@@ -51,7 +51,7 @@ export function HeroSection() {
           </div>
         </div>
 
-        <div className="reveal-scale reveal-delay-200 min-w-0 max-w-[calc(100vw-2.5rem)] lg:max-w-none">
+        <div className="min-w-0 max-w-[calc(100vw-2.5rem)] lg:max-w-none">
           <div className="relative rounded-2xl border border-black/5 bg-white p-2 shadow-2xl shadow-black/10">
             <img
               src="/images/hero-suite.png"

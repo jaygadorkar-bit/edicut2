@@ -43,10 +43,10 @@ export function PricingCards() {
               </ul>
               <a
                 href="#contact"
-                className={`mt-8 inline-flex w-full items-center justify-center rounded-2xl px-5 py-4 text-sm font-black transition ${
+                className={`mt-8 inline-flex w-full items-center justify-center rounded-2xl px-5 py-4 text-sm font-black ${
                   plan.popular
-                    ? "bg-[#FF0000] text-white hover:bg-[#D90000]"
-                    : "bg-[#0F0F0F] text-white hover:bg-[#282828]"
+                    ? "bg-[#FF0000] text-white [#D90000]"
+                    : "bg-[#0F0F0F] text-white [#282828]"
                 }`}
               >
                 Start with {plan.name}

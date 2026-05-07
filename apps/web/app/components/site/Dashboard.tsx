@@ -29,7 +29,7 @@ export function AppShell({ mode }: { mode: "creator" | "admin" }) {
         </div>
         <nav className="mt-8 grid gap-1">
           {nav.map((item, index) => (
-            <a key={item} href="#" className={`rounded-lg px-3 py-2 text-sm font-bold ${index === 0 ? "bg-[#F9F9F9] text-[#0F0F0F]" : "text-[#717171] hover:bg-[#F9F9F9]"}`}>{item}</a>
+            <a key={item} href="#" className={`rounded-lg px-3 py-2 text-sm font-bold ${index === 0 ? "bg-[#F9F9F9] text-[#0F0F0F]" : "text-[#717171] [#F9F9F9]"}`}>{item}</a>
           ))}
         </nav>
       </aside>

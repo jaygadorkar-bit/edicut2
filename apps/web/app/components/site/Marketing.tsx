@@ -1,5 +1,16 @@
 import { Link, NavLink, useMatches } from "react-router";
-import { faqs, legalLinks, navLinks, plans, portfolio, testimonials, workflow } from "./data";
+import { faqs, legalLinks, navLinks, plans as defaultPlans, portfolio, testimonials, workflow } from "./data";
+
+type PricingPlanView = {
+  name: string;
+  slug: string;
+  price: string;
+  interval?: string;
+  description: string;
+  features: string[];
+  popular?: boolean;
+  badge?: string;
+};
 
 export function Logo() {
   return (
@@ -24,7 +35,7 @@ export function SiteHeader({ active }: { active?: string }) {
             <NavLink
               key={item.label}
               to={item.to}
-              className={`rounded-full px-4 py-2 text-sm font-bold transition hover:bg-[#F9F9F9] hover:text-[#0F0F0F] ${
+              className={`rounded-full px-4 py-2 text-sm font-bold [#F9F9F9] [#0F0F0F] ${
                 active === item.label ? "bg-[#F9F9F9] text-[#0F0F0F]" : "text-[#717171]"
               }`}
             >
@@ -34,21 +45,18 @@ export function SiteHeader({ active }: { active?: string }) {
         </nav>
         <Link
           to={isSignedIn ? "/dashboard" : "/signin"}
-          className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-black shadow-lg transition ${
+          className={`inline-flex items-center gap-1 rounded-full px-4 py-1.5 text-xs font-black shadow-lg ${
             isSignedIn
-              ? "border border-black/5 bg-[#0F0F0F] text-white shadow-black/10 hover:-translate-y-0.5 hover:bg-[#1A1A1A]"
-              : "border border-[#FF0000]/10 bg-gradient-to-r from-[#FF0000] to-[#D90000] text-white shadow-red-500/20 hover:-translate-y-0.5 hover:from-[#D90000] hover:to-[#A80000]"
+              ? "border border-black/5 bg-[#0F0F0F] text-white shadow-black/10 [#1A1A1A]"
+              : "border border-[#FF0000]/10 bg-gradient-to-r from-[#FF0000] to-[#D90000] text-white shadow-red-500/20 [#D90000] [#A80000]"
           }`}
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
-            <span className="material-symbols-outlined text-[20px]">
-              {isSignedIn ? "space_dashboard" : "login"}
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15">
+            <span className="material-symbols-outlined text-[14px]">
+              {isSignedIn ? "space_dashboard" : "person"}
             </span>
           </span>
-          {isSignedIn ? "Dashboard" : "Sign in / Sign up"}
-          <span className="material-symbols-outlined text-[18px]">
-            {isSignedIn ? "arrow_forward" : "chevron_right"}
-          </span>
+          {isSignedIn ? "Dashboard" : "Sign in/Sign up"}
         </Link>
       </div>
     </header>
@@ -61,8 +69,8 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 border-t border-gray-100 pt-8 text-center md:flex-row md:text-left">
         <Link to="/"><Logo /></Link>
         <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-bold text-[#717171]">
-          {navLinks.map((item) => <Link key={item.label} to={item.to} className="hover:text-[#0F0F0F]">{item.label}</Link>)}
-          {legalLinks.map((item) => <Link key={item.label} to={item.to} className="hover:text-[#0F0F0F]">{item.label}</Link>)}
+          {navLinks.map((item) => <Link key={item.label} to={item.to} className="[#0F0F0F]">{item.label}</Link>)}
+          {legalLinks.map((item) => <Link key={item.label} to={item.to} className="[#0F0F0F]">{item.label}</Link>)}
         </div>
         <p className="text-sm font-medium text-[#717171]">© 2026 EdiCut Studios. All rights reserved.</p>
       </div>
@@ -96,9 +104,9 @@ export function SectionIntro({ eyebrow, title, copy }: { eyebrow: string; title:
 
 export function ButtonLink({ to, children, variant = "primary" }: { to: string; children: React.ReactNode; variant?: "primary" | "secondary" }) {
   const cls = variant === "primary"
-    ? "bg-[#FF0000] text-white hover:bg-[#D90000]"
-    : "border border-gray-200 bg-white text-[#0F0F0F] hover:bg-[#F9F9F9]";
-  return <Link to={to} className={`inline-flex items-center justify-center rounded-2xl px-6 py-3.5 text-sm font-black transition ${cls}`}>{children}</Link>;
+    ? "bg-[#FF0000] text-white [#D90000]"
+    : "border border-gray-200 bg-white text-[#0F0F0F] [#F9F9F9]";
+  return <Link to={to} className={`inline-flex items-center justify-center rounded-2xl px-6 py-3.5 text-sm font-black ${cls}`}>{children}</Link>;
 }
 
 export function TrustStrip() {
@@ -185,7 +193,7 @@ export function DifferentiatorsSection() {
   );
 }
 
-export function PricingSection({ comparison = false }: { comparison?: boolean }) {
+export function PricingSection({ comparison = false, plans = defaultPlans }: { comparison?: boolean; plans?: PricingPlanView[] }) {
   return (
     <section id="pricing" className="bg-[#F9F9F9] px-5 py-20 sm:px-6">
       <div className="mx-auto max-w-7xl">
@@ -199,14 +207,16 @@ export function PricingSection({ comparison = false }: { comparison?: boolean })
         <div className="mt-12 grid gap-5 lg:grid-cols-3">
           {plans.map((plan) => (
             <article key={plan.name} className={`relative rounded-2xl border bg-white p-7 ${plan.popular ? "border-[#FF0000] shadow-xl shadow-red-500/10" : "border-gray-200"}`}>
-              {plan.popular ? <span className="absolute right-5 top-5 rounded-full bg-[#FF0000] px-3 py-1 text-xs font-black uppercase text-white">Popular</span> : null}
+              {plan.popular ? <span className="absolute right-5 top-5 rounded-full bg-[#FF0000] px-3 py-1 text-xs font-black uppercase text-white">{plan.badge || "Popular"}</span> : null}
               <h3 className="text-2xl font-black">{plan.name}</h3>
               <p className="mt-3 min-h-14 leading-7 text-[#717171]">{plan.description}</p>
-              <div className="mt-7 text-5xl font-black">{plan.price}<span className="text-sm text-[#717171]">/mo</span></div>
+              <div className="mt-7 text-5xl font-black">{plan.price}<span className="text-sm text-[#717171]">{plan.interval || "/mo"}</span></div>
               <ul className="mt-7 space-y-3">
                 {plan.features.map((feature) => <li key={feature} className="flex gap-3 text-sm font-bold"><span className="material-symbols-outlined text-[18px] text-[#FF0000]">check</span>{feature}</li>)}
               </ul>
-              <ButtonLink to={`/pricing/${plan.slug}`}>{`View ${plan.name}`}</ButtonLink>
+              <div className="mt-7">
+                <ButtonLink to={`/pricing/${plan.slug}`}>{`View ${plan.name}`}</ButtonLink>
+              </div>
             </article>
           ))}
         </div>
