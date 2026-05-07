@@ -6,6 +6,7 @@ Status: Finalized implementation strategy
 ╚═══════════════════════════════════════════════════════════════════════╝
 
 - Aesthetic: Clean, minimal, modern white theme tailored for YouTubers. Highly pleasing to the eye.
+- Homepage hero: Use a plain white background with no hero image, no dashboard preview, and no decorative media block. The first viewport should rely on typography, trust signals, CTAs, and restrained layout.
 - Framework: Modern Tailwind CSS (utility-first, minimal custom CSS).
 - Typography: Roboto (YouTube's primary font) and system sans-serif fallbacks.
 - Palette: 
@@ -46,15 +47,16 @@ PUBLIC PAGES
 ╚═══════════════════════════════════════════════════════════════════════╝
 
 HOME PAGE SECTIONS
-1. Hero: Bright, clean background, trust badge, centered headline, Dual CTAs.
+1. Hero: Plain white background, no hero image, trust badge, centered headline, supporting copy, stats, and dual CTAs.
 2. Trust Strip: Horizontal logo row of partners/clients.
 3. Workflow: 3-step grid (Choose -> Upload -> Review) with large icons.
-4. Differentiators: 4-card grid (Team, Speed, Retention, Repurposing).
-5. Portfolio: Bento-grid with hover-play video thumbnails and proof cards.
+4. Portfolio: Place this in the middle of the page as a bento-grid with hover-play video thumbnails and proof cards.
+5. Differentiators: 4-card grid (Team, Speed, Retention, Repurposing).
 6. Testimonials: Compact stats row + 3-card carousel of client feedback.
 7. Pricing: 3-column tiered cards with checklist and product page links.
 8. FAQ: objection-handling section (Onboarding, content types, revisions).
-9. Final CTA: Conversion panel with pricing/contact buttons.
+9. Contact Us: Dedicated bottom section with a concise inquiry form and contact details.
+10. Final CTA: Compact conversion strip near the contact area with pricing/contact buttons.
 
 PACKAGE PRODUCT PAGE SECTIONS
 1. Product Hero: Title, badge, review stars, and highlight stats.
@@ -68,8 +70,8 @@ PACKAGE PRODUCT PAGE SECTIONS
 ║                    SOURCE OF TRUTH                                    ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 
-- Home Page: apps/cf-web/src/app/page.tsx
-- Pricing Catalog: apps/cf-web/src/app/pricing/page.tsx
-- Product Pages: apps/cf-web/src/app/pricing/[slug]/page.tsx
-- Shared Content: apps/cf-web/src/lib/public-packages.ts
+- Home Page: apps/web/app/routes/home.tsx
+- Public routes: apps/web/app/routes.ts
+- Web styles: apps/web/app/styles/global.css
+- Shared Content: packages/shared/src/content
 - DB Schema: packages/platform-core/src/db/schema.ts

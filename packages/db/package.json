@@ -26,6 +26,10 @@
       "types": "./dist/repositories/projects.d.ts",
       "default": "./dist/repositories/projects.js"
     },
+    "./repositories/admin-users": {
+      "types": "./dist/repositories/admin-users.d.ts",
+      "default": "./dist/repositories/admin-users.js"
+    },
     "./repositories/users": {
       "types": "./dist/repositories/users.d.ts",
       "default": "./dist/repositories/users.js"
@@ -46,6 +50,7 @@
     "@edicut/shared": "workspace:*",
     "@neondatabase/serverless": "^0.10.4",
     "drizzle-orm": "^0.36.3",
+    "postgres": "^3.4.9",
     "zod": "^3.23.8"
   },
   "devDependencies": {

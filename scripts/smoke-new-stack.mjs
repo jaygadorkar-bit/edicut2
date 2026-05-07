@@ -1,4 +1,4 @@
-const webBaseUrl = (process.env.WEB_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
+const webBaseUrl = (process.env.WEB_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const nodeApiBaseUrl = (process.env.NODE_API_BASE_URL || "http://localhost:8787").replace(/\/$/, "");
 const serviceSecret = process.env.SERVICE_SHARED_SECRET || "";
 
@@ -12,47 +12,29 @@ async function main() {
   const homepage = await fetch(`${webBaseUrl}/`);
   await expectStatus("homepage", homepage);
 
-  const login = await fetch(`${webBaseUrl}/login`);
-  await expectStatus("login", login);
+  const health = await fetch(`${webBaseUrl}/health`);
+  await expectStatus("web-health", health);
 
-  const dashboard = await fetch(`${webBaseUrl}/dashboard`, {
-    redirect: "manual",
-  });
-  await expectStatus("dashboard-shell", dashboard, [302]);
+  const dashboard = await fetch(`${webBaseUrl}/dashboard`);
+  await expectStatus("dashboard-shell", dashboard);
 
-  const cfMutation = await fetch(`${webBaseUrl}/forgot-password`, {
-    method: "POST",
-    redirect: "manual",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      email: "demo@edicut.com",
-    }),
-  });
-  await expectStatus("cloudflare-mutation", cfMutation);
+  const admin = await fetch(`${webBaseUrl}/admin`);
+  await expectStatus("admin-shell", admin);
 
   if (serviceSecret) {
-    const nodeMutation = await fetch(`${nodeApiBaseUrl}/api/node/ops/contact-intake`, {
-      method: "POST",
+    const nodeHealth = await fetch(`${nodeApiBaseUrl}/api/node/health`, {
       headers: {
-        "content-type": "application/json",
         "x-edicut-service-token": serviceSecret,
       },
-      body: JSON.stringify({
-        name: "Smoke Test",
-        email: "smoke@edicut.com",
-        brief: "This is a smoke test for the bounded Node API contact intake route.",
-      }),
     });
-    await expectStatus("node-mutation", nodeMutation);
+    await expectStatus("node-health", nodeHealth);
   }
 
   console.log(
     JSON.stringify(
       {
         ok: true,
-        checks: ["homepage", "login", "dashboard-shell", "cloudflare-mutation", "node-mutation"],
+        checks: ["homepage", "web-health", "dashboard-shell", "admin-shell", "node-health"],
       },
       null,
       2

@@ -33,17 +33,30 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Roboto', sans-serif;
+    overflow-x: hidden;
+  }
+
+  html {
+    scroll-behavior: smooth;
   }
 }
 
 .glass-nav {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .soft-shadow {
   box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.08);
+}
+
+.hero-grid {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.98)),
+    linear-gradient(90deg, rgba(15, 15, 15, 0.05) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 15, 15, 0.05) 1px, transparent 1px);
+  background-size: auto, 48px 48px, 48px 48px;
 }
 
 .headline-font {

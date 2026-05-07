@@ -13,10 +13,27 @@ export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull(),
   name: text("name"),
+  phone: varchar("phone", { length: 32 }),
+  country: varchar("country", { length: 120 }),
+  profileImageUrl: text("profile_image_url"),
   passwordHash: text("password_hash"),
   role: text("role").notNull().default("user"),
   active: boolean("active").notNull().default(true),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const adminUsers = pgTable("admin_users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  phone: varchar("phone", { length: 32 }),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull().default("admin"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const projects = pgTable("projects", {

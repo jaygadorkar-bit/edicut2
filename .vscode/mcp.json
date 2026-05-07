@@ -1,10 +1,14 @@
 {
   "servers": {
-    "googleStitch": {
+    "chrome-devtools": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "google-stitch-mcp", "proxy"],
-      "envFile": "${workspaceFolder}/.env.local"
+      "args": [
+        "-y",
+        "@anthropic/chrome-devtools-mcp@latest",
+        "--port",
+        "9222"
+      ]
     }
   }
 }

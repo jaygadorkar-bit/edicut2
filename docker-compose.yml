@@ -20,17 +20,18 @@ services:
   node-api:
     build:
       context: .
-      dockerfile: Dockerfile.new-stack
+      dockerfile: Dockerfile
     container_name: edicut-node-api
     restart: "no"
     working_dir: /app
     environment:
+      NODE_ENV: development
       PORT: 8787
       APP_URL: http://localhost:3000
       DATABASE_URL: postgresql://postgres:password@postgres:5432/edicut
       SERVICE_SHARED_SECRET: stage9-preview-service-secret-000000000000
     command: >
-      sh -c "pnpm install --no-frozen-lockfile --store-dir /pnpm/store &&
+      sh -c "pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store &&
       pnpm --filter @edicut/shared build &&
       pnpm --filter @edicut/db build &&
       pnpm --filter @edicut/db exec drizzle-kit push --config drizzle.config.ts --force &&
@@ -53,11 +54,12 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile.new-stack
+      dockerfile: Dockerfile
     container_name: edicut-web
     restart: "no"
     working_dir: /app
     environment:
+      NODE_ENV: development
       APP_URL: http://localhost:3000
       DATABASE_URL: postgresql://postgres:password@postgres:5432/edicut
       SESSION_SECRET: stage9-local-session-secret-stage9-local-session
@@ -65,10 +67,10 @@ services:
       NODE_API_BASE_URL: http://node-api:8787
       CHOKIDAR_USEPOLLING: "true"
     command: >
-      sh -c "pnpm install --no-frozen-lockfile --store-dir /pnpm/store &&
+      sh -c "pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store &&
       pnpm --filter @edicut/shared build &&
       pnpm --filter @edicut/db build &&
-      pnpm --filter @edicut/web dev --host 0.0.0.0 --port 3000"
+      pnpm --filter @edicut/web exec react-router dev --host 0.0.0.0 --port 3000"
     ports:
       - "3000:3000"
     volumes:

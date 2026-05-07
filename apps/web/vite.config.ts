@@ -1,13 +1,19 @@
 import { reactRouter } from "@react-router/dev/vite";
+// import { cloudflareDevProxy } from "@react-router/dev/vite/cloudflare"; // Removed because it breaks React hooks
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig(({ isSsrBuild }) => ({
   cacheDir: ".vite-cache",
+  server: {
+    hmr: {
+      overlay: true,
+    },
+  },
   build: {
     cssCodeSplit: true,
-    sourcemap: false,
+    sourcemap: process.env.NODE_ENV !== "production",
     assetsInlineLimit: 2048,
     rollupOptions: isSsrBuild
       ? undefined

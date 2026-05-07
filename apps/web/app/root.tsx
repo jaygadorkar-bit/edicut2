@@ -11,6 +11,7 @@ import {
 import stylesheetUrl from "./styles/global.css?url";
 import { resolveWebEnv } from "./lib/context.server";
 import type { LoaderContext } from "./types";
+import { getSession } from "./lib/session.server";
 
 export function links() {
   return [
@@ -23,17 +24,21 @@ export function links() {
 }
 
 export async function loader({
+  request,
   context,
 }: {
   request: Request;
   context?: LoaderContext;
 }) {
   const env = resolveWebEnv(context);
+  const session = await getSession(request.headers.get("Cookie"), context);
+  const userId = session.get("userId");
 
   return {
     appName: "EdiCut",
-    appUrl: env.APP_URL ?? "http://localhost:4174",
+    appUrl: env.APP_URL ?? "http://localhost:3000",
     nodeApiBaseUrl: env.NODE_API_BASE_URL ?? "http://localhost:8787/api/node",
+    isSignedIn: Boolean(userId),
   };
 }
 
@@ -75,11 +80,17 @@ export function ErrorBoundary() {
     : error instanceof Error
       ? error.message
       : "Unexpected error in starter app.";
+  const stack = import.meta.env.DEV && error instanceof Error ? error.stack : null;
 
   return (
     <main className="p-8">
       <h1 className="text-2xl font-bold text-red-500">{title}</h1>
       <p className="mt-4">{String(message)}</p>
+      {stack ? (
+        <pre className="mt-6 overflow-auto rounded-lg bg-slate-950 p-4 text-xs leading-5 text-slate-100">
+          {stack}
+        </pre>
+      ) : null}
     </main>
   );
 }

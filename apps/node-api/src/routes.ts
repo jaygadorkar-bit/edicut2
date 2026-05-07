@@ -19,3 +19,15 @@ operationalRoutes.get("/dashboard/summary", (c) =>
     notifications: 0,
   })
 );
+
+operationalRoutes.get("/metrics/usage", (c) =>
+  c.json({
+    ok: true,
+    area: "metrics",
+    usage: {
+      activeProjects: 0,
+      processedMinutes: 0,
+      storageGb: 0,
+    },
+  })
+);

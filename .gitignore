@@ -1,107 +1,62 @@
 # dependencies
-/node_modules
+node_modules/
 **/node_modules/
-/.pnp
-.pnp.js
 
 # package manager caches
 .pnpm-store/
 .pnpm-store-local/
 pnpm-store/
 
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-/apps/cf-web/.cf-next/
-/apps/cf-web/.next/
-/apps/web/build/
-/apps/web/.react-router/
-/apps/web/.wrangler-out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# local env files
+# local env and secrets
 .env
 .env*.local
 .env.test
 .env.production
 .env.development
+.env.cloudflare
+.dev.vars
+.cf-deploy-secrets.json
+secrets.json
+*.pem
 
-# vercel
-.vercel
-
-# typescript
+# generated app output and caches
+build/
+dist/
+out/
+.next/
+.open-next/
+.react-router/
+.vite-cache/
+.vite-cache-root-owned-backup-*/
+.wrangler/
+.wrangler-out/
+.turbo/
+.vercel/
+.codex-screens/
 *.tsbuildinfo
 next-env.d.ts
 
-# Docker
-.docker_data/
-postgres_data/
-redis_data/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
+# logs and reports
+coverage/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# local env files
-.env
-.env*.local
-.env.test
-.env.production
-.env.development
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# Docker
+# docker/local service data
 .docker_data/
 postgres_data/
 redis_data/
 minio_data/
 meilisearch_data/
 
-# OpenNext
-.open-next
+# OS/editor
+.DS_Store
 
-# secrets and local config
-secrets.json
-.env.cloudflare
-.dev.vars
-.wrangler/
-*.log
-.cf-deploy-secrets.json
-
-# build artifacts and caches
-.vite-cache/
-.vite-cache-root-owned-backup-*/
-.turbo/
-.vercel
-dist/
-build/
+# local tooling/artifacts
+chrome-profile/
+scratch/
+stitch_*.html
+.vscode/cline_mcp_settings.json
+/-

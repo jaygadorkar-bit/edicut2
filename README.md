@@ -1,58 +1,57 @@
 # EdiCut
 
-The professional video editing platform built for high-retention content. This is a monorepo containing the hybrid Cloudflare-first production stack.
+EdiCut is a video editing platform for YouTube creators. This repository is a pnpm monorepo with one frontend, one Node API, and shared packages.
 
-## 🚀 Workspace Overview
+## Workspace
 
-- **`apps/cf-web`**: Primary Web Application (Next.js 16 + React 19). Deployed on **Cloudflare Pages**.
-- **`apps/vercel-api`**: Backend API (Next.js API Routes). Deployed on **Vercel Serverless**.
-- **`apps/node-api`**: Alternative Node.js API (Hono).
-- **`packages/db`**: Shared data layer (Neon PostgreSQL + Drizzle ORM).
-- **`packages/shared`**: Shared TypeScript contracts, validators, and utility logic.
-- **`packages/platform-core`**: Core business logic and shared database schemas.
+- `apps/web`: the only frontend app. React Router 7, Vite, Tailwind, Cloudflare Worker deployment.
+- `apps/node-api`: Hono API for backend endpoints.
+- `packages/shared`: shared contracts and utilities.
+- `packages/db`: Drizzle/PostgreSQL data layer.
+- `packages/platform-core`: shared platform logic, including auth-oriented helpers.
 
-## 🛠️ Local Development
+## Local Development
 
-### 1. Install Dependencies
+Install dependencies:
+
 ```bash
 pnpm install
 ```
 
-### 2. Set Up Environment
-Ensure you have a `.env.local` or `.env.cloudflare` file in the root. Refer to the credentials provided in `docs/project-planning/TECH_STACK.txt`.
+Run the frontend on the single standard local port:
 
-### 3. Run the App
-To start the primary Next.js web application:
 ```bash
-# Start the Next.js dev server (Port 3000)
-pnpm --filter @edicut/cf-web dev
+pnpm dev
 ```
 
-To start the Hono API:
+Frontend URL: `http://localhost:3000`
+
+Run the Node API:
+
 ```bash
 pnpm dev:node-api
 ```
 
-## 🏗️ Production Stack
+API URL: `http://localhost:8787/api/node`
 
-- **Frontend**: Next.js 16 on **Cloudflare Edge** (via OpenNext).
-- **Backend**: **Vercel Functions** (Full Node.js environment).
-- **Database**: **Neon** (Serverless PostgreSQL).
-- **Media**: **Cloudinary** (Images) & **YouTube** (Unlisted Video Hosting).
-- **Cache**: **Upstash Redis**.
+## Docker
 
-## 📖 Documentation
-
-- **Tech Stack**: [docs/project-planning/TECH_STACK.txt](docs/project-planning/TECH_STACK.txt)
-- **Deployment Guide**: [docs/HYBRID_DEPLOYMENT_GUIDE.md](docs/HYBRID_DEPLOYMENT_GUIDE.md)
-- **Unified Planning**: [docs/project-planning/UNIFIED_PLANNING.txt](docs/project-planning/UNIFIED_PLANNING.txt)
-
-## 🏗️ Build & Typecheck
+Start the local stack:
 
 ```bash
-# Build all packages and apps
-pnpm build
+docker compose up --build
+```
 
-# Run type checks across the workspace
+Docker exposes:
+
+- Web: `http://localhost:3000`
+- Node API: `http://localhost:8787/api/node`
+- Postgres: `localhost:5432`
+
+## Quality
+
+```bash
 pnpm typecheck
+pnpm build
+pnpm health
 ```

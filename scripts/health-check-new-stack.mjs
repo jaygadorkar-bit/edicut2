@@ -1,4 +1,4 @@
-const webBaseUrl = (process.env.WEB_BASE_URL || "http://localhost:5173").replace(/\/$/, "");
+const webBaseUrl = (process.env.WEB_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const nodeApiBaseUrl = (process.env.NODE_API_BASE_URL || "http://localhost:8787").replace(/\/$/, "");
 const serviceSecret = process.env.SERVICE_SHARED_SECRET || "";
 
