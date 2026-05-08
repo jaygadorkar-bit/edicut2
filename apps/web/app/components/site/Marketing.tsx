@@ -219,7 +219,7 @@ export function WorkflowSection() {
   );
 }
 
-export function PortfolioSection({ full = false, sections }: { full?: boolean; sections?: PortfolioSectionView[] }) {
+export function PortfolioSection({ full = false, sections, className = "" }: { full?: boolean; sections?: PortfolioSectionView[]; className?: string }) {
   const fallbackSections = useMemo<PortfolioSectionView[]>(() => [{
     id: "fallback-featured",
     name: "Featured",
@@ -269,7 +269,7 @@ export function PortfolioSection({ full = false, sections }: { full?: boolean; s
   }, [playingItem]);
 
   return (
-    <section id="portfolio" className="bg-secondary px-5 py-20 sm:px-6">
+    <section id="portfolio" className={`bg-secondary px-5 py-20 sm:px-6 ${className}`}>
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-4xl text-center">
           <Eyebrow>Creator proof</Eyebrow>

@@ -22,7 +22,7 @@ export default function PortfolioPage() {
 
   return (
     <PageShell>
-      <PortfolioSection full sections={portfolioSections} />
+      <PortfolioSection full sections={portfolioSections} className="pt-32" />
       <section className="px-5 py-16 sm:px-6">
         <div className="mx-auto max-w-7xl gap-5 grid md:grid-cols-4">
           {["500+ videos edited", "1.2M views generated", "32 shorts exported", "4.9 creator rating"].map((stat) => (
