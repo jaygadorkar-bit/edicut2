@@ -524,7 +524,7 @@ export default function AdminRoute() {
         </div>
         
         <nav className="p-4 space-y-1">
-          <SidebarLink icon="home" label="Home" active={false} to="/" reloadDocument />
+          <SidebarLink icon="home" label="Home" active={false} to="/" />
           <SidebarLink icon="dashboard" label="Overview" active={tab === "overview"} to="?tab=overview" />
           <SidebarLink icon="group" label="User Management" active={tab === "users"} to="?tab=users" />
           <SidebarLink icon="sell" label="Pricing Packages" active={tab === "packages"} to="?tab=packages" />
