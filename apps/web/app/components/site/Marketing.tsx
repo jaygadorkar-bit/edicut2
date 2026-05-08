@@ -87,7 +87,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-gray-100 bg-white px-5 py-16 sm:px-6">
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-12 lg:grid-cols-[1.5fr_1fr_1fr_1.5fr]">
+        <div className="grid gap-12 lg:grid-cols-[2fr_0.8fr_0.8fr_1.4fr]">
           {/* Brand & Newsletter */}
           <div className="space-y-6">
             <Link to="/"><Logo /></Link>
@@ -153,11 +153,21 @@ export function SiteFooter() {
 
             <div className="space-y-4">
               <h4 className="text-xs font-black uppercase tracking-widest text-foreground">Supported Payments</h4>
-              <div className="flex gap-3 grayscale opacity-60 lg:justify-end">
-                {/* Simplified SVG icons for payments */}
-                <div title="Visa" className="h-6 w-10 bg-muted rounded flex items-center justify-center text-[8px] font-black italic">VISA</div>
-                <div title="Mastercard" className="h-6 w-10 bg-muted rounded flex items-center justify-center text-[8px] font-black italic">MC</div>
-                <div title="American Express" className="h-6 w-10 bg-muted rounded flex items-center justify-center text-[8px] font-black italic">AMEX</div>
+              <div className="flex gap-4 grayscale opacity-60 lg:justify-end">
+                <svg className="h-6 w-9" viewBox="0 0 38 24" fill="none">
+                  <rect width="38" height="24" rx="4" fill="#222"/>
+                  <path d="M15 16.5l1.5-7.5h2.5l-1.5 7.5h-2.5zm10.2-7.5c-.5-.2-1.3-.4-2.2-.4-2.4 0-4.1 1.3-4.1 3.1 0 1.4 1.2 2.1 2.2 2.6 1 .5 1.3.8 1.3 1.2 0 .6-.8.9-1.5.9-1 0-1.6-.2-2.4-.6l-.3-.2-.4 2.2c.6.3 1.7.5 2.8.5 2.5 0 4.2-1.2 4.2-3.1 0-1-.6-1.8-2-2.5-.8-.4-1.3-.7-1.3-1.1 0-.4.4-.8 1.3-.8.8 0 1.4.2 1.8.4l.2.1.4-2.1zM34 9h-2.3c-.7 0-1.3.4-1.6 1l-4.6 11h2.6l.5-1.4h3.2l.3 1.4h2.3L34 9zm-4.7 8.2l1.1-3.1 1 3.1h-2.1zM8.3 9L5.8 15.6l-.3-1.3C5 12.5 4 11.4 2.8 10.8l.1-.1h4.1l1.3-1.7H8.3z" fill="white"/>
+                </svg>
+                <svg className="h-6 w-9" viewBox="0 0 38 24" fill="none">
+                  <rect width="38" height="24" rx="4" fill="#222"/>
+                  <circle cx="15" cy="12" r="7" fill="white" fillOpacity="0.8"/>
+                  <circle cx="23" cy="12" r="7" fill="white" fillOpacity="0.5"/>
+                </svg>
+                <svg className="h-6 w-9" viewBox="0 0 38 24" fill="none">
+                  <rect width="38" height="24" rx="4" fill="#222"/>
+                  <path d="M12 8h14v8H12z" fill="white" fillOpacity="0.9"/>
+                  <path d="M19 10l-2 4h4l-2-4z" fill="#222"/>
+                </svg>
               </div>
             </div>
           </div>
