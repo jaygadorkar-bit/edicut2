@@ -38,7 +38,7 @@ export default function HomePage() {
 
   return (
     <PageShell>
-      <section className="bg-white px-5 pb-16 pt-32 text-center sm:px-6 lg:pb-20 lg:pt-36">
+      <section className="bg-white px-5 pb-16 pt-20 text-center sm:px-6 lg:pb-20 lg:pt-24">
         <div className="mx-auto max-w-5xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
             <span className="h-2 w-2 rounded-full bg-primary" />
