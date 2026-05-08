@@ -36,7 +36,7 @@ export function SiteHeader() {
   return (
     <>
       {promoEnabled && promoMessage ? (
-        <div className="fixed left-0 top-0 z-[60] flex h-10 w-full items-center justify-center bg-foreground px-4 text-center text-[11px] font-black uppercase tracking-widest text-white shadow-md">
+        <div className="fixed left-0 top-0 z-[60] flex h-10 w-full items-center justify-center bg-[#7B68EE] px-4 text-center text-[11px] font-black uppercase tracking-widest text-white shadow-md">
           {promoMessage}
         </div>
       ) : null}
