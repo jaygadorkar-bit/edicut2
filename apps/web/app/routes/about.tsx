@@ -5,7 +5,7 @@ export const meta: MetaFunction = () => [{ title: "About EdiCut | Creator-first 
 
 export default function AboutPage() {
   return (
-    <PageShell active="About">
+    <PageShell>
       <section className="px-5 pb-16 pt-32 text-center sm:px-6">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Creator-first post production</p>
         <h1 className="mx-auto mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-6xl">A focused editing team for channels that publish on schedule.</h1>

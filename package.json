@@ -4,6 +4,7 @@
   "devDependencies": {
     "@types/node": "^20.17.6",
     "eslint": "^9.15.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.6.3",
     "vitest": "^4.1.5"
   },
@@ -14,6 +15,9 @@
     "build": "pnpm --filter @edicut/shared --filter @edicut/db --filter @edicut/web --filter @edicut/node-api build",
     "typecheck": "pnpm --filter @edicut/shared --filter @edicut/db --filter @edicut/web --filter @edicut/node-api typecheck",
     "health": "node scripts/health-check-new-stack.mjs",
+    "email:test-connection": "tsx scripts/test-gmail.ts",
+    "email:send-test": "tsx scripts/test-send-email.ts",
+    "email:get-gmail-token": "tsx scripts/get-gmail-token.ts",
     "db:typecheck": "pnpm --filter @edicut/db typecheck",
     "db:generate": "pnpm --filter @edicut/db db:generate",
     "db:push": "pnpm --filter @edicut/db db:push",

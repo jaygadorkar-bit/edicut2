@@ -3,6 +3,8 @@ import { z } from "zod";
 export const contactIntakeSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email(),
+  projectType: z.string().trim().max(120).optional(),
+  monthlyVolume: z.string().trim().max(120).optional(),
   brief: z.string().trim().min(20).max(1200),
 });
 

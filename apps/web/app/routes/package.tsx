@@ -32,7 +32,7 @@ export default function PackagePage() {
   ];
 
   return (
-    <PageShell active="Pricing">
+    <PageShell>
       <section className="px-5 pb-16 pt-32 sm:px-6">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_380px]">
           <div>

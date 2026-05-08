@@ -97,10 +97,10 @@ export default function Signin() {
             </p>
 
             <div className="space-y-4">
-              <button className="w-full flex items-center justify-center gap-3 rounded-lg py-3 font-medium bg-[#DB4437] text-white">
+              <a href="/auth/google" className="w-full flex items-center justify-center gap-3 rounded-lg py-3 font-medium bg-[#DB4437] text-white">
                 <img src="/icons/google-flat-white.svg" alt="Google" className="h-5 w-5" />
                 Continue with Google
-              </button>
+              </a>
             </div>
 
             <div className="mt-6 mb-4 flex items-center gap-3">

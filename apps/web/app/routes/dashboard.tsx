@@ -5,14 +5,15 @@ import { findUserById } from "@edicut/db/repositories/users";
 import { getDbFromContext } from "../lib/db.server";
 
 const navItems = [
-  ["Overview", "dashboard"],
-  ["Projects", "video_library"],
-  ["Reviews", "rate_review"],
-  ["Uploads", "upload_file"],
-  ["Messages", "forum"],
-  ["Billing", "receipt_long"],
-  ["Affiliates", "hub"],
-  ["Settings", "settings"],
+  ["Home", "home", "/"],
+  ["Overview", "space_dashboard", "/dashboard"],
+  ["Projects", "video_library", "/dashboard/projects"],
+  ["Reviews", "rate_review", "/dashboard/reviews"],
+  ["Uploads", "upload_file", "/dashboard/uploads"],
+  ["Messages", "forum", "/dashboard/messages"],
+  ["Billing", "receipt_long", "/dashboard/billing"],
+  ["Affiliates", "hub", "/dashboard/affiliates"],
+  ["Settings", "settings", "/dashboard/settings"],
 ];
 
 const kpis = [
@@ -127,19 +128,22 @@ export default function DashboardRoute() {
           </Link>
 
           <nav className="mt-8 grid gap-1">
-            {navItems.map(([label, icon], index) => (
-              <a
+            {navItems.map(([label, icon, path]) => (
+              <NavLink
                 key={label}
-                href="#"
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold ${
-                  index === 0
-                    ? "bg-foreground text-white"
-                    : "text-[#575757] secondary foreground"
-                }`}
+                to={path}
+                end={path === "/" || path === "/dashboard"}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors ${
+                    isActive
+                      ? "bg-foreground text-white shadow-md shadow-black/10"
+                      : "text-[#575757] hover:bg-black/5 hover:text-foreground"
+                  }`
+                }
               >
                 <span className="material-symbols-outlined text-[20px]">{icon}</span>
                 {label}
-              </a>
+              </NavLink>
             ))}
           </nav>
 
@@ -185,17 +189,22 @@ export default function DashboardRoute() {
             </div>
           </div>
           <nav className="mx-auto mt-3 flex max-w-[1500px] gap-2 overflow-x-auto pb-1 lg:hidden">
-            {navItems.slice(0, 6).map(([label, icon], index) => (
-              <a
+            {navItems.slice(0, 6).map(([label, icon, path]) => (
+              <NavLink
                 key={label}
-                href="#"
-                className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-black ${
-                  index === 0 ? "bg-foreground text-white" : "border border-gray-200 bg-white text-[#575757]"
-                }`}
+                to={path}
+                end={path === "/" || path === "/dashboard"}
+                className={({ isActive }) =>
+                  `inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-black transition-colors ${
+                    isActive
+                      ? "bg-foreground text-white shadow-md shadow-black/10"
+                      : "border border-gray-200 bg-white text-[#575757] hover:bg-black/5"
+                  }`
+                }
               >
                 <span className="material-symbols-outlined text-[18px]">{icon}</span>
                 {label}
-              </a>
+              </NavLink>
             ))}
           </nav>
         </header>

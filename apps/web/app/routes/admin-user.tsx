@@ -21,7 +21,7 @@ export function headers() {
   return {
     "X-Robots-Tag": "noindex, nofollow, noarchive",
     "Cache-Control": "no-store",
-    "Referrer-Policy": "no-referrer",
+    "Referrer-Policy": "same-origin",
   };
 }
 

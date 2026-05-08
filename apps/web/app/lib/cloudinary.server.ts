@@ -5,6 +5,13 @@ type CloudinaryEnv = {
   cloudflare?: { env?: Record<string, string | undefined> };
 };
 
+const CLOUDINARY_CACHE_MS = 60_000;
+
+let imageListCache: { expiresAt: number; data: CloudinaryImageResource[] } | null = null;
+let imageListPromise: Promise<CloudinaryImageResource[]> | null = null;
+let usageCache: { expiresAt: number; data: CloudinaryUsage } | null = null;
+let usagePromise: Promise<CloudinaryUsage> | null = null;
+
 async function readLocalEnvFile() {
   if (!globalThis.process?.cwd) {
     return {};
@@ -77,6 +84,13 @@ export type CloudinaryUsage = {
     used_percent?: number;
   };
 };
+
+function clearCloudinaryCache() {
+  imageListCache = null;
+  imageListPromise = null;
+  usageCache = null;
+  usagePromise = null;
+}
 
 async function readEnv(context?: CloudinaryEnv) {
   const viteEnv = import.meta.env as Record<string, string | undefined>;
@@ -190,20 +204,58 @@ export async function uploadPackageImageToCloudinary(file: File, context?: Cloud
     throw new Error(result.error?.message || "Cloudinary upload failed.");
   }
 
+  clearCloudinaryCache();
   return result.secure_url;
 }
 
 export async function listCloudinaryImages(context?: CloudinaryEnv) {
-  const result = await cloudinaryAdminRequest<{ resources?: CloudinaryImageResource[] }>(
-    "/resources/image/upload?prefix=edicut/&max_results=100",
-    context,
-  );
+  const now = Date.now();
 
-  return result.resources || [];
+  if (imageListCache && imageListCache.expiresAt > now) {
+    return imageListCache.data;
+  }
+
+  if (!imageListPromise) {
+    imageListPromise = cloudinaryAdminRequest<{ resources?: CloudinaryImageResource[] }>(
+      "/resources/image/upload?prefix=edicut/&max_results=100",
+      context,
+    )
+      .then((result) => {
+        const data = result.resources || [];
+        imageListCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
+        imageListPromise = null;
+        return data;
+      })
+      .catch((error) => {
+        imageListPromise = null;
+        throw error;
+      });
+  }
+
+  return imageListPromise;
 }
 
 export async function getCloudinaryUsage(context?: CloudinaryEnv) {
-  return cloudinaryAdminRequest<CloudinaryUsage>("/usage", context);
+  const now = Date.now();
+
+  if (usageCache && usageCache.expiresAt > now) {
+    return usageCache.data;
+  }
+
+  if (!usagePromise) {
+    usagePromise = cloudinaryAdminRequest<CloudinaryUsage>("/usage", context)
+      .then((data) => {
+        usageCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
+        usagePromise = null;
+        return data;
+      })
+      .catch((error) => {
+        usagePromise = null;
+        throw error;
+      });
+  }
+
+  return usagePromise;
 }
 
 export async function deleteCloudinaryImages(publicIds: string[], context?: CloudinaryEnv) {
@@ -225,6 +277,7 @@ export async function deleteCloudinaryImages(publicIds: string[], context?: Clou
       body: params,
     },
   );
+  clearCloudinaryCache();
 }
 
 export function removeCloudinaryUrlsFromPackages(packages: PricingPackage[], deletedUrls: string[]) {

@@ -20,16 +20,7 @@ export default function PricingPage() {
   const { packages } = useLoaderData<typeof loader>();
 
   return (
-    <PageShell active="Pricing">
-      <section className="bg-white px-5 pb-12 pt-32 text-center sm:px-6">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Transparent creator packages</p>
-        <h1 className="mx-auto mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-6xl">
-          Choose the editing lane that matches your upload rhythm.
-        </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
-          Predictable scope, rapid turnaround, and review-ready deliverables designed for modern creators.
-        </p>
-      </section>
+    <PageShell>
       <PricingSection comparison plans={packages} />
       <WorkflowSection />
       <FAQSection />

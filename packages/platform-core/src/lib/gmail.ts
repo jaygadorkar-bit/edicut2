@@ -1,8 +1,15 @@
 const GMAIL_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
+let runtimeEnv: Record<string, string | undefined> = {};
+
+export function configureGmailRuntimeEnv(env: Record<string, string | undefined>) {
+  runtimeEnv = { ...runtimeEnv, ...env };
+}
+
 function requireEnv(name: string) {
-  const value = process.env[name];
+  const processEnv = typeof process === "undefined" ? {} : process.env;
+  const value = runtimeEnv[name] ?? processEnv[name];
   if (!value) {
     throw new Error(`Missing required Gmail configuration: ${name}`);
   }
@@ -106,7 +113,8 @@ export async function sendMailViaGmail({
 export async function testGmailConnection() {
   try {
     const accessToken = await getGoogleAccessToken();
-    const senderEmail = process.env.GMAIL_SENDER_EMAIL;
+    const processEnv = typeof process === "undefined" ? {} : process.env;
+    const senderEmail = runtimeEnv.GMAIL_SENDER_EMAIL ?? processEnv.GMAIL_SENDER_EMAIL;
     
     // Check if we can get user info (basic verification)
     const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
@@ -120,7 +128,7 @@ export async function testGmailConnection() {
       return { success: false, error: errorText };
     }
 
-    const profile = await response.json();
+    const profile = (await response.json()) as { emailAddress?: string };
     return { 
       success: true, 
       email: profile.emailAddress,

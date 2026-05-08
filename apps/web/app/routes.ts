@@ -16,5 +16,7 @@ export default [
   route("site/node-logmin/users/:userId", "routes/admin-user.tsx"),
   route("dashboard", "routes/dashboard.tsx"),
   route("signin", "routes/signin.tsx"),
+  route("auth/google", "routes/auth-google.ts"),
+  route("api/auth/callback/google", "routes/auth-google-callback.ts"),
   route("health", "routes/health.ts"),
 ] satisfies RouteConfig;

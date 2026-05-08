@@ -33,7 +33,7 @@ export function headers() {
   return {
     "X-Robots-Tag": "noindex, nofollow, noarchive",
     "Cache-Control": "no-store",
-    "Referrer-Policy": "no-referrer",
+    "Referrer-Policy": "same-origin",
   };
 }
 
@@ -56,7 +56,7 @@ function hasTrustedOrigin(request: Request) {
 
   const origin = request.headers.get("Origin");
 
-  if (!origin) {
+  if (!origin || origin === "null") {
     return true;
   }
 
@@ -68,7 +68,11 @@ function hasTrustedOrigin(request: Request) {
     "https://www.edicut.com",
   ]);
 
-  return trustedOrigins.has(new URL(origin).origin);
+  try {
+    return trustedOrigins.has(new URL(origin).origin);
+  } catch {
+    return false;
+  }
 }
 
 function getAttemptStore() {
@@ -222,7 +226,21 @@ export default function AdminLoginRoute() {
             </div>
           ) : null}
 
-          <Form method="post" action={ADMIN_LOGIN_PATH} reloadDocument className="mt-6 grid gap-4">
+          <a
+            href={`/auth/google?mode=admin&returnTo=${encodeURIComponent(redirectTo)}`}
+            className="mt-6 inline-flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white px-5 text-sm font-black text-foreground shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
+          >
+            <img src="/icons/google-flat.svg" alt="" className="h-5 w-5" aria-hidden="true" />
+            Continue with Google
+          </a>
+
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-black uppercase text-muted-foreground">or</span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+
+          <Form method="post" action={ADMIN_LOGIN_PATH} reloadDocument className="grid gap-4">
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <label className="grid gap-2 text-sm font-black">
               Admin email

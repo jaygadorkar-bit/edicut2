@@ -9,12 +9,14 @@ if not exist "%CHROME_PATH%" set CHROME_PATH=%ProgramFiles(x86)%\Google\Chrome\A
 
 echo Launching Chrome with remote debugging (port 9222)...
 echo Using: %CHROME_PATH%
+echo Debug profile: %TEMP%\edicut-chrome-debug-9222
 
 REM --remote-debugging-port=9222 enables DevTools protocol on port 9222
+REM --user-data-dir uses a separate profile so your normal browser data is not exposed
 REM --no-first-run skips the first run wizard
 REM --disable-default-apps disables default apps
 if exist "%CHROME_PATH%" (
-    start "" "%CHROME_PATH%" --remote-debugging-port=9222 --no-first-run --disable-default-apps http://localhost:3000
+    start "" "%CHROME_PATH%" --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 --user-data-dir="%TEMP%\edicut-chrome-debug-9222" --no-first-run --no-default-browser-check --disable-default-apps http://localhost:3000
     echo Chrome launched successfully!
     echo The Chrome DevTools MCP server can now connect to port 9222.
 ) else (

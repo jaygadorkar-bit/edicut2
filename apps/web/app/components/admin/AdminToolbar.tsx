@@ -4,6 +4,7 @@ import { ADMIN_BASE_PATH, adminPath } from "../../lib/admin-paths";
 const toolbarLinks = [
   { label: "Admin", to: ADMIN_BASE_PATH, icon: "admin_panel_settings", title: "Open admin panel" },
   { label: "Packages", to: adminPath("?tab=packages"), icon: "sell", title: "Edit pricing packages" },
+  { label: "Portfolio", to: adminPath("?tab=portfolio"), icon: "video_library", title: "Edit portfolio videos" },
   { label: "Users", to: adminPath("?tab=users"), icon: "group", title: "Manage users", iconOnly: true },
 ];
 

@@ -38,7 +38,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-5xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
             <span className="h-2 w-2 rounded-full bg-primary" />
-            Editing built for YouTubers
+            Editing service for YouTubers
           </div>
           <h1 className="mx-auto mt-7 max-w-4xl text-5xl font-black leading-[1.02] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
             Publish better videos without living in the timeline.

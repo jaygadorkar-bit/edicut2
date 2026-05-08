@@ -1,5 +1,9 @@
 import readline from 'readline';
 import { URLSearchParams } from 'url';
+import * as dotenv from "dotenv";
+
+dotenv.config();
+dotenv.config({ path: ".env.cloudflare" });
 
 type TokenResponse = {
   refresh_token?: string;
@@ -8,7 +12,7 @@ type TokenResponse = {
 };
 
 /**
- * This script helps you get a logic-lived GMAIL_REFRESH_TOKEN.
+ * This script helps you get a long-lived GMAIL_REFRESH_TOKEN.
  * 
  * Instructions:
  * 1. Go to https://developers.google.com/oauthplayground
