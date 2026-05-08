@@ -85,14 +85,90 @@ export function SiteHeader() {
 
 export function SiteFooter() {
   return (
-    <footer className="px-5 py-10 sm:px-6">
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 border-t border-gray-100 pt-8 text-center md:flex-row md:text-left">
-        <Link to="/"><Logo /></Link>
-        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-bold text-muted-foreground">
-          {navLinks.map((item) => <Link key={item.label} to={item.to} className="foreground">{item.label}</Link>)}
-          {legalLinks.map((item) => <Link key={item.label} to={item.to} className="foreground">{item.label}</Link>)}
+    <footer className="border-t border-gray-100 bg-white px-5 py-16 sm:px-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="grid gap-12 lg:grid-cols-[1.5fr_1fr_1fr_1.5fr]">
+          {/* Brand & Newsletter */}
+          <div className="space-y-6">
+            <Link to="/"><Logo /></Link>
+            <p className="text-sm leading-7 text-muted-foreground max-w-sm">
+              The high-retention editing partner for modern YouTubers. Scale your channel without living in the timeline.
+            </p>
+            <div className="space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-widest text-foreground">Join the waitlist</h4>
+              <form className="flex gap-2">
+                <input 
+                  type="email" 
+                  placeholder="Email address" 
+                  className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium outline-none focus:border-primary"
+                />
+                <button type="submit" className="flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90">
+                  <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <div className="space-y-6">
+            <h4 className="text-xs font-black uppercase tracking-widest text-foreground">Services</h4>
+            <nav className="flex flex-col gap-4 text-sm font-bold text-muted-foreground">
+              {navLinks.map((item) => (
+                <Link key={item.label} to={item.to} className="hover:text-primary transition-colors">{item.label}</Link>
+              ))}
+            </nav>
+          </div>
+
+          {/* Legal */}
+          <div className="space-y-6">
+            <h4 className="text-xs font-black uppercase tracking-widest text-foreground">Company</h4>
+            <nav className="flex flex-col gap-4 text-sm font-bold text-muted-foreground">
+              {legalLinks.map((item) => (
+                <Link key={item.label} to={item.to} className="hover:text-primary transition-colors">{item.label}</Link>
+              ))}
+            </nav>
+          </div>
+
+          {/* Contact & Payments */}
+          <div className="space-y-8">
+            <div className="space-y-6">
+              <h4 className="text-xs font-black uppercase tracking-widest text-foreground">Get in touch</h4>
+              <div className="space-y-4">
+                <a href="mailto:hello@edicut.com" className="flex items-center gap-3 text-sm font-bold text-muted-foreground hover:text-primary transition-colors">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-primary">
+                    <span className="material-symbols-outlined text-[18px]">mail</span>
+                  </span>
+                  hello@edicut.com
+                </a>
+                <a href="https://wa.me/yournumber" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm font-bold text-muted-foreground hover:text-primary transition-colors">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-primary">
+                    <span className="material-symbols-outlined text-[18px]">chat</span>
+                  </span>
+                  WhatsApp Support
+                </a>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-black uppercase tracking-widest text-foreground">Supported Payments</h4>
+              <div className="flex gap-3 grayscale opacity-60">
+                {/* Simplified SVG icons for payments */}
+                <div title="Visa" className="h-6 w-10 bg-muted rounded flex items-center justify-center text-[8px] font-black italic">VISA</div>
+                <div title="Mastercard" className="h-6 w-10 bg-muted rounded flex items-center justify-center text-[8px] font-black italic">MC</div>
+                <div title="American Express" className="h-6 w-10 bg-muted rounded flex items-center justify-center text-[8px] font-black italic">AMEX</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="text-sm font-medium text-muted-foreground">© 2026 EdiCut Studios. All rights reserved.</p>
+
+        <div className="mt-16 flex flex-col items-center justify-between gap-6 border-t border-gray-100 pt-8 md:flex-row">
+          <p className="text-sm font-medium text-muted-foreground">© 2026 EdiCut Studios. All rights reserved.</p>
+          <div className="flex gap-6 text-xs font-black uppercase tracking-widest text-muted-foreground">
+             <span>Made for creators</span>
+             <span className="text-primary">●</span>
+             <span>Retention first</span>
+          </div>
+        </div>
       </div>
     </footer>
   );
