@@ -204,10 +204,10 @@ export function Eyebrow({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">{children}</p>;
 }
 
-export function SectionIntro({ eyebrow, title, copy }: { eyebrow: string; title: string; copy?: string }) {
+export function SectionIntro({ eyebrow, title, copy }: { eyebrow?: string; title: string; copy?: string }) {
   return (
     <div className="mx-auto max-w-3xl text-center">
-      <Eyebrow>{eyebrow}</Eyebrow>
+      {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
       <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">{title}</h2>
       {copy ? <p className="mt-5 text-lg leading-8 text-muted-foreground">{copy}</p> : null}
     </div>
@@ -574,7 +574,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
   return (
     <section id="pricing" className="bg-white px-5 py-20 sm:px-6">
       <div className="mx-auto max-w-7xl">
-        <SectionIntro eyebrow="Packages" title="Choose the editing lane that matches your upload rhythm." copy="Predictable scope, rapid turnaround, and review-ready deliverables designed for modern creators." />
+        <SectionIntro title="Choose the editing lane that matches your upload rhythm." />
         <div className="mt-10 flex justify-center">
           <div className="flex cursor-pointer rounded-full border border-gray-200 bg-white p-1 text-sm font-black transition-colors" onClick={() => setIsMonthly(!isMonthly)}>
             <span className={`inline-flex rounded-full px-4 py-2 ${isMonthly ? "bg-foreground text-white" : "text-muted-foreground hover:text-foreground"}`}>Monthly</span>
