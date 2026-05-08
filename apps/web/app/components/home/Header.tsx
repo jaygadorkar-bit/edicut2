@@ -25,12 +25,12 @@ export function Header() {
   return (
     <>
       {promoEnabled && promoMessage ? (
-        <div className="fixed left-0 top-0 z-[60] flex h-10 w-full items-center justify-center bg-[#7B68EE] px-4 text-center text-[11px] font-black uppercase tracking-widest text-white shadow-md">
+        <div className="flex h-10 w-full items-center justify-center bg-[#F7F8F9] px-4 text-center text-[11px] font-black uppercase tracking-widest text-foreground">
           {promoMessage}
         </div>
       ) : null}
       
-      <nav className={`glass-nav fixed left-0 ${promoEnabled && promoMessage ? "top-10" : "top-0"} z-50 w-full border-b border-black/5 transition-all duration-300`}>
+      <nav className="glass-nav sticky top-0 z-50 w-full border-b border-black/5 transition-all duration-300">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
           <Link to="/" aria-label="EdiCut home" className="transition-opacity hover:opacity-80">
             <LogoMark />
