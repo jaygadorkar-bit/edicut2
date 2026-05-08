@@ -44,10 +44,10 @@ export default function HomePage() {
             <span className="h-2 w-2 rounded-full bg-primary" />
             Editing service for YouTubers
           </div>
-          <h1 className="mx-auto mt-7 max-w-4xl text-5xl font-black leading-[1.02] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
+          <h1 className="yt-display mx-auto mt-7 max-w-4xl text-foreground">
             Publish better videos without living in the timeline.
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
+          <p className="yt-subtitle mx-auto mt-6 max-w-2xl">
             A creator-first editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables.
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">

@@ -201,15 +201,15 @@ export function PageShell({ children }: { children: React.ReactNode }) {
 }
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">{children}</p>;
+  return <p className="yt-tag text-primary">{children}</p>;
 }
 
 export function SectionIntro({ eyebrow, title, copy }: { eyebrow?: string; title: string; copy?: string }) {
   return (
     <div className="mx-auto max-w-3xl text-center">
       {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-      <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">{title}</h2>
-      {copy ? <p className="mt-5 text-lg leading-8 text-muted-foreground">{copy}</p> : null}
+      <h2 className="yt-title mt-3 text-foreground">{title}</h2>
+      {copy ? <p className="yt-subtitle mt-5">{copy}</p> : null}
     </div>
   );
 }
