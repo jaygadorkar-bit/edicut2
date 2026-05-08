@@ -153,20 +153,23 @@ export function SiteFooter() {
 
             <div className="space-y-4">
               <h4 className="text-xs font-black uppercase tracking-widest text-foreground">Supported Payments</h4>
-              <div className="flex gap-4 grayscale opacity-60 lg:justify-end">
-                <svg className="h-6 w-9" viewBox="0 0 38 24" fill="none">
-                  <rect width="38" height="24" rx="4" fill="#222"/>
-                  <path d="M15 16.5l1.5-7.5h2.5l-1.5 7.5h-2.5zm10.2-7.5c-.5-.2-1.3-.4-2.2-.4-2.4 0-4.1 1.3-4.1 3.1 0 1.4 1.2 2.1 2.2 2.6 1 .5 1.3.8 1.3 1.2 0 .6-.8.9-1.5.9-1 0-1.6-.2-2.4-.6l-.3-.2-.4 2.2c.6.3 1.7.5 2.8.5 2.5 0 4.2-1.2 4.2-3.1 0-1-.6-1.8-2-2.5-.8-.4-1.3-.7-1.3-1.1 0-.4.4-.8 1.3-.8.8 0 1.4.2 1.8.4l.2.1.4-2.1zM34 9h-2.3c-.7 0-1.3.4-1.6 1l-4.6 11h2.6l.5-1.4h3.2l.3 1.4h2.3L34 9zm-4.7 8.2l1.1-3.1 1 3.1h-2.1zM8.3 9L5.8 15.6l-.3-1.3C5 12.5 4 11.4 2.8 10.8l.1-.1h4.1l1.3-1.7H8.3z" fill="white"/>
+              <div className="flex gap-4 opacity-80 lg:justify-end">
+                {/* Visa Official */}
+                <svg className="h-6 w-10" viewBox="0 0 24 15" fill="none">
+                  <path d="M12.006 11.533l1.173-7.202h1.884l-1.173 7.202h-1.884zm6.657-6.933c-.417-.16-.94-.269-1.638-.269-1.786 0-3.041.951-3.05 2.308-.01 1.004.898 1.565 1.583 1.899.702.342.938.562.936.868-.004.469-.562.684-1.08.684-.719 0-1.102-.11-1.688-.363l-.236-.112-.252 1.554c.418.192 1.19.359 1.99.367 1.898 0 3.132-.939 3.149-2.396.009-.798-.475-1.405-1.517-1.905-.632-.317-.817-.53-.817-.852.002-.34.378-.696 1.194-.696.678-.01 1.173.15 1.554.312l.185.085.295-1.48zM23.333 4.331h-1.45c-.45 0-.788.13-.986.602l-2.8 6.6h1.978l.394-1.088h2.418l.228 1.088h1.74l-1.522-7.202zm-2.43 4.256l.685-1.883.396 1.883h-1.081zM5.53 4.331L3.35 11.533H1.47l2.253-5.26-.856 3.633a.855.855 0 01-.19.34L.43 11.458l-.062-.03c.312-.647.603-1.25.92-1.91l1.522-6.284H5.53l.363-.122-1.19 1.565c.214-.23.633-.346.827-.346z" fill="#1A1F71"/>
+                  <path d="M5.132 4.331h.398l-3.277 7.202h-.4l3.279-7.202z" fill="#F7B600"/>
                 </svg>
+                {/* Mastercard Official */}
                 <svg className="h-6 w-9" viewBox="0 0 38 24" fill="none">
-                  <rect width="38" height="24" rx="4" fill="#222"/>
-                  <circle cx="15" cy="12" r="7" fill="white" fillOpacity="0.8"/>
-                  <circle cx="23" cy="12" r="7" fill="white" fillOpacity="0.5"/>
+                  <rect width="38" height="24" rx="4" fill="transparent"/>
+                  <circle cx="14" cy="12" r="9" fill="#EB001B"/>
+                  <circle cx="24" cy="12" r="9" fill="#F79E1B"/>
+                  <path d="M19 12a8.99 8.99 0 013.344-6.91A8.99 8.99 0 0015.656 5.09a8.99 8.99 0 000 13.82c2.404-.616 4.417-2.476 5.344-4.82A8.99 8.99 0 0119 12z" fill="#FF5F00"/>
                 </svg>
+                {/* Amex Official */}
                 <svg className="h-6 w-9" viewBox="0 0 38 24" fill="none">
-                  <rect width="38" height="24" rx="4" fill="#222"/>
-                  <path d="M12 8h14v8H12z" fill="white" fillOpacity="0.9"/>
-                  <path d="M19 10l-2 4h4l-2-4z" fill="#222"/>
+                  <rect width="38" height="24" rx="2" fill="#016FD0"/>
+                  <path d="M6 8h2.5l1 2.5 1-2.5h2.5v8H11v-5l-1.5 4h-1l-1.5-4v5H6V8zm12 0h4v1.5h-2.5v1.5H22v1.5h-2.5v1.5H22v1.5h-4V8zm7 0h2l1 2.5L29 8h2l-2 4 2 4h-2l-1-2.5-1 2.5h-2l2-4-2-4z" fill="white"/>
                 </svg>
               </div>
             </div>
