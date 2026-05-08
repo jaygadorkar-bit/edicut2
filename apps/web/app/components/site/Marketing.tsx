@@ -269,7 +269,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   }, [playingItem]);
 
   return (
-    <section id="portfolio" className={`bg-secondary px-5 py-20 sm:px-6 ${className}`}>
+    <section id="portfolio" className={`bg-white px-5 py-20 sm:px-6 ${className}`}>
       <div className="mx-auto max-w-7xl">
         <div className="mx-auto max-w-4xl text-center">
           <Eyebrow>Creator proof</Eyebrow>
@@ -480,7 +480,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
   const [isMonthly, setIsMonthly] = useState(true);
 
   return (
-    <section id="pricing" className="bg-secondary px-5 py-20 sm:px-6">
+    <section id="pricing" className="bg-white px-5 py-20 sm:px-6">
       <div className="mx-auto max-w-7xl">
         <SectionIntro eyebrow="Packages" title="Choose the editing lane that matches your upload rhythm." copy="Predictable scope, rapid turnaround, and review-ready deliverables designed for modern creators." />
         <div className="mt-10 flex justify-center">
@@ -574,7 +574,7 @@ export function TestimonialsSection() {
 
 export function FAQSection() {
   return (
-    <section id="faq" className="bg-secondary px-5 py-20 sm:px-6">
+    <section id="faq" className="bg-white px-5 py-20 sm:px-6">
       <div className="mx-auto max-w-4xl">
         <SectionIntro eyebrow="FAQ" title="What creators usually ask before starting." />
         <div className="mt-10 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
@@ -601,7 +601,7 @@ export function ContactSection({ compact = false, status }: { compact?: boolean;
           <h2 className="mt-3 max-w-2xl text-4xl font-black tracking-tight sm:text-5xl">Tell us what you are editing next.</h2>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">We will review your channel and match you with the most efficient editing lane for your upload rhythm.</p>
         </div>
-        <form method="post" action="/contact" className="grid gap-4 rounded-2xl border border-gray-200 bg-secondary p-5">
+        <form method="post" action="/contact" className="grid gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Name" name="name" required />
             <Input label="Email" name="email" type="email" required />
