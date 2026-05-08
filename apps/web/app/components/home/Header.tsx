@@ -59,17 +59,9 @@ export function Header() {
           <div className="hidden items-center gap-4 md:flex">
             <Link
               to={isSignedIn ? "/dashboard" : "/signin"}
-              className={`group inline-flex items-center gap-2 rounded-full px-7 py-3 text-[11px] font-black uppercase tracking-wider shadow-xl transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 ${
-                isSignedIn
-                  ? "border border-black/5 bg-white text-foreground shadow-black/5 hover:bg-black/5"
-                  : "bg-primary text-white shadow-primary/25 hover:bg-primary/90"
-              }`}
+              className="group inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3 text-[11px] font-black uppercase tracking-wider text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0"
             >
-              <span
-                className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
-                  isSignedIn ? "bg-black/5 text-foreground" : "bg-white/20 text-white"
-                }`}
-              >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition-colors">
                 <span className="material-symbols-outlined text-[12px]">
                   {isSignedIn ? "space_dashboard" : "person"}
                 </span>
