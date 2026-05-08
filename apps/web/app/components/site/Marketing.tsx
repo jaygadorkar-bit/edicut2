@@ -363,13 +363,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   return (
     <section id="portfolio" className={`bg-white px-5 py-20 sm:px-6 ${className}`}>
       <div className="mx-auto max-w-7xl">
-        <div className="mx-auto max-w-4xl text-center">
-          <Eyebrow>Creator proof</Eyebrow>
-          <h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">Edits built to keep viewers watching.</h2>
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
-            Proof across long-form YouTube stories, Shorts, podcast episodes, fashion edits, and commercial launches sharing one system built for retention.
-          </p>
-        </div>
+        <SectionIntro title="Edits built to keep viewers watching." />
 
         <div className="mt-8 flex flex-wrap justify-center gap-2" role="tablist" aria-label="Portfolio categories">
           {portfolioSections.map((section) => (
