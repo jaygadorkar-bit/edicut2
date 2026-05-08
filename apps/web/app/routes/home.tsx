@@ -13,6 +13,7 @@ import {
   WorkflowSection,
 } from "../components/site/Marketing.js";
 import { getDbFromContext } from "../lib/db.server";
+import { getPortfolioSections, publicPortfolioSections } from "../lib/portfolio.server";
 import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
 
 export const meta: MetaFunction = () => {
@@ -24,13 +25,16 @@ export const meta: MetaFunction = () => {
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = getDbFromContext(context);
-  const packages = publicPricingPackages(await getPricingPackages(db));
+  const [packages, portfolioSections] = await Promise.all([
+    getPricingPackages(db).then(publicPricingPackages),
+    getPortfolioSections(db).then(publicPortfolioSections),
+  ]);
 
-  return { packages };
+  return { packages, portfolioSections };
 }
 
 export default function HomePage() {
-  const { packages } = useLoaderData<typeof loader>();
+  const { packages, portfolioSections } = useLoaderData<typeof loader>();
 
   return (
     <PageShell>
@@ -62,7 +66,7 @@ export default function HomePage() {
       </section>
       <TrustStrip />
       <WorkflowSection />
-      <PortfolioSection />
+      <PortfolioSection sections={portfolioSections} />
       <DifferentiatorsSection />
       <TestimonialsSection />
       <PricingSection plans={packages} />

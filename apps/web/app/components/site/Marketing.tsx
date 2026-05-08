@@ -279,11 +279,11 @@ export function PortfolioSection({ full = false, sections }: { full?: boolean; s
   return (
     <section id="portfolio" className="bg-secondary px-5 py-20 sm:px-6">
       <div className="mx-auto max-w-7xl">
-        <div className="mx-auto max-w-3xl text-center">
-          <Eyebrow>Portfolio</Eyebrow>
-          <h2 className="mt-3 text-4xl font-black sm:text-5xl">Mixed-format edits built for modern feeds.</h2>
-          <p className="mt-5 text-lg leading-8 text-muted-foreground">
-            Horizontal YouTube stories, podcast episodes, campaign cuts, music edits, and vertical reels share one production system built for retention.
+        <div className="mx-auto max-w-4xl text-center">
+          <Eyebrow>Creator proof</Eyebrow>
+          <h2 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">Edits built to keep viewers watching.</h2>
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">
+            Proof across long-form YouTube stories, Shorts, podcast episodes, fashion edits, and commercial launches sharing one system built for retention.
           </p>
         </div>
 
