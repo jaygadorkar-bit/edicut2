@@ -46,7 +46,7 @@ export default function FAQ() {
   });
 
   return (
-    <div className="min-h-screen bg-white font-sans text-black">
+    <div className="min-h-screen bg-white text-black">
       <Header />
       
       <main className="pt-32 pb-24 px-5 max-w-3xl mx-auto min-h-screen">

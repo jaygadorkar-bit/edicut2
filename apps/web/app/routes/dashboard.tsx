@@ -129,7 +129,7 @@ export default function DashboardRoute() {
   const visibleNavItems = navItems.filter((item) => !item.feature || allowedFeatures.includes(item.feature));
 
   return (
-    <div className="min-h-screen bg-[#F6F7F8] font-sans text-foreground">
+    <div className="min-h-screen bg-[#F6F7F8] text-foreground">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-gray-200 bg-white lg:block">
         <div className="flex h-full flex-col p-4">
           <Link to="/" className="flex items-center gap-3 rounded-lg px-2 py-2 secondary">

@@ -219,7 +219,7 @@ export function SiteFooter() {
 
 export function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-white font-sans text-foreground">
+    <div className="min-h-screen bg-white text-foreground">
       <SiteHeader />
       <main>{children}</main>
       <SiteFooter />
