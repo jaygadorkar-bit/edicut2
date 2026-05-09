@@ -17,7 +17,7 @@ const navItems = [
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
-  { label: "Customer Support", icon: "support_agent", path: "/dashboard/messages", feature: "support" as DashboardFeature },
+  { label: "Contact Inbox", icon: "support_agent", path: "/dashboard/messages", feature: "support" as DashboardFeature },
   { label: "Billing", icon: "receipt_long", path: "/dashboard/billing", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
   { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },

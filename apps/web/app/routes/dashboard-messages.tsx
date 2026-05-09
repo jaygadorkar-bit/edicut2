@@ -22,7 +22,7 @@ const navItems = [
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
-  { label: "Customer Support", icon: "support_agent", path: "/dashboard/messages", feature: "support" as DashboardFeature },
+  { label: "Contact Inbox", icon: "support_agent", path: "/dashboard/messages", feature: "support" as DashboardFeature },
   { label: "Billing", icon: "receipt_long", path: "/dashboard/billing", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
   { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
@@ -30,7 +30,7 @@ const navItems = [
 
 type MessageFilter = "all" | "replied" | "unreplied";
 
-export const meta: MetaFunction = () => [{ title: "Customer Support - EdiCut Dashboard" }];
+export const meta: MetaFunction = () => [{ title: "Contact Inbox - EdiCut Dashboard" }];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const { user, db, allowedFeatures } = await requireDashboardUser(request, context);
@@ -212,7 +212,7 @@ export default function DashboardMessagesRoute() {
           <div className="mx-auto flex max-w-[1500px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <p className="text-xs font-black uppercase text-muted-foreground">Dashboard</p>
-              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Customer Support</h1>
+              <h1 className="text-2xl font-black tracking-tight sm:text-3xl">Contact Inbox</h1>
             </div>
             <div className="flex flex-wrap gap-2">
               <a href={exportPath} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-black">

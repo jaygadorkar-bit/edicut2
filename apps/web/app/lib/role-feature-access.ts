@@ -5,7 +5,7 @@ export const DASHBOARD_FEATURES = [
   { key: "projects", label: "Projects", path: "/dashboard" },
   { key: "reviews", label: "Reviews", path: "/dashboard" },
   { key: "uploads", label: "Uploads", path: "/dashboard" },
-  { key: "support", label: "Customer Support", path: "/dashboard/messages" },
+  { key: "support", label: "Contact Inbox", path: "/dashboard/messages" },
   { key: "billing", label: "Billing", path: "/dashboard" },
   { key: "affiliates", label: "Affiliates", path: "/dashboard" },
   { key: "settings", label: "Settings", path: "/dashboard" },
