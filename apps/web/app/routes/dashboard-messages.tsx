@@ -17,15 +17,17 @@ import {
 const PAGE_SIZE = 10;
 
 const navItems = [
-  { label: "Home", icon: "home", path: "/", feature: null },
   { label: "Overview", icon: "space_dashboard", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
-  { label: "Contact Inbox", icon: "support_agent", path: "/dashboard/messages", feature: "support" as DashboardFeature },
   { label: "Billing", icon: "receipt_long", path: "/dashboard/billing", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
   { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
+];
+
+const adminItems = [
+  { label: "Mail Inbox", icon: "mail", path: "/dashboard/messages", feature: "support" as DashboardFeature },
 ];
 
 type MessageFilter = "all" | "replied" | "unreplied";
@@ -164,6 +166,7 @@ export default function DashboardMessagesRoute() {
   const currentPath = `/dashboard/messages?${searchParams.toString()}`;
   const exportPath = `/dashboard/messages?${withParam(searchParams, "export", "csv")}`;
   const visibleNavItems = navItems.filter((item) => !item.feature || allowedFeatures.includes(item.feature));
+  const visibleAdminItems = user.role === "customer_support" ? adminItems.filter((item) => !item.feature || allowedFeatures.includes(item.feature)) : [];
 
   return (
     <div className="min-h-screen bg-[#F6F7F8] text-foreground">
@@ -198,6 +201,31 @@ export default function DashboardMessagesRoute() {
               </NavLink>
             ))}
           </nav>
+          
+          {visibleAdminItems.length > 0 && (
+            <>
+              <p className="mt-8 px-3 text-xs font-black uppercase tracking-widest text-muted-foreground">Admin</p>
+              <nav className="mt-2 grid gap-1">
+                {visibleAdminItems.map(({ label, icon, path }) => (
+                  <NavLink
+                    key={label}
+                    to={path}
+                    end={path === "/" || path === "/dashboard"}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors ${
+                        isActive
+                          ? "bg-foreground text-white shadow-md shadow-black/10"
+                          : "text-[#575757] hover:bg-black/5 hover:text-foreground"
+                      }`
+                    }
+                  >
+                    <span className="material-symbols-outlined text-[20px]">{icon}</span>
+                    {label}
+                  </NavLink>
+                ))}
+              </nav>
+            </>
+          )}
 
           <div className="mt-auto rounded-lg border border-gray-200 bg-secondary p-4">
             <p className="text-xs font-black uppercase text-muted-foreground">Signed in as</p>
