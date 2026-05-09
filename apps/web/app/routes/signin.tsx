@@ -34,7 +34,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const captcha = await verifyRecaptchaToken({
     context,
     token: formData.get("g-recaptcha-response"),
-    action: intent === "signup" ? "dashboard_signup" : "dashboard_signin",
   });
 
   if (!captcha.success) {

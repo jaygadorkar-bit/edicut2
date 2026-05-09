@@ -93,7 +93,7 @@ export default function AppRoot() {
       {data.isAdminSignedIn && data.adminToolbarEnabled && !isAdminArea ? <AdminToolbar /> : null}
       {data.recaptchaSiteKey ? (
         <script
-          src={`https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(data.recaptchaSiteKey)}`}
+          src="https://www.google.com/recaptcha/api.js?render=explicit"
           async
           defer
           data-edicut-recaptcha-site-key={data.recaptchaSiteKey}

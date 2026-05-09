@@ -2,7 +2,7 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useMatches } from "react-router";
 import { authHref } from "../auth/AuthModal";
-import { attachRecaptchaToken } from "../../lib/recaptcha.client";
+import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
 import { faqs, legalLinks, navLinks, plans as defaultPlans, portfolio, testimonials, workflow } from "./data";
 import type { PortfolioSection as PortfolioSectionView, PortfolioVideo } from "../../lib/portfolio.server";
 
@@ -882,7 +882,7 @@ export function ContactSection({ compact = false, status }: { compact?: boolean;
     setSecurityError(null);
 
     try {
-      await attachRecaptchaToken(event.currentTarget, "contact_inquiry");
+      await executeInvisibleRecaptcha(event.currentTarget, "contact_inquiry");
       event.currentTarget.dataset.recaptchaReady = "true";
       event.currentTarget.requestSubmit();
     } catch (error) {

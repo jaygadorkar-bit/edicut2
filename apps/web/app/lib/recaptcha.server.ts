@@ -7,8 +7,6 @@ type RecaptchaContext = {
 
 type RecaptchaVerifyResponse = {
   success?: boolean;
-  score?: number;
-  action?: string;
   challenge_ts?: string;
   hostname?: string;
   "error-codes"?: string[];
@@ -39,13 +37,9 @@ export function isRecaptchaConfigured(context?: RecaptchaContext) {
 export async function verifyRecaptchaToken({
   context,
   token,
-  action,
-  minScore = 0.5,
 }: {
   context?: RecaptchaContext;
   token: FormDataEntryValue | null;
-  action: string;
-  minScore?: number;
 }) {
   const env = getRuntimeEnv(context);
   const secret = env.RECAPTCHA_SECRET_KEY;
@@ -76,14 +70,6 @@ export async function verifyRecaptchaToken({
   const data = (await response.json()) as RecaptchaVerifyResponse;
 
   if (!data.success) {
-    return { success: false as const, error: "Security check failed. Please try again." };
-  }
-
-  if (typeof data.score === "number" && data.score < minScore) {
-    return { success: false as const, error: "Security check failed. Please try again." };
-  }
-
-  if (data.action && data.action !== action) {
     return { success: false as const, error: "Security check failed. Please try again." };
   }
 

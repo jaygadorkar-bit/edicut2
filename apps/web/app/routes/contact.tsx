@@ -25,7 +25,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const captcha = await verifyRecaptchaToken({
     context,
     token: formData.get("g-recaptcha-response"),
-    action: "contact_inquiry",
   });
 
   if (!captcha.success) {

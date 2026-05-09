@@ -10,7 +10,7 @@ import {
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 import { verifyPassword } from "../lib/password.server";
-import { attachRecaptchaToken } from "../lib/recaptcha.client";
+import { executeInvisibleRecaptcha } from "../lib/recaptcha.client";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
 
 const MAX_ATTEMPTS = 5;
@@ -155,7 +155,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const captcha = await verifyRecaptchaToken({
     context,
     token: formData.get("g-recaptcha-response"),
-    action: "admin_login",
   });
 
   if (!captcha.success) {
@@ -206,7 +205,7 @@ export default function AdminLoginRoute() {
     setSecurityError(null);
 
     try {
-      await attachRecaptchaToken(event.currentTarget, "admin_login");
+      await executeInvisibleRecaptcha(event.currentTarget, "admin_login");
       event.currentTarget.dataset.recaptchaReady = "true";
       event.currentTarget.requestSubmit();
     } catch (error) {
