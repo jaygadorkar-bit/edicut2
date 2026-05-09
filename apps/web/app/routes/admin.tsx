@@ -551,7 +551,17 @@ export default function AdminRoute() {
     return `${adminPath(`/users/${userId}`)}?returnTo=${encodeURIComponent(returnTo)}`;
   };
   const adminAccountUrl = `${adminPath("/account")}?returnTo=${encodeURIComponent(`${location.pathname}${location.search || ""}`)}`;
-  const pageTitle = tab === "packages" ? "Pricing Packages" : tab === "images" ? "Images" : tab === "settings" ? "Settings" : tab === "users" ? "User Management" : `${tab.charAt(0).toUpperCase()}${tab.slice(1)} Module`;
+  const pageTitle = tab === "packages"
+    ? "Pricing Packages"
+    : tab === "images"
+      ? "Images"
+      : tab === "roles"
+        ? "Role Management"
+        : tab === "settings"
+          ? "Settings"
+          : tab === "users"
+            ? "User Management"
+            : `${tab.charAt(0).toUpperCase()}${tab.slice(1)} Module`;
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">
@@ -570,6 +580,7 @@ export default function AdminRoute() {
           <SidebarLink icon="home" label="Home" active={false} to="/" />
           <SidebarLink icon="dashboard" label="Overview" active={tab === "overview"} to="?tab=overview" />
           <SidebarLink icon="group" label="User Management" active={tab === "users"} to="?tab=users" />
+          <SidebarLink icon="shield_person" label="Role Management" active={tab === "roles"} to="?tab=roles" />
           <SidebarLink icon="sell" label="Pricing Packages" active={tab === "packages"} to="?tab=packages" />
           <SidebarLink icon="image" label="Images" active={tab === "images"} to="?tab=images" />
           <SidebarLink icon="video_library" label="Projects" active={tab === "projects"} to="?tab=projects" />
@@ -897,11 +908,12 @@ export default function AdminRoute() {
             <PricingPackagesPanel packages={pricingPackages} actionData={actionData} navigationState={navigation.state} />
           ) : tab === "images" ? (
             <ImagesPanel images={cloudinaryImages} usage={cloudinaryUsage} error={cloudinaryError} actionData={actionData} navigationState={navigation.state} />
+          ) : tab === "roles" ? (
+            <RoleManagementPanel roleFeatureAccess={roleFeatureAccess} navigationState={navigation.state} />
           ) : tab === "settings" ? (
             <SettingsPanel
               adminToolbarEnabled={adminToolbarEnabled}
               promoBarSettings={promoBarSettings}
-              roleFeatureAccess={roleFeatureAccess}
               actionData={actionData}
               navigationState={navigation.state}
             />
@@ -1235,16 +1247,85 @@ function formatUsage(value: { usage?: number; limit?: number; used_percent?: num
   return "Unavailable";
 }
 
+function RoleManagementPanel({
+  roleFeatureAccess,
+  navigationState,
+}: {
+  roleFeatureAccess: RoleFeatureAccess;
+  navigationState: "idle" | "submitting" | "loading";
+}) {
+  const isSubmitting = navigationState === "submitting";
+
+  return (
+    <div className="max-w-6xl space-y-6">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
+              <span className="material-symbols-outlined text-[22px]">shield_person</span>
+            </div>
+            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">RBAC</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">Role management</h3>
+            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+              Choose which dashboard features each role can access. This controls navigation visibility and route-level access checks.
+            </p>
+          </div>
+
+          <Form method="post" reloadDocument className="w-full md:w-[720px]">
+            <input type="hidden" name="intent" value="update-role-access" />
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full min-w-[680px] text-left">
+                <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Role</th>
+                    {DASHBOARD_FEATURES.map((feature) => (
+                      <th key={feature.key} className="px-3 py-3 text-center">{feature.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {USER_ROLES.map((role) => {
+                    const access = new Set(roleFeatureAccess[role] || []);
+
+                    return (
+                      <tr key={role}>
+                        <td className="px-4 py-3 text-sm font-black text-slate-900">{formatUserRole(role)}</td>
+                        {DASHBOARD_FEATURES.map((feature) => (
+                          <td key={`${role}-${feature.key}`} className="px-3 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              name={`access__${role}__${feature.key}`}
+                              defaultChecked={access.has(feature.key)}
+                              className="h-4 w-4 accent-black"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-black px-5 text-sm font-black text-white disabled:opacity-50">
+              <span className="material-symbols-outlined text-[18px]">save</span>
+              {isSubmitting ? "Saving..." : "Save Role Access"}
+            </button>
+          </Form>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SettingsPanel({
   adminToolbarEnabled,
   promoBarSettings,
-  roleFeatureAccess,
   actionData,
   navigationState,
 }: {
   adminToolbarEnabled: boolean;
   promoBarSettings: { enabled: boolean; message: string };
-  roleFeatureAccess: RoleFeatureAccess;
   actionData: { error?: string; success?: string } | undefined;
   navigationState: "idle" | "submitting" | "loading";
 }) {
@@ -1316,63 +1397,6 @@ function SettingsPanel({
             <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-black text-white disabled:opacity-50">
               <span className="material-symbols-outlined text-[18px]">save</span>
               {isSubmitting ? "Saving..." : "Save Promo Bar"}
-            </button>
-          </Form>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
-              <span className="material-symbols-outlined text-[22px]">shield_person</span>
-            </div>
-            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">RBAC</p>
-            <h3 className="mt-2 text-2xl font-black text-slate-900">Role management</h3>
-            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
-              Choose which dashboard features each role can access. This controls navigation visibility and route-level access checks.
-            </p>
-          </div>
-
-          <Form method="post" reloadDocument className="w-full md:w-[720px]">
-            <input type="hidden" name="intent" value="update-role-access" />
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="w-full min-w-[680px] text-left">
-                <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Role</th>
-                    {DASHBOARD_FEATURES.map((feature) => (
-                      <th key={feature.key} className="px-3 py-3 text-center">{feature.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {USER_ROLES.map((role) => {
-                    const access = new Set(roleFeatureAccess[role] || []);
-
-                    return (
-                      <tr key={role}>
-                        <td className="px-4 py-3 text-sm font-black text-slate-900">{formatUserRole(role)}</td>
-                        {DASHBOARD_FEATURES.map((feature) => (
-                          <td key={`${role}-${feature.key}`} className="px-3 py-3 text-center">
-                            <input
-                              type="checkbox"
-                              name={`access__${role}__${feature.key}`}
-                              defaultChecked={access.has(feature.key)}
-                              className="h-4 w-4 accent-black"
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-black px-5 text-sm font-black text-white disabled:opacity-50">
-              <span className="material-symbols-outlined text-[18px]">save</span>
-              {isSubmitting ? "Saving..." : "Save Role Access"}
             </button>
           </Form>
         </div>
