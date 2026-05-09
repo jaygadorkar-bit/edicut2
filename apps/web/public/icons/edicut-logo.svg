@@ -6,9 +6,9 @@
       .logo { font-family: 'YouTube Sans', Roboto, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial; font-weight: 900; font-size: 36px; text-rendering: optimizeLegibility; }
     ]]></style>
   </defs>
-  <!-- Text-only logo: 'edi' black, 'cut' red; sized to fit header h-10 (40px) -->
-  <text x="0" y="28" class="logo" letter-spacing="-0.02em" dominant-baseline="alphabetic">
-    <tspan fill="#000000">edi</tspan>
-    <tspan fill="#FF0000">cut</tspan>
+  <!-- Text-only logo: 'Edi' black, 'Cut' red; sized to fit header h-10 (40px); tightened spacing -->
+  <text x="0" y="28" class="logo" letter-spacing="-0.04em" dominant-baseline="alphabetic">
+    <tspan fill="#000000">Edi</tspan>
+    <tspan fill="#FF0000">Cut</tspan>
   </text>
 </svg>

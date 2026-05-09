@@ -133,11 +133,8 @@ export default function DashboardRoute() {
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-gray-200 bg-white lg:block">
         <div className="flex h-full flex-col p-4">
           <Link to="/" className="flex items-center gap-3 rounded-lg px-2 py-2 secondary">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white shadow-lg shadow-red-500/20">
-              <span className="material-symbols-outlined text-[22px]">play_arrow</span>
-            </span>
+            <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto" />
             <span>
-              <span className="block text-lg font-black uppercase tracking-tight">EdiCut</span>
               <span className="block text-xs font-bold text-muted-foreground">Operations workspace</span>
             </span>
           </Link>
