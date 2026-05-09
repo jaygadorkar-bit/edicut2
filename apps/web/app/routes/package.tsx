@@ -5,6 +5,14 @@ import { ComparisonTable, ContactSection, PageShell } from "../components/site/M
 import { getDbFromContext } from "../lib/db.server";
 import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
+import {
+  SUBSCRIPTION_PACKAGES,
+  getCheckoutTotal,
+  getCheckoutUrl,
+  getPackageIndex,
+  getSubscriptionPackage,
+  type SubscriptionPackage,
+} from "../lib/subscriptions";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
   { title: data?.subscription ? `${data.subscription.name} Subscription | EdiCut` : "Editing Package | EdiCut" },
@@ -132,87 +140,17 @@ export default function PackagePage() {
   );
 }
 
-type SubscriptionPackage = {
-  name: string;
-  slug: string;
-  description: string;
-  badge: string;
-  bestFor: string;
-  deliverables: string[];
-  basePrice: number;
-  finishedRuntimePrice: number;
-  rawFootagePrice: number;
-};
-
-const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
-  {
-    name: "Creator",
-    slug: "creator",
-    description: "A lean creator package for clean edits with subtitles, sound, color, stock assets, proofing, reels, and thumbnail support.",
-    badge: "Base package",
-    bestFor: "Creators who need the core editing stack without advanced project-file and effects deliverables.",
-    deliverables: ["Subtitles", "Color grading", "Sound design & mixing", "Royalty free stock video", "Royalty free stock music", "Video proofing tool", "Reels repurposing", "Thumbnail"],
-    basePrice: 80,
-    finishedRuntimePrice: 160,
-    rawFootagePrice: 160,
-  },
-  {
-    name: "Creator Plus",
-    slug: "creator-plus",
-    description: "Core creator editing with stronger coverage for longer podcast or vlog inputs.",
-    badge: "Balanced",
-    bestFor: "Creators who want the standard editing stack with a better fit for longer podcast or vlog source material.",
-    deliverables: ["Subtitles", "Color grading", "Sound design & mixing", "Royalty free stock video", "Royalty free stock music", "Video proofing tool", "Reels repurposing", "Thumbnail"],
-    basePrice: 120,
-    finishedRuntimePrice: 240,
-    rawFootagePrice: 200,
-  },
-  {
-    name: "Creator Pro",
-    slug: "creator-pro",
-    description: "The full creator package with project files, motion graphics, VFX, and AI voice over.",
-    badge: "Full stack",
-    bestFor: "Creators and teams that need advanced post-production assets and premium editing support.",
-    deliverables: ["Subtitles", "Color grading", "Sound design & mixing", "Royalty free stock video", "Royalty free stock music", "Video proofing tool", "Reels repurposing", "Thumbnail", "After Effects and Premiere Pro files", "Motion graphics", "VFX", "AI voice over"],
-    basePrice: 300,
-    finishedRuntimePrice: 600,
-    rawFootagePrice: 380,
-  },
-];
-
-function getPackageIndex(slug: string, packages: Array<{ slug: string }>) {
-  const canonicalIndex = SUBSCRIPTION_PACKAGES.findIndex((item) => item.slug === slug);
-  if (canonicalIndex >= 0) return canonicalIndex;
-  return Math.max(packages.findIndex((item) => item.slug === slug), 0);
-}
-
-function getSubscriptionPackage(name: string, slug: string, index: number): SubscriptionPackage {
-  const canonicalIndex = SUBSCRIPTION_PACKAGES.findIndex((item) => item.slug === slug);
-  if (canonicalIndex >= 0) return SUBSCRIPTION_PACKAGES[canonicalIndex];
-
-  const key = `${name} ${slug}`.toLowerCase();
-
-  if (key.includes("plus") || index === 1) {
-    return SUBSCRIPTION_PACKAGES[1];
-  }
-
-  if (key.includes("pro") || index === 2) {
-    return SUBSCRIPTION_PACKAGES[2];
-  }
-
-  return SUBSCRIPTION_PACKAGES[0];
-}
-
 function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPackage }) {
   const [includeFinishedRuntime, setIncludeFinishedRuntime] = useState(false);
   const [includeRawFootage, setIncludeRawFootage] = useState(false);
-  const total = useMemo(() => {
-    return subscription.basePrice
-      + (includeFinishedRuntime ? subscription.finishedRuntimePrice : 0)
-      + (includeRawFootage ? subscription.rawFootagePrice : 0);
-  }, [includeFinishedRuntime, includeRawFootage, subscription]);
-
-  const contactHref = `/contact?package=${encodeURIComponent(subscription.name)}&estimate=${total}#contact`;
+  const total = useMemo(() => getCheckoutTotal(subscription, {
+    runtime: includeFinishedRuntime,
+    raw: includeRawFootage,
+  }), [includeFinishedRuntime, includeRawFootage, subscription]);
+  const checkoutHref = getCheckoutUrl(subscription, {
+    runtime: includeFinishedRuntime,
+    raw: includeRawFootage,
+  });
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-xl shadow-black/5">
@@ -258,10 +196,11 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
         </div>
       </div>
 
-      <Link to={contactHref} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-4 text-sm font-black text-white">
+      <Link to={checkoutHref} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-4 text-sm font-black text-white">
         Continue with subscription
         <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
       </Link>
+      <p className="mt-3 text-center text-xs font-bold text-muted-foreground">Sign in opens first if you are not already logged in.</p>
     </section>
   );
 }
