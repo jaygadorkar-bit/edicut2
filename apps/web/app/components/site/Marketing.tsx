@@ -88,6 +88,21 @@ export function SiteHeader() {
 }
 
 export function SiteFooter() {
+  const [newsletterStatus, setNewsletterStatus] = useState<"idle" | "verified" | "error">("idle");
+
+  async function handleNewsletterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNewsletterStatus("idle");
+
+    try {
+      await executeInvisibleRecaptcha(event.currentTarget, "newsletter_signup");
+      setNewsletterStatus("verified");
+      event.currentTarget.reset();
+    } catch {
+      setNewsletterStatus("error");
+    }
+  }
+
   return (
     <footer className="border-t border-gray-100 bg-white px-5 py-16 sm:px-6">
       <div className="mx-auto max-w-7xl">
@@ -100,16 +115,21 @@ export function SiteFooter() {
             </p>
             <div className="space-y-3">
               <h4 className="text-xs font-black uppercase tracking-widest text-foreground">Join the waitlist</h4>
-              <form className="flex gap-2">
+              <form className="flex gap-2" onSubmit={handleNewsletterSubmit}>
+                <input type="hidden" name="g-recaptcha-response" value="" />
                 <input 
                   type="email" 
+                  name="email"
                   placeholder="Email address" 
+                  required
                   className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm font-medium outline-none focus:border-primary"
                 />
                 <button type="submit" className="flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90">
                   <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
                 </button>
               </form>
+              {newsletterStatus === "verified" ? <p className="text-xs font-black text-primary">Security check passed.</p> : null}
+              {newsletterStatus === "error" ? <p className="text-xs font-black text-[#D90000]">Security check failed. Please try again.</p> : null}
             </div>
           </div>
 
