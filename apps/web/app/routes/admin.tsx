@@ -1255,6 +1255,14 @@ function RoleManagementPanel({
   navigationState: "idle" | "submitting" | "loading";
 }) {
   const isSubmitting = navigationState === "submitting";
+  const roleLabels: Record<UserRole, string> = {
+    user: "Customer",
+    customer: "Customer",
+    customer_support: "Customer Support",
+    affiliate: "Affiliate Partner",
+    editor: "Editor",
+    project_manager: "Project Manager",
+  };
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -1264,8 +1272,8 @@ function RoleManagementPanel({
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
               <span className="material-symbols-outlined text-[22px]">shield_person</span>
             </div>
-            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">RBAC</p>
-            <h3 className="mt-2 text-2xl font-black text-slate-900">Role management</h3>
+            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">Access control</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">Permission matrix</h3>
             <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
               Choose which dashboard features each role can access. This controls navigation visibility and route-level access checks.
             </p>
@@ -1277,7 +1285,7 @@ function RoleManagementPanel({
               <table className="w-full min-w-[680px] text-left">
                 <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500">
                   <tr>
-                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">Access role</th>
                     {DASHBOARD_FEATURES.map((feature) => (
                       <th key={feature.key} className="px-3 py-3 text-center">{feature.label}</th>
                     ))}
@@ -1289,7 +1297,7 @@ function RoleManagementPanel({
 
                     return (
                       <tr key={role}>
-                        <td className="px-4 py-3 text-sm font-black text-slate-900">{formatUserRole(role)}</td>
+                        <td className="px-4 py-3 text-sm font-black text-slate-900">{roleLabels[role]}</td>
                         {DASHBOARD_FEATURES.map((feature) => (
                           <td key={`${role}-${feature.key}`} className="px-3 py-3 text-center">
                             <input
