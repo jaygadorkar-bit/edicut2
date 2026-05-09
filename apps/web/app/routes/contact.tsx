@@ -4,6 +4,7 @@ import { contactIntakeSchema } from "@edicut/shared/contracts/operations";
 import { contactMessages } from "@edicut/db/schema";
 import { ContactSection, FAQSection, PageShell } from "../components/site/Marketing.js";
 import { getDbFromContext } from "../lib/db.server";
+import { verifyRecaptchaToken } from "../lib/recaptcha.server";
 
 export const meta: MetaFunction = () => [{ title: "Contact EdiCut | Start a project" }];
 
@@ -19,6 +20,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (!parsed.success) {
     return redirect("/contact?error=invalid#contact");
+  }
+
+  const captcha = await verifyRecaptchaToken({
+    context,
+    token: formData.get("g-recaptcha-response"),
+    action: "contact_inquiry",
+  });
+
+  if (!captcha.success) {
+    return redirect("/contact?error=security#contact");
   }
 
   const db = getDbFromContext(context);
@@ -37,11 +48,12 @@ export function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   return {
     sent: url.searchParams.get("sent") === "1",
+    error: url.searchParams.get("error"),
   };
 }
 
 export default function ContactPage() {
-  const { sent } = useLoaderData<typeof loader>();
+  const { sent, error } = useLoaderData<typeof loader>();
 
   return (
     <PageShell>
@@ -50,7 +62,7 @@ export default function ContactPage() {
         <h1 className="mx-auto mt-4 max-w-4xl text-5xl font-black tracking-tight sm:text-6xl">Tell us what you are editing next.</h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">Our team will review your channel and project details to match you with the right package.</p>
       </section>
-      <ContactSection status={sent ? "sent" : undefined} />
+      <ContactSection status={sent ? "sent" : error === "security" ? "security-error" : error === "invalid" ? "invalid-error" : undefined} />
       <section className="bg-secondary px-5 py-16 sm:px-6">
         <div className="mx-auto grid max-w-7xl gap-5 md:grid-cols-3">
           {["Pricing questions", "Portfolio review", "Existing project support"].map((item) => <article key={item} className="rounded-2xl border border-gray-200 bg-white p-6 text-xl font-black">{item}</article>)}

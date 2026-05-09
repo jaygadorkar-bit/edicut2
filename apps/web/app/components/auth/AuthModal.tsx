@@ -1,5 +1,7 @@
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useLocation, useNavigate, useSearchParams } from "react-router";
+import { executeRecaptcha } from "../../lib/recaptcha.client";
 
 type AuthMode = "signin" | "signup";
 
@@ -25,6 +27,7 @@ export function AuthModal() {
   const isOpen = requestedMode === "signin" || requestedMode === "signup";
   const [mode, setMode] = useState<AuthMode>("signin");
   const [showPassword, setShowPassword] = useState(false);
+  const [securityError, setSecurityError] = useState<string | null>(null);
 
   useEffect(() => {
     if (requestedMode === "signup") setMode("signup");
@@ -42,7 +45,21 @@ export function AuthModal() {
   if (!isOpen) return null;
 
   const error = fetcher.data?.intent === mode ? fetcher.data.error : undefined;
+  const visibleError = securityError || error;
   const submitting = fetcher.state !== "idle";
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSecurityError(null);
+
+    try {
+      const formData = new FormData(event.currentTarget);
+      formData.set("g-recaptcha-response", await executeRecaptcha(mode === "signup" ? "dashboard_signup" : "dashboard_signin"));
+      fetcher.submit(formData, { method: "post", action: "/signin" });
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 px-3 py-4 sm:px-5 sm:py-8" role="dialog" aria-modal="true" aria-label="EdiCut authentication">
@@ -148,15 +165,16 @@ export function AuthModal() {
             <div className="h-px flex-1 bg-gray-200" />
           </div>
 
-          {error ? (
+          {visibleError ? (
             <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-              {error}
+              {visibleError}
             </div>
           ) : null}
 
-          <fetcher.Form method="post" action="/signin" className="grid gap-4">
+          <fetcher.Form method="post" action="/signin" className="grid gap-4" onSubmit={handleSubmit}>
             <input type="hidden" name="intent" value={mode} />
             <input type="hidden" name="redirectTo" value={redirectTo} />
+            <input type="hidden" name="g-recaptcha-response" value="" />
             {mode === "signup" ? <AuthField label="Full name" name="name" /> : null}
             <AuthField label="Email" name="email" type="email" />
             <PasswordField

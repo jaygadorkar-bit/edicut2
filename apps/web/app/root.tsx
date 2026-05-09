@@ -19,6 +19,7 @@ import { getDbFromContext } from "./lib/db.server";
 import { getAdminToolbarEnabled, getPromoBarSettings } from "./lib/site-settings.server";
 import { AdminToolbar } from "./components/admin/AdminToolbar";
 import { AuthModal } from "./components/auth/AuthModal";
+import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 
 export function links() {
   return [
@@ -58,6 +59,7 @@ export async function loader({
     isAdminSignedIn,
     adminToolbarEnabled,
     promoBarSettings,
+    recaptchaSiteKey: getRecaptchaSiteKey(context),
   };
 }
 
@@ -89,6 +91,14 @@ export default function AppRoot() {
       <Outlet />
       <AuthModal />
       {data.isAdminSignedIn && data.adminToolbarEnabled && !isAdminArea ? <AdminToolbar /> : null}
+      {data.recaptchaSiteKey ? (
+        <script
+          src={`https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(data.recaptchaSiteKey)}`}
+          async
+          defer
+          data-edicut-recaptcha-site-key={data.recaptchaSiteKey}
+        />
+      ) : null}
       <ScrollRestoration />
       <Scripts />
     </>

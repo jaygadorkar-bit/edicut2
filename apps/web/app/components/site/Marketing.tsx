@@ -1,6 +1,8 @@
+import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useMatches } from "react-router";
 import { authHref } from "../auth/AuthModal";
+import { attachRecaptchaToken } from "../../lib/recaptcha.client";
 import { faqs, legalLinks, navLinks, plans as defaultPlans, portfolio, testimonials, workflow } from "./data";
 import type { PortfolioSection as PortfolioSectionView, PortfolioVideo } from "../../lib/portfolio.server";
 
@@ -867,7 +869,27 @@ export function FAQSection() {
   );
 }
 
-export function ContactSection({ compact = false, status }: { compact?: boolean; status?: "sent" }) {
+export function ContactSection({ compact = false, status }: { compact?: boolean; status?: "sent" | "security-error" | "invalid-error" }) {
+  const [securityError, setSecurityError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    if (event.currentTarget.dataset.recaptchaReady === "true") {
+      event.currentTarget.dataset.recaptchaReady = "false";
+      return;
+    }
+
+    event.preventDefault();
+    setSecurityError(null);
+
+    try {
+      await attachRecaptchaToken(event.currentTarget, "contact_inquiry");
+      event.currentTarget.dataset.recaptchaReady = "true";
+      event.currentTarget.requestSubmit();
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+    }
+  }
+
   return (
     <section id="contact" className="px-5 py-20 sm:px-6">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_0.75fr]">
@@ -876,7 +898,8 @@ export function ContactSection({ compact = false, status }: { compact?: boolean;
           <h2 className="mt-3 max-w-2xl text-4xl font-black tracking-tight sm:text-5xl">Tell us what you are editing next.</h2>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">We will review your channel and match you with the most efficient editing lane for your upload rhythm.</p>
         </div>
-        <form method="post" action="/contact" className="grid gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <form method="post" action="/contact" className="grid gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm" onSubmit={handleSubmit}>
+          <input type="hidden" name="g-recaptcha-response" value="" />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Name" name="name" required />
             <Input label="Email" name="email" type="email" required />
@@ -893,6 +916,8 @@ export function ContactSection({ compact = false, status }: { compact?: boolean;
           </label>
           <button type="submit" className="rounded-2xl bg-primary px-5 py-4 text-sm font-black text-white">Send inquiry</button>
           {status === "sent" ? <p className="rounded-xl bg-white px-4 py-3 text-sm font-black text-primary">Message sent. We will reply shortly.</p> : null}
+          {securityError || status === "security-error" ? <p className="rounded-xl bg-[#FFF5F5] px-4 py-3 text-sm font-black text-[#D90000]">{securityError || "Security check failed. Please try again."}</p> : null}
+          {status === "invalid-error" ? <p className="rounded-xl bg-[#FFF5F5] px-4 py-3 text-sm font-black text-[#D90000]">Check the form details and try again.</p> : null}
           <p className="text-sm font-bold text-muted-foreground">hello@edicut.com · Replies within 24 hours</p>
         </form>
       </div>

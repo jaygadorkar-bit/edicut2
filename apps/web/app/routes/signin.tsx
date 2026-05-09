@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { createUserSession } from "../lib/session.server";
 import { getDbFromContext } from "../lib/db.server";
 import { verifyPassword } from "../lib/password.server";
+import { verifyRecaptchaToken } from "../lib/recaptcha.server";
 
 export const meta: MetaFunction = () => [
   { title: "Sign in - EdiCut" },
@@ -28,6 +29,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (!email || !password || password.length < 6 || typeof email !== "string" || typeof password !== "string") {
     return { error: "Invalid email or password (min 6 characters).", intent };
+  }
+
+  const captcha = await verifyRecaptchaToken({
+    context,
+    token: formData.get("g-recaptcha-response"),
+    action: intent === "signup" ? "dashboard_signup" : "dashboard_signin",
+  });
+
+  if (!captcha.success) {
+    return { error: captcha.error, intent };
   }
 
   const db = getDbFromContext(context);

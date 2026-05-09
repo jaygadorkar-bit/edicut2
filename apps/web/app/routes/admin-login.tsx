@@ -1,4 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { FormEvent } from "react";
+import { useState } from "react";
 import { Form, redirect, useActionData, useNavigation, useSearchParams } from "react-router";
 import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
 import { getDbFromContext } from "../lib/db.server";
@@ -8,6 +10,8 @@ import {
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 import { verifyPassword } from "../lib/password.server";
+import { attachRecaptchaToken } from "../lib/recaptcha.client";
+import { verifyRecaptchaToken } from "../lib/recaptcha.server";
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -148,6 +152,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return { error: "Use your admin email and password." };
   }
 
+  const captcha = await verifyRecaptchaToken({
+    context,
+    token: formData.get("g-recaptcha-response"),
+    action: "admin_login",
+  });
+
+  if (!captcha.success) {
+    return { error: captcha.error };
+  }
+
   const attemptKey = getAttemptKey(request, email);
 
   if (isRateLimited(attemptKey)) {
@@ -180,6 +194,25 @@ export default function AdminLoginRoute() {
   const [searchParams] = useSearchParams();
   const redirectTo = safeRedirectTo(searchParams.get("redirectTo"));
   const isSubmitting = navigation.state === "submitting";
+  const [securityError, setSecurityError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    if (event.currentTarget.dataset.recaptchaReady === "true") {
+      event.currentTarget.dataset.recaptchaReady = "false";
+      return;
+    }
+
+    event.preventDefault();
+    setSecurityError(null);
+
+    try {
+      await attachRecaptchaToken(event.currentTarget, "admin_login");
+      event.currentTarget.dataset.recaptchaReady = "true";
+      event.currentTarget.requestSubmit();
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#F6F7F8] px-5 py-8 text-foreground sm:px-6">
@@ -220,9 +253,9 @@ export default function AdminLoginRoute() {
             <span className="material-symbols-outlined text-primary">lock</span>
           </div>
 
-          {actionData?.error ? (
+          {securityError || actionData?.error ? (
             <div className="mt-5 rounded-lg border border-red-100 bg-[#FFF5F5] p-3 text-sm font-bold text-[#D90000]">
-              {actionData.error}
+              {securityError || actionData?.error}
             </div>
           ) : null}
 
@@ -240,8 +273,9 @@ export default function AdminLoginRoute() {
             <div className="h-px flex-1 bg-gray-200" />
           </div>
 
-          <Form method="post" action={ADMIN_LOGIN_PATH} reloadDocument className="grid gap-4">
+          <Form method="post" action={ADMIN_LOGIN_PATH} reloadDocument className="grid gap-4" onSubmit={handleSubmit}>
             <input type="hidden" name="redirectTo" value={redirectTo} />
+            <input type="hidden" name="g-recaptcha-response" value="" />
             <label className="grid gap-2 text-sm font-black">
               Admin email
               <input
