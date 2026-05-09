@@ -19,12 +19,7 @@ type PricingPlanView = {
 
 export function Logo() {
   return (
-    <span className="flex items-center gap-2">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-red-500/20 transition-transform hover:scale-105 active:scale-95">
-        <span className="material-symbols-outlined text-[24px]">play_arrow</span>
-      </span>
-      <span className="yt-subtitle font-black uppercase tracking-tight text-foreground">EdiCut</span>
-    </span>
+    <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto" />
   );
 }
 

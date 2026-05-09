@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 40" role="img" aria-label="edicut logo">
+  <title>edicut</title>
+  <defs>
+    <style type="text/css"><![CDATA[
+      .logo { font-family: 'YouTube Sans', Roboto, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial; font-weight: 900; font-size: 36px; text-rendering: optimizeLegibility; }
+    ]]></style>
+  </defs>
+  <!-- Text-only logo: 'edi' black, 'cut' red; sized to fit header h-10 (40px) -->
+  <text x="0" y="28" class="logo" letter-spacing="-0.02em" dominant-baseline="alphabetic">
+    <tspan fill="#000000">edi</tspan>
+    <tspan fill="#FF0000">cut</tspan>
+  </text>
+</svg>

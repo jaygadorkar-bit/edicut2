@@ -78,10 +78,7 @@ export function AuthModal() {
         <section className="hidden bg-[#111111] p-8 text-white md:flex md:flex-col md:justify-between lg:p-10">
           <div>
             <Link to="/" className="inline-flex items-center gap-2" aria-label="EdiCut home">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white">
-                <span className="material-symbols-outlined text-[23px]">play_arrow</span>
-              </span>
-              <span className="text-lg font-black uppercase tracking-tight">EdiCut</span>
+              <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto" />
             </Link>
 
             <h2 className="mt-12 max-w-sm text-4xl font-black leading-tight tracking-tight">Scale your edits without living in the timeline.</h2>
@@ -123,10 +120,7 @@ export function AuthModal() {
         <section className="max-h-[94vh] overflow-y-auto px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
           <div className="pr-10 md:hidden">
             <Link to="/" className="inline-flex items-center gap-2" aria-label="EdiCut home">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-                <span className="material-symbols-outlined text-[21px]">play_arrow</span>
-              </span>
-              <span className="text-lg font-black uppercase tracking-tight">EdiCut</span>
+              <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-9 w-auto" />
             </Link>
           </div>
 

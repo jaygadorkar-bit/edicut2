@@ -4,14 +4,7 @@ import { authHref } from "../auth/AuthModal";
 import { navLinks } from "../site/data";
 
 export function LogoMark() {
-  return (
-    <span className="flex items-center gap-2">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-red-500/20 transition-transform hover:scale-105 active:scale-95">
-        <span className="material-symbols-outlined text-[24px]">play_arrow</span>
-      </span>
-      <span className="text-xl font-black uppercase tracking-tight text-foreground">EdiCut</span>
-    </span>
-  );
+  return <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto" />;
 }
 
 export function Header() {
