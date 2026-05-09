@@ -31,9 +31,17 @@ import {
   type CloudinaryImageResource,
   type CloudinaryUsage,
 } from "../lib/cloudinary.server";
-import { getAdminToolbarEnabled, saveAdminToolbarEnabled, getPromoBarSettings, savePromoBarSettings } from "../lib/site-settings.server";
+import {
+  getAdminToolbarEnabled,
+  saveAdminToolbarEnabled,
+  getPromoBarSettings,
+  savePromoBarSettings,
+  getRoleFeatureAccessSettings,
+  saveRoleFeatureAccessSettings,
+} from "../lib/site-settings.server";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, count as drizzleCount } from "drizzle-orm";
 import { useState, useEffect, type ReactNode } from "react";
+import { DASHBOARD_FEATURES, type RoleFeatureAccess } from "../lib/role-feature-access";
 
 const PAGE_SIZE = 10;
 
@@ -163,10 +171,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     managerCount,
     editorCount,
     customerCount,
+    supportCount,
     trashCount,
     pricingPackages,
     adminToolbarEnabled,
     promoBarSettings,
+    roleFeatureAccess,
     cloudinaryImages,
     cloudinaryUsage,
     cloudinaryError
@@ -176,10 +186,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "project_manager"), isNull(usersTable.deletedAt))),
     db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "editor"), isNull(usersTable.deletedAt))),
     db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "customer"), isNull(usersTable.deletedAt))),
+    db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "customer_support"), isNull(usersTable.deletedAt))),
     db.select({ count: drizzleCount() }).from(usersTable).where(isNotNull(usersTable.deletedAt)),
     getPricingPackages(db),
     getAdminToolbarEnabled(db),
     getPromoBarSettings(db),
+    getRoleFeatureAccessSettings(db),
     listCloudinaryImages(context).catch((error) => {
       console.error("Cloudinary image list error:", error);
       return [] as CloudinaryImageResource[];
@@ -203,6 +215,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     pricingPackages,
     adminToolbarEnabled,
     promoBarSettings,
+    roleFeatureAccess,
     cloudinaryImages,
     cloudinaryUsage,
     cloudinaryError,
@@ -212,6 +225,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       managers: Number(managerCount[0].count || 0),
       editors: Number(editorCount[0].count || 0),
       customers: Number(customerCount[0].count || 0),
+      support: Number(supportCount[0].count || 0),
       trash: Number(trashCount[0].count || 0),
     }
   };
@@ -419,6 +433,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return { success: "Promo bar settings updated." };
   }
 
+  if (intent === "update-role-access") {
+    const nextAccess = USER_ROLES.reduce<RoleFeatureAccess>((accumulator, role) => {
+      accumulator[role] = DASHBOARD_FEATURES
+        .filter((feature) => formData.get(`access__${role}__${feature.key}`) === "on")
+        .map((feature) => feature.key);
+
+      return accumulator;
+    }, {} as RoleFeatureAccess);
+
+    await saveRoleFeatureAccessSettings(db, nextAccess);
+    return { success: "Role access settings updated." };
+  }
+
   if (intent === "upload-images") {
     const imageFiles = formData
       .getAll("imageFiles")
@@ -460,7 +487,23 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function AdminRoute() {
-  const { adminUser, users, adminUsers, totalPages, currentPage, stats, tab, view, pricingPackages, adminToolbarEnabled, promoBarSettings, cloudinaryImages, cloudinaryUsage, cloudinaryError } = useLoaderData<typeof loader>();
+  const {
+    adminUser,
+    users,
+    adminUsers,
+    totalPages,
+    currentPage,
+    stats,
+    tab,
+    view,
+    pricingPackages,
+    adminToolbarEnabled,
+    promoBarSettings,
+    roleFeatureAccess,
+    cloudinaryImages,
+    cloudinaryUsage,
+    cloudinaryError,
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const actionError = actionData && "error" in actionData ? actionData.error : null;
   const actionSuccess = actionData && "success" in actionData ? actionData.success : null;
@@ -616,10 +659,11 @@ export default function AdminRoute() {
           {tab === "users" ? (
             <>
               {/* Metrics */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <MetricCard label="All Users" value={stats.total} icon="group" color="blue" to="?tab=users&view=active" active={!isAdminDirectory && view !== "trash" && !searchParams.get("role")} />
                 <MetricCard label="Admins" value={stats.admins} icon="admin_panel_settings" color="red" to="?tab=users&view=admins" active={isAdminDirectory} />
                 <MetricCard label="Managers" value={stats.managers} icon="manage_accounts" color="indigo" to="?tab=users&view=active&role=project_manager" active={!isAdminDirectory && searchParams.get("role") === "project_manager"} />
+                <MetricCard label="Support" value={stats.support} icon="support_agent" color="slate" to="?tab=users&view=active&role=customer_support" active={!isAdminDirectory && searchParams.get("role") === "customer_support"} />
                 <MetricCard label="Trash" value={stats.trash} icon="delete" color="amber" to="?tab=users&view=trash" active={view === "trash"} />
               </div>
 
@@ -854,7 +898,13 @@ export default function AdminRoute() {
           ) : tab === "images" ? (
             <ImagesPanel images={cloudinaryImages} usage={cloudinaryUsage} error={cloudinaryError} actionData={actionData} navigationState={navigation.state} />
           ) : tab === "settings" ? (
-            <SettingsPanel adminToolbarEnabled={adminToolbarEnabled} promoBarSettings={promoBarSettings} actionData={actionData} navigationState={navigation.state} />
+            <SettingsPanel
+              adminToolbarEnabled={adminToolbarEnabled}
+              promoBarSettings={promoBarSettings}
+              roleFeatureAccess={roleFeatureAccess}
+              actionData={actionData}
+              navigationState={navigation.state}
+            />
           ) : (
             <div className="flex flex-col items-center justify-center py-32 rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">
               <span className="material-symbols-outlined text-[64px] mb-4">construction</span>
@@ -1188,11 +1238,13 @@ function formatUsage(value: { usage?: number; limit?: number; used_percent?: num
 function SettingsPanel({
   adminToolbarEnabled,
   promoBarSettings,
+  roleFeatureAccess,
   actionData,
   navigationState,
 }: {
   adminToolbarEnabled: boolean;
   promoBarSettings: { enabled: boolean; message: string };
+  roleFeatureAccess: RoleFeatureAccess;
   actionData: { error?: string; success?: string } | undefined;
   navigationState: "idle" | "submitting" | "loading";
 }) {
@@ -1264,6 +1316,63 @@ function SettingsPanel({
             <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-black text-white disabled:opacity-50">
               <span className="material-symbols-outlined text-[18px]">save</span>
               {isSubmitting ? "Saving..." : "Save Promo Bar"}
+            </button>
+          </Form>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
+              <span className="material-symbols-outlined text-[22px]">shield_person</span>
+            </div>
+            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">RBAC</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">Role management</h3>
+            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+              Choose which dashboard features each role can access. This controls navigation visibility and route-level access checks.
+            </p>
+          </div>
+
+          <Form method="post" reloadDocument className="w-full md:w-[720px]">
+            <input type="hidden" name="intent" value="update-role-access" />
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full min-w-[680px] text-left">
+                <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Role</th>
+                    {DASHBOARD_FEATURES.map((feature) => (
+                      <th key={feature.key} className="px-3 py-3 text-center">{feature.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {USER_ROLES.map((role) => {
+                    const access = new Set(roleFeatureAccess[role] || []);
+
+                    return (
+                      <tr key={role}>
+                        <td className="px-4 py-3 text-sm font-black text-slate-900">{formatUserRole(role)}</td>
+                        {DASHBOARD_FEATURES.map((feature) => (
+                          <td key={`${role}-${feature.key}`} className="px-3 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              name={`access__${role}__${feature.key}`}
+                              defaultChecked={access.has(feature.key)}
+                              className="h-4 w-4 accent-black"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-black px-5 text-sm font-black text-white disabled:opacity-50">
+              <span className="material-symbols-outlined text-[18px]">save</span>
+              {isSubmitting ? "Saving..." : "Save Role Access"}
             </button>
           </Form>
         </div>
@@ -1517,7 +1626,13 @@ function SidebarLink({ icon, label, to, active }: { icon: string; label: string;
 }
 
 function MetricCard({ label, value, icon, color, to, active = false }: { label: string; value: number; icon: string; color: string; to?: string; active?: boolean }) {
-  const colorMap: Record<string, string> = { blue: "bg-blue-50 text-blue-600", red: "bg-red-50 text-red-600", indigo: "bg-indigo-50 text-indigo-600", amber: "bg-amber-50 text-amber-600" };
+  const colorMap: Record<string, string> = {
+    blue: "bg-blue-50 text-blue-600",
+    red: "bg-red-50 text-red-600",
+    indigo: "bg-indigo-50 text-indigo-600",
+    amber: "bg-amber-50 text-amber-600",
+    slate: "bg-slate-100 text-slate-700",
+  };
   const content = (
     <>
       <div className="flex items-center justify-between">
@@ -1552,6 +1667,7 @@ function RoleBadge({ role }: { role: string }) {
   const styles: Record<UserRole, string> = {
     user: "bg-slate-50 text-slate-700 ring-slate-600/10",
     customer: "bg-slate-50 text-slate-700 ring-slate-600/10",
+    customer_support: "bg-cyan-50 text-cyan-700 ring-cyan-600/10",
     affiliate: "bg-emerald-50 text-emerald-700 ring-emerald-600/10",
     editor: "bg-amber-50 text-amber-700 ring-amber-600/10",
     project_manager: "bg-indigo-50 text-indigo-700 ring-indigo-600/10",

@@ -17,6 +17,7 @@ import type { AdapterAccount } from "next-auth/adapters";
 
 export const userRoleEnum = pgEnum("user_role", [
   "customer",
+  "customer_support",
   "affiliate",
   "editor",
   "project_manager",

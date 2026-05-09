@@ -6,19 +6,26 @@ import { contactMessages } from "@edicut/db/schema";
 import { findUserById } from "@edicut/db/repositories/users";
 import { getDbFromContext } from "../lib/db.server";
 import { destroySession, getSession, requireUserId } from "../lib/session.server";
+import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
+import {
+  canAccessDashboardFeature,
+  getAllowedDashboardFeatures,
+  getDashboardLandingPath,
+  type DashboardFeature,
+} from "../lib/role-feature-access";
 
 const PAGE_SIZE = 10;
 
 const navItems = [
-  ["Home", "home", "/"],
-  ["Overview", "space_dashboard", "/dashboard"],
-  ["Projects", "video_library", "/dashboard/projects"],
-  ["Reviews", "rate_review", "/dashboard/reviews"],
-  ["Uploads", "upload_file", "/dashboard/uploads"],
-  ["Customer Support", "support_agent", "/dashboard/messages"],
-  ["Billing", "receipt_long", "/dashboard/billing"],
-  ["Affiliates", "hub", "/dashboard/affiliates"],
-  ["Settings", "settings", "/dashboard/settings"],
+  { label: "Home", icon: "home", path: "/", feature: null },
+  { label: "Overview", icon: "space_dashboard", path: "/dashboard", feature: "overview" as DashboardFeature },
+  { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
+  { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
+  { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
+  { label: "Customer Support", icon: "support_agent", path: "/dashboard/messages", feature: "support" as DashboardFeature },
+  { label: "Billing", icon: "receipt_long", path: "/dashboard/billing", feature: "billing" as DashboardFeature },
+  { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
+  { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
 ];
 
 type MessageFilter = "all" | "replied" | "unreplied";
@@ -26,7 +33,7 @@ type MessageFilter = "all" | "replied" | "unreplied";
 export const meta: MetaFunction = () => [{ title: "Customer Support - EdiCut Dashboard" }];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
-  const { user, db } = await requireDashboardUser(request, context);
+  const { user, db, allowedFeatures } = await requireDashboardUser(request, context);
   const url = new URL(request.url);
   const filter = getFilter(url.searchParams.get("filter"));
   const page = Math.max(Number(url.searchParams.get("page") || "1"), 1);
@@ -60,6 +67,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   return {
     user,
+    allowedFeatures,
     messages,
     filter,
     page: Math.min(page, totalPages),
@@ -148,13 +156,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function DashboardMessagesRoute() {
-  const { user, messages, filter, page, total, totalPages, repliedCount, unrepliedCount, flash, error } = useLoaderData<typeof loader>();
+  const { user, allowedFeatures, messages, filter, page, total, totalPages, repliedCount, unrepliedCount, flash, error } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigation = useNavigation();
   const displayName = user.name || user.email;
   const isSubmitting = navigation.state !== "idle";
   const currentPath = `/dashboard/messages?${searchParams.toString()}`;
   const exportPath = `/dashboard/messages?${withParam(searchParams, "export", "csv")}`;
+  const visibleNavItems = navItems.filter((item) => !item.feature || allowedFeatures.includes(item.feature));
 
   return (
     <div className="min-h-screen bg-[#F6F7F8] font-sans text-foreground">
@@ -171,7 +180,7 @@ export default function DashboardMessagesRoute() {
           </Link>
 
           <nav className="mt-8 grid gap-1">
-            {navItems.map(([label, icon, path]) => (
+            {visibleNavItems.map(({ label, icon, path }) => (
               <NavLink
                 key={label}
                 to={path}
@@ -217,7 +226,7 @@ export default function DashboardMessagesRoute() {
             </div>
           </div>
           <nav className="mx-auto mt-3 flex max-w-[1500px] gap-2 overflow-x-auto pb-1 lg:hidden">
-            {navItems.slice(0, 6).map(([label, icon, path]) => (
+            {visibleNavItems.slice(0, 6).map(({ label, icon, path }) => (
               <NavLink
                 key={label}
                 to={path}
@@ -372,7 +381,14 @@ async function requireDashboardUser(request: Request, context: any) {
     });
   }
 
-  return { user, db };
+  const roleFeatureAccess = await getRoleFeatureAccessSettings(db);
+  const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
+
+  if (!canAccessDashboardFeature(user.role, "support", roleFeatureAccess)) {
+    throw redirect(getDashboardLandingPath(allowedFeatures));
+  }
+
+  return { user, db, allowedFeatures };
 }
 
 function getFilter(value: string | null): MessageFilter {
@@ -411,6 +427,7 @@ function normalizeRole(role: string) {
     manager: "Editor manager",
     project_manager: "Editor manager",
     editor: "Editor",
+    customer_support: "Customer support",
     affiliate: "Affiliate marketer",
     client: "Client",
     user: "Client",

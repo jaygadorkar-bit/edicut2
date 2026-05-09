@@ -4,7 +4,7 @@ import { packages, portfolio, users } from "../db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { updateSecuritySetting } from "./security-settings";
 
-export type AppRole = "customer" | "affiliate" | "editor" | "project_manager" | "admin";
+export type AppRole = "customer" | "customer_support" | "affiliate" | "editor" | "project_manager" | "admin";
 
 export type ActionResult = { success: true } | { success: false; error: string };
 

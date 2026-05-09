@@ -2,7 +2,7 @@ import { db } from "../db";
 import { orders, packages, portfolio, projects, users } from "../db/schema";
 import { and, asc, count, desc, eq, ilike, or, sql, sum, type SQL } from "drizzle-orm";
 
-export type AppRole = "customer" | "affiliate" | "editor" | "project_manager" | "admin";
+export type AppRole = "customer" | "customer_support" | "affiliate" | "editor" | "project_manager" | "admin";
 export type SortDirection = "asc" | "desc";
 export type AdminUserSort = "createdAt" | "role";
 

@@ -1,10 +1,16 @@
 import { eq } from "drizzle-orm";
 import { siteSettings } from "@edicut/db/schema";
 import type { DatabaseClient } from "@edicut/db/client";
+import {
+  DEFAULT_ROLE_FEATURE_ACCESS,
+  sanitizeRoleFeatureAccess,
+  type RoleFeatureAccess,
+} from "./role-feature-access";
 
 const ADMIN_TOOLBAR_ENABLED_KEY = "admin_toolbar_enabled";
 const PROMO_BAR_ENABLED_KEY = "promo_bar_enabled";
 const PROMO_BAR_MESSAGE_KEY = "promo_bar_message";
+const ROLE_FEATURE_ACCESS_KEY = "role_feature_access";
 
 async function getSetting(db: DatabaseClient, key: string) {
   const [row] = await db.select().from(siteSettings).where(eq(siteSettings.key, key)).limit(1);
@@ -44,4 +50,22 @@ export async function getPromoBarSettings(db: DatabaseClient) {
 export async function savePromoBarSettings(db: DatabaseClient, enabled: boolean, message: string) {
   await saveSetting(db, PROMO_BAR_ENABLED_KEY, enabled ? "true" : "false");
   await saveSetting(db, PROMO_BAR_MESSAGE_KEY, message || "");
+}
+
+export async function getRoleFeatureAccessSettings(db: DatabaseClient): Promise<RoleFeatureAccess> {
+  const value = await getSetting(db, ROLE_FEATURE_ACCESS_KEY);
+
+  if (!value) {
+    return DEFAULT_ROLE_FEATURE_ACCESS;
+  }
+
+  try {
+    return sanitizeRoleFeatureAccess(JSON.parse(value));
+  } catch {
+    return DEFAULT_ROLE_FEATURE_ACCESS;
+  }
+}
+
+export async function saveRoleFeatureAccessSettings(db: DatabaseClient, access: RoleFeatureAccess) {
+  await saveSetting(db, ROLE_FEATURE_ACCESS_KEY, JSON.stringify(sanitizeRoleFeatureAccess(access)));
 }

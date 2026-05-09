@@ -3,17 +3,24 @@ import { Link, NavLink, Form, redirect, useLoaderData } from "react-router";
 import { requireUserId, getSession, destroySession } from "../lib/session.server";
 import { findUserById } from "@edicut/db/repositories/users";
 import { getDbFromContext } from "../lib/db.server";
+import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
+import {
+  canAccessDashboardFeature,
+  getAllowedDashboardFeatures,
+  getDashboardLandingPath,
+  type DashboardFeature,
+} from "../lib/role-feature-access";
 
 const navItems = [
-  ["Home", "home", "/"],
-  ["Overview", "space_dashboard", "/dashboard"],
-  ["Projects", "video_library", "/dashboard/projects"],
-  ["Reviews", "rate_review", "/dashboard/reviews"],
-  ["Uploads", "upload_file", "/dashboard/uploads"],
-  ["Customer Support", "support_agent", "/dashboard/messages"],
-  ["Billing", "receipt_long", "/dashboard/billing"],
-  ["Affiliates", "hub", "/dashboard/affiliates"],
-  ["Settings", "settings", "/dashboard/settings"],
+  { label: "Home", icon: "home", path: "/", feature: null },
+  { label: "Overview", icon: "space_dashboard", path: "/dashboard", feature: "overview" as DashboardFeature },
+  { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
+  { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
+  { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
+  { label: "Customer Support", icon: "support_agent", path: "/dashboard/messages", feature: "support" as DashboardFeature },
+  { label: "Billing", icon: "receipt_long", path: "/dashboard/billing", feature: "billing" as DashboardFeature },
+  { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
+  { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
 ];
 
 const kpis = [
@@ -105,13 +112,21 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     });
   }
 
-  return { user };
+  const roleFeatureAccess = await getRoleFeatureAccessSettings(db);
+  const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
+
+  if (!canAccessDashboardFeature(user.role, "overview", roleFeatureAccess)) {
+    throw redirect(getDashboardLandingPath(allowedFeatures));
+  }
+
+  return { user, allowedFeatures };
 }
 
 export default function DashboardRoute() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, allowedFeatures } = useLoaderData<typeof loader>();
   const displayName = user.name || user.email;
   const roleLabel = normalizeRole(user.role);
+  const visibleNavItems = navItems.filter((item) => !item.feature || allowedFeatures.includes(item.feature));
 
   return (
     <div className="min-h-screen bg-[#F6F7F8] font-sans text-foreground">
@@ -128,7 +143,7 @@ export default function DashboardRoute() {
           </Link>
 
           <nav className="mt-8 grid gap-1">
-            {navItems.map(([label, icon, path]) => (
+            {visibleNavItems.map(({ label, icon, path }) => (
               <NavLink
                 key={label}
                 to={path}
@@ -168,6 +183,8 @@ export default function DashboardRoute() {
                   search
                 </span>
                 <input
+                  id="dashboard-search"
+                  name="dashboardSearch"
                   placeholder="Search projects, clients, files, referrals"
                   className="h-10 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-3 text-sm font-medium outline-none focus:border-foreground"
                 />
@@ -189,7 +206,7 @@ export default function DashboardRoute() {
             </div>
           </div>
           <nav className="mx-auto mt-3 flex max-w-[1500px] gap-2 overflow-x-auto pb-1 lg:hidden">
-            {navItems.slice(0, 6).map(([label, icon, path]) => (
+            {visibleNavItems.slice(0, 6).map(({ label, icon, path }) => (
               <NavLink
                 key={label}
                 to={path}
@@ -298,6 +315,7 @@ function normalizeRole(role: string) {
     manager: "Editor manager",
     project_manager: "Editor manager",
     editor: "Editor",
+    customer_support: "Customer support",
     affiliate: "Affiliate marketer",
     client: "Client",
     user: "Client",
@@ -453,7 +471,7 @@ function ProjectTable() {
             {projects.map((row) => (
               <tr key={row[0]} className="border-t border-gray-100">
                 {row.map((cell, index) => (
-                  <td key={`${row[0]}-${cell}`} className="px-4 py-4 font-bold text-[#575757]">
+                  <td key={`${row[0]}-${index}-${cell}`} className="px-4 py-4 font-bold text-[#575757]">
                     {index === 0 ? <span className="font-black text-foreground">{cell}</span> : index === 5 ? <StatusPill label={cell} tone={cell === "High" ? "red" : "dark"} /> : cell}
                   </td>
                 ))}
