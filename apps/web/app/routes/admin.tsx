@@ -1256,7 +1256,7 @@ function RoleManagementPanel({
 }) {
   const isSubmitting = navigationState === "submitting";
   const roleLabels: Record<UserRole, string> = {
-    user: "Customer",
+    user: "Legacy User",
     customer: "Customer",
     customer_support: "Customer Support",
     affiliate: "Affiliate Partner",
