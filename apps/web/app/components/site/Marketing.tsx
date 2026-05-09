@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, NavLink, useMatches } from "react-router";
+import { Link, NavLink, useLocation, useMatches } from "react-router";
+import { authHref } from "../auth/AuthModal";
 import { faqs, legalLinks, navLinks, plans as defaultPlans, portfolio, testimonials, workflow } from "./data";
 import type { PortfolioSection as PortfolioSectionView, PortfolioVideo } from "../../lib/portfolio.server";
 
@@ -27,6 +28,7 @@ export function Logo() {
 
 export function SiteHeader() {
   const matches = useMatches();
+  const location = useLocation();
   const rootData = matches.find((m) => m.id === "root")?.data as { promoBarSettings?: { enabled: boolean; message: string } } | undefined;
   const isSignedIn = matches.some((match) => Boolean((match.data as { isSignedIn?: boolean } | undefined)?.isSignedIn));
 
@@ -67,7 +69,7 @@ export function SiteHeader() {
           </nav>
 
           <Link
-            to={isSignedIn ? "/dashboard" : "/signin"}
+            to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signup")}
             className="group hidden items-center gap-2 rounded-full bg-primary px-7 py-3 text-[11px] font-black uppercase tracking-wider text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0 md:inline-flex"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition-colors">
@@ -563,81 +565,268 @@ export function DifferentiatorsSection() {
 }
 
 export function PricingSection({ comparison = false, plans = defaultPlans }: { comparison?: boolean; plans?: PricingPlanView[] }) {
-  const [isMonthly, setIsMonthly] = useState(true);
+  const editingPlans = [
+    {
+      name: "Creator",
+      slug: "creator",
+      price: "$80",
+      podcastPrice: "$160",
+      vlogPrice: "$160",
+      description: "A lean creator package for clean edits with subtitles, sound, color, stock assets, proofing, reels, and thumbnail support.",
+      badge: "Base",
+      icon: "smart_display",
+      features: ["Subtitles", "Color grading", "Sound design & mixing", "Reels repurposing", "Thumbnail"],
+    },
+    {
+      name: "Creator Plus",
+      slug: "creator-plus",
+      price: "$120",
+      podcastPrice: "$240",
+      vlogPrice: "$200",
+      description: "For creators who need the core editing stack plus a stronger package price for podcast-length work and vlog footage.",
+      badge: "Balanced",
+      icon: "trending_up",
+      popular: true,
+      features: ["Subtitles", "Color grading", "Sound design & mixing", "Reels repurposing", "Thumbnail"],
+    },
+    {
+      name: "Creator Pro",
+      slug: "creator-pro",
+      price: "$300",
+      podcastPrice: "$600",
+      vlogPrice: "$380",
+      description: "The full creator package with project files, motion graphics, VFX, and AI voice over for more advanced edits.",
+      badge: "Full stack",
+      icon: "movie_filter",
+      features: ["Everything in Creator Plus", "After Effects / Premiere Pro files", "Motion graphics", "VFX", "AI voice over"],
+    },
+  ];
 
   return (
     <section id="pricing" className="bg-white px-5 py-20 sm:px-6">
       <div className="mx-auto max-w-7xl">
-        <SectionIntro title="Choose the editing lane that matches your upload rhythm." />
-        <div className="mt-10 flex justify-center">
-          <div className="flex cursor-pointer rounded-full border border-gray-200 bg-white p-1 text-sm font-black transition-colors" onClick={() => setIsMonthly(!isMonthly)}>
-            <span className={`inline-flex rounded-full px-4 py-2 ${isMonthly ? "bg-foreground text-white" : "text-muted-foreground hover:text-foreground"}`}>Monthly</span>
-            <span className={`inline-flex rounded-full px-4 py-2 ${!isMonthly ? "bg-foreground text-white" : "text-muted-foreground hover:text-foreground"}`}>One-off</span>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.45fr)] lg:items-end">
+          <div>
+            <Eyebrow>Variable packages</Eyebrow>
+            <h2 className="mt-3 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">Creator packages built around footage and finished runtime.</h2>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
+              Start with a base creator package, then price changes by podcast runtime, vlog raw footage, and advanced editing requirements.
+            </p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-secondary p-4">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Base scope bands</p>
+            <div className="mt-3 grid gap-2">
+              <ScopeRow icon="podcasts" label="Podcast run time" value="60 min" />
+              <ScopeRow icon="video_file" label="Vlog raw footage" value="600 min" />
+            </div>
           </div>
         </div>
-        <div className="mt-12 grid gap-5 lg:grid-cols-3">
-          {plans.map((plan) => {
-            let displayPrice = plan.price;
-            let displayInterval = plan.interval || "/mo";
-            let displayFeatures = plan.features;
 
-            if (!isMonthly) {
-              displayInterval = "";
-              const numericPrice = parseInt(plan.price.replace(/[^0-9]/g, ""), 10);
-              if (!isNaN(numericPrice)) {
-                let div = 4;
-                if (plan.features[0]?.includes("8")) div = 8;
-                if (plan.features[0]?.includes("12")) div = 12;
-                const singlePrice = Math.floor(numericPrice / div * 1.2); // Adding 20% premium for one-off
-                // Round to nearest 9
-                displayPrice = `$${Math.floor(singlePrice / 10) * 10 + 9}`;
-              }
-              displayFeatures = plan.features.map(f =>
-                f.replace("4 videos monthly", "1 video")
-                 .replace("8 videos monthly", "1 video")
-                 .replace("12+ videos monthly", "1 video")
-              );
-            }
-
+        <div className="mt-10 grid gap-4 lg:grid-cols-3">
+          {editingPlans.map((plan) => {
             return (
-              <article key={plan.name} className={`relative rounded-2xl border bg-white p-7 ${plan.popular ? "border-primary shadow-xl shadow-red-500/10" : "border-gray-200"}`}>
-                {plan.popular ? <span className="absolute right-5 top-5 rounded-full bg-primary px-3 py-1 text-xs font-black uppercase text-white">{plan.badge || "Popular"}</span> : null}
-                <h3 className="text-2xl font-black">{plan.name}</h3>
-                <p className="mt-3 min-h-14 leading-7 text-muted-foreground">{plan.description}</p>
-                <div className="mt-7 text-5xl font-black">{displayPrice}<span className="text-sm text-muted-foreground">{displayInterval}</span></div>
-                <ul className="mt-7 space-y-3">
-                  {displayFeatures.map((feature) => <li key={feature} className="flex gap-3 text-sm font-bold"><span className="material-symbols-outlined text-[18px] text-primary">check</span>{feature}</li>)}
-                </ul>
-                <div className="mt-7">
-                  <ButtonLink to={`/pricing/${plan.slug}`}>{`View ${plan.name}`}</ButtonLink>
+              <article key={plan.name} className={`relative rounded-lg border bg-white p-5 ${plan.popular ? "border-primary shadow-xl shadow-red-500/10" : "border-gray-200"}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#FFF0F0] text-primary">
+                    <span className="material-symbols-outlined text-[21px]">{plan.icon}</span>
+                  </span>
+                  <span className={`rounded-md px-2.5 py-1 text-[11px] font-black uppercase ${plan.popular ? "bg-primary text-white" : "bg-secondary text-muted-foreground"}`}>
+                    {plan.badge}
+                  </span>
                 </div>
+
+                <h3 className="mt-5 text-2xl font-black">{plan.name}</h3>
+                <p className="mt-3 min-h-20 text-sm font-medium leading-6 text-muted-foreground">{plan.description}</p>
+
+                <div className="mt-5 border-y border-gray-100 py-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Base price starts at</p>
+                  <div className="mt-1 text-4xl font-black tracking-tight">{plan.price}</div>
+                </div>
+
+                <div className="mt-4 grid gap-2">
+                  <ScopeRow icon="podcasts" label="60 min podcast" value={plan.podcastPrice} compact />
+                  <ScopeRow icon="video_file" label="600 min vlog footage" value={plan.vlogPrice} compact />
+                </div>
+
+                <ul className="mt-5 grid gap-3">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex gap-3 text-sm font-bold text-slate-800">
+                      <span className="material-symbols-outlined text-[18px] text-primary">check</span>
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <Link to={`/pricing/${plan.slug}`} className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-black ${plan.popular ? "bg-primary text-white" : "bg-foreground text-white"}`}>
+                  Choose subscription
+                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                </Link>
               </article>
             );
           })}
         </div>
+
+        <section className="mt-5 rounded-lg border border-gray-200 bg-secondary p-5">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Quote factors</p>
+              <h3 className="mt-2 text-2xl font-black">What changes the final price?</h3>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:w-[680px]">
+              {[
+                ["paid", "Creator base price", "$80, $120, or $300 depending on package level."],
+                ["podcasts", "60 min run time", "Podcast-style work varies from $160 to $600."],
+                ["video_file", "600 min raw footage", "Vlog raw footage varies from $160 to $380."],
+                ["auto_awesome", "Advanced add-ons", "Project files, motion graphics, VFX, and AI voice over are Pro-only."],
+              ].map(([icon, title, copy]) => (
+                <div key={title} className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px] text-primary">{icon}</span>
+                    <p className="text-sm font-black">{title}</p>
+                  </div>
+                  <p className="mt-2 text-xs font-bold leading-5 text-muted-foreground">{copy}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {comparison ? <ComparisonTable /> : null}
       </div>
     </section>
   );
 }
 
-function ComparisonTable() {
-  const rows = [
-    ["Turnaround", "48h", "24-36h", "Priority"],
-    ["Videos / month", "4", "8", "12+"],
-    ["Shorts", "Add-on", "Included", "Unlimited lane"],
-    ["Project manager", "Shared", "Shared", "Dedicated"],
-    ["Thumbnail support", "Add-on", "Included", "Premium"],
-  ];
+function ScopeRow({ icon, label, value, compact = false }: { icon: string; label: string; value: string; compact?: boolean }) {
   return (
-    <div className="mt-14 overflow-hidden rounded-2xl border border-gray-200 bg-white">
-      {rows.map((row) => (
-        <div key={row[0]} className="grid grid-cols-4 border-b border-gray-100 last:border-b-0">
-          {row.map((cell, index) => <div key={cell} className={`p-4 text-sm ${index === 0 ? "font-black" : "font-bold text-muted-foreground"}`}>{cell}</div>)}
-        </div>
-      ))}
+    <div className={`flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="material-symbols-outlined text-[18px] text-primary">{icon}</span>
+        <span className="truncate text-sm font-black">{label}</span>
+      </div>
+      <span className="shrink-0 text-sm font-black text-muted-foreground">{value}</span>
     </div>
   );
+}
+
+export function ComparisonTable() {
+  const [featureMode, setFeatureMode] = useState<"key" | "all">("key");
+  const packages = [
+    ["Creator", "$80", "Core editing for creators who need clean delivery and essential channel assets."],
+    ["Creator Plus", "$120", "A stronger lane for longer podcast runtime and larger vlog footage inputs."],
+    ["Creator Pro", "$300", "Full-stack post-production with project files, motion graphics, VFX, and AI voice over."],
+  ];
+  const keyRows = [
+    ["Base package", "$80", "$120", "$300"],
+    ["60 min podcast/run time", "$160", "$240", "$600"],
+    ["600 min raw vlog footage", "$160", "$200", "$380"],
+    ["Subtitles", "Yes", "Yes", "Yes"],
+    ["Color grading", "Yes", "Yes", "Yes"],
+    ["Sound design & mixing", "Yes", "Yes", "Yes"],
+    ["Content repurposing reels", "Yes", "Yes", "Yes"],
+    ["Thumbnail", "Yes", "Yes", "Yes"],
+    ["Advanced project files", "No", "No", "Yes"],
+  ];
+  const allRows = [
+    ...keyRows.slice(0, 6),
+    ["Royalty-free stock video", "Yes", "Yes", "Yes"],
+    ["Royalty-free stock music", "Yes", "Yes", "Yes"],
+    ["Video proofing tool", "Yes", "Yes", "Yes"],
+    ...keyRows.slice(6, 8),
+    ["After Effects / Premiere Pro files", "No", "No", "Yes"],
+    ["Motion graphics", "No", "No", "Yes"],
+    ["VFX", "No", "No", "Yes"],
+    ["AI voice over", "No", "No", "Yes"],
+  ];
+  const rows = featureMode === "key" ? keyRows : allRows;
+
+  return (
+    <section className="mt-8 rounded-lg bg-[#F7FAFB] p-3 sm:p-4">
+      <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside>
+          <h2 className="max-w-[230px] text-4xl font-black leading-tight tracking-tight text-foreground sm:text-[2.7rem]">Compare packages</h2>
+          <p className="mt-4 max-w-[250px] text-base font-medium leading-7 text-muted-foreground">
+            Choose the editing subscription that matches your footage volume, runtime, and advanced deliverables.
+          </p>
+          <div className="mt-6 inline-flex rounded-full bg-gray-200 p-1 text-xs font-black" role="tablist" aria-label="Compare feature mode">
+            <button
+              type="button"
+              onClick={() => setFeatureMode("key")}
+              aria-selected={featureMode === "key"}
+              className={`rounded-full px-4 py-2 ${featureMode === "key" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"}`}
+            >
+              Key features
+            </button>
+            <button
+              type="button"
+              onClick={() => setFeatureMode("all")}
+              aria-selected={featureMode === "all"}
+              className={`rounded-full px-4 py-2 ${featureMode === "all" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"}`}
+            >
+              All features
+            </button>
+          </div>
+          <h3 className="mt-9 text-xl font-black">Package features</h3>
+          <p className="mt-2 text-xs font-bold leading-5 text-muted-foreground">
+            {featureMode === "key" ? "Showing the most important buying criteria." : "Showing every listed package feature."}
+          </p>
+        </aside>
+
+        <div className="self-start lg:col-start-2">
+          <div className="grid md:grid-cols-3">
+            {packages.map(([name, price, copy], index) => (
+              <article key={name} className={`h-fit border-r border-gray-100 bg-white p-5 last:border-r-0 ${index === 1 ? "relative z-10 ring-1 ring-primary" : ""}`}>
+                <h3 className="text-lg font-black">{name}</h3>
+                <p className="mt-3 text-4xl font-black tracking-tight">{price}<span className="text-sm font-bold text-muted-foreground"> base</span></p>
+                <p className="mt-3 text-sm font-medium leading-6 text-muted-foreground">{copy}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-col gap-3 rounded-lg bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-lg font-black">Need a custom editing solution bigger than these packages?</p>
+            <Link to="/contact#contact" className="inline-flex h-11 items-center justify-center rounded-lg bg-[#FFC46B] px-6 text-sm font-black text-foreground">
+              Book call
+            </Link>
+          </div>
+        </div>
+
+        <div className="lg:col-span-2">
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <div className="min-w-[860px]">
+              <div className="grid grid-cols-[230px_repeat(3,minmax(150px,1fr))] border-b border-gray-200 bg-[#FBFCFD]">
+                <div className="px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Package features</div>
+                {packages.map(([name]) => (
+                  <div key={name} className="border-l border-gray-200 px-4 py-3 text-center text-sm font-black">{name}</div>
+                ))}
+              </div>
+              {rows.map(([label, creator, plus, pro]) => (
+                <div key={label} className="grid grid-cols-[230px_repeat(3,minmax(150px,1fr))] border-b border-gray-100 last:border-b-0">
+                  <div className="flex min-h-[46px] items-center px-4 text-sm font-black text-foreground">{label}</div>
+                  {[creator, plus, pro].map((value, index) => (
+                    <div key={`${label}-${index}`} className="flex min-h-[46px] items-center justify-center border-l border-gray-100 px-4 text-center text-sm font-bold text-foreground">
+                      <FeatureValue value={value} />
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FeatureValue({ value }: { value: string }) {
+  if (value === "Yes") {
+    return <span className="material-symbols-outlined text-[19px] text-primary">check_circle</span>;
+  }
+
+  if (value === "No") {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  return <span>{value}</span>;
 }
 
 export function TestimonialsSection() {

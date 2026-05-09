@@ -10,7 +10,7 @@ const navItems = [
   ["Projects", "video_library", "/dashboard/projects"],
   ["Reviews", "rate_review", "/dashboard/reviews"],
   ["Uploads", "upload_file", "/dashboard/uploads"],
-  ["Messages", "forum", "/dashboard/messages"],
+  ["Customer Support", "support_agent", "/dashboard/messages"],
   ["Billing", "receipt_long", "/dashboard/billing"],
   ["Affiliates", "hub", "/dashboard/affiliates"],
   ["Settings", "settings", "/dashboard/settings"],
@@ -80,7 +80,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
   if (formData.get("intent") === "logout") {
     const session = await getSession(request.headers.get("Cookie"), context);
-    return redirect("/signin", {
+    return redirect("/?auth=signin&redirectTo=/dashboard", {
       headers: {
         "Set-Cookie": await destroySession(session, context),
       },
@@ -98,7 +98,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   if (!user) {
     // If user deleted from DB but session exists, force sign in
     const session = await getSession(request.headers.get("Cookie"), context);
-    throw redirect("/signin", {
+    throw redirect("/?auth=signin&redirectTo=/dashboard", {
       headers: {
         "Set-Cookie": await destroySession(session, context),
       },

@@ -30,6 +30,10 @@ services:
       APP_URL: http://localhost:3000
       DATABASE_URL: postgresql://postgres:password@postgres:5432/edicut
       SERVICE_SHARED_SECRET: stage9-preview-service-secret-000000000000
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+      GMAIL_SENDER_EMAIL: ${GMAIL_SENDER_EMAIL:-}
     command: >
       sh -c "pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store &&
       pnpm --filter @edicut/shared build &&
@@ -65,6 +69,10 @@ services:
       SESSION_SECRET: stage9-local-session-secret-stage9-local-session
       SERVICE_SHARED_SECRET: stage9-preview-service-secret-000000000000
       NODE_API_BASE_URL: http://node-api:8787
+      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
+      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
+      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+      GMAIL_SENDER_EMAIL: ${GMAIL_SENDER_EMAIL:-}
       CHOKIDAR_USEPOLLING: "true"
     command: >
       sh -c "pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store &&

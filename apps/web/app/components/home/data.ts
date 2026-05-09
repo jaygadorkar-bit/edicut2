@@ -108,23 +108,23 @@ export const testimonials: Testimonial[] = [
 
 export const pricingPlans: PricingPlan[] = [
   {
-    name: "Basic",
-    price: "$499",
-    description: "For new creators who need clean, consistent edits.",
-    features: ["4 videos monthly", "48h turnaround", "Color and audio cleanup", "2 revision rounds"],
+    name: "Creator",
+    price: "$80",
+    description: "Core creator editing with subtitles, color, sound, stock assets, proofing, reels, and thumbnail support.",
+    features: ["60 min podcast: $160", "600 min raw vlog footage: $160", "Subtitles", "Color grading"],
   },
   {
-    name: "Medium",
-    price: "$999",
-    description: "For channels publishing every week with stronger retention needs.",
-    features: ["8 videos monthly", "36h turnaround", "Motion graphics", "Shorts repurposing"],
+    name: "Creator Plus",
+    price: "$120",
+    description: "Core creator editing with stronger coverage for longer podcast or vlog inputs.",
+    features: ["60 min podcast: $240", "600 min raw vlog footage: $200", "Subtitles", "Thumbnail"],
     popular: true,
   },
   {
-    name: "Pro",
-    price: "$1,899",
-    description: "For teams that need a full editing pipeline.",
-    features: ["12+ videos monthly", "Priority queue", "Thumbnail support", "Dedicated project manager"],
+    name: "Creator Pro",
+    price: "$300",
+    description: "Full-stack creator editing with project files, motion graphics, VFX, and AI voice over.",
+    features: ["60 min podcast: $600", "600 min raw vlog footage: $380", "Motion graphics", "AI voice over"],
   },
 ];
 

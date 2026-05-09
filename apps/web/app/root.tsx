@@ -18,6 +18,7 @@ import { ADMIN_BASE_PATH } from "./lib/admin-paths";
 import { getDbFromContext } from "./lib/db.server";
 import { getAdminToolbarEnabled, getPromoBarSettings } from "./lib/site-settings.server";
 import { AdminToolbar } from "./components/admin/AdminToolbar";
+import { AuthModal } from "./components/auth/AuthModal";
 
 export function links() {
   return [
@@ -86,6 +87,7 @@ export default function AppRoot() {
   return (
     <>
       <Outlet />
+      <AuthModal />
       {data.isAdminSignedIn && data.adminToolbarEnabled && !isAdminArea ? <AdminToolbar /> : null}
       <ScrollRestoration />
       <Scripts />

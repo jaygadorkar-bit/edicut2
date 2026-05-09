@@ -14,26 +14,26 @@ export const legalLinks = [
 
 export const plans = [
   {
-    name: "Basic",
-    slug: "basic",
-    price: "$499",
-    description: "For new creators who need clean, consistent edits.",
-    features: ["4 videos monthly", "48h turnaround", "Color and audio cleanup", "2 revision rounds"],
+    name: "Creator",
+    slug: "creator",
+    price: "$80",
+    description: "Core creator editing with subtitles, color, sound, stock assets, proofing, reels, and thumbnail support.",
+    features: ["60 min podcast: $160", "600 min raw vlog footage: $160", "Subtitles", "Color grading"],
   },
   {
-    name: "Medium",
-    slug: "medium",
-    price: "$999",
-    description: "For weekly channels that need retention polish and repurposing.",
-    features: ["8 videos monthly", "24-36h turnaround", "Motion graphics", "Shorts repurposing", "Thumbnail support"],
+    name: "Creator Plus",
+    slug: "creator-plus",
+    price: "$120",
+    description: "Core creator editing with stronger coverage for longer podcast or vlog inputs.",
+    features: ["60 min podcast: $240", "600 min raw vlog footage: $200", "Subtitles", "Thumbnail"],
     popular: true,
   },
   {
-    name: "Pro",
-    slug: "pro",
-    price: "$1,899",
-    description: "For teams that need a full editing pipeline.",
-    features: ["12+ videos monthly", "Priority queue", "Premium thumbnails", "Dedicated project manager"],
+    name: "Creator Pro",
+    slug: "creator-pro",
+    price: "$300",
+    description: "Full-stack creator editing with project files, motion graphics, VFX, and AI voice over.",
+    features: ["60 min podcast: $600", "600 min raw vlog footage: $380", "Motion graphics", "AI voice over"],
   },
 ];
 

@@ -131,8 +131,8 @@ export async function requireUserId(
   const session = await getSession(request.headers.get("Cookie"), context);
   const userId = session.get("userId");
   if (!userId || typeof userId !== "string") {
-    const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
-    throw redirect(`/signin?${searchParams}`);
+    const searchParams = new URLSearchParams([["auth", "signin"], ["redirectTo", redirectTo]]);
+    throw redirect(`/?${searchParams}`);
   }
   return userId;
 }

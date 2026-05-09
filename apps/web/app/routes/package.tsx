@@ -1,34 +1,36 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { ContactSection, PageShell } from "../components/site/Marketing.js";
+import { useMemo, useState } from "react";
+import { ComparisonTable, ContactSection, PageShell } from "../components/site/Marketing.js";
 import { getDbFromContext } from "../lib/db.server";
 import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: data?.pkg ? `${data.pkg.name} Editing Package | EdiCut` : "Editing Package | EdiCut" },
-  { name: "description", content: data?.pkg?.description || "EdiCut creator editing package details." },
+  { title: data?.subscription ? `${data.subscription.name} Subscription | EdiCut` : "Editing Package | EdiCut" },
+  { name: "description", content: data?.subscription?.description || "EdiCut creator editing package details." },
 ];
 
 export async function loader({ params, context }: LoaderFunctionArgs) {
   const db = getDbFromContext(context);
   const packages = publicPricingPackages(await getPricingPackages(db));
-  const pkg = packages.find((item) => item.slug === params.slug) || packages[0];
+  const packageIndex = getPackageIndex(params.slug || "", packages);
+  const pkg = packages[packageIndex] || packages[0];
 
   if (!pkg) {
     throw new Response("Package not found", { status: 404 });
   }
 
-  return { pkg, packages };
+  return { pkg, packages, packageIndex, subscription: getSubscriptionPackage(pkg.name, params.slug || pkg.slug, packageIndex) };
 }
 
 export default function PackagePage() {
-  const { pkg, packages } = useLoaderData<typeof loader>();
+  const { pkg, packageIndex, subscription } = useLoaderData<typeof loader>();
   const featureCards = [
-    ["schedule", pkg.turnaround || "Flexible turnaround"],
-    ["rate_review", pkg.revisions || "Revision rounds included"],
-    ["workspace_premium", pkg.badge || "Creator editing lane"],
-    ["inventory_2", `${pkg.deliverables.length || pkg.features.length} core deliverables`],
+    ["paid", `Base starts at $${subscription.basePrice}`],
+    ["podcasts", `60 min podcast $${subscription.finishedRuntimePrice}`],
+    ["video_file", `600 min raw footage $${subscription.rawFootagePrice}`],
+    ["workspace_premium", subscription.badge],
   ];
 
   return (
@@ -36,30 +38,18 @@ export default function PackagePage() {
       <section className="px-5 pb-16 pt-32 sm:px-6">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_380px]">
           <div>
-            {pkg.badge ? <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black uppercase text-primary">{pkg.badge}</span> : null}
-            <h1 className="mt-5 text-5xl font-black tracking-tight sm:text-6xl">{pkg.name} Editing Package</h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">{pkg.description}</p>
+            <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black uppercase text-primary">{subscription.badge}</span>
+            <h1 className="mt-5 text-5xl font-black tracking-tight sm:text-6xl">{subscription.name} Subscription</h1>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">{subscription.description}</p>
             <div className="mt-8 flex flex-wrap gap-4 text-sm font-black text-muted-foreground">
-              <span>{pkg.turnaround || "Custom"} turnaround</span>
-              <span>{pkg.revisions || "Revisions included"}</span>
-              <span>{pkg.features[0] || "Creator-ready edits"}</span>
+              <span>Base package ${subscription.basePrice}</span>
+              <span>60 min podcast ${subscription.finishedRuntimePrice}</span>
+              <span>600 min raw vlog ${subscription.rawFootagePrice}</span>
             </div>
           </div>
-          <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-6 shadow-xl shadow-black/5 lg:sticky lg:top-24">
-            <p className="text-sm font-black uppercase tracking-wide text-muted-foreground">{pkg.name} plan</p>
-            <p className="mt-3 text-5xl font-black">
-              {pkg.price}<span className="text-sm text-muted-foreground">{pkg.interval}</span>
-            </p>
-            <ul className="mt-6 space-y-3 text-sm font-bold text-slate-800">
-              {pkg.features.map((item) => (
-                <li key={item} className="flex gap-2">
-                  <span className="material-symbols-outlined text-[18px] text-primary">check</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <Link to="/contact" className="mt-7 inline-flex w-full justify-center rounded-2xl bg-primary px-5 py-4 text-sm font-black text-white">Start package</Link>
-            <Link to="/pricing" className="mt-3 inline-flex w-full justify-center rounded-2xl border border-gray-200 px-5 py-4 text-sm font-black">Compare packages</Link>
+          <aside className="h-fit lg:sticky lg:top-24">
+            <SubscriptionBuilder subscription={subscription} />
+            <Link to="/pricing" className="mt-3 inline-flex w-full justify-center rounded-lg border border-gray-200 bg-white px-5 py-4 text-sm font-black">Compare packages</Link>
           </aside>
         </div>
       </section>
@@ -94,19 +84,25 @@ export default function PackagePage() {
         </div>
       </section>
 
+      <section className="px-5 pb-20 sm:px-6">
+        <div className="mx-auto max-w-7xl">
+          <ComparisonTable />
+        </div>
+      </section>
+
       <section className="px-5 py-20 sm:px-6">
         <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-2">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Best for</p>
-            <h2 className="mt-3 text-4xl font-black tracking-tight">{pkg.bestFor || "Creators who need a predictable editing lane."}</h2>
+            <h2 className="mt-3 text-4xl font-black tracking-tight">{subscription.bestFor}</h2>
             <p className="mt-5 leading-8 text-muted-foreground">
-              This package keeps scope, delivery, and review expectations visible before a project starts, so your upload calendar stays predictable.
+              Select the base subscription, add finished runtime coverage, add extra raw footage coverage, or combine both before sending the request.
             </p>
           </div>
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
             <h3 className="text-2xl font-black">Deliverables</h3>
             <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-              {(pkg.deliverables.length ? pkg.deliverables : pkg.features).map((item) => (
+              {subscription.deliverables.map((item) => (
                 <li key={item} className="flex gap-2 rounded-xl bg-secondary p-3 text-sm font-bold">
                   <span className="material-symbols-outlined text-[18px] text-primary">check</span>
                   {item}
@@ -121,11 +117,11 @@ export default function PackagePage() {
         <div className="mx-auto max-w-7xl">
           <h2 className="text-3xl font-black tracking-tight">Other packages</h2>
           <div className="mt-6 grid gap-5 md:grid-cols-3">
-            {packages.filter((item) => item.id !== pkg.id).map((item) => (
-              <Link key={item.id} to={`/pricing/${item.slug}`} className="rounded-2xl border border-gray-200 bg-white p-6 ">
+            {SUBSCRIPTION_PACKAGES.filter((_, index) => index !== packageIndex).map((item) => (
+              <Link key={item.slug} to={`/pricing/${item.slug}`} className="rounded-2xl border border-gray-200 bg-white p-6 ">
                 <p className="text-xl font-black">{item.name}</p>
                 <p className="mt-2 text-sm font-bold text-muted-foreground">{item.description}</p>
-                <p className="mt-5 text-3xl font-black">{item.price}<span className="text-sm text-muted-foreground">{item.interval}</span></p>
+                <p className="mt-5 text-3xl font-black">${item.basePrice}<span className="text-sm text-muted-foreground"> base</span></p>
               </Link>
             ))}
           </div>
@@ -133,5 +129,172 @@ export default function PackagePage() {
       </section>
       <ContactSection compact />
     </PageShell>
+  );
+}
+
+type SubscriptionPackage = {
+  name: string;
+  slug: string;
+  description: string;
+  badge: string;
+  bestFor: string;
+  deliverables: string[];
+  basePrice: number;
+  finishedRuntimePrice: number;
+  rawFootagePrice: number;
+};
+
+const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
+  {
+    name: "Creator",
+    slug: "creator",
+    description: "A lean creator package for clean edits with subtitles, sound, color, stock assets, proofing, reels, and thumbnail support.",
+    badge: "Base package",
+    bestFor: "Creators who need the core editing stack without advanced project-file and effects deliverables.",
+    deliverables: ["Subtitles", "Color grading", "Sound design & mixing", "Royalty free stock video", "Royalty free stock music", "Video proofing tool", "Reels repurposing", "Thumbnail"],
+    basePrice: 80,
+    finishedRuntimePrice: 160,
+    rawFootagePrice: 160,
+  },
+  {
+    name: "Creator Plus",
+    slug: "creator-plus",
+    description: "Core creator editing with stronger coverage for longer podcast or vlog inputs.",
+    badge: "Balanced",
+    bestFor: "Creators who want the standard editing stack with a better fit for longer podcast or vlog source material.",
+    deliverables: ["Subtitles", "Color grading", "Sound design & mixing", "Royalty free stock video", "Royalty free stock music", "Video proofing tool", "Reels repurposing", "Thumbnail"],
+    basePrice: 120,
+    finishedRuntimePrice: 240,
+    rawFootagePrice: 200,
+  },
+  {
+    name: "Creator Pro",
+    slug: "creator-pro",
+    description: "The full creator package with project files, motion graphics, VFX, and AI voice over.",
+    badge: "Full stack",
+    bestFor: "Creators and teams that need advanced post-production assets and premium editing support.",
+    deliverables: ["Subtitles", "Color grading", "Sound design & mixing", "Royalty free stock video", "Royalty free stock music", "Video proofing tool", "Reels repurposing", "Thumbnail", "After Effects and Premiere Pro files", "Motion graphics", "VFX", "AI voice over"],
+    basePrice: 300,
+    finishedRuntimePrice: 600,
+    rawFootagePrice: 380,
+  },
+];
+
+function getPackageIndex(slug: string, packages: Array<{ slug: string }>) {
+  const canonicalIndex = SUBSCRIPTION_PACKAGES.findIndex((item) => item.slug === slug);
+  if (canonicalIndex >= 0) return canonicalIndex;
+  return Math.max(packages.findIndex((item) => item.slug === slug), 0);
+}
+
+function getSubscriptionPackage(name: string, slug: string, index: number): SubscriptionPackage {
+  const canonicalIndex = SUBSCRIPTION_PACKAGES.findIndex((item) => item.slug === slug);
+  if (canonicalIndex >= 0) return SUBSCRIPTION_PACKAGES[canonicalIndex];
+
+  const key = `${name} ${slug}`.toLowerCase();
+
+  if (key.includes("plus") || index === 1) {
+    return SUBSCRIPTION_PACKAGES[1];
+  }
+
+  if (key.includes("pro") || index === 2) {
+    return SUBSCRIPTION_PACKAGES[2];
+  }
+
+  return SUBSCRIPTION_PACKAGES[0];
+}
+
+function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPackage }) {
+  const [includeFinishedRuntime, setIncludeFinishedRuntime] = useState(false);
+  const [includeRawFootage, setIncludeRawFootage] = useState(false);
+  const total = useMemo(() => {
+    return subscription.basePrice
+      + (includeFinishedRuntime ? subscription.finishedRuntimePrice : 0)
+      + (includeRawFootage ? subscription.rawFootagePrice : 0);
+  }, [includeFinishedRuntime, includeRawFootage, subscription]);
+
+  const contactHref = `/contact?package=${encodeURIComponent(subscription.name)}&estimate=${total}#contact`;
+
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-xl shadow-black/5">
+      <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Choose subscription</p>
+      <h2 className="mt-2 text-2xl font-black">{subscription.name}</h2>
+
+      <div className="mt-5 rounded-lg border border-gray-200 bg-secondary p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-black">Base package</p>
+            <p className="mt-1 text-xs font-bold text-muted-foreground">Core creator editing subscription.</p>
+          </div>
+          <p className="text-xl font-black">${subscription.basePrice}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3">
+        <OptionCheckbox
+          checked={includeFinishedRuntime}
+          icon="podcasts"
+          label="Finished video duration"
+          description="Add 60 min finished podcast/runtime coverage."
+          price={subscription.finishedRuntimePrice}
+          onChange={setIncludeFinishedRuntime}
+        />
+        <OptionCheckbox
+          checked={includeRawFootage}
+          icon="video_file"
+          label="Extra raw video"
+          description="Add 600 min raw vlog footage coverage."
+          price={subscription.rawFootagePrice}
+          onChange={setIncludeRawFootage}
+        />
+      </div>
+
+      <div className="mt-5 border-t border-gray-100 pt-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Estimated total</p>
+            <p className="mt-1 text-sm font-bold text-muted-foreground">Final quote may vary after footage review.</p>
+          </div>
+          <p className="text-4xl font-black">${total}</p>
+        </div>
+      </div>
+
+      <Link to={contactHref} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-4 text-sm font-black text-white">
+        Continue with subscription
+        <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+      </Link>
+    </section>
+  );
+}
+
+function OptionCheckbox({
+  checked,
+  icon,
+  label,
+  description,
+  price,
+  onChange,
+}: {
+  checked: boolean;
+  icon: string;
+  label: string;
+  description: string;
+  price: number;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${checked ? "border-primary bg-red-50" : "border-gray-200 bg-white"}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.currentTarget.checked)}
+        className="mt-1 h-4 w-4 accent-red-600"
+      />
+      <span className="material-symbols-outlined text-[20px] text-primary">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-black">{label}</span>
+        <span className="mt-1 block text-xs font-bold leading-5 text-muted-foreground">{description}</span>
+      </span>
+      <span className="text-sm font-black">+${price}</span>
+    </label>
   );
 }

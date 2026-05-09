@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link, NavLink, useMatches } from "react-router";
+import { Link, NavLink, useLocation, useMatches } from "react-router";
+import { authHref } from "../auth/AuthModal";
 import { navLinks } from "../site/data";
 
 export function LogoMark() {
@@ -16,6 +17,7 @@ export function LogoMark() {
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const matches = useMatches();
+  const location = useLocation();
   const rootData = matches.find((m) => m.id === "root")?.data as { promoBarSettings?: { enabled: boolean; message: string } } | undefined;
   const isSignedIn = matches.some((match) => Boolean((match.data as { isSignedIn?: boolean } | undefined)?.isSignedIn));
 
@@ -58,7 +60,7 @@ export function Header() {
 
           <div className="hidden items-center gap-4 md:flex">
             <Link
-              to={isSignedIn ? "/dashboard" : "/signin"}
+              to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signup")}
               className="group inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3 text-[11px] font-black uppercase tracking-wider text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition-colors">
@@ -110,7 +112,7 @@ export function Header() {
               </NavLink>
             ))}
             <Link
-              to={isSignedIn ? "/dashboard" : "/signin"}
+              to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
               onClick={() => setIsMenuOpen(false)}
               className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-center text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-primary/20 transition-transform active:scale-95"
             >
