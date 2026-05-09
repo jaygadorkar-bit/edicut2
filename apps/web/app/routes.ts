@@ -20,5 +20,6 @@ export default [
   route("signin", "routes/signin.tsx"),
   route("auth/google", "routes/auth-google.ts"),
   route("api/auth/callback/google", "routes/auth-google-callback.ts"),
+  route("favicon.ico", "routes/favicon.ts"),
   route("health", "routes/health.ts"),
 ] satisfies RouteConfig;

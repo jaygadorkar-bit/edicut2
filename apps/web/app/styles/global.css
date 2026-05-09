@@ -28,10 +28,17 @@
 }
 
 :root {
-  /* YouTube Inspired Scale */
+  /* YouTube-inspired 5-step type scale */
+  --font-family-base: 'Roboto', sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+  --font-weight-black: 900;
+
   --text-display: clamp(2.5rem, 8vw, 4.5rem);
   --text-title: clamp(1.75rem, 5vw, 2.5rem);
-  --text-subtitle: clamp(1.125rem, 3vw, 1.25rem);
+  --text-subtitle: 1.125rem;
+  --text-small: 0.875rem;
   --text-body: 1rem;
   --text-tag: 0.75rem;
 }
@@ -39,10 +46,14 @@
 @layer base {
   * {
     @apply border-border;
+    font-family: inherit;
+  }
+  html, body, #root {
+    font-family: var(--font-family-base) !important;
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Roboto', sans-serif;
+    font-family: var(--font-family-base);
     font-size: var(--text-body);
     line-height: 1.5;
     overflow-x: hidden;
@@ -60,34 +71,50 @@
   }
 }
 
+/* Override Tailwind's font utility classes to enforce Roboto globally */
+.font-sans, .font-serif, .font-mono {
+  font-family: var(--font-family-base) !important;
+}
+
+/* Ensure yt semantic classes always use the base font */
+.yt-display, .yt-title, .yt-subtitle, .yt-small, .yt-body, .yt-tag {
+  font-family: var(--font-family-base) !important;
+}
+
 .yt-display {
   font-size: var(--text-display);
-  font-weight: 900;
+  font-weight: var(--font-weight-black);
   letter-spacing: -0.03em;
   line-height: 1.05;
 }
 
 .yt-title {
   font-size: var(--text-title);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   letter-spacing: -0.02em;
 }
 
 .yt-subtitle {
   font-size: var(--text-subtitle);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-muted-foreground);
+}
+
+.yt-small {
+  font-size: var(--text-small);
+  font-weight: var(--font-weight-medium);
   color: var(--color-muted-foreground);
 }
 
 .yt-body {
   font-size: var(--text-body);
-  font-weight: 400;
+  font-weight: var(--font-weight-regular);
   color: var(--color-muted-foreground);
 }
 
 .yt-tag {
   font-size: var(--text-tag);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
@@ -111,8 +138,21 @@
 }
 
 .headline-font {
-  font-family: 'Roboto', sans-serif;
-  font-weight: 700;
+  font-family: var(--font-family-base);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Ensure readable text on dark/red backgrounds for common utility classes */
+.bg-black, .bg-primary, .bg-destructive {
+  color: #fff !important;
+}
+/* Also ensure foreground background uses white text */
+.bg-foreground, button.bg-foreground, a.bg-foreground {
+  color: #fff !important;
+}
+button.bg-black, button.bg-primary, button.bg-destructive,
+a.bg-black, a.bg-primary, a.bg-destructive {
+  color: #fff !important;
 }
 
 .material-symbols-outlined {

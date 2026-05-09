@@ -116,9 +116,9 @@ export default function CheckoutRoute() {
 
           <Panel title="Project basics" icon="edit_note">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Channel name" name="channelName" placeholder="YourTube Studio" required />
-              <Field label="Content category" name="category" placeholder="Podcast, tech, beauty" />
-              <Field label="Upload cadence" name="cadence" placeholder="Weekly" />
+              <Field label="Channel name" name="channelName" placeholder="YourTube Studio" autoComplete="organization" required />
+              <Field label="Content category" name="category" placeholder="Podcast, tech, beauty" autoComplete="off" />
+              <Field label="Upload cadence" name="cadence" placeholder="Weekly" autoComplete="off" />
               <Field label="First deadline" name="deadline" type="date" />
             </div>
             <label className="mt-3 grid gap-2 text-sm font-black">
@@ -127,6 +127,7 @@ export default function CheckoutRoute() {
                 name="notes"
                 rows={4}
                 placeholder="References, editing style, intro/outro preferences, or anything the editor should know."
+                autoComplete="off"
                 className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium outline-none focus:border-primary focus:ring-2 focus:ring-red-100"
               />
             </label>
@@ -160,10 +161,10 @@ export default function CheckoutRoute() {
 
           <Panel title="Billing details" icon="receipt_long">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Billing name" name="billingName" defaultValue={user.name} required />
-              <Field label="Billing email" name="billingEmail" type="email" defaultValue={user.email} required />
-              <Field label="Company" name="company" placeholder="Optional" />
-              <Field label="Country" name="country" defaultValue="United States" />
+              <Field label="Billing name" name="billingName" defaultValue={user.name} autoComplete="name" required />
+              <Field label="Billing email" name="billingEmail" type="email" defaultValue={user.email} autoComplete="email" required />
+              <Field label="Company" name="company" placeholder="Optional" autoComplete="organization" />
+              <Field label="Country" name="country" defaultValue="United States" autoComplete="country-name" />
             </div>
           </Panel>
 
@@ -193,6 +194,7 @@ export default function CheckoutRoute() {
                 <input
                   name="discountCode"
                   placeholder="Discount code"
+                  autoComplete="off"
                   className="h-10 rounded-lg border border-gray-200 px-3 text-sm font-bold outline-none focus:border-primary"
                 />
                 <button type="button" className="h-10 rounded-lg border border-gray-200 bg-white px-4 text-xs font-black">
@@ -246,7 +248,23 @@ function Panel({ title, icon, aside, children }: { title: string; icon: string; 
   );
 }
 
-function Field({ label, name, type = "text", placeholder, defaultValue, required = false }: { label: string; name: string; type?: string; placeholder?: string; defaultValue?: string; required?: boolean }) {
+function Field({
+  label,
+  name,
+  type = "text",
+  placeholder,
+  defaultValue,
+  required = false,
+  autoComplete,
+}: {
+  label: string;
+  name: string;
+  type?: string;
+  placeholder?: string;
+  defaultValue?: string;
+  required?: boolean;
+  autoComplete?: string;
+}) {
   return (
     <label className="grid gap-2 text-sm font-black">
       {label}
@@ -256,6 +274,7 @@ function Field({ label, name, type = "text", placeholder, defaultValue, required
         required={required}
         placeholder={placeholder}
         defaultValue={defaultValue}
+        autoComplete={autoComplete}
         className="h-10 rounded-lg border border-gray-200 px-3 text-sm font-medium outline-none focus:border-primary focus:ring-2 focus:ring-red-100"
       />
     </label>

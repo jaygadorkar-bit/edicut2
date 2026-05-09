@@ -40,7 +40,7 @@ export default function HomePage() {
     <PageShell>
       <section className="bg-white px-5 pb-16 pt-20 text-center sm:px-6 lg:pb-20 lg:pt-24">
         <div className="mx-auto max-w-5xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 yt-tag tracking-[0.16em]">
             <span className="h-2 w-2 rounded-full bg-primary" />
             Editing service for YouTubers
           </div>
@@ -57,8 +57,8 @@ export default function HomePage() {
           <div className="mx-auto mt-10 grid max-w-2xl grid-cols-3 divide-x divide-gray-200 rounded-2xl border border-gray-100 bg-white p-4">
             {["48h first cuts", "500+ videos edited", "4.9 creator rating"].map((stat) => (
               <div key={stat} className="px-3">
-                <p className="text-2xl font-black">{stat.split(" ")[0]}</p>
-                <p className="mt-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">{stat.split(" ").slice(1).join(" ")}</p>
+                <p className="yt-title">{stat.split(" ")[0]}</p>
+                <p className="mt-1 yt-small font-black uppercase tracking-wide">{stat.split(" ").slice(1).join(" ")}</p>
               </div>
             ))}
           </div>

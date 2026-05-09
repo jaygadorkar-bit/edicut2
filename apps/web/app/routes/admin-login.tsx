@@ -196,18 +196,14 @@ export default function AdminLoginRoute() {
   const [securityError, setSecurityError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    if (event.currentTarget.dataset.recaptchaReady === "true") {
-      event.currentTarget.dataset.recaptchaReady = "false";
-      return;
-    }
+    const form = event.currentTarget;
 
     event.preventDefault();
     setSecurityError(null);
 
     try {
-      await executeInvisibleRecaptcha(event.currentTarget, "admin_login");
-      event.currentTarget.dataset.recaptchaReady = "true";
-      event.currentTarget.requestSubmit();
+      await executeInvisibleRecaptcha(form, "admin_login");
+      HTMLFormElement.prototype.submit.call(form);
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
     }

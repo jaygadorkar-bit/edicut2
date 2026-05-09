@@ -1255,14 +1255,14 @@ function RoleManagementPanel({
   navigationState: "idle" | "submitting" | "loading";
 }) {
   const isSubmitting = navigationState === "submitting";
-  const roleLabels: Record<UserRole, string> = {
-    user: "Legacy User",
+  const roleLabels: Record<Exclude<UserRole, "user">, string> = {
     customer: "Customer",
     customer_support: "Customer Support",
     affiliate: "Affiliate Partner",
     editor: "Editor",
     project_manager: "Project Manager",
   };
+  const matrixRoles = USER_ROLES.filter((role): role is Exclude<UserRole, "user"> => role !== "user");
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -1292,7 +1292,7 @@ function RoleManagementPanel({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {USER_ROLES.map((role) => {
+                  {matrixRoles.map((role) => {
                     const access = new Set(roleFeatureAccess[role] || []);
 
                     return (

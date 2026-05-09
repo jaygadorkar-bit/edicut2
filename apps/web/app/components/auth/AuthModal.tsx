@@ -49,12 +49,14 @@ export function AuthModal() {
   const submitting = fetcher.state !== "idle";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+
     event.preventDefault();
     setSecurityError(null);
 
     try {
-      const formData = new FormData(event.currentTarget);
-      formData.set("g-recaptcha-response", await executeInvisibleRecaptcha(event.currentTarget, mode === "signup" ? "dashboard_signup" : "dashboard_signin"));
+      const formData = new FormData(form);
+      formData.set("g-recaptcha-response", await executeInvisibleRecaptcha(form, mode === "signup" ? "dashboard_signup" : "dashboard_signin"));
       fetcher.submit(formData, { method: "post", action: "/signin" });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
@@ -213,6 +215,8 @@ export function AuthModal() {
 }
 
 function AuthField({ label, name, type = "text" }: { label: string; name: string; type?: string }) {
+  const autoComplete = name === "name" ? "name" : name === "email" ? "email" : undefined;
+
   return (
     <label className="grid gap-2">
       <span className="text-xs font-black uppercase tracking-[0.12em] text-gray-500">{label}</span>
@@ -220,6 +224,7 @@ function AuthField({ label, name, type = "text" }: { label: string; name: string
         name={name}
         type={type}
         required
+        autoComplete={autoComplete}
         className="h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold outline-none transition focus:border-black focus:ring-2 focus:ring-red-100"
       />
     </label>
@@ -234,6 +239,7 @@ function PasswordField({ label, name, show, onToggle }: { label: string; name: s
         name={name}
         type={show ? "text" : "password"}
         required
+        autoComplete={name === "confirmPassword" ? "new-password" : "current-password"}
         className="h-11 rounded-xl border border-gray-300 bg-white px-3 pr-10 text-sm font-bold outline-none transition focus:border-black focus:ring-2 focus:ring-red-100"
       />
       <button
