@@ -3,8 +3,8 @@ import { Link, NavLink, useLocation, useMatches } from "react-router";
 import { authHref } from "../auth/AuthModal";
 import { navLinks } from "../site/data";
 
-export function LogoMark() {
-  return <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto" />;
+export function LogoMark({ className = "h-10" }: { className?: string }) {
+  return <img src="/icons/edicut-logo.svg" alt="EdiCut" className={`${className} w-auto`} />;
 }
 
 export function Header() {
@@ -25,10 +25,10 @@ export function Header() {
         </div>
       ) : null}
       
-      <nav className="glass-nav sticky top-0 z-50 w-full border-b border-black/5 transition-all duration-300">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+      <nav className="glass-nav sticky top-0 z-50 w-full border-b border-black/5 px-5 sm:px-6 transition-all duration-300">
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between">
           <Link to="/" aria-label="EdiCut home" className="transition-opacity hover:opacity-80">
-            <LogoMark />
+            <LogoMark className="h-[60px]" />
           </Link>
 
           {/* Desktop Navigation */}

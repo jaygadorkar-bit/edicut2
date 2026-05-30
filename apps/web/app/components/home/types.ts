@@ -8,6 +8,9 @@ export interface WorkflowStep {
   title: string;
   description: string;
   icon: string;
+  input: string;
+  action: string;
+  output: string;
 }
 
 export interface Differentiator {

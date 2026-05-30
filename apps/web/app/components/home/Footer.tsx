@@ -7,7 +7,7 @@ export function Footer() {
     <footer className="px-5 py-10 sm:px-6">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 border-t border-gray-100 pt-8 text-center md:flex-row md:text-left">
         <Link to="/" className="-opacity ">
-          <LogoMark />
+          <LogoMark className="h-20" />
         </Link>
         <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-bold text-muted-foreground">
           {navLinks.map((item) => (

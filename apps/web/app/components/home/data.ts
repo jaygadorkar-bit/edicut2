@@ -14,6 +14,9 @@ export const workflowSteps: WorkflowStep[] = [
     description:
       "Pick the package that matches your publishing rhythm, video length, and edit style.",
     icon: "sell",
+    input: "Your channel goal",
+    action: "Match a package",
+    output: "A clear scope and timeline",
   },
   {
     step: "02",
@@ -21,6 +24,9 @@ export const workflowSteps: WorkflowStep[] = [
     description:
       "Send raw footage, references, notes, and brand assets through a simple project portal.",
     icon: "cloud_upload",
+    input: "Footage, notes, references",
+    action: "We organize the brief",
+    output: "A ready-to-edit project",
   },
   {
     step: "03",
@@ -28,6 +34,9 @@ export const workflowSteps: WorkflowStep[] = [
     description:
       "Comment on the cut, request revisions, and approve files ready for YouTube upload.",
     icon: "rate_review",
+    input: "Timestamped feedback",
+    action: "We refine the cut",
+    output: "Final files ready to publish",
   },
 ];
 

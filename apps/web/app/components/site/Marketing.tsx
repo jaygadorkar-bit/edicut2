@@ -17,9 +17,9 @@ type PricingPlanView = {
   badge?: string;
 };
 
-export function Logo() {
+export function Logo({ className = "h-10" }: { className?: string }) {
   return (
-    <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto" />
+    <img src="/icons/edicut-logo.svg" alt="EdiCut" className={`${className} w-auto`} />
   );
 }
 
@@ -40,10 +40,10 @@ export function SiteHeader() {
         </div>
       ) : null}
       
-      <header className="glass-nav sticky top-0 z-50 w-full border-b border-black/5 transition-all duration-300">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+      <header className="glass-nav sticky top-0 z-50 w-full border-b border-black/5 px-5 sm:px-6 transition-all duration-300">
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between">
           <Link to="/" aria-label="EdiCut home" className="transition-opacity hover:opacity-80">
-            <Logo />
+            <Logo className="h-[60px]" />
           </Link>
 
           <nav className="hidden items-center gap-1 rounded-full border border-black/5 bg-white/60 p-1.5 backdrop-blur-md md:flex">
@@ -106,7 +106,7 @@ export function SiteFooter() {
         <div className="grid gap-12 lg:grid-cols-[2fr_0.8fr_0.8fr_1.4fr]">
           {/* Brand & Newsletter */}
           <div className="space-y-6">
-            <Link to="/"><Logo /></Link>
+            <Link to="/"><Logo className="h-20" /></Link>
             <p className="yt-small leading-7 text-muted-foreground max-w-sm">
               The high-retention editing partner for modern YouTubers. Scale your channel without living in the timeline.
             </p>
@@ -785,10 +785,6 @@ export function ComparisonTable() {
               All features
             </button>
           </div>
-          <h3 className="mt-9 yt-title font-black">Package features</h3>
-          <p className="mt-2 yt-tag font-bold leading-5 text-muted-foreground">
-            {featureMode === "key" ? "Showing the most important buying criteria." : "Showing every listed package feature."}
-          </p>
         </aside>
 
         <div className="self-start lg:col-start-2">

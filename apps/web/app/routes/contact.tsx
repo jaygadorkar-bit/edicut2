@@ -56,7 +56,10 @@ export default function ContactPage() {
 
   return (
     <PageShell>
-      <ContactSection status={sent ? "sent" : error === "security" ? "security-error" : error === "invalid" ? "invalid-error" : undefined} />
+      <ContactSection
+        compact
+        status={sent ? "sent" : error === "security" ? "security-error" : error === "invalid" ? "invalid-error" : undefined}
+      />
       <section className="bg-secondary px-5 py-16 sm:px-6">
         <div className="mx-auto grid max-w-7xl gap-5 md:grid-cols-3">
           {["Pricing questions", "Portfolio review", "Existing project support"].map((item) => <article key={item} className="rounded-2xl border border-gray-200 bg-white p-6 text-xl font-black">{item}</article>)}
