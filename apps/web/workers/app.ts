@@ -13,7 +13,7 @@ const handleRequest = createRequestHandler({
 });
 
 const IMMUTABLE_ASSET_PATH = /^\/assets\/.+\.[a-z0-9]+$/i;
-const PUBLIC_ASSET_PATH = /^\/(?:images\/.+|[^/]+\.(?:ico|svg|png|jpg|jpeg|webp|avif))$/i;
+const PUBLIC_ASSET_PATH = /^\/(?:images\/.+|icons\/.+|[^/]+\.(?:ico|svg|png|jpg|jpeg|webp|avif))$/i;
 
 function withStaticCacheHeaders(response: Response, pathname: string) {
   if (!response.ok) {
