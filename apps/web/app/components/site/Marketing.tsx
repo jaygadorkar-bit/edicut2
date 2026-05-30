@@ -106,10 +106,12 @@ export function SiteFooter() {
         <div className="grid gap-12 lg:grid-cols-[2fr_0.8fr_0.8fr_1.4fr]">
           {/* Brand & Newsletter */}
           <div className="space-y-6">
-            <Link to="/"><Logo className="h-20" /></Link>
-            <p className="yt-small leading-7 text-muted-foreground max-w-sm">
-              The high-retention editing partner for modern YouTubers. Scale your channel without living in the timeline.
-            </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+              <Link to="/"><Logo className="h-20" /></Link>
+              <p className="yt-small leading-6 text-muted-foreground max-w-sm">
+                The high-retention editing partner for modern YouTubers. Scale your channel without living in the timeline.
+              </p>
+            </div>
             <div className="space-y-3">
               <h4 className="yt-tag font-black uppercase tracking-widest text-foreground">Join the waitlist</h4>
               <form className="flex gap-2" onSubmit={handleNewsletterSubmit}>
