@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
-import { siteSettings } from "@edicut/db/schema";
 import type { DatabaseClient } from "@edicut/db/client";
+import type { SupabaseRuntimeContext } from "../integrations/supabase/client.server";
+import { getSiteSetting, saveSiteSetting } from "./site-settings.server";
 
 const PRICING_PACKAGES_KEY = "pricing_packages";
 
@@ -135,15 +135,15 @@ export function sortPackages(packages: PricingPackage[]) {
   return [...packages].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
-export async function getPricingPackages(db: DatabaseClient) {
-  const [row] = await db.select().from(siteSettings).where(eq(siteSettings.key, PRICING_PACKAGES_KEY)).limit(1);
+export async function getPricingPackages(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {
+  const value = await getSiteSetting(db, PRICING_PACKAGES_KEY, context);
 
-  if (!row?.value) {
+  if (!value) {
     return defaultPricingPackages;
   }
 
   try {
-    const parsed = JSON.parse(row.value);
+    const parsed = JSON.parse(value);
     const packages = Array.isArray(parsed)
       ? parsed.map(normalizePackage).filter((item): item is PricingPackage => Boolean(item))
       : [];
@@ -154,17 +154,9 @@ export async function getPricingPackages(db: DatabaseClient) {
   }
 }
 
-export async function savePricingPackages(db: DatabaseClient, packages: PricingPackage[]) {
-  const now = new Date();
+export async function savePricingPackages(db: DatabaseClient | null | undefined, packages: PricingPackage[], context?: SupabaseRuntimeContext) {
   const value = JSON.stringify(sortPackages(packages));
-
-  await db
-    .insert(siteSettings)
-    .values({ key: PRICING_PACKAGES_KEY, value, updatedAt: now })
-    .onConflictDoUpdate({
-      target: siteSettings.key,
-      set: { value, updatedAt: now },
-    });
+  await saveSiteSetting(db, PRICING_PACKAGES_KEY, value, context);
 }
 
 export function publicPricingPackages(packages: PricingPackage[]) {

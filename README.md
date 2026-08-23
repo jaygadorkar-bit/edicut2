@@ -1,6 +1,6 @@
 # EdiCut
 
-EdiCut is a video editing platform for YouTube creators. This repository is a pnpm monorepo with one frontend, one Node API, and shared packages.
+EdiCut is a video editing platform for YouTube creators. This repository is a pnpm monorepo with the web app, shared packages, and a compatibility API package.
 
 ## Workspace
 
@@ -36,17 +36,19 @@ API URL: `http://localhost:8787/api/node`
 
 ## Docker
 
-Start the local stack:
+Start the web-only local container. It reads the live database and Cloudinary configuration from `.env.cloudflare`:
 
 ```bash
-docker compose up --build
+docker compose up --build web
 ```
+
+The Docker development profile disables the production-domain reCAPTCHA keys for `localhost`; production re-enables them through its Cloudflare environment.
 
 Docker exposes:
 
 - Web: `http://localhost:3000`
-- Node API: `http://localhost:8787/api/node`
-- Postgres: `localhost:5432`
+
+The local Postgres and Node API containers are not part of the Docker workflow. The previous Postgres volume is retained but is no longer mounted or started.
 
 ## Quality
 

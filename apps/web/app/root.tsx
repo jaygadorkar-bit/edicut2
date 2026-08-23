@@ -8,6 +8,7 @@ import {
   isRouteErrorResponse,
   useLoaderData,
   useLocation,
+  useRouteLoaderData,
   useRouteError,
 } from "react-router";
 import stylesheetUrl from "./styles/global.css?url";
@@ -20,6 +21,7 @@ import { getAdminToolbarEnabled, getPromoBarSettings } from "./lib/site-settings
 import { AdminToolbar } from "./components/admin/AdminToolbar";
 import { AuthModal } from "./components/auth/AuthModal";
 import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
+import { getSupabaseClient } from "./integrations/supabase/client.server";
 
 export function links() {
   return [
@@ -44,13 +46,16 @@ export async function loader({
   const adminSession = await getAdminSession(request.headers.get("Cookie"), context);
   const userId = session.get("userId");
   const adminUserId = adminSession.get("adminUserId");
-  const isAdminSignedIn = typeof adminUserId === "string" && adminUserId.length > 0;
-  const db = getDbFromContext(context ?? {});
+  const userAdminUserId = session.get("adminUserId");
+  const isAdminSignedIn =
+    (typeof adminUserId === "string" && adminUserId.length > 0) ||
+    (typeof userAdminUserId === "string" && userAdminUserId.length > 0);
+  const db = getSupabaseClient(context) ? null : getDbFromContext(context ?? {});
   const adminToolbarEnabled = isAdminSignedIn
-    ? await getAdminToolbarEnabled(db)
+    ? await getAdminToolbarEnabled(db, context)
     : false;
   
-  const promoBarSettings = await getPromoBarSettings(db);
+  const promoBarSettings = await getPromoBarSettings(db, context);
 
   return {
     appName: "EdiCut",
@@ -61,6 +66,7 @@ export async function loader({
     adminToolbarEnabled,
     promoBarSettings,
     recaptchaSiteKey: getRecaptchaSiteKey(context),
+    debugEnabled: env.DEBUG_MODE === "true" && (env.APP_URL?.includes("localhost") || isAdminSignedIn),
   };
 }
 
@@ -108,6 +114,7 @@ export default function AppRoot() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
+  const rootData = useRouteLoaderData("root") as { debugEnabled?: boolean } | undefined;
   const title = isRouteErrorResponse(error)
     ? `${error.status} ${error.statusText}`
     : "Application error";
@@ -116,12 +123,24 @@ export function ErrorBoundary() {
     : error instanceof Error
       ? error.message
       : "Unexpected error in starter app.";
-  const stack = import.meta.env.DEV && error instanceof Error ? error.stack : null;
+  const debugEnabled = import.meta.env.DEV || rootData?.debugEnabled === true;
+  const stack = debugEnabled && error instanceof Error ? error.stack : null;
 
   return (
     <main className="p-8">
       <h1 className="text-2xl font-bold text-red-500">{title}</h1>
       <p className="mt-4">{String(message)}</p>
+      {debugEnabled ? (
+        <section className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
+          <p className="text-xs font-black uppercase tracking-widest">Debug mode enabled</p>
+          {error instanceof Error ? (
+            <dl className="mt-3 grid gap-2 text-sm">
+              <div><dt className="inline font-bold">Error: </dt><dd className="inline">{error.name}</dd></div>
+              <div><dt className="inline font-bold">Message: </dt><dd className="inline break-words">{error.message}</dd></div>
+            </dl>
+          ) : null}
+        </section>
+      ) : null}
       {stack ? (
         <pre className="mt-6 overflow-auto rounded-lg bg-slate-950 p-4 text-xs leading-5 text-slate-100">
           {stack}

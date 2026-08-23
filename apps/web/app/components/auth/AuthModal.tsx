@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useNavigate, useSearchParams } from "react-router";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
 
@@ -28,6 +28,8 @@ export function AuthModal() {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [showPassword, setShowPassword] = useState(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const googleFormRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (requestedMode === "signup") setMode("signup");
@@ -59,6 +61,22 @@ export function AuthModal() {
       formData.set("g-recaptcha-response", await executeInvisibleRecaptcha(form, mode === "signup" ? "dashboard_signup" : "dashboard_signin"));
       fetcher.submit(formData, { method: "post", action: "/signin" });
     } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+    }
+  }
+
+  async function handleGoogleSubmit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+
+    event.preventDefault();
+    setSecurityError(null);
+    setGoogleSubmitting(true);
+
+    try {
+      await executeInvisibleRecaptcha(form, "google_signin");
+      HTMLFormElement.prototype.submit.call(form);
+    } catch (error) {
+      setGoogleSubmitting(false);
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
     }
   }
@@ -150,10 +168,18 @@ export function AuthModal() {
             </p>
           </div>
 
-          <a href="/auth/google" className="mt-6 flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white text-sm font-black transition hover:border-black">
-            <img src="/icons/google-flat.svg" alt="" className="h-5 w-5" />
-            Continue with Google
-          </a>
+          <form ref={googleFormRef} method="post" action="/auth/google" onSubmit={handleGoogleSubmit} className="mt-6">
+            <input type="hidden" name="returnTo" value={redirectTo} />
+            <input type="hidden" name="g-recaptcha-response" value="" />
+            <button
+              type="submit"
+              disabled={googleSubmitting || submitting}
+              className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white text-sm font-black transition hover:border-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <img src="/icons/google-flat.svg" alt="" className="h-5 w-5" />
+              {googleSubmitting ? "Checking security..." : "Continue with Google"}
+            </button>
+          </form>
 
           <div className="my-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-gray-200" />

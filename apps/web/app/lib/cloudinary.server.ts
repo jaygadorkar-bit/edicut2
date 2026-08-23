@@ -93,7 +93,6 @@ function clearCloudinaryCache() {
 }
 
 async function readEnv(context?: CloudinaryEnv) {
-  const viteEnv = import.meta.env as Record<string, string | undefined>;
   const nodeEnv = globalThis.process?.env as Record<string, string | undefined> | undefined;
   const localEnv = await readLocalEnvFile();
 
@@ -102,19 +101,16 @@ async function readEnv(context?: CloudinaryEnv) {
       context?.cloudflare?.env?.CLOUDINARY_CLOUD_NAME ??
       context?.cf?.env?.CLOUDINARY_CLOUD_NAME ??
       nodeEnv?.CLOUDINARY_CLOUD_NAME ??
-      viteEnv.CLOUDINARY_CLOUD_NAME ??
       localEnv.CLOUDINARY_CLOUD_NAME,
     apiKey:
       context?.cloudflare?.env?.CLOUDINARY_API_KEY ??
       context?.cf?.env?.CLOUDINARY_API_KEY ??
       nodeEnv?.CLOUDINARY_API_KEY ??
-      viteEnv.CLOUDINARY_API_KEY ??
       localEnv.CLOUDINARY_API_KEY,
     apiSecret:
       context?.cloudflare?.env?.CLOUDINARY_API_SECRET ??
       context?.cf?.env?.CLOUDINARY_API_SECRET ??
       nodeEnv?.CLOUDINARY_API_SECRET ??
-      viteEnv.CLOUDINARY_API_SECRET ??
       localEnv.CLOUDINARY_API_SECRET,
   };
 }

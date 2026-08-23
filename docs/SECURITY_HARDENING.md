@@ -4,10 +4,9 @@ This document serves as the definitive reference for the security measures imple
 
 ## 1. Secret Management Strategy
 
-### Production Environment (GCP)
-- **Primary Storage**: [Google Cloud Secret Manager](https://console.cloud.google.com/security/secret-manager)
-- **Project**: `reference-tine-493519-a1` (Edicut)
-- **Injection Method**: Secrets are injected into the Google Cloud Run container at runtime. They are NOT stored in the Docker image layers.
+### Production Environment (Cloudflare + Supabase)
+- **Primary storage**: Cloudflare Worker secrets for runtime credentials, with Supabase and Cloudinary dashboards managing their provider-side configuration.
+- **Injection method**: Secrets are injected into the Cloudflare Worker at runtime. They are not stored in the client bundle or Docker image layers.
 
 ### Development Environment
 - **Storage**: Local `.env` file (located in the project root).
@@ -17,13 +16,12 @@ This document serves as the definitive reference for the security measures imple
 
 | Service | Credential Variable Name | Location |
 | :--- | :--- | :--- |
-| **Database (Neon)** | `DATABASE_URL` | GCP Secret Manager / Neon Console |
-| **Cache (Upstash)** | `REDIS_URL` | GCP Secret Manager / Upstash Console |
-| **Email (Resend)** | `RESEND_API_KEY` | GCP Secret Manager / Resend Dashboard |
-| **Email (Gmail OTP)** | `GMAIL_REFRESH_TOKEN`, etc. | GCP Secret Manager / Gmail API |
-| **Auth (Google)** | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | GCP Secret Manager / GCP Credentials |
-| **Auth (Auth.js)** | `AUTH_SECRET` | GCP Secret Manager |
-| **Firebase** | `NEXT_PUBLIC_FIREBASE_*` | Firebase Console (Non-secret placeholders in code) |
+| **Database (Supabase PostgreSQL)** | `DATABASE_URL` | Cloudflare Worker secret / Supabase project |
+| **Cache (Upstash)** | `REDIS_URL` | Cloudflare Worker secret / Upstash Console |
+| **Email (Resend)** | `RESEND_API_KEY` | Cloudflare Worker secret / Resend Dashboard |
+| **Email (Gmail OTP)** | `GMAIL_REFRESH_TOKEN`, etc. | Cloudflare Worker secret / Gmail API |
+| **Auth (Supabase)** | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Cloudflare Worker secrets / Supabase project |
+| **Media (Cloudinary)** | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Cloudflare Worker secrets / Cloudinary console |
 
 ## 3. Implemented Security Measures
 
@@ -46,7 +44,7 @@ This document serves as the definitive reference for the security measures imple
 
 ## 4. Pending Infrastructure Setup
 - **Cloudflare Zero Trust**: Targeted for the `/admin` path once human verification is completed manually.
-- **Billing Activation**: GCP APIs (Secret Manager, Cloud Run) require billing enablement to fully utilize the secrets.
+- **Provider setup**: Supabase project settings, Cloudflare custom domains/secrets, and Cloudinary upload credentials still require one-time manual configuration.
 
 ## 5. Emergency Contacts & Audit
 - **Deployment Admin**: admin@edicut.studio

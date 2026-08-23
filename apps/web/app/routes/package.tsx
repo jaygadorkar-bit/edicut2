@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ComparisonTable, ContactSection, PageShell } from "../components/site/Marketing.js";
 import { getDbFromContext } from "../lib/db.server";
 import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
+import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
 import {
   SUBSCRIPTION_PACKAGES,
@@ -20,8 +21,8 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
 ];
 
 export async function loader({ params, context }: LoaderFunctionArgs) {
-  const db = getDbFromContext(context);
-  const packages = publicPricingPackages(await getPricingPackages(db));
+  const db = getSupabaseClient(context) ? null : getDbFromContext(context);
+  const packages = publicPricingPackages(await getPricingPackages(db, context));
   const packageIndex = getPackageIndex(params.slug || "", packages);
   const pkg = packages[packageIndex] || packages[0];
 

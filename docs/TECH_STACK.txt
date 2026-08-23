@@ -9,20 +9,26 @@ Current repository shape
   - Vite
   - Tailwind CSS 4
   - Cloudflare Worker deployment via Wrangler
-- Backend API: apps/node-api
+- Platform services
+  - Supabase Auth and Supabase PostgreSQL for hosted identity/data
+  - Cloudinary for managed image delivery and transformations
+  - Cloudflare Workers for the production edge runtime and custom domains
+- Backend API: apps/node-api (local/compatibility service)
   - Hono
   - Node.js local runtime
 - Shared packages:
   - packages/shared for contracts and shared content
-  - packages/db for Drizzle/PostgreSQL access
-  - packages/platform-core for platform/auth-oriented shared logic
-- Database: PostgreSQL locally through Docker, Neon-compatible Drizzle layer for hosted environments
+  - packages/db for the existing Drizzle query layer over the Supabase PostgreSQL connection
+  - packages/platform-core for shared application logic
+- Database: Supabase PostgreSQL, with local Supabase CLI migrations under `supabase/`
+- Authentication: Supabase Auth is preferred when `SUPABASE_*` runtime variables are configured; the signed legacy session path remains available for local migration compatibility
 
 Standard local ports
 --------------------
 - Web: http://localhost:3000
 - Node API: http://localhost:8787/api/node
-- Postgres: localhost:5432
+- Supabase local API: http://127.0.0.1:54321
+- Supabase local Postgres: localhost:54322
 
 Design system
 -------------
@@ -54,4 +60,11 @@ Commands
 - API dev: pnpm dev:node-api
 - Typecheck: pnpm typecheck
 - Build: pnpm build
+- Supabase local stack: npx supabase start
 - Docker: docker compose up --build
+
+Provider configuration
+---------------------
+- Browser build variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
+- Cloudflare Worker secrets: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- Apply the database schema with `npx supabase db push` after linking the hosted project.

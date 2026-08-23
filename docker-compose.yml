@@ -1,60 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: edicut-postgres
-    restart: "no"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: edicut
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d edicut"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    volumes:
-      - edicut_postgres_data:/var/lib/postgresql/data
-
-  node-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: edicut-node-api
-    restart: "no"
-    working_dir: /app
-    environment:
-      NODE_ENV: development
-      PORT: 8787
-      APP_URL: http://localhost:3000
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/edicut
-      SERVICE_SHARED_SECRET: stage9-preview-service-secret-000000000000
-      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
-      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
-      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
-      GMAIL_SENDER_EMAIL: ${GMAIL_SENDER_EMAIL:-}
-    command: >
-      sh -c "pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store &&
-      pnpm --filter @edicut/shared build &&
-      pnpm --filter @edicut/db build &&
-      pnpm --filter @edicut/db exec drizzle-kit push --config drizzle.config.ts --force &&
-      pnpm --filter @edicut/node-api dev"
-    ports:
-      - "8787:8787"
-    volumes:
-      - .:/app
-      - edicut_node_api_node_modules:/app/node_modules
-      - /app/apps/web/node_modules
-      - /app/apps/node-api/node_modules
-      - /app/packages/db/node_modules
-      - /app/packages/platform-core/node_modules
-      - /app/packages/shared/node_modules
-      - edicut_node_api_pnpm_store:/pnpm/store
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   web:
     build:
       context: .
@@ -62,17 +6,24 @@ services:
     container_name: edicut-web
     restart: "no"
     working_dir: /app
+    # Uses the live database and Cloudinary configuration for local development.
+    env_file:
+      - .env.cloudflare
     environment:
       NODE_ENV: development
+      CI: "true"
+      DEBUG_MODE: "true"
       APP_URL: http://localhost:3000
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/edicut
-      SESSION_SECRET: stage9-local-session-secret-stage9-local-session
-      SERVICE_SHARED_SECRET: stage9-preview-service-secret-000000000000
-      NODE_API_BASE_URL: http://node-api:8787
-      GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID:-}
-      GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET:-}
-      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
-      GMAIL_SENDER_EMAIL: ${GMAIL_SENDER_EMAIL:-}
+      AUTH_URL: http://localhost:3000/api/auth
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      # Production reCAPTCHA keys are domain-bound to edicut.com and reject localhost.
+      # Keep the local profile usable while production remains protected by reCAPTCHA.
+      NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ""
+      RECAPTCHA_SECRET_KEY: ""
+      SESSION_SECRET: ${SESSION_SECRET:-stage9-local-session-secret-stage9-local-session}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       CHOKIDAR_USEPOLLING: "true"
     command: >
       sh -c "pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store &&
@@ -85,20 +36,11 @@ services:
       - .:/app
       - edicut_web_node_modules:/app/node_modules
       - /app/apps/web/node_modules
-      - /app/apps/node-api/node_modules
       - /app/packages/db/node_modules
       - /app/packages/platform-core/node_modules
       - /app/packages/shared/node_modules
       - edicut_web_pnpm_store:/pnpm/store
-    depends_on:
-      postgres:
-        condition: service_healthy
-      node-api:
-        condition: service_started
 
 volumes:
-  edicut_postgres_data:
-  edicut_node_api_node_modules:
-  edicut_node_api_pnpm_store:
   edicut_web_node_modules:
   edicut_web_pnpm_store:

@@ -12,6 +12,10 @@ import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 import { verifyPassword } from "../lib/password.server";
 import { executeInvisibleRecaptcha } from "../lib/recaptcha.client";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
+import {
+  signInWithSupabase,
+  supabaseAuthEnabled,
+} from "../integrations/supabase/auth.server";
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -135,7 +139,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     throw redirect(ADMIN_BASE_PATH);
   }
 
-  return null;
+  throw redirect("/?auth=signin&redirectTo=%2Fdashboard");
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -169,6 +173,34 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   const db = getDbFromContext(context);
   const user = await findAdminUserByEmail(db, email);
+
+  if (supabaseAuthEnabled(context)) {
+    if (!user || !user.active) {
+      recordFailedAttempt(attemptKey);
+      return { error: "Admin access is not available for this account." };
+    }
+
+    const result = await signInWithSupabase({ context, email, password });
+    if (!result.error && result.user && result.session) {
+      clearFailedAttempts(attemptKey);
+      return createAdminSession({
+        request,
+        context,
+        userId: user.id,
+        redirectTo,
+        accessToken: result.session.access_token,
+        refreshToken: result.session.refresh_token,
+      });
+    }
+
+    if (user.passwordHash && await verifyPassword(password, user.passwordHash)) {
+      clearFailedAttempts(attemptKey);
+      return createAdminSession({ request, context, userId: user.id, redirectTo });
+    }
+
+    recordFailedAttempt(attemptKey);
+    return { error: "Admin access is not available for this account." };
+  }
 
   if (!user || !user.active || !user.passwordHash) {
     recordFailedAttempt(attemptKey);

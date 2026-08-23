@@ -53,7 +53,7 @@ export function Header() {
 
           <div className="hidden items-center gap-4 md:flex">
             <Link
-              to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signup")}
+              to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
               className="group inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3 text-[11px] font-black uppercase tracking-wider text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition-colors">
@@ -61,7 +61,7 @@ export function Header() {
                   {isSignedIn ? "space_dashboard" : "person"}
                 </span>
               </span>
-              {isSignedIn ? "Go to Dashboard" : "Get Started"}
+              {isSignedIn ? "Go to Dashboard" : "Sign in"}
             </Link>
           </div>
 

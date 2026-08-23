@@ -30,7 +30,7 @@ export type UsageResource = {
 };
 
 export type ProviderUsage = {
-  id: "cloudflare" | "vercel" | "neon" | "cloudinary";
+  id: "cloudflare" | "vercel" | "neon" | "supabase" | "cloudinary";
   name: string;
   icon: string;
   configured: boolean;
@@ -204,6 +204,9 @@ async function readEnv(context?: ProviderEnv) {
     neonApiKey: value("NEON_API_KEY"),
     neonProjectId: value("NEON_PROJECT_ID") || value("DATABASE_PROJECT_ID"),
     databaseUrl: value("NEON_DATABASE_URL") || value("DATABASE_URL"),
+    supabaseUrl: value("SUPABASE_URL") || value("VITE_SUPABASE_URL"),
+    supabasePublishableKey: value("SUPABASE_PUBLISHABLE_KEY") || value("VITE_SUPABASE_PUBLISHABLE_KEY"),
+    supabaseServiceRoleKey: value("SUPABASE_SERVICE_ROLE_KEY"),
   };
 }
 
@@ -774,6 +777,46 @@ async function getNeonUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<P
   }
 }
 
+async function getSupabaseUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<ProviderUsage> {
+  if (!env.supabaseUrl || !env.supabasePublishableKey) {
+    return notConfigured("supabase", "Supabase", "database", ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"]);
+  }
+
+  try {
+    const url = env.supabaseUrl.replace(/\/$/, "");
+    const settings = await fetchJson<{ external?: boolean }>(`${url}/auth/v1/settings`, {
+      headers: {
+        apikey: env.supabasePublishableKey,
+        Authorization: `Bearer ${env.supabasePublishableKey}`,
+      },
+    });
+
+    return {
+      id: "supabase",
+      name: "Supabase",
+      icon: "database",
+      configured: true,
+      status: "connected",
+      statusLabel: "Connected",
+      cards: [
+        { label: "Auth API", value: "Reachable" },
+        { label: "Database", value: "Supabase Postgres" },
+        { label: "RLS", value: "Migration enabled" },
+        { label: "Service key", value: env.supabaseServiceRoleKey ? "Configured" : "Missing" },
+      ],
+      details: [
+        { label: "Project URL", value: url },
+        { label: "Auth settings", value: settings ? "Loaded" : "Unavailable" },
+        { label: "Client key", value: "Publishable key configured" },
+        { label: "Server key", value: env.supabaseServiceRoleKey ? "Configured as a secret" : "Missing" },
+      ],
+      resources: [],
+    };
+  } catch (error) {
+    return errorProvider("supabase", "Supabase", "database", error);
+  }
+}
+
 function getCloudinaryProvider(usage: CloudinaryUsage | null, images: CloudinaryImageResource[]): ProviderUsage {
   const totalBytes = images.reduce((sum, image) => sum + (image.bytes || 0), 0);
   const formats = Array.from(new Set(images.map((image) => image.format).filter(Boolean)));
@@ -822,8 +865,7 @@ export async function getProviderUsageOverview(
         const env = await readEnv(context);
         const providers = await Promise.all([
           getCloudflareUsage(env),
-          getVercelUsage(env),
-          getNeonUsage(env),
+          getSupabaseUsage(env),
         ]);
         providerCache = { expiresAt: Date.now() + PROVIDER_CACHE_MS, data: providers };
         providerCachePromise = null;

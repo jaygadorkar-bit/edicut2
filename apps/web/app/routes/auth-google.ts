@@ -1,7 +1,11 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { startGoogleOAuth } from "../lib/google-auth.server";
 import type { LoaderContext } from "../types";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  return startGoogleOAuth(request, context as LoaderContext);
+}
+
+export async function action({ request, context }: ActionFunctionArgs) {
   return startGoogleOAuth(request, context as LoaderContext);
 }

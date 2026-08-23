@@ -1,7 +1,12 @@
 import { createCookieSessionStorage, redirect } from "react-router";
 import { findAdminUserById } from "@edicut/db/repositories/admin-users";
+import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
 import type { DatabaseClient } from "@edicut/db/client";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
+import {
+  getSupabaseUserByAccessToken,
+  refreshSupabaseSession,
+} from "../integrations/supabase/client.server";
 
 type SessionContext = {
   cf?: { env?: Record<string, string | undefined> };
@@ -130,6 +135,32 @@ export async function requireUserId(
 ) {
   const session = await getSession(request.headers.get("Cookie"), context);
   const userId = session.get("userId");
+
+  const accessToken = session.get("supabaseAccessToken");
+  if (typeof accessToken === "string" && accessToken.length > 0) {
+    const user = await getSupabaseUserByAccessToken(context, accessToken);
+    if (!user) {
+      const refreshToken = session.get("supabaseRefreshToken");
+      if (typeof refreshToken === "string" && refreshToken.length > 0) {
+        const refreshed = await refreshSupabaseSession(context, refreshToken);
+        if (refreshed) {
+          session.set("userId", refreshed.user.id);
+          session.set("supabaseAccessToken", refreshed.session.access_token);
+          session.set("supabaseRefreshToken", refreshed.session.refresh_token);
+          throw redirect(request.url, {
+            headers: {
+              "Set-Cookie": await commitSession(session, undefined, context),
+            },
+          });
+        }
+      }
+
+      const searchParams = new URLSearchParams([["auth", "signin"], ["redirectTo", redirectTo]]);
+      throw redirect(`/?${searchParams}`);
+    }
+    return user.id;
+  }
+
   if (!userId || typeof userId !== "string") {
     const searchParams = new URLSearchParams([["auth", "signin"], ["redirectTo", redirectTo]]);
     throw redirect(`/?${searchParams}`);
@@ -143,15 +174,24 @@ export async function createUserSession({
   userId,
   remember,
   redirectTo,
+  accessToken,
+  refreshToken,
+  adminUserId,
 }: {
   request: Request;
   context?: SessionContext;
   userId: string;
   remember: boolean;
   redirectTo: string;
+  accessToken?: string;
+  refreshToken?: string;
+  adminUserId?: string;
 }) {
   const session = await getSession(request.headers.get("Cookie"), context);
   session.set("userId", userId);
+  if (accessToken) session.set("supabaseAccessToken", accessToken);
+  if (refreshToken) session.set("supabaseRefreshToken", refreshToken);
+  if (adminUserId) session.set("adminUserId", adminUserId);
   return redirect(redirectTo, {
     headers: {
       "Set-Cookie": await commitSession(session, {
@@ -176,6 +216,35 @@ export async function requireAdminUser(
   const session = await getAdminSession(request.headers.get("Cookie"), context);
   const adminUserId = session.get("adminUserId");
 
+  const accessToken = session.get("supabaseAccessToken");
+  if (typeof accessToken === "string" && accessToken.length > 0) {
+    const authUser = await getSupabaseUserByAccessToken(context, accessToken);
+    if (!authUser?.email) {
+      const refreshToken = session.get("supabaseRefreshToken");
+      if (typeof refreshToken === "string" && refreshToken.length > 0) {
+        const refreshed = await refreshSupabaseSession(context, refreshToken);
+        if (refreshed?.user.email) {
+          session.set("supabaseAccessToken", refreshed.session.access_token);
+          session.set("supabaseRefreshToken", refreshed.session.refresh_token);
+          throw redirect(request.url, {
+            headers: {
+              "Set-Cookie": await commitAdminSession(session, undefined, context),
+            },
+          });
+        }
+      }
+
+      throw redirect(ADMIN_LOGIN_PATH);
+    }
+
+    const supabaseAdmin = await findAdminUserByEmail(db, authUser.email);
+    if (supabaseAdmin?.active) {
+      return supabaseAdmin;
+    }
+
+    throw redirect(ADMIN_LOGIN_PATH);
+  }
+
   if (!adminUserId || typeof adminUserId !== "string") {
     const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
     throw redirect(`${ADMIN_LOGIN_PATH}?${searchParams}`);
@@ -195,14 +264,20 @@ export async function createAdminSession({
   context,
   userId,
   redirectTo,
+  accessToken,
+  refreshToken,
 }: {
   request: Request;
   context?: SessionContext;
   userId: string;
   redirectTo: string;
+  accessToken?: string;
+  refreshToken?: string;
 }) {
   const session = await getAdminSession(request.headers.get("Cookie"), context);
   session.set("adminUserId", userId);
+  if (accessToken) session.set("supabaseAccessToken", accessToken);
+  if (refreshToken) session.set("supabaseRefreshToken", refreshToken);
 
   return redirect(redirectTo, {
     headers: {

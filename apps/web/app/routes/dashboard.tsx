@@ -10,9 +10,11 @@ import {
   getDashboardLandingPath,
   type DashboardFeature,
 } from "../lib/role-feature-access";
+import { WorkspaceShell } from "../components/WorkspaceShell";
+import { WorkspaceBoard, WorkspaceProjectStrip, WorkspaceSchedule } from "../components/WorkspaceWidgets";
 
 const navItems = [
-  { label: "Overview", icon: "space_dashboard", path: "/dashboard", feature: "overview" as DashboardFeature },
+  { label: "Dashboard", icon: "dashboard_customize", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
@@ -125,6 +127,63 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export default function DashboardRoute() {
+  const { user, allowedFeatures } = useLoaderData<typeof loader>();
+  const displayName = user.name || user.email;
+  const visibleNavItems = navItems.filter((item) => !item.feature || allowedFeatures.includes(item.feature));
+  const visibleAdminItems = user.role === "customer_support" ? adminItems.filter((item) => !item.feature || allowedFeatures.includes(item.feature)) : [];
+
+  return (
+    <WorkspaceShell
+      title={`Good morning, ${displayName.split(" ")[0]}`}
+      subtitle={`${normalizeRole(user.role)} workspace`}
+      navItems={[...visibleNavItems, ...visibleAdminItems].map(({ label, icon, path }) => ({
+        label,
+        icon,
+        to: path,
+        end: path === "/dashboard",
+      }))}
+      account={{ name: displayName, detail: normalizeRole(user.role), imageUrl: user.profileImageUrl }}
+      accountAction={(
+        <Form method="post">
+          <input type="hidden" name="intent" value="logout" />
+          <button type="submit" className="text-[#a0a3b5] transition hover:text-[#5a43d5]" aria-label="Sign out">
+            <span className="material-symbols-outlined text-[18px]">logout</span>
+          </button>
+        </Form>
+      )}
+      headerActions={(
+        <button type="button" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
+          <span className="material-symbols-outlined text-[17px]">add</span>
+          New project
+        </button>
+      )}
+    >
+      <WorkspaceProjectStrip
+        projects={[
+          { title: "UI Designers", description: "Creates intuitive and visually appealing...", tone: "purple", progress: 72, members: ["Maya Chen", "Ari Kim"], count: "2" },
+          { title: "Team Projects", description: "Builds seamless digital experiences, fo...", tone: "blue", progress: 54, members: ["Ari Kim", "Noah James"], count: "8" },
+          { title: "Front-end Developers", description: "Creates user-friendly and engaging di...", tone: "yellow", progress: 82, members: ["Noah James", "Maya Chen"], count: "12" },
+          { title: "Python Developers", description: "Creates intuitive and visually appealing...", tone: "pink", progress: 46, members: ["Ari Kim", "Maya Chen"], count: "2" },
+        ]}
+      />
+      <div className="mt-7">
+        <WorkspaceBoard
+          columns={[
+            { title: "Draft", tasks: [{ title: "Redesign mobile app", meta: "UI Designers", tone: "purple", members: ["Maya Chen"] }, { title: "API integration challenge", meta: "Front-end", tone: "yellow", members: ["Ari Kim"] }] },
+            { title: "In Progress", tasks: [{ title: "Data processing script", meta: "Python Developers", tone: "pink", members: ["Noah James"] }, { title: "Build a landing page for a course", meta: "Team Projects", tone: "yellow", members: ["Ari Kim", "Maya Chen"] }] },
+            { title: "Editing", tasks: [{ title: "User Authentication Module", meta: "Front-end", tone: "blue", members: ["Maya Chen"] }, { title: "Data Processing Script", meta: "Python Developers", tone: "pink", members: ["Noah James"] }, { title: "API Integration Service", meta: "Team Projects", tone: "purple", members: ["Ari Kim"] }] },
+            { title: "Done", tasks: [{ title: "Provide a short explanation", meta: "UI Designers", tone: "purple", members: ["Maya Chen"], done: true }, { title: "Navigation bar that sticks", meta: "Front-end", tone: "purple", members: ["Ari Kim"], done: true }, { title: "Endpoints to create, read...", meta: "Python Developers", tone: "pink", members: ["Noah James"], done: true }] },
+          ]}
+        />
+      </div>
+      <div className="mt-7">
+        <WorkspaceSchedule />
+      </div>
+    </WorkspaceShell>
+  );
+}
+
+function LegacyDashboardRoute() {
   const { user, allowedFeatures } = useLoaderData<typeof loader>();
   const displayName = user.name || user.email;
   const roleLabel = normalizeRole(user.role);

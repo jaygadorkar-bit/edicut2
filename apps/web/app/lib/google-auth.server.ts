@@ -11,6 +11,7 @@ import {
   getAdminSession,
 } from "./session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
+import { verifyRecaptchaToken } from "./recaptcha.server";
 import type { LoaderContext } from "../types";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -211,9 +212,19 @@ async function createAdminOAuthCompletionResponse({
 }
 
 export async function startGoogleOAuth(request: Request, context?: LoaderContext) {
-  const { clientId, redirectUri } = readRequiredGoogleEnv(context);
   const requestUrl = new URL(request.url);
-  const mode = getOAuthMode(requestUrl);
+  const formData = request.method === "POST" ? await request.clone().formData() : null;
+  const captcha = await verifyRecaptchaToken({
+    context,
+    token: formData?.get("g-recaptcha-response") ?? requestUrl.searchParams.get("g-recaptcha-response"),
+  });
+
+  if (!captcha.success) {
+    throw new Response(captcha.error, { status: 403 });
+  }
+
+  const { clientId, redirectUri } = readRequiredGoogleEnv(context);
+  const mode = formData?.get("mode") === "admin" ? "admin" : getOAuthMode(requestUrl);
   const state = randomState();
   const url = new URL(GOOGLE_AUTH_URL);
 
@@ -224,7 +235,9 @@ export async function startGoogleOAuth(request: Request, context?: LoaderContext
   url.searchParams.set("state", state);
   url.searchParams.set("prompt", "select_account");
 
-  const requestedReturnTo = requestUrl.searchParams.get("returnTo");
+  const requestedReturnTo = typeof formData?.get("returnTo") === "string"
+    ? String(formData.get("returnTo"))
+    : requestUrl.searchParams.get("returnTo");
   const returnTo = mode === "admin"
     ? safeAdminReturnTo(requestedReturnTo)
     : safeUserReturnTo(requestedReturnTo);
@@ -327,12 +340,14 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
         })
         .returning();
 
+  const adminUser = await findAdminUserByEmail(db, email);
   const response = await createUserSession({
     request,
     context,
     userId: user.id,
     remember: true,
     redirectTo: safeUserReturnTo(typeof stored.returnTo === "string" ? stored.returnTo : null),
+    adminUserId: adminUser?.active ? adminUser.id : undefined,
   });
 
   response.headers.append("Set-Cookie", await oauthStateCookie.serialize("", { maxAge: 0 }));

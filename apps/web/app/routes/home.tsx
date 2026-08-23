@@ -15,6 +15,7 @@ import {
 import { getDbFromContext } from "../lib/db.server";
 import { getPortfolioSections, publicPortfolioSections } from "../lib/portfolio.server";
 import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
+import { getSupabaseClient } from "../integrations/supabase/client.server";
 
 export const meta: MetaFunction = () => {
   return [
@@ -24,10 +25,10 @@ export const meta: MetaFunction = () => {
 };
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = getDbFromContext(context);
+  const db = getSupabaseClient(context) ? null : getDbFromContext(context);
   const [packages, portfolioSections] = await Promise.all([
-    getPricingPackages(db).then(publicPricingPackages),
-    getPortfolioSections(db).then(publicPortfolioSections),
+    getPricingPackages(db, context).then(publicPricingPackages),
+    getPortfolioSections(db, context).then(publicPortfolioSections),
   ]);
 
   return { packages, portfolioSections };

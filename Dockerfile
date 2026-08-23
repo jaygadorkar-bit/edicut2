@@ -1,4 +1,4 @@
-FROM node:20-alpine AS workspace
+FROM node:22-alpine AS workspace
 
 RUN apk add --no-cache libc6-compat
 RUN npm install -g pnpm
@@ -20,6 +20,6 @@ RUN pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY . .
 
-EXPOSE 3000 8787
+EXPOSE 3000
 
 CMD ["pnpm", "dev"]

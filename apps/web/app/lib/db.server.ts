@@ -15,7 +15,7 @@ export function getDbFromContext(context: DbContext) {
     context.cf?.env?.DATABASE_URL ??
     nodeEnv?.DATABASE_URL ??
     viteEnv.DATABASE_URL ??
-    "postgresql://postgres:password@localhost:5432/edicut";
+    "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 
   const env = {
     ...context.cf?.env,

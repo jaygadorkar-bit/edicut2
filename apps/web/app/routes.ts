@@ -12,6 +12,7 @@ export default [
   route("privacy", "routes/privacy.tsx"),
   route("terms", "routes/terms.tsx"),
   route("site/node-logmin/login", "routes/admin-login.tsx"),
+  route("site/node-logmin/access", "routes/admin-access.ts"),
   route("site/node-logmin", "routes/admin.tsx"),
   route("site/node-logmin/account", "routes/admin-account.tsx"),
   route("site/node-logmin/users/:userId", "routes/admin-user.tsx"),

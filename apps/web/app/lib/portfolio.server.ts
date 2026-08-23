@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
-import { siteSettings } from "@edicut/db/schema";
 import type { DatabaseClient } from "@edicut/db/client";
+import type { SupabaseRuntimeContext } from "../integrations/supabase/client.server";
+import { getSiteSetting, saveSiteSetting } from "./site-settings.server";
 
 const PORTFOLIO_SECTIONS_KEY = "portfolio_sections";
 
@@ -205,13 +205,13 @@ export function sortPortfolioSections(sections: PortfolioSection[]) {
   return [...sections].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
-export async function getPortfolioSections(db: DatabaseClient) {
-  const [row] = await db.select().from(siteSettings).where(eq(siteSettings.key, PORTFOLIO_SECTIONS_KEY)).limit(1);
+export async function getPortfolioSections(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {
+  const value = await getSiteSetting(db, PORTFOLIO_SECTIONS_KEY, context);
 
-  if (!row?.value) return defaultPortfolioSections;
+  if (!value) return defaultPortfolioSections;
 
   try {
-    const parsed = JSON.parse(row.value);
+    const parsed = JSON.parse(value);
     const sections = Array.isArray(parsed)
       ? parsed.map(normalizeSection).filter((section): section is PortfolioSection => Boolean(section))
       : [];
@@ -222,20 +222,12 @@ export async function getPortfolioSections(db: DatabaseClient) {
   }
 }
 
-export async function savePortfolioSections(db: DatabaseClient, sections: PortfolioSection[]) {
-  const now = new Date();
+export async function savePortfolioSections(db: DatabaseClient | null | undefined, sections: PortfolioSection[], context?: SupabaseRuntimeContext) {
   const value = JSON.stringify(sortPortfolioSections(sections).map((section) => ({
     ...section,
     videos: sortVideos(section.videos),
   })));
-
-  await db
-    .insert(siteSettings)
-    .values({ key: PORTFOLIO_SECTIONS_KEY, value, updatedAt: now })
-    .onConflictDoUpdate({
-      target: siteSettings.key,
-      set: { value, updatedAt: now },
-    });
+  await saveSiteSetting(db, PORTFOLIO_SECTIONS_KEY, value, context);
 }
 
 export function publicPortfolioSections(sections: PortfolioSection[]) {

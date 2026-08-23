@@ -42,6 +42,8 @@ import {
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, count as drizzleCount } from "drizzle-orm";
 import { useState, useEffect, type ReactNode } from "react";
 import { DASHBOARD_FEATURES, type RoleFeatureAccess } from "../lib/role-feature-access";
+import { WorkspaceShell } from "../components/WorkspaceShell";
+import { WorkspaceBoard, WorkspaceProjectStrip, WorkspaceSchedule } from "../components/WorkspaceWidgets";
 
 const PAGE_SIZE = 10;
 
@@ -92,7 +94,7 @@ function packageFromForm(formData: FormData, existing?: PricingPackage): Pricing
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "User Management - EdiCut" },
+    { title: "Admin Workspace - EdiCut" },
     { name: "robots", content: "noindex,nofollow" },
   ];
 };
@@ -109,7 +111,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = getDbFromContext(context);
   const url = new URL(request.url);
   const adminUser = await requireAdminUser(request, db, context, `${url.pathname}${url.search}`);
-  const tab = url.searchParams.get("tab") || "users";
+  const tab = url.searchParams.get("tab") || "overview";
   const q = url.searchParams.get("q") || "";
   const roleFilter = url.searchParams.get("role") || "";
   const page = Math.max(Number(url.searchParams.get("page") || "1"), 1);
@@ -487,6 +489,94 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function AdminRoute() {
+  const { tab } = useLoaderData<typeof loader>();
+  return tab === "overview" ? <AdminOverview /> : <LegacyAdminRoute />;
+}
+
+function AdminOverview() {
+  const { adminUser, stats, cloudinaryImages, pricingPackages } = useLoaderData<typeof loader>();
+
+  return (
+    <WorkspaceShell
+      title="Admin overview"
+      subtitle="EdiCut operations workspace"
+      navItems={[
+        { label: "Dashboard", icon: "dashboard_customize", to: "?tab=overview", active: true },
+        { label: "Users", icon: "group", to: "?tab=users" },
+        { label: "Roles", icon: "shield_person", to: "?tab=roles" },
+        { label: "Packages", icon: "sell", to: "?tab=packages" },
+        { label: "Images", icon: "image", to: "?tab=images" },
+        { label: "Settings", icon: "settings", to: "?tab=settings" },
+      ]}
+      account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
+      accountAction={(
+        <Form method="post" action={ADMIN_BASE_PATH} reloadDocument>
+          <input type="hidden" name="intent" value="logout" />
+          <button type="submit" className="text-[#a0a3b5] transition hover:text-[#5a43d5]" aria-label="Sign out">
+            <span className="material-symbols-outlined text-[18px]">logout</span>
+          </button>
+        </Form>
+      )}
+      headerActions={(
+        <Link to="?tab=users" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
+          <span className="material-symbols-outlined text-[17px]">manage_accounts</span>
+          Manage users
+        </Link>
+      )}
+    >
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Total users", String(stats.total), "Active accounts", "group", "purple"],
+          ["Admin team", String(stats.admins), "Privileged accounts", "admin_panel_settings", "blue"],
+          ["Editors", String(stats.editors), "Production capacity", "movie_edit", "yellow"],
+          ["Media assets", String(cloudinaryImages.length), `${pricingPackages.length} packages live`, "perm_media", "pink"],
+        ].map(([label, value, hint, icon, tone]) => {
+          const toneMap = { purple: "bg-[#eeeaff] text-[#6448cc]", blue: "bg-[#e8efff] text-[#4d6ac4]", yellow: "bg-[#fff3d1] text-[#aa710d]", pink: "bg-[#ffebf7] text-[#c03a86]" };
+          return (
+            <article key={label} className="rounded-[17px] bg-white p-4 shadow-[0_7px_24px_rgba(44,49,100,0.045)] ring-1 ring-white">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#9699ac]">{label}</p>
+                  <p className="mt-2 text-3xl font-black tracking-[-0.05em]">{value}</p>
+                </div>
+                <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${toneMap[tone as keyof typeof toneMap]}`}><span className="material-symbols-outlined text-[19px]">{icon}</span></span>
+              </div>
+              <p className="mt-3 text-[10px] font-bold text-[#9a9cac]">{hint}</p>
+            </article>
+          );
+        })}
+      </section>
+
+      <div className="mt-7">
+        <WorkspaceProjectStrip
+          projects={[
+            { title: "User operations", description: "Manage access, roles, and onboarding...", tone: "purple", progress: 78, members: [adminUser.name || "Admin"], count: String(stats.total) },
+            { title: "Content pipeline", description: "Keep packages and portfolio content...", tone: "blue", progress: 62, members: [adminUser.name || "Admin"], count: String(pricingPackages.length) },
+            { title: "Media library", description: "Cloudinary assets ready for publishing...", tone: "yellow", progress: 84, members: [adminUser.name || "Admin"], count: String(cloudinaryImages.length) },
+            { title: "Security review", description: "Role access and toolbar settings...", tone: "pink", progress: 91, members: [adminUser.name || "Admin"], count: "OK" },
+          ]}
+        />
+      </div>
+
+      <div className="mt-7">
+        <WorkspaceBoard
+          columns={[
+            { title: "Draft", tasks: [{ title: "Review pending user invites", meta: "User management", tone: "purple", members: [adminUser.name || "Admin"] }, { title: "Plan next content update", meta: "Packages", tone: "yellow", members: [adminUser.name || "Admin"] }] },
+            { title: "In Progress", tasks: [{ title: "Audit role feature access", meta: "Security", tone: "blue", members: [adminUser.name || "Admin"] }, { title: "Refresh portfolio imagery", meta: "Cloudinary", tone: "pink", members: [adminUser.name || "Admin"] }] },
+            { title: "Review", tasks: [{ title: "Approve new admin accounts", meta: "Admin team", tone: "purple", members: [adminUser.name || "Admin"] }, { title: "Check promo bar settings", meta: "Site settings", tone: "yellow", members: [adminUser.name || "Admin"] }] },
+            { title: "Done", tasks: [{ title: "Production database connected", meta: "Infrastructure", tone: "blue", members: [adminUser.name || "Admin"], done: true }, { title: "Cloudinary library synced", meta: "Media", tone: "pink", members: [adminUser.name || "Admin"], done: true }] },
+          ]}
+        />
+      </div>
+
+      <div className="mt-7">
+        <WorkspaceSchedule accent="pink" />
+      </div>
+    </WorkspaceShell>
+  );
+}
+
+function LegacyAdminRoute() {
   const {
     adminUser,
     users,
@@ -569,16 +659,13 @@ export default function AdminRoute() {
       <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-slate-200 bg-white">
         <div className="flex h-16 items-center border-b border-slate-100 px-6">
           <Link to="/" reloadDocument className="flex items-center gap-2" title="Visit frontend homepage">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-black text-white shadow-lg">
-              <span className="material-symbols-outlined text-[20px]">bolt</span>
-            </div>
             <span className="text-xl font-black tracking-tighter text-slate-900">EDICUT</span>
           </Link>
         </div>
         
         <nav className="p-4 space-y-1">
           <SidebarLink icon="home" label="Home" active={false} to="/" />
-          <SidebarLink icon="dashboard" label="Overview" active={tab === "overview"} to="?tab=overview" />
+          <SidebarLink icon="dashboard_customize" label="Dashboard" active={tab === "overview"} to="?tab=overview" />
           <SidebarLink icon="group" label="User Management" active={tab === "users"} to="?tab=users" />
           <SidebarLink icon="shield_person" label="Role Management" active={tab === "roles"} to="?tab=roles" />
           <SidebarLink icon="sell" label="Pricing Packages" active={tab === "packages"} to="?tab=packages" />

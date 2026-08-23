@@ -1,6 +1,7 @@
 export type WebEnv = {
   APP_URL?: string;
   NODE_API_BASE_URL?: string;
+  DEBUG_MODE?: string;
 };
 
 export type WebLoadContext = {
@@ -23,6 +24,7 @@ export function createWebLoadContext(args: {
     env: {
       APP_URL: args.env.APP_URL ?? "http://localhost:3000",
       NODE_API_BASE_URL: args.env.NODE_API_BASE_URL ?? "http://127.0.0.1:8787/api/node",
+      DEBUG_MODE: args.env.DEBUG_MODE ?? "false",
     },
   };
 }
@@ -33,6 +35,7 @@ export function resolveWebEnv(context?: Pick<WebLoadContext, "env">): WebEnv {
       APP_URL: process.env.APP_URL ?? "http://localhost:3000",
       NODE_API_BASE_URL:
         process.env.NODE_API_BASE_URL ?? "http://127.0.0.1:8787/api/node",
+      DEBUG_MODE: process.env.DEBUG_MODE ?? "false",
     }
   );
 }

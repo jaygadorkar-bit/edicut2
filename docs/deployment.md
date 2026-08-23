@@ -1,23 +1,23 @@
 # Deployment Guide
 
-Last updated: 2026-05-09
+Last updated: 2026-08-23
 
 ## Prerequisites
 
 - Node.js 20+ and pnpm installed
 - GitHub CLI authenticated for `jaygadorkar-bit/edicut2`
-- Vercel project linked locally in `.vercel/project.json`
-- Cloudflare account with API credentials configured in `.env` at the repo root (`CLOUDFLARE_EMAIL` and `CLOUDFLARE_API_KEY`, or preferably `CLOUDFLARE_API_TOKEN`)
-- Neon PostgreSQL connection configured as `DATABASE_URL`
+- Cloudflare account with Wrangler authentication (`CLOUDFLARE_API_TOKEN` is preferred)
+- A hosted Supabase project and its project ref
+- Cloudinary cloud name, API key, and API secret
 
 ## Current Production Targets
 
 | Provider | Target | Latest result |
 | --- | --- | --- |
 | GitHub | `https://github.com/jaygadorkar-bit/edicut2` | Push local `main` after validation |
-| Cloudflare Workers | `edicut-web` on `https://edicut.com` and `https://www.edicut.com` | Version `d14f0df8-4b56-4927-8048-7abfc281e3c5` deployed on 2026-05-09 |
-| Vercel | `edicut-node-api` | Production deployment `dpl_D4t5nGA8mWPfdFAjn1dE8JBna4nJ`, aliased to `https://edicut-node-api.vercel.app` |
-| Neon | PostgreSQL from `DATABASE_URL` | `pnpm db:push` completed on 2026-05-09 with no schema changes detected |
+| Cloudflare Workers | `edicut-web` on `https://edicut.com` and `https://www.edicut.com` | Version `13a40842-0d45-4dd7-9884-5a9d50e6d71b` deployed on 2026-08-23 in the Jaygadorkar Cloudflare account. |
+| Supabase | Auth + PostgreSQL from `SUPABASE_*` | Hosted `Edicut` project in South Asia (Mumbai); initial migration applied and verified |
+| Cloudinary | Managed image delivery and server-signed uploads | Worker secrets configured |
 
 ## Preflight
 
@@ -39,17 +39,19 @@ git commit -m "Update authentication and deployment"
 git push origin main
 ```
 
-Do not commit local secret files such as `.env`, `.env.local`, `.env.cloudflare`, `.cf-deploy-secrets.json`, `secrets.json`, `.dev.vars`, or `.vercel/`.
+Do not commit local secret files such as `.env`, `.env.local`, `.env.cloudflare`, `.cf-deploy-secrets.json`, `secrets.json`, or `.dev.vars`.
 
-## Deploy to Neon
+## Deploy to Supabase
 
-Load `DATABASE_URL` from the local environment, then push the Drizzle schema:
+Authenticate and link the hosted Supabase project, then push the checked-in migrations:
 
 ```bash
-pnpm db:push
+npx supabase login
+npx supabase link --project-ref <project-ref>
+npx supabase db push
 ```
 
-Latest result: Drizzle pulled the remote schema successfully and reported no changes detected.
+Do not commit Supabase access tokens or service-role keys. The `SUPABASE_SERVICE_ROLE_KEY` is a Cloudflare Worker secret only.
 
 ## Wrangler Authentication
 
@@ -104,43 +106,37 @@ Or install the latest version globally via pnpm:
 pnpm add -D wrangler@latest --filter @edicut/web
 ```
 
-## Deploy to Cloudflare (edicut.com)
+## Deploy to Cloudflare Workers
 
 ```bash
 # 1. Build shared packages and web app
 pnpm --filter @edicut/web build
 
-# 2. Set authentication credentials (if not already set in environment)
-set CLOUDFLARE_EMAIL=Jaygadorkar@gmail.com
-set CLOUDFLARE_API_KEY=<your-api-key>
+# 2. Configure runtime secrets once
+pnpm exec wrangler secret put SUPABASE_URL --config apps/web/wrangler.jsonc
+pnpm exec wrangler secret put SUPABASE_PUBLISHABLE_KEY --config apps/web/wrangler.jsonc
+pnpm exec wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config apps/web/wrangler.jsonc
+pnpm exec wrangler secret put CLOUDINARY_CLOUD_NAME --config apps/web/wrangler.jsonc
+pnpm exec wrangler secret put CLOUDINARY_API_KEY --config apps/web/wrangler.jsonc
+pnpm exec wrangler secret put CLOUDINARY_API_SECRET --config apps/web/wrangler.jsonc
 
 # 3. Deploy to Cloudflare Workers
 pnpm --filter @edicut/web run deploy
 ```
 
-The deployment targets the custom domains `edicut.com` and `www.edicut.com` as configured in [`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc).
+The Worker is connected to both production routes in the Cloudflare zone:
+`edicut.com/*` and `www.edicut.com/*`.
 
 Latest production result:
 
 - Worker: `edicut-web`
-- Version ID: `d14f0df8-4b56-4927-8048-7abfc281e3c5`
-- Custom domains: `edicut.com`, `www.edicut.com`
-- Health check: `https://edicut.com/health` returned HTTP 200
+- URLs: `https://edicut.com`, `https://www.edicut.com`
+- Health checks: both `/health` endpoints returned HTTP 200
 
-## Deploy to Vercel
+## Legacy Node API
 
-The linked Vercel project is `edicut-node-api`. Deploy it from the repository root:
-
-```bash
-pnpm dlx vercel --prod --yes --token "$VERCEL_TOKEN"
-```
-
-Latest production result:
-
-- Deployment ID: `dpl_D4t5nGA8mWPfdFAjn1dE8JBna4nJ`
-- Production URL: `https://edicut-node-api.vercel.app`
-- Inspect URL: `https://vercel.com/rafsanxaman-1744s-projects/edicut-node-api/D4t5nGA8mWPfdFAjn1dE8JBna4nJ`
-- Health check: `https://edicut-node-api.vercel.app/api/node/health` returned HTTP 200
+`apps/node-api` remains available for local compatibility and development. It
+is not part of the production Cloudflare/Supabase deployment path.
 
 ## Verify Deployment
 
@@ -148,12 +144,11 @@ After a successful deployment, visit `https://edicut.com` to confirm the changes
 
 - Assets uploaded (new or modified files)
 - Worker bindings
-- Custom domain triggers (`edicut.com`, `www.edicut.com`)
+- Worker routes (`edicut.com`, `www.edicut.com`)
 - Current Version ID (for rollback reference)
 
 Also verify:
 
 ```bash
 curl https://edicut.com/health
-curl https://edicut-node-api.vercel.app/api/node/health
 ```
