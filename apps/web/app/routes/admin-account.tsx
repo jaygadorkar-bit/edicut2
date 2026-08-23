@@ -8,6 +8,7 @@ import { toPublicAdminUser } from "../lib/admin-public";
 import { getDbFromContext } from "../lib/db.server";
 import { requireAdminUser } from "../lib/session.server";
 import { verifyPassword } from "../lib/password.server";
+import { AdminPanelShell } from "../components/AdminPanelShell";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -124,38 +125,19 @@ export default function AdminAccountRoute() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
-  const initials = (adminUser.name?.[0] || adminUser.email[0] || "A").toUpperCase();
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] text-slate-900">
-      <header className="border-b border-slate-200 bg-white px-6 py-4">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link
-              to={returnTo}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 "
-              title="Back to admin panel"
-            >
-              <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-            </Link>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Admin / Settings</p>
-              <h1 className="text-2xl font-black tracking-tight">Admin account</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black">{adminUser.name || "Admin"}</p>
-              <p className="truncate text-xs font-bold text-slate-500">{adminUser.email}</p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-5xl gap-6 p-6 lg:grid-cols-[1fr_360px]">
+    <AdminPanelShell
+      title="Admin account"
+      activeTab="settings"
+      account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
+    >
+      <div className="space-y-6">
+        <Link to={returnTo} className="inline-flex items-center gap-2 text-xs font-black text-[#6d55e8] transition hover:text-[#5b44d3]">
+          <span className="material-symbols-outlined text-[17px]">arrow_back</span>
+          Back to admin panel
+        </Link>
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 p-5">
             <h2 className="text-lg font-black">Profile details</h2>
@@ -215,8 +197,9 @@ export default function AdminAccountRoute() {
             </button>
           </Form>
         </aside>
+        </div>
       </div>
-    </main>
+    </AdminPanelShell>
   );
 }
 

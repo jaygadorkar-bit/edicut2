@@ -24,6 +24,7 @@ export function Logo({ className = "h-10" }: { className?: string }) {
 }
 
 export function SiteHeader() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const matches = useMatches();
   const location = useLocation();
   const rootData = matches.find((m) => m.id === "root")?.data as { promoBarSettings?: { enabled: boolean; message: string } } | undefined;
@@ -31,6 +32,27 @@ export function SiteHeader() {
 
   const promoEnabled = rootData?.promoBarSettings?.enabled;
   const promoMessage = rootData?.promoBarSettings?.message;
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMenuOpen(false);
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isMenuOpen]);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname, location.search]);
 
   return (
     <>
@@ -40,20 +62,20 @@ export function SiteHeader() {
         </div>
       ) : null}
       
-      <header className="glass-nav sticky top-0 z-50 w-full border-b border-black/5 px-5 sm:px-6 transition-all duration-300">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between">
+      <header className="glass-nav sticky relative top-0 z-50 w-full border-b border-black/5 px-4 transition-all duration-300 sm:px-6">
+        <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-4">
           <Link to="/" aria-label="EdiCut home" className="transition-opacity hover:opacity-80">
-            <Logo className="h-[60px]" />
+            <Logo className="h-11 sm:h-12" />
           </Link>
 
-          <nav className="hidden items-center gap-1 rounded-full border border-black/5 bg-white/60 p-1.5 backdrop-blur-md md:flex">
+          <nav className="hidden items-center gap-0.5 rounded-full border border-black/5 bg-white/60 p-1 backdrop-blur-md lg:flex">
             {navLinks.map((item) => (
               <NavLink
                 key={item.label}
                 to={item.to}
                 end={item.to === "/"}
                 className={({ isActive }) =>
-                  `rounded-full px-5 py-2 yt-small font-bold transition-all duration-200 ${
+                  `rounded-full px-4 py-2 text-[13px] font-bold transition-all duration-200 ${
                     isActive
                       ? "bg-foreground text-white shadow-sm shadow-black/10"
                       : "text-muted-foreground hover:bg-black/5 hover:text-foreground"
@@ -65,24 +87,109 @@ export function SiteHeader() {
             ))}
           </nav>
 
-          <Link
-            to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
-            className="group hidden items-center gap-2 rounded-full bg-primary px-7 py-3 yt-small font-black uppercase tracking-wider text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0 md:inline-flex"
-          >
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition-colors">
-              <span className="material-symbols-outlined text-[12px]">
-                {isSignedIn ? "space_dashboard" : "person"}
+          <div className="hidden items-center gap-3 lg:flex">
+            <Link
+              to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
+              className="group inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition-colors">
+                <span className="material-symbols-outlined text-[13px]">
+                  {isSignedIn ? "dashboard_customize" : "person"}
+                </span>
               </span>
+              {isSignedIn ? "Dashboard" : "Sign in"}
+            </Link>
+          </div>
+
+          <button
+            type="button"
+            aria-label={isMenuOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={isMenuOpen}
+            aria-controls="site-mobile-navigation-drawer"
+            onClick={() => setIsMenuOpen((value) => !value)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/5 bg-white/70 text-slate-900 shadow-sm transition hover:bg-white lg:hidden"
+          >
+            <span className="material-symbols-outlined text-[22px]">
+              {isMenuOpen ? "close" : "menu"}
             </span>
-            {isSignedIn ? "Go to Dashboard" : "Sign in"}
-          </Link>
+          </button>
         </div>
+
       </header>
+
+      <div
+        aria-hidden={!isMenuOpen}
+        className={`fixed inset-0 z-[100] overflow-hidden lg:hidden ${
+            isMenuOpen ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+      >
+        <div
+          onClick={() => setIsMenuOpen(false)}
+          className={`absolute inset-0 bg-slate-950/25 backdrop-blur-[2px] transition-opacity duration-300 ${
+            isMenuOpen ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        <div
+          id="site-mobile-navigation-drawer"
+          role="dialog"
+          aria-label="Mobile navigation"
+          aria-hidden={!isMenuOpen}
+          className={`absolute right-0 top-0 z-10 flex h-full w-[min(88vw,380px)] flex-col border-l border-black/5 bg-white/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-out ${
+            isMenuOpen ? "translate-x-0" : "translate-x-full"
+          }`}
+        >
+          <div className="flex h-[72px] shrink-0 items-center justify-end border-b border-black/5 px-5 sm:px-6">
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setIsMenuOpen(false)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/5 bg-white text-slate-900 shadow-sm transition hover:bg-gray-50"
+            >
+              <span className="material-symbols-outlined text-[22px]">close</span>
+            </button>
+          </div>
+
+          <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-5 sm:p-6">
+            <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Explore EdiCut</p>
+            {navLinks.map((item) => (
+              <NavLink
+                key={item.label}
+                to={item.to}
+                end={item.to === "/"}
+                onClick={() => setIsMenuOpen(false)}
+                className={({ isActive }) =>
+                  `flex min-h-12 items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-colors ${
+                    isActive
+                      ? "bg-foreground text-white shadow-sm"
+                      : "text-muted-foreground hover:bg-black/5 hover:text-foreground"
+                  }`
+                }
+              >
+                {item.label}
+                <span className="material-symbols-outlined text-[18px] opacity-50">arrow_forward</span>
+              </NavLink>
+            ))}
+          </div>
+
+          <div className="border-t border-black/5 p-5 sm:p-6">
+            <Link
+              to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
+              onClick={() => setIsMenuOpen(false)}
+              className="flex h-12 items-center justify-center gap-2 rounded-xl bg-primary text-center text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-primary/20 transition-transform hover:bg-primary/90 active:scale-[0.98]"
+            >
+              <span className="material-symbols-outlined text-[19px]">
+                {isSignedIn ? "dashboard_customize" : "login"}
+              </span>
+              {isSignedIn ? "Dashboard" : "Sign in"}
+            </Link>
+          </div>
+        </div>
+      </div>
     </>
   );
 }
 
-export function SiteFooter() {
+function LegacySiteFooter() {
   const [newsletterStatus, setNewsletterStatus] = useState<"idle" | "verified" | "error">("idle");
 
   async function handleNewsletterSubmit(event: FormEvent<HTMLFormElement>) {
@@ -214,12 +321,258 @@ export function SiteFooter() {
   );
 }
 
+export function SiteFooter() {
+  const [openSection, setOpenSection] = useState<string | null>(null);
+  const [newsletterStatus, setNewsletterStatus] = useState<"idle" | "verified" | "error">("idle");
+
+  async function handleNewsletterSubmit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+
+    event.preventDefault();
+    setNewsletterStatus("idle");
+
+    try {
+      await executeInvisibleRecaptcha(form, "newsletter_signup");
+      setNewsletterStatus("verified");
+      form.reset();
+    } catch {
+      setNewsletterStatus("error");
+    }
+  }
+
+  const sections = [
+    {
+      label: "Company",
+      links: navLinks.filter((item) => ["About", "Portfolio", "Pricing"].includes(item.label)),
+    },
+    {
+      label: "Get Help",
+      links: [
+        { label: "Contact", to: "/contact" },
+        { label: "FAQ", to: "/faq" },
+        { label: "Privacy", to: "/privacy" },
+        { label: "Terms", to: "/terms" },
+      ],
+    },
+  ];
+
+  return (
+    <footer className="relative overflow-hidden border-t border-black/10 bg-white text-[#242424]">
+      <div className="mx-auto max-w-7xl px-5 pb-5 pt-8 sm:px-8 sm:pb-7 sm:pt-12 md:pb-10 md:pt-14">
+        <div className="grid gap-0 md:grid-cols-[minmax(18rem,1.45fr)_minmax(9rem,1fr)_minmax(11rem,1fr)] md:items-start md:gap-12">
+        <section className="max-w-xl md:max-w-md">
+          <h2 className="text-[21px] font-medium tracking-[-0.02em] text-[#242424] sm:text-2xl">Keep in Touch</h2>
+          <p className="mt-1 max-w-md text-sm leading-5 text-[#4b5563] sm:text-[15px]">
+            Receive emails about new editing services, creator tips, and helpful updates.
+          </p>
+          <form className="mt-4 flex max-w-[440px] flex-wrap gap-2" onSubmit={handleNewsletterSubmit}>
+            <input type="hidden" name="g-recaptcha-response" value="" />
+            <label className="sr-only" htmlFor="footer-email">Your email address</label>
+            <input
+              id="footer-email"
+              type="email"
+              name="email"
+              placeholder="Your email address"
+              required
+              autoComplete="email"
+              className="h-10 min-w-[180px] flex-1 rounded-full border border-black/80 bg-transparent px-4 text-sm font-medium text-[#242424] outline-none placeholder:text-[#6b7280] focus:border-black focus:ring-2 focus:ring-black/10"
+            />
+            <button type="submit" className="h-10 shrink-0 rounded-full bg-[#242424] px-5 text-sm font-medium text-white transition hover:bg-black">
+              Sign Up
+            </button>
+          </form>
+          {newsletterStatus === "verified" ? <p className="mt-2 text-xs font-bold text-[#a7f3d0]">Security check passed.</p> : null}
+          {newsletterStatus === "error" ? <p className="mt-2 text-xs font-bold text-[#fca5a5]">Security check failed. Please try again.</p> : null}
+        </section>
+
+          {sections.map((section, index) => {
+            const isOpen = openSection === section.label;
+
+            return (
+              <section key={section.label} className={`${index === 0 ? "mt-5 border-t pt-2 sm:mt-0 sm:pt-0" : ""} border-b border-black/20 md:border-0`}>
+                <button
+                  type="button"
+                  onClick={() => setOpenSection(isOpen ? null : section.label)}
+                  aria-expanded={isOpen}
+                  className="flex w-full items-center justify-between py-3 text-left text-sm font-bold text-[#242424] md:pointer-events-none md:border-b md:border-[#d1d5db] md:pb-3 md:pt-0"
+                >
+                  {section.label}
+                  <span className="material-symbols-outlined text-[20px] transition-transform duration-200 sm:hidden" style={{ transform: isOpen ? "rotate(180deg)" : undefined }}>
+                    expand_more
+                  </span>
+                </button>
+                <nav className={`grid gap-2 overflow-hidden text-sm text-[#4b5563] transition-[max-height,opacity,padding] duration-200 ${isOpen ? "max-h-48 pb-4 opacity-100" : "max-h-0 opacity-0"} md:mt-3 md:max-h-none md:overflow-visible md:pb-0 md:opacity-100`} aria-label={section.label}>
+                  {section.links.map((item) => (
+                    <Link key={item.label} to={item.to} className="transition-colors hover:text-[#242424]">{item.label}</Link>
+                  ))}
+                </nav>
+              </section>
+            );
+          })}
+        </div>
+
+        <section className="mt-7 grid gap-5 border-t border-black/20 pt-5 text-center md:mt-10 md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4 md:pt-4">
+          <div className="order-1 md:justify-self-start">
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[#242424] md:hidden">Follow EdiCut</p>
+            <div className="flex justify-center gap-4" aria-label="Social media icons">
+              {[
+                "Facebook",
+                "Instagram",
+                "TikTok",
+                "YouTube",
+              ].map((label) => (
+                <span key={label} role="img" aria-label={label} className="flex h-8 w-8 items-center justify-center text-[#242424] brightness-0">
+                  <HerlanSocialIcon name={label} />
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="order-2 flex flex-col items-center gap-3 md:flex-row md:justify-self-center">
+            <p className="text-sm font-bold text-[#242424]">Pay With</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {["bKash", "VISA", "MasterCard", "AMEX", "Nagad"].map((payment) => (
+                <span key={payment} className="rounded-sm bg-[#242424] px-2 py-1 text-[10px] font-black tracking-tight text-white">{payment}</span>
+              ))}
+            </div>
+          </div>
+
+          <p className="order-3 text-xs font-medium text-[#6b7280] md:justify-self-end md:text-right">© 2026 EdiCut. All rights reserved.</p>
+        </section>
+      </div>
+
+    </footer>
+  );
+}
+
+function HerlanSocialIcon({ name }: { name: string }) {
+  if (name === "Facebook") {
+    return (
+      <svg width="25" height="25" viewBox="0 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+        <path d="M25 12.5C25 5.6 19.4 0 12.5 0C5.6 0 0 5.6 0 12.5C0 18.55 4.3 23.5875 10 24.75V16.25H7.5V12.5H10V9.375C10 6.9625 11.9625 5 14.375 5H17.5V8.75H15C14.3125 8.75 13.75 9.3125 13.75 10V12.5H17.5V16.25H13.75V24.9375C20.0625 24.3125 25 18.9875 25 12.5Z" fill="white" />
+      </svg>
+    );
+  }
+
+  if (name === "Instagram") {
+    return (
+      <svg width="25" height="25" viewBox="0 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+        <path d="M13.7857 0C15.192 0.00375 15.9057 0.01125 16.522 0.02875L16.7645 0.0375C17.0445 0.0475 17.3207 0.0599999 17.6545 0.0749999C18.9845 0.1375 19.892 0.3475 20.6882 0.65625C21.5132 0.97375 22.2082 1.40375 22.9032 2.0975C23.5388 2.72237 24.0307 3.47824 24.3445 4.3125C24.6532 5.10875 24.8632 6.01625 24.9257 7.3475C24.9407 7.68 24.9532 7.95625 24.9632 8.2375L24.9707 8.48C24.9895 9.095 24.997 9.80875 24.9995 11.215L25.0007 12.1475V13.785C25.0038 14.6968 24.9942 15.6085 24.972 16.52L24.9645 16.7625C24.9545 17.0437 24.942 17.32 24.927 17.6525C24.8645 18.9837 24.652 19.89 24.3445 20.6875C24.0316 21.5222 23.5396 22.2783 22.9032 22.9025C22.2782 23.5379 21.5224 24.0297 20.6882 24.3438C19.892 24.6525 18.9845 24.8625 17.6545 24.925C17.3579 24.939 17.0612 24.9515 16.7645 24.9625L16.522 24.97C15.9057 24.9875 15.192 24.9963 13.7857 24.9988L12.8532 25H11.217C10.3048 25.0031 9.39263 24.9936 8.48072 24.9712L8.23822 24.9638C7.94148 24.9525 7.64481 24.9396 7.34822 24.925C6.01822 24.8625 5.11072 24.6525 4.31322 24.3438C3.47906 24.0305 2.72349 23.5386 2.09947 22.9025C1.46328 22.2779 0.971002 21.5219 0.656971 20.6875C0.348221 19.8912 0.138221 18.9837 0.0757212 17.6525C0.0617947 17.3559 0.0492947 17.0592 0.0382212 16.7625L0.0319713 16.52C0.00893643 15.6085 -0.00148136 14.6968 0.00072125 13.785V11.215C-0.00276746 10.3033 0.00640019 9.3915 0.0282213 8.48L0.0369713 8.2375C0.0469713 7.95625 0.0594713 7.68 0.0744713 7.3475C0.136971 6.01625 0.346971 5.11 0.655721 4.3125C0.969614 3.47738 1.46287 2.72128 2.10072 2.0975C2.72459 1.46184 3.47965 0.969984 4.31322 0.65625C5.11072 0.3475 6.01697 0.1375 7.34822 0.0749999C7.68072 0.0599999 7.95822 0.0475 8.23822 0.0375L8.48072 0.0299999C9.39221 0.00779088 10.304 -0.00179337 11.2157 0.00124991L13.7857 0ZM12.5007 6.25C10.8431 6.25 9.25341 6.90848 8.0813 8.08058C6.9092 9.25268 6.25072 10.8424 6.25072 12.5C6.25072 14.1576 6.9092 15.7473 8.0813 16.9194C9.25341 18.0915 10.8431 18.75 12.5007 18.75C14.1583 18.75 15.748 18.0915 16.9201 16.9194C18.0922 15.7473 18.7507 14.1576 18.7507 12.5C18.7507 10.8424 18.0922 9.25268 16.9201 8.08058C15.748 6.90848 14.1583 6.25 12.5007 6.25ZM12.5007 8.75C12.9932 8.74992 13.4808 8.84683 13.9358 9.03521C14.3908 9.22359 14.8043 9.49975 15.1526 9.84791C15.5008 10.1961 15.7771 10.6094 15.9657 11.0644C16.1542 11.5193 16.2513 12.0069 16.2513 12.4994C16.2514 12.9918 16.1545 13.4795 15.9661 13.9345C15.7778 14.3895 15.5016 14.8029 15.1534 15.1512C14.8053 15.4995 14.3919 15.7758 13.937 15.9643C13.482 16.1528 12.9944 16.2499 12.502 16.25C11.5074 16.25 10.5536 15.8549 9.85032 15.1517C9.14706 14.4484 8.75197 13.4946 8.75197 12.5C8.75197 11.5054 9.14706 10.5516 9.85032 9.84835C10.5536 9.14509 11.5074 8.75 12.502 8.75M19.0645 4.375C18.6501 4.375 18.2526 4.53962 17.9596 4.83265C17.6666 5.12567 17.502 5.5231 17.502 5.9375C17.502 6.3519 17.6666 6.74933 17.9596 7.04235C18.2526 7.33538 18.6501 7.5 19.0645 7.5C19.4789 7.5 19.8763 7.33538 20.1693 7.04235C20.4624 6.74933 20.627 6.3519 20.627 5.9375C20.627 5.5231 20.4624 5.12567 20.1693 4.83265C19.8763 4.53962 19.4789 4.375 19.0645 4.375Z" fill="white" />
+      </svg>
+    );
+  }
+
+  if (name === "TikTok") {
+    return (
+      <svg width="20" height="23" viewBox="0 0 20 23" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+        <path d="M15.55 3.525C14.6955 2.54953 14.2246 1.29679 14.225 0H10.3625V15.5C10.3327 16.3388 9.97859 17.1333 9.37471 17.7162C8.77083 18.2991 7.96431 18.6249 7.125 18.625C5.35 18.625 3.875 17.175 3.875 15.375C3.875 13.225 5.95 11.6125 8.0875 12.275V8.325C3.775 7.75 0 11.1 0 15.375C0 19.5375 3.45 22.5 7.1125 22.5C11.0375 22.5 14.225 19.3125 14.225 15.375V7.5125C15.7912 8.63731 17.6717 9.24081 19.6 9.2375V5.375C19.6 5.375 17.25 5.4875 15.55 3.525Z" fill="white" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg width="25" height="18" viewBox="0 0 25 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+      <path d="M10 12.5L16.4875 8.75L10 5V12.5ZM24.45 2.7125C24.6125 3.3 24.725 4.0875 24.8 5.0875C24.8875 6.0875 24.925 6.95 24.925 7.7L25 8.75C25 11.4875 24.8 13.5 24.45 14.7875C24.1375 15.9125 23.4125 16.6375 22.2875 16.95C21.7 17.1125 20.625 17.225 18.975 17.3C17.35 17.3875 15.8625 17.425 14.4875 17.425L12.5 17.5C7.2625 17.5 4 17.3 2.7125 16.95C1.5875 16.6375 0.8625 15.9125 0.55 14.7875C0.3875 14.2 0.275 13.4125 0.2 12.4125C0.1125 11.4125 0.0749999 10.55 0.0749999 9.8L0 8.75C0 6.0125 0.2 4 0.55 2.7125C0.8625 1.5875 1.5875 0.8625 2.7125 0.55C3.3 0.3875 4.375 0.275 6.025 0.2C7.65 0.1125 9.1375 0.0749999 10.5125 0.0749999L12.5 0C17.7375 0 21 0.2 22.2875 0.55C23.4125 0.8625 24.1375 1.5875 24.45 2.7125Z" fill="white" />
+    </svg>
+  );
+}
+
+export function MessageWidget() {
+  const [isOpen, setIsOpen] = useState(false);
+  const whatsappUrl = "https://wa.me/8801515688142?text=Hi%20EdiCut%2C%20I%27d%20like%20to%20ask%20about%20video%20editing.";
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen]);
+
+  return (
+    <>
+      <div
+        aria-hidden={!isOpen}
+        onClick={() => setIsOpen(false)}
+        className={`fixed inset-0 z-[60] bg-black/40 transition-opacity duration-300 ease-out ${isOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
+      />
+
+      <div
+        aria-hidden={!isOpen}
+        className={`!fixed right-0 bottom-[calc(20%+2rem)] z-[70] w-[20rem] max-w-[calc(100vw-1.5rem)] mr-3 transition-all duration-300 ease-out md:bottom-[20%] ${isOpen ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-6 opacity-0"}`}
+      >
+        <div className="pointer-events-none absolute inset-0 isolate rounded-3xl bg-neutral-900/50 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] ring-1 ring-white/15 backdrop-blur-lg backdrop-saturate-150" />
+        <div className="relative overflow-hidden rounded-3xl text-white">
+          <div className="relative px-5 pb-12 pt-5">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.16),transparent_60%)]" />
+            <button
+              type="button"
+              aria-label="Close support"
+              onClick={() => setIsOpen(false)}
+              className="absolute right-2 top-2 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition hover:bg-white/10 hover:text-white"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="relative flex items-center gap-3 pr-10">
+              <p className="text-base font-medium leading-tight">EdiCut Support</p>
+            </div>
+          </div>
+
+          <div className="space-y-2 p-4">
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex w-full items-center gap-3 rounded-2xl bg-white/5 p-3 text-left ring-1 ring-white/10 transition hover:bg-white/10 hover:ring-emerald-400/40"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-md shadow-emerald-500/30 transition group-hover:scale-105">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+                  <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
+                </svg>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">WhatsApp</span>
+                <span className="block truncate text-xs text-white/60">+880 1515-688142</span>
+              </span>
+              <span className="text-xs font-semibold text-emerald-300 opacity-0 transition group-hover:opacity-100">Open →</span>
+            </a>
+          </div>
+
+          <div className="border-t border-white/5 px-4 py-2.5 text-center text-[10px] uppercase tracking-[0.2em] text-white/40">EdiCut · Customer Care</div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        aria-label="Open support"
+        aria-expanded={isOpen}
+        aria-hidden={isOpen}
+        tabIndex={isOpen ? -1 : 0}
+        onClick={() => setIsOpen(true)}
+        className={`!fixed right-0 bottom-[calc(20%+2rem)] z-[65] group flex items-center gap-2 rounded-l-2xl bg-neutral-900/40 py-4 pl-3 pr-2 text-white shadow-[0_8px_30px_-6px_rgba(0,0,0,0.35)] ring-1 ring-white/15 backdrop-blur-xl backdrop-saturate-150 transition-all duration-300 ease-out hover:pl-4 hover:shadow-[0_14px_40px_-6px_rgba(0,0,0,0.6)] md:bottom-[20%] ${isOpen ? "pointer-events-none translate-x-2 opacity-0" : "pointer-events-auto translate-x-0 opacity-100"}`}
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#d1d5db] text-neutral-600">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+            <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
+          </svg>
+        </span>
+      </button>
+    </>
+  );
+}
+
 export function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-white text-foreground">
       <SiteHeader />
       <main>{children}</main>
       <SiteFooter />
+      <MessageWidget />
     </div>
   );
 }

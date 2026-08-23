@@ -9,6 +9,7 @@ import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "../lib/admin-paths
 import { toPublicAdminUser } from "../lib/admin-public";
 import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES } from "../lib/admin-user-roles";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
+import { AdminPanelShell } from "../components/AdminPanelShell";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -208,30 +209,17 @@ export default function AdminUserRoute() {
   const initials = (user.name?.[0] || user.email[0] || "U").toUpperCase();
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] text-slate-900">
-      <header className="border-b border-slate-200 bg-white px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Link
-              to={returnTo}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-600 "
-              title="Back to accounts"
-            >
-              <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-            </Link>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Admin / Accounts</p>
-              <h1 className="text-2xl font-black tracking-tight">{user.name || user.email}</h1>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-xs font-bold text-slate-500">Signed in as</p>
-            <p className="text-sm font-black">{adminUser.email}</p>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[320px_1fr]">
+    <AdminPanelShell
+      title={user.name || user.email}
+      activeTab="users"
+      account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
+    >
+      <div className="space-y-6">
+        <Link to={returnTo} className="inline-flex items-center gap-2 text-xs font-black text-[#6d55e8] transition hover:text-[#5b44d3]">
+          <span className="material-symbols-outlined text-[17px]">arrow_back</span>
+          Back to accounts
+        </Link>
+        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-4">
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-4">
@@ -375,8 +363,9 @@ export default function AdminUserRoute() {
             </div>
           </div>
         </section>
+        </div>
       </div>
-    </main>
+    </AdminPanelShell>
   );
 }
 

@@ -7,7 +7,14 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig(({ isSsrBuild }) => ({
   cacheDir: ".vite-cache",
   server: {
+    host: "0.0.0.0",
+    watch: {
+      usePolling: true,
+      interval: 250,
+    },
     hmr: {
+      host: "localhost",
+      clientPort: 3000,
       overlay: true,
     },
   },

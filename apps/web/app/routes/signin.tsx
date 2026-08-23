@@ -1,5 +1,5 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { redirect } from "react-router";
+import type { ActionFunctionArgs, MetaFunction } from "react-router";
+import { AuthPage } from "../components/auth/AuthModal";
 import { users } from "@edicut/db/schema";
 import { findUserByEmail } from "@edicut/db/repositories/users";
 import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
@@ -18,12 +18,6 @@ export const meta: MetaFunction = () => [
   { title: "Sign in - EdiCut" },
   { name: "description", content: "Sign in or create an account with EdiCut" },
 ];
-
-export async function loader({ request }: LoaderFunctionArgs) {
-  const url = new URL(request.url);
-  const redirectTo = sanitizeRedirect(url.searchParams.get("redirectTo") || "/dashboard");
-  throw redirect(`/?auth=signin&redirectTo=${encodeURIComponent(redirectTo)}`);
-}
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
@@ -206,8 +200,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
   return { error: "Unknown intent", intent };
 }
 
-export default function SigninEndpoint() {
-  return null;
+export default function SigninPage() {
+  return <AuthPage />;
 }
 
 function sanitizeRedirect(value: string) {

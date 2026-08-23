@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useMatches } from "react-router";
 import { authHref } from "../auth/AuthModal";
 import { navLinks } from "../site/data";
@@ -17,6 +17,27 @@ export function Header() {
   const promoEnabled = rootData?.promoBarSettings?.enabled;
   const promoMessage = rootData?.promoBarSettings?.message;
 
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMenuOpen(false);
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isMenuOpen]);
+
+  useEffect(() => {
+    setIsMenuOpen(false);
+  }, [location.pathname, location.search]);
+
   return (
     <>
       {promoEnabled && promoMessage ? (
@@ -25,21 +46,21 @@ export function Header() {
         </div>
       ) : null}
       
-      <nav className="glass-nav sticky top-0 z-50 w-full border-b border-black/5 px-5 sm:px-6 transition-all duration-300">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between">
+      <nav className="glass-nav sticky relative top-0 z-50 w-full border-b border-black/5 px-4 transition-all duration-300 sm:px-6">
+        <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-4">
           <Link to="/" aria-label="EdiCut home" className="transition-opacity hover:opacity-80">
-            <LogoMark className="h-[60px]" />
+            <LogoMark className="h-11 sm:h-12" />
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden items-center gap-1 rounded-full border border-black/5 bg-white/60 p-1.5 backdrop-blur-md md:flex">
+          <div className="hidden items-center gap-0.5 rounded-full border border-black/5 bg-white/60 p-1 backdrop-blur-md lg:flex">
             {navLinks.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === "/"}
                 className={({ isActive }) =>
-                  `rounded-full px-5 py-2 text-sm font-bold transition-all duration-200 ${
+                  `rounded-full px-4 py-2 text-[13px] font-bold transition-all duration-200 ${
                     isActive
                       ? "bg-foreground text-white shadow-sm shadow-black/10"
                       : "text-muted-foreground hover:bg-black/5 hover:text-foreground"
@@ -51,41 +72,72 @@ export function Header() {
             ))}
           </div>
 
-          <div className="hidden items-center gap-4 md:flex">
+          <div className="hidden items-center gap-3 lg:flex">
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
-              className="group inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3 text-[11px] font-black uppercase tracking-wider text-white shadow-xl shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0"
+              className="group inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition-colors">
-                <span className="material-symbols-outlined text-[12px]">
-                  {isSignedIn ? "space_dashboard" : "person"}
+                <span className="material-symbols-outlined text-[13px]">
+                  {isSignedIn ? "dashboard_customize" : "person"}
                 </span>
               </span>
-              {isSignedIn ? "Go to Dashboard" : "Sign in"}
+              {isSignedIn ? "Dashboard" : "Sign in"}
             </Link>
           </div>
 
           {/* Mobile Menu Button */}
           <button
             type="button"
-            aria-label="Toggle navigation"
+            aria-label={isMenuOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={isMenuOpen}
+            aria-controls="mobile-navigation-drawer"
             onClick={() => setIsMenuOpen((value) => !value)}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-black/5 bg-white/50 text-slate-900 shadow-sm md:hidden"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/5 bg-white/70 text-slate-900 shadow-sm transition hover:bg-white lg:hidden"
           >
-            <span className="material-symbols-outlined text-[24px]">
+            <span className="material-symbols-outlined text-[22px]">
               {isMenuOpen ? "close" : "menu"}
             </span>
           </button>
         </div>
 
-        {/* Mobile Navigation */}
-        <div 
-          className={`overflow-hidden transition-all duration-300 ease-in-out md:hidden ${
-            isMenuOpen ? "max-h-[500px] border-t border-black/5 opacity-100" : "max-h-0 opacity-0"
-          } bg-white/95 backdrop-blur-xl shadow-2xl`}
+        {/* Compact navigation drawer for mobile and tablet widths */}
+      </nav>
+
+      <div
+        aria-hidden={!isMenuOpen}
+        className={`fixed inset-0 z-[100] overflow-hidden lg:hidden ${
+          isMenuOpen ? "pointer-events-auto" : "pointer-events-none"
+        }`}
+      >
+        <div
+          onClick={() => setIsMenuOpen(false)}
+          className={`absolute inset-0 bg-slate-950/25 backdrop-blur-[2px] transition-opacity duration-300 ${
+            isMenuOpen ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        <div
+          id="mobile-navigation-drawer"
+          role="dialog"
+          aria-label="Mobile navigation"
+          aria-hidden={!isMenuOpen}
+          className={`absolute right-0 top-0 z-10 flex h-full w-[min(88vw,380px)] flex-col border-l border-black/5 bg-white/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-out ${
+            isMenuOpen ? "translate-x-0" : "translate-x-full"
+          }`}
         >
-          <div className="mx-auto grid max-w-7xl gap-2 p-6">
+          <div className="flex h-[72px] shrink-0 items-center justify-end border-b border-black/5 px-5 sm:px-6">
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setIsMenuOpen(false)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/5 bg-white text-slate-900 shadow-sm transition hover:bg-gray-50"
+            >
+              <span className="material-symbols-outlined text-[22px]">close</span>
+            </button>
+          </div>
+
+          <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-5 sm:p-6">
+            <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Explore EdiCut</p>
             {navLinks.map((item) => (
               <NavLink
                 key={item.to}
@@ -93,30 +145,33 @@ export function Header() {
                 end={item.to === "/"}
                 onClick={() => setIsMenuOpen(false)}
                 className={({ isActive }) =>
-                  `flex items-center justify-between rounded-2xl px-5 py-4 text-base font-bold transition-colors ${
+                  `flex min-h-12 items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-colors ${
                     isActive
-                      ? "bg-black/5 text-foreground"
+                      ? "bg-foreground text-white shadow-sm"
                       : "text-muted-foreground hover:bg-black/5 hover:text-foreground"
                   }`
                 }
               >
                 {item.label}
-                <span className="material-symbols-outlined text-[20px] opacity-20">arrow_forward</span>
+                <span className="material-symbols-outlined text-[18px] opacity-50">arrow_forward</span>
               </NavLink>
             ))}
+          </div>
+
+          <div className="border-t border-black/5 p-5 sm:p-6">
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
               onClick={() => setIsMenuOpen(false)}
-              className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-center text-sm font-black uppercase tracking-widest text-white shadow-lg shadow-primary/20 transition-transform active:scale-95"
+              className="flex h-12 items-center justify-center gap-2 rounded-xl bg-primary text-center text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-primary/20 transition-transform hover:bg-primary/90 active:scale-[0.98]"
             >
-              <span className="material-symbols-outlined text-[20px]">
-                {isSignedIn ? "space_dashboard" : "login"}
+              <span className="material-symbols-outlined text-[19px]">
+                {isSignedIn ? "dashboard_customize" : "login"}
               </span>
               {isSignedIn ? "Dashboard" : "Sign in"}
             </Link>
           </div>
         </div>
-      </nav>
+      </div>
     </>
   );
 }

@@ -16,6 +16,8 @@ const ADMIN_TOOLBAR_ENABLED_KEY = "admin_toolbar_enabled";
 const PROMO_BAR_ENABLED_KEY = "promo_bar_enabled";
 const PROMO_BAR_MESSAGE_KEY = "promo_bar_message";
 const ROLE_FEATURE_ACCESS_KEY = "role_feature_access";
+const SEARCH_CRAWLING_ENABLED_KEY = "search_crawling_enabled";
+const MAINTENANCE_MODE_ENABLED_KEY = "maintenance_mode_enabled";
 
 export async function getSiteSetting(
   db: DatabaseClient | null | undefined,
@@ -89,6 +91,24 @@ export async function getAdminToolbarEnabled(db: DatabaseClient | null | undefin
 
 export async function saveAdminToolbarEnabled(db: DatabaseClient | null | undefined, enabled: boolean, context?: SupabaseRuntimeContext) {
   await saveSetting(db, ADMIN_TOOLBAR_ENABLED_KEY, enabled ? "true" : "false", context);
+}
+
+export async function getSearchCrawlingEnabled(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {
+  const value = await getSetting(db, SEARCH_CRAWLING_ENABLED_KEY, context);
+  return value !== "false";
+}
+
+export async function saveSearchCrawlingEnabled(db: DatabaseClient | null | undefined, enabled: boolean, context?: SupabaseRuntimeContext) {
+  await saveSetting(db, SEARCH_CRAWLING_ENABLED_KEY, enabled ? "true" : "false", context);
+}
+
+export async function getMaintenanceModeEnabled(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {
+  const value = await getSetting(db, MAINTENANCE_MODE_ENABLED_KEY, context);
+  return value === "true";
+}
+
+export async function saveMaintenanceModeEnabled(db: DatabaseClient | null | undefined, enabled: boolean, context?: SupabaseRuntimeContext) {
+  await saveSetting(db, MAINTENANCE_MODE_ENABLED_KEY, enabled ? "true" : "false", context);
 }
 
 export async function getPromoBarSettings(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {

@@ -155,15 +155,15 @@ export async function requireUserId(
         }
       }
 
-      const searchParams = new URLSearchParams([["auth", "signin"], ["redirectTo", redirectTo]]);
-      throw redirect(`/?${searchParams}`);
+      const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
+      throw redirect(`/signin?${searchParams}`);
     }
     return user.id;
   }
 
   if (!userId || typeof userId !== "string") {
-    const searchParams = new URLSearchParams([["auth", "signin"], ["redirectTo", redirectTo]]);
-    throw redirect(`/?${searchParams}`);
+    const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
+    throw redirect(`/signin?${searchParams}`);
   }
   return userId;
 }

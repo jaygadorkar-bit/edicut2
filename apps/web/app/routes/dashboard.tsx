@@ -91,7 +91,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
   if (formData.get("intent") === "logout") {
     const session = await getSession(request.headers.get("Cookie"), context);
-    return redirect("/?auth=signin&redirectTo=/dashboard", {
+    return redirect("/signin?redirectTo=/dashboard", {
       headers: {
         "Set-Cookie": await destroySession(session, context),
       },
@@ -109,7 +109,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   if (!user) {
     // If user deleted from DB but session exists, force sign in
     const session = await getSession(request.headers.get("Cookie"), context);
-    throw redirect("/?auth=signin&redirectTo=/dashboard", {
+    throw redirect("/signin?redirectTo=/dashboard", {
       headers: {
         "Set-Cookie": await destroySession(session, context),
       },

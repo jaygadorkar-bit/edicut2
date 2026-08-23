@@ -402,7 +402,7 @@ async function requireDashboardUser(request: Request, context: any) {
 
   if (!user) {
     const session = await getSession(request.headers.get("Cookie"), context);
-    throw redirect("/?auth=signin&redirectTo=/dashboard/messages", {
+    throw redirect("/signin?redirectTo=/dashboard/messages", {
       headers: {
         "Set-Cookie": await destroySession(session, context),
       },

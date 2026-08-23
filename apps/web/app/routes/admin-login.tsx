@@ -139,7 +139,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     throw redirect(ADMIN_BASE_PATH);
   }
 
-  throw redirect("/?auth=signin&redirectTo=%2Fdashboard");
+  throw redirect("/signin?redirectTo=%2Fdashboard");
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {

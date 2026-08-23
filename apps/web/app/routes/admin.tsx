@@ -11,7 +11,7 @@ import {
   isAdminRole,
   requireAdminUser,
 } from "../lib/session.server";
-import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "../lib/admin-paths";
+import { ADMIN_LOGIN_PATH, adminPath } from "../lib/admin-paths";
 import { toPublicAdminUser } from "../lib/admin-public";
 import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES, type UserRole } from "../lib/admin-user-roles";
 import {
@@ -33,19 +33,56 @@ import {
 } from "../lib/cloudinary.server";
 import {
   getAdminToolbarEnabled,
+  getMaintenanceModeEnabled,
   saveAdminToolbarEnabled,
   getPromoBarSettings,
+  getSearchCrawlingEnabled,
   savePromoBarSettings,
+  saveMaintenanceModeEnabled,
+  saveSearchCrawlingEnabled,
   getRoleFeatureAccessSettings,
   saveRoleFeatureAccessSettings,
 } from "../lib/site-settings.server";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, count as drizzleCount } from "drizzle-orm";
 import { useState, useEffect, type ReactNode } from "react";
 import { DASHBOARD_FEATURES, type RoleFeatureAccess } from "../lib/role-feature-access";
-import { WorkspaceShell } from "../components/WorkspaceShell";
+import { AdminPanelShell } from "../components/AdminPanelShell";
 import { WorkspaceBoard, WorkspaceProjectStrip, WorkspaceSchedule } from "../components/WorkspaceWidgets";
 
 const PAGE_SIZE = 10;
+
+const adminPlaceholderConfigs = {
+  projects: {
+    title: "Projects workspace",
+    icon: "video_library",
+    description: "A central view for project intake, production status, assignments, and delivery health.",
+    cards: [
+      ["Project pipeline", "Monitor briefs as they move from intake to delivery."],
+      ["Team assignments", "Balance editor capacity and keep ownership visible."],
+      ["Delivery health", "Surface overdue work and projects waiting for review."],
+    ],
+  },
+  payments: {
+    title: "Payments workspace",
+    icon: "payments",
+    description: "A finance view for invoices, successful payments, refunds, and payout readiness.",
+    cards: [
+      ["Payment activity", "Review the latest successful and pending transactions."],
+      ["Invoice queue", "Keep client billing records organized and easy to reconcile."],
+      ["Payout readiness", "Track affiliate and production payouts before release."],
+    ],
+  },
+  audit: {
+    title: "Audit logs",
+    icon: "history",
+    description: "A security timeline for role changes, account actions, configuration updates, and system events.",
+    cards: [
+      ["Account activity", "See sign-ins, role updates, and account lifecycle events."],
+      ["Configuration changes", "Review updates to packages, settings, and access rules."],
+      ["Exportable history", "Prepare a filtered audit trail for operational review."],
+    ],
+  },
+} as const;
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -177,6 +214,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     trashCount,
     pricingPackages,
     adminToolbarEnabled,
+    searchCrawlingEnabled,
+    maintenanceModeEnabled,
     promoBarSettings,
     roleFeatureAccess,
     cloudinaryImages,
@@ -191,9 +230,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "customer_support"), isNull(usersTable.deletedAt))),
     db.select({ count: drizzleCount() }).from(usersTable).where(isNotNull(usersTable.deletedAt)),
     getPricingPackages(db),
-    getAdminToolbarEnabled(db),
-    getPromoBarSettings(db),
-    getRoleFeatureAccessSettings(db),
+    getAdminToolbarEnabled(db, context),
+    getSearchCrawlingEnabled(db, context),
+    getMaintenanceModeEnabled(db, context),
+    getPromoBarSettings(db, context),
+    getRoleFeatureAccessSettings(db, context),
     listCloudinaryImages(context).catch((error) => {
       console.error("Cloudinary image list error:", error);
       return [] as CloudinaryImageResource[];
@@ -216,6 +257,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     view,
     pricingPackages,
     adminToolbarEnabled,
+    searchCrawlingEnabled,
+    maintenanceModeEnabled,
     promoBarSettings,
     roleFeatureAccess,
     cloudinaryImages,
@@ -424,14 +467,24 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   if (intent === "update-admin-toolbar") {
-    await saveAdminToolbarEnabled(db, formData.get("adminToolbarEnabled") === "on");
+    await saveAdminToolbarEnabled(db, formData.get("adminToolbarEnabled") === "on", context);
     return { success: "Settings updated." };
+  }
+
+  if (intent === "update-search-crawling") {
+    await saveSearchCrawlingEnabled(db, formData.get("searchCrawlingEnabled") === "on", context);
+    return { success: "Search visibility settings updated." };
+  }
+
+  if (intent === "update-maintenance-mode") {
+    await saveMaintenanceModeEnabled(db, formData.get("maintenanceModeEnabled") === "on", context);
+    return { success: "Maintenance mode settings updated." };
   }
 
   if (intent === "update-promo-bar") {
     const enabled = formData.get("promoBarEnabled") === "on";
     const message = String(formData.get("promoBarMessage") || "");
-    await savePromoBarSettings(db, enabled, message);
+    await savePromoBarSettings(db, enabled, message, context);
     return { success: "Promo bar settings updated." };
   }
 
@@ -490,33 +543,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 export default function AdminRoute() {
   const { tab } = useLoaderData<typeof loader>();
-  return tab === "overview" ? <AdminOverview /> : <LegacyAdminRoute />;
+  if (tab === "overview") return <AdminOverview />;
+  if (tab === "projects" || tab === "payments" || tab === "audit") return <AdminPlaceholder tab={tab} />;
+  return <LegacyAdminRoute />;
 }
 
 function AdminOverview() {
   const { adminUser, stats, cloudinaryImages, pricingPackages } = useLoaderData<typeof loader>();
 
   return (
-    <WorkspaceShell
+    <AdminPanelShell
       title="Admin overview"
-      subtitle="EdiCut operations workspace"
-      navItems={[
-        { label: "Dashboard", icon: "dashboard_customize", to: "?tab=overview", active: true },
-        { label: "Users", icon: "group", to: "?tab=users" },
-        { label: "Roles", icon: "shield_person", to: "?tab=roles" },
-        { label: "Packages", icon: "sell", to: "?tab=packages" },
-        { label: "Images", icon: "image", to: "?tab=images" },
-        { label: "Settings", icon: "settings", to: "?tab=settings" },
-      ]}
+      activeTab="overview"
       account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
-      accountAction={(
-        <Form method="post" action={ADMIN_BASE_PATH} reloadDocument>
-          <input type="hidden" name="intent" value="logout" />
-          <button type="submit" className="text-[#a0a3b5] transition hover:text-[#5a43d5]" aria-label="Sign out">
-            <span className="material-symbols-outlined text-[18px]">logout</span>
-          </button>
-        </Form>
-      )}
       headerActions={(
         <Link to="?tab=users" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
           <span className="material-symbols-outlined text-[17px]">manage_accounts</span>
@@ -529,7 +568,7 @@ function AdminOverview() {
           ["Total users", String(stats.total), "Active accounts", "group", "purple"],
           ["Admin team", String(stats.admins), "Privileged accounts", "admin_panel_settings", "blue"],
           ["Editors", String(stats.editors), "Production capacity", "movie_edit", "yellow"],
-          ["Media assets", String(cloudinaryImages.length), `${pricingPackages.length} packages live`, "perm_media", "pink"],
+          ["Media assets", String(cloudinaryImages.length), `${pricingPackages.length} packages published`, "perm_media", "pink"],
         ].map(([label, value, hint, icon, tone]) => {
           const toneMap = { purple: "bg-[#eeeaff] text-[#6448cc]", blue: "bg-[#e8efff] text-[#4d6ac4]", yellow: "bg-[#fff3d1] text-[#aa710d]", pink: "bg-[#ffebf7] text-[#c03a86]" };
           return (
@@ -572,7 +611,66 @@ function AdminOverview() {
       <div className="mt-7">
         <WorkspaceSchedule accent="pink" />
       </div>
-    </WorkspaceShell>
+    </AdminPanelShell>
+  );
+}
+
+function AdminPlaceholder({ tab }: { tab: keyof typeof adminPlaceholderConfigs }) {
+  const { adminUser } = useLoaderData<typeof loader>();
+  const config = adminPlaceholderConfigs[tab];
+
+  return (
+    <AdminPanelShell
+      title={config.title}
+      activeTab={tab}
+      account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
+      headerActions={(
+        <Link to="?tab=overview" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
+          <span className="material-symbols-outlined text-[17px]">dashboard_customize</span>
+          Dashboard
+        </Link>
+      )}
+    >
+      <section className="rounded-[24px] bg-white p-6 shadow-[0_9px_30px_rgba(44,49,100,0.05)] sm:p-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#eeeaff] text-[#6448cc]">
+              <span className="material-symbols-outlined text-[24px]">{config.icon}</span>
+            </span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.17em] text-[#9699ac]">Admin module</p>
+              <h2 className="mt-1 text-2xl font-black tracking-[-0.04em] text-[#17172a]">{config.title}</h2>
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#777b91]">{config.description}</p>
+            </div>
+          </div>
+          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[#f4f5fb] px-3 py-2 text-[10px] font-black uppercase tracking-wider text-[#777b91]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#6d55e8]" />
+            Coming soon
+          </span>
+        </div>
+
+        <div className="mt-8 grid gap-3 md:grid-cols-3">
+          {config.cards.map(([title, copy]) => (
+            <article key={title} className="rounded-2xl border border-[#edf0f7] bg-[#fafaff] p-4">
+              <span className="material-symbols-outlined text-[20px] text-[#6d55e8]">auto_awesome</span>
+              <h3 className="mt-4 text-sm font-black text-[#27263d]">{title}</h3>
+              <p className="mt-2 text-xs font-medium leading-5 text-[#8b8ea0]">{copy}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-col gap-3 rounded-2xl bg-[#f3f5ff] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-black text-[#27263d]">This admin module is being prepared.</p>
+            <p className="mt-1 text-xs font-medium text-[#777b91]">Navigation, access control, and the workspace shell are ready for the full workflow.</p>
+          </div>
+          <Link to="?tab=overview" className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white transition hover:bg-[#5b44d3]">
+            <span className="material-symbols-outlined text-[17px]">arrow_back</span>
+            Back to dashboard
+          </Link>
+        </div>
+      </section>
+    </AdminPanelShell>
   );
 }
 
@@ -588,6 +686,8 @@ function LegacyAdminRoute() {
     view,
     pricingPackages,
     adminToolbarEnabled,
+    searchCrawlingEnabled,
+    maintenanceModeEnabled,
     promoBarSettings,
     roleFeatureAccess,
     cloudinaryImages,
@@ -640,7 +740,6 @@ function LegacyAdminRoute() {
     const returnTo = `${location.pathname}${location.search || "?tab=users"}`;
     return `${adminPath(`/users/${userId}`)}?returnTo=${encodeURIComponent(returnTo)}`;
   };
-  const adminAccountUrl = `${adminPath("/account")}?returnTo=${encodeURIComponent(`${location.pathname}${location.search || ""}`)}`;
   const pageTitle = tab === "packages"
     ? "Pricing Packages"
     : tab === "images"
@@ -654,100 +753,54 @@ function LegacyAdminRoute() {
             : `${tab.charAt(0).toUpperCase()}${tab.slice(1)} Module`;
 
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC]">
-      {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r border-slate-200 bg-white">
-        <div className="flex h-16 items-center border-b border-slate-100 px-6">
-          <Link to="/" reloadDocument className="flex items-center gap-2" title="Visit frontend homepage">
-            <span className="text-xl font-black tracking-tighter text-slate-900">EDICUT</span>
-          </Link>
-        </div>
-        
-        <nav className="p-4 space-y-1">
-          <SidebarLink icon="home" label="Home" active={false} to="/" />
-          <SidebarLink icon="dashboard_customize" label="Dashboard" active={tab === "overview"} to="?tab=overview" />
-          <SidebarLink icon="group" label="User Management" active={tab === "users"} to="?tab=users" />
-          <SidebarLink icon="shield_person" label="Role Management" active={tab === "roles"} to="?tab=roles" />
-          <SidebarLink icon="sell" label="Pricing Packages" active={tab === "packages"} to="?tab=packages" />
-          <SidebarLink icon="image" label="Images" active={tab === "images"} to="?tab=images" />
-          <SidebarLink icon="video_library" label="Projects" active={tab === "projects"} to="?tab=projects" />
-          <SidebarLink icon="payments" label="Payments" active={tab === "payments"} to="?tab=payments" />
-          <SidebarLink icon="history" label="Audit Logs" active={tab === "audit"} to="?tab=audit" />
-          <SidebarLink icon="settings" label="Settings" active={tab === "settings"} to="?tab=settings" />
-        </nav>
-
-        <div className="absolute bottom-0 w-full border-t border-slate-100 p-4">
-          <div className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-            <Link to={adminAccountUrl} className="h-8 w-8 rounded-full bg-black flex items-center justify-center text-[10px] text-white font-bold " title="Edit admin account">
-              {adminUser.email[0].toUpperCase()}
-            </Link>
-            <Link to={adminAccountUrl} className="min-w-0 flex-1 overflow-hidden" title="Edit admin account">
-              <p className="truncate text-xs font-bold text-slate-900 underline-offset-4">{adminUser.name || "Admin"}</p>
-              <p className="truncate text-[10px] font-medium text-slate-500">{adminUser.email}</p>
-            </Link>
-            <Form method="post" action={ADMIN_BASE_PATH} reloadDocument className="ml-auto">
-              <input type="hidden" name="intent" value="logout" />
-              <button type="submit" className="text-slate-400 -colors">
-                <span className="material-symbols-outlined text-[18px]">logout</span>
+    <>
+      <AdminPanelShell
+        title={pageTitle}
+        activeTab={tab}
+        account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
+        headerActions={(
+          <>
+            {tab === "packages" ? (
+              <button
+                onClick={() => setShowCreatePackageModal(true)}
+                className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] sm:inline-flex"
+              >
+                <span className="material-symbols-outlined text-[18px]">add_card</span>
+                Add Package
               </button>
-            </Form>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 pl-64">
-        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 px-8 py-4 backdrop-blur-md">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black text-slate-900">
-              {pageTitle}
-            </h2>
-            <div className="flex items-center gap-3">
-              {tab === "packages" && (
+            ) : null}
+            {tab === "images" ? (
+              <Link
+                reloadDocument
+                to="?tab=images"
+                className="hidden h-10 items-center gap-2 rounded-full border border-[#e5e7f2] bg-white px-4 text-xs font-black text-[#5f6378] transition hover:border-[#c8cbe0] sm:inline-flex"
+              >
+                <span className="material-symbols-outlined text-[18px]">refresh</span>
+                Refresh
+              </Link>
+            ) : null}
+            {tab === "users" ? (
+              <>
                 <button
-                  onClick={() => setShowCreatePackageModal(true)}
-                  className="flex h-10 items-center gap-2 rounded-xl bg-black px-4 text-sm font-black text-white shadow-lg shadow-black/10"
+                  onClick={() => setShowCreateAdminModal(true)}
+                  className="hidden h-10 items-center gap-2 rounded-full border border-[#e5e7f2] bg-white px-4 text-xs font-black text-[#5f6378] transition hover:border-[#c8cbe0] sm:inline-flex"
                 >
-                  <span className="material-symbols-outlined text-[18px]">add_card</span>
-                  Add Package
+                  <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
+                  Add Admin
                 </button>
-              )}
-              {tab === "images" && (
-                <Link
-                  reloadDocument
-                  to="?tab=images"
-                  className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 "
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] sm:inline-flex"
                 >
-                  <span className="material-symbols-outlined text-[18px]">refresh</span>
-                  Refresh
-                </Link>
-              )}
-              {tab === "users" && (
-                <>
-                  <button
-                    onClick={() => setShowCreateAdminModal(true)}
-                    className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 "
-                  >
-                    <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
-                    Add Admin
-                  </button>
-                  <button 
-                    onClick={() => setShowCreateModal(true)}
-                    className="flex h-10 items-center gap-2 rounded-xl bg-black px-4 text-sm font-black text-white shadow-lg shadow-black/10"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">person_add</span>
-                    Add User
-                  </button>
-                </>
-              )}
-              <div className="h-6 w-px bg-slate-200 mx-2" />
-              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Live</span>
-            </div>
-          </div>
-        </header>
-
-        <div className="p-8 space-y-8">
+                  <span className="material-symbols-outlined text-[18px]">person_add</span>
+                  Add User
+                </button>
+              </>
+            ) : null}
+          </>
+        )}
+      >
+        <div className="space-y-8">
           {tab === "users" && actionError ? (
             <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-600">{actionError}</div>
           ) : null}
@@ -1000,6 +1053,8 @@ function LegacyAdminRoute() {
           ) : tab === "settings" ? (
             <SettingsPanel
               adminToolbarEnabled={adminToolbarEnabled}
+              searchCrawlingEnabled={searchCrawlingEnabled}
+              maintenanceModeEnabled={maintenanceModeEnabled}
               promoBarSettings={promoBarSettings}
               actionData={actionData}
               navigationState={navigation.state}
@@ -1013,7 +1068,7 @@ function LegacyAdminRoute() {
             </div>
           )}
         </div>
-      </main>
+      </AdminPanelShell>
 
       {/* Create User Modal */}
       {showCreateModal && (
@@ -1105,7 +1160,7 @@ function LegacyAdminRoute() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1165,7 +1220,7 @@ function PricingPackagesPanel({
                     <p className={`mt-1 text-xs font-bold ${editingPackage?.id === pkg.id ? "text-slate-300" : "text-slate-500"}`}>{pkg.price}{pkg.interval} · /pricing/{pkg.slug}</p>
                   </div>
                   <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${pkg.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                    {pkg.active ? "Live" : "Hidden"}
+                    {pkg.active ? "Published" : "Hidden"}
                   </span>
                 </div>
               </button>
@@ -1415,11 +1470,15 @@ function RoleManagementPanel({
 
 function SettingsPanel({
   adminToolbarEnabled,
+  searchCrawlingEnabled,
+  maintenanceModeEnabled,
   promoBarSettings,
   actionData,
   navigationState,
 }: {
   adminToolbarEnabled: boolean;
+  searchCrawlingEnabled: boolean;
+  maintenanceModeEnabled: boolean;
   promoBarSettings: { enabled: boolean; message: string };
   actionData: { error?: string; success?: string } | undefined;
   navigationState: "idle" | "submitting" | "loading";
@@ -1458,6 +1517,66 @@ function SettingsPanel({
             <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-black text-white disabled:opacity-50">
               <span className="material-symbols-outlined text-[18px]">save</span>
               {isSubmitting ? "Saving..." : "Save Settings"}
+            </button>
+          </Form>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#efeaff] text-[#5b44d3]">
+              <span className="material-symbols-outlined text-[22px]">travel_explore</span>
+            </div>
+            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">Search visibility</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">Google crawling</h3>
+            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+              Disable search engine indexing while EdiCut is still being built. This adds noindex and nofollow signals to the site responses and page metadata.
+            </p>
+          </div>
+
+          <Form method="post" reloadDocument className="w-full rounded-2xl bg-slate-50 p-5 md:w-80">
+            <input type="hidden" name="intent" value="update-search-crawling" />
+            <label className="flex cursor-pointer items-center justify-between gap-4">
+              <span>
+                <span className="block text-sm font-black text-slate-900">Allow crawling</span>
+                <span className="mt-1 block text-xs font-bold text-slate-500">{searchCrawlingEnabled ? "Currently allowed" : "Currently disabled"}</span>
+              </span>
+              <input name="searchCrawlingEnabled" type="checkbox" defaultChecked={searchCrawlingEnabled} className="h-5 w-5 accent-[#6d55e8]" />
+            </label>
+            <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+              <span className="material-symbols-outlined text-[18px]">save</span>
+              {isSubmitting ? "Saving..." : "Save Search Visibility"}
+            </button>
+          </Form>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+              <span className="material-symbols-outlined text-[22px]">construction</span>
+            </div>
+            <p className="mt-5 text-xs font-black uppercase tracking-widest text-amber-700">Site availability</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">Maintenance mode</h3>
+            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+              When enabled, public visitors and regular users see the maintenance page. Administrators can still sign in and use the admin workspace.
+            </p>
+          </div>
+
+          <Form method="post" reloadDocument className="w-full rounded-2xl bg-amber-50 p-5 md:w-80">
+            <input type="hidden" name="intent" value="update-maintenance-mode" />
+            <label className="flex cursor-pointer items-center justify-between gap-4">
+              <span>
+                <span className="block text-sm font-black text-slate-900">Enable maintenance mode</span>
+                <span className="mt-1 block text-xs font-bold text-slate-500">{maintenanceModeEnabled ? "Currently active" : "Currently off"}</span>
+              </span>
+              <input name="maintenanceModeEnabled" type="checkbox" defaultChecked={maintenanceModeEnabled} className="h-5 w-5 accent-amber-600" />
+            </label>
+            <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+              <span className="material-symbols-outlined text-[18px]">save</span>
+              {isSubmitting ? "Saving..." : "Save Maintenance Mode"}
             </button>
           </Form>
         </div>
@@ -1733,14 +1852,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {label}
       {children}
     </label>
-  );
-}
-
-function SidebarLink({ icon, label, to, active }: { icon: string; label: string; to: string; active?: boolean }) {
-  return (
-    <Link reloadDocument to={to} className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-bold -all ${active ? "bg-slate-900 text-white shadow-lg" : "text-slate-500 "}`}>
-      <span className="material-symbols-outlined text-[20px]">{icon}</span> {label}
-    </Link>
   );
 }
 

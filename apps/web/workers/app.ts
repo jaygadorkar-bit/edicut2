@@ -64,7 +64,12 @@ function withSecurityHeaders(response: Response, request: Request) {
   if (url.protocol === "https:") {
     headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
-  if (url.pathname.startsWith("/site/node-logmin") || url.pathname.startsWith("/signin")) {
+  if (
+    url.pathname.startsWith("/site/node-logmin") ||
+    url.pathname.startsWith("/signin") ||
+    url.pathname.startsWith("/forgot-password") ||
+    url.pathname.startsWith("/update-password")
+  ) {
     headers.set("Cache-Control", "no-store");
   }
 
