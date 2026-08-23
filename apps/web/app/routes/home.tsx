@@ -17,6 +17,20 @@ import { getPortfolioSections, publicPortfolioSections } from "../lib/portfolio.
 import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 
+const audienceTypes = [
+  ["sports_esports", "Gaming", "Fast-paced cuts, highlights, reactions, and stream-to-video edits."],
+  ["podcasts", "Podcast", "Long-form conversations shaped into polished episodes and clips."],
+  ["fitness_center", "Health & fitness", "Clear, energetic edits for workouts, coaching, and wellness content."],
+  ["home_work", "Real estate", "Property tours, market updates, and social-ready listing videos."],
+  ["videocam", "Vlogs", "Story-driven pacing that keeps everyday footage engaging."],
+  ["sentiment_very_satisfied", "Comedy", "Tighter timing, punchlines, captions, and memorable moments."],
+  ["self_improvement", "Lifestyle", "Clean, stylish edits for routines, travel, beauty, and culture."],
+  ["school", "Educational", "Explainers and lessons that are easy to follow and watch."],
+  ["rate_review", "Product reviews", "Clear demos, comparisons, b-roll, and buyer-focused storytelling."],
+  ["live_tv", "Streaming", "Turn live content into highlights, recaps, and publish-ready episodes."],
+  ["auto_awesome", "And more", "Tell us what you make and we will match the right editing lane."],
+] as const;
+
 export const meta: MetaFunction = () => {
   return [
     { title: "EdiCut — Editing built for YouTubers" },
@@ -52,8 +66,8 @@ export default function HomePage() {
             A creator-first editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables.
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
-            <ButtonLink to="/pricing">Compare packages</ButtonLink>
-            <ButtonLink to="/portfolio" variant="secondary">Watch the reel</ButtonLink>
+            <ButtonLink to="/pricing">Choose editing plan</ButtonLink>
+            <ButtonLink to="/portfolio" variant="secondary">View portfolio</ButtonLink>
           </div>
           <div className="mx-auto mt-10 grid max-w-2xl grid-cols-3 divide-x divide-gray-200 rounded-2xl border border-gray-100 bg-white p-4">
             {["48h first cuts", "500+ videos edited", "4.9 creator rating"].map((stat) => (
@@ -65,12 +79,35 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      <section className="border-y border-gray-100 bg-[#F7FAFB] px-5 py-16 sm:px-6 lg:py-20">
+        <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="yt-tag text-primary">Who EdiCut is for</p>
+            <h2 className="yt-title mt-3 text-foreground">Editing support for every kind of creator.</h2>
+            <p className="yt-subtitle mt-5">
+              From long-form episodes to fast-moving streams, EdiCut helps turn your footage into content your audience wants to finish.
+            </p>
+          </div>
+
+          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            {audienceTypes.map(([icon, title, description]) => (
+              <article key={title} className="group rounded-2xl border border-gray-200 bg-white p-4 transition duration-200 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-red-500/5 sm:p-5">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                  <span className="material-symbols-outlined text-[21px]">{icon}</span>
+                </span>
+                <h3 className="mt-4 text-sm font-black leading-tight text-foreground sm:text-base">{title}</h3>
+                <p className="mt-2 text-xs font-medium leading-5 text-muted-foreground">{description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
       <TrustStrip />
+      <PricingSection plans={packages} />
       <WorkflowSection />
       <PortfolioSection sections={portfolioSections} />
       <DifferentiatorsSection />
       <TestimonialsSection />
-      <PricingSection plans={packages} />
       <FAQSection />
       <ContactSection compact />
     </PageShell>

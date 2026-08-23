@@ -1,5 +1,6 @@
 import type { DatabaseClient } from "@edicut/db/client";
 import type { SupabaseRuntimeContext } from "../integrations/supabase/client.server";
+import { cloudinaryVideoThumbnailUrl, isCloudinaryVideoUrl } from "./cloudinary";
 import { getSiteSetting, saveSiteSetting } from "./site-settings.server";
 
 const PORTFOLIO_SECTIONS_KEY = "portfolio_sections";
@@ -12,6 +13,7 @@ export type PortfolioVideo = {
   uniqueSellingPoint: string;
   videoUrl: string;
   youtubeId: string;
+  videoProvider: "youtube" | "cloudinary";
   thumbnailUrl: string;
   orientation: "horizontal" | "vertical";
   sortOrder: number;
@@ -160,7 +162,8 @@ function normalizeVideo(value: unknown, index: number): PortfolioVideo | null {
   const title = String(row.title || "").trim();
   const videoUrl = String(row.videoUrl || "").trim();
   const youtubeId = youtubeIdFromUrl(String(row.youtubeId || videoUrl));
-  if (!title || !youtubeId) return null;
+  const videoProvider = row.videoProvider === "cloudinary" || isCloudinaryVideoUrl(videoUrl) ? "cloudinary" : "youtube";
+  if (!title || !videoUrl || (videoProvider === "youtube" && !youtubeId)) return null;
 
   return {
     id: String(row.id || createPortfolioId("video")),
@@ -170,7 +173,8 @@ function normalizeVideo(value: unknown, index: number): PortfolioVideo | null {
     uniqueSellingPoint: String(row.uniqueSellingPoint || "").trim(),
     videoUrl: videoUrl || `https://www.youtube.com/watch?v=${youtubeId}`,
     youtubeId,
-    thumbnailUrl: String(row.thumbnailUrl || "").trim() || youtubeThumbnailUrl(youtubeId),
+    videoProvider,
+    thumbnailUrl: String(row.thumbnailUrl || "").trim() || (videoProvider === "cloudinary" ? cloudinaryVideoThumbnailUrl(videoUrl) : youtubeThumbnailUrl(youtubeId)),
     orientation: row.orientation === "vertical" ? "vertical" : "horizontal",
     sortOrder: Number.isFinite(Number(row.sortOrder)) ? Number(row.sortOrder) : index + 1,
   };

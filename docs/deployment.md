@@ -119,6 +119,9 @@ pnpm exec wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config apps/web/wrangl
 pnpm exec wrangler secret put CLOUDINARY_CLOUD_NAME --config apps/web/wrangler.jsonc
 pnpm exec wrangler secret put CLOUDINARY_API_KEY --config apps/web/wrangler.jsonc
 pnpm exec wrangler secret put CLOUDINARY_API_SECRET --config apps/web/wrangler.jsonc
+pnpm exec wrangler secret put CLOUDINARY_VIDEO_CLOUD_NAME --config apps/web/wrangler.jsonc
+pnpm exec wrangler secret put CLOUDINARY_VIDEO_API_KEY --config apps/web/wrangler.jsonc
+pnpm exec wrangler secret put CLOUDINARY_VIDEO_API_SECRET --config apps/web/wrangler.jsonc
 
 # 3. Deploy to Cloudflare Workers
 pnpm --filter @edicut/web run deploy

@@ -1,16 +1,23 @@
 import type { PricingPackage } from "./pricing.server";
+import type { PortfolioSection } from "./portfolio.server";
 
 type CloudinaryEnv = {
   cf?: { env?: Record<string, string | undefined> };
   cloudflare?: { env?: Record<string, string | undefined> };
 };
 
+type CloudinaryAccount = "image" | "video";
+
 const CLOUDINARY_CACHE_MS = 60_000;
 
 let imageListCache: { expiresAt: number; data: CloudinaryImageResource[] } | null = null;
 let imageListPromise: Promise<CloudinaryImageResource[]> | null = null;
-let usageCache: { expiresAt: number; data: CloudinaryUsage } | null = null;
-let usagePromise: Promise<CloudinaryUsage> | null = null;
+let videoListCache: { expiresAt: number; data: CloudinaryVideoResource[] } | null = null;
+let videoListPromise: Promise<CloudinaryVideoResource[]> | null = null;
+let imageUsageCache: { expiresAt: number; data: CloudinaryUsage } | null = null;
+let imageUsagePromise: Promise<CloudinaryUsage> | null = null;
+let videoUsageCache: { expiresAt: number; data: CloudinaryUsage } | null = null;
+let videoUsagePromise: Promise<CloudinaryUsage> | null = null;
 
 async function readLocalEnvFile() {
   if (!globalThis.process?.cwd) {
@@ -62,6 +69,17 @@ export type CloudinaryImageResource = {
   created_at?: string;
 };
 
+export type CloudinaryVideoResource = {
+  public_id: string;
+  secure_url: string;
+  bytes: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  format?: string;
+  created_at?: string;
+};
+
 export type CloudinaryUsage = {
   credits?: {
     usage?: number;
@@ -88,38 +106,36 @@ export type CloudinaryUsage = {
 function clearCloudinaryCache() {
   imageListCache = null;
   imageListPromise = null;
-  usageCache = null;
-  usagePromise = null;
+  videoListCache = null;
+  videoListPromise = null;
+  imageUsageCache = null;
+  imageUsagePromise = null;
+  videoUsageCache = null;
+  videoUsagePromise = null;
 }
 
-async function readEnv(context?: CloudinaryEnv) {
+async function readEnv(context: CloudinaryEnv | undefined, account: CloudinaryAccount) {
   const nodeEnv = globalThis.process?.env as Record<string, string | undefined> | undefined;
   const localEnv = await readLocalEnvFile();
+  const prefix = account === "video" ? "CLOUDINARY_VIDEO_" : "CLOUDINARY_";
+  const get = (name: "CLOUD_NAME" | "API_KEY" | "API_SECRET") => {
+    const key = `${prefix}${name}`;
+    return context?.cloudflare?.env?.[key] ?? context?.cf?.env?.[key] ?? nodeEnv?.[key] ?? localEnv[key];
+  };
 
   return {
-    cloudName:
-      context?.cloudflare?.env?.CLOUDINARY_CLOUD_NAME ??
-      context?.cf?.env?.CLOUDINARY_CLOUD_NAME ??
-      nodeEnv?.CLOUDINARY_CLOUD_NAME ??
-      localEnv.CLOUDINARY_CLOUD_NAME,
-    apiKey:
-      context?.cloudflare?.env?.CLOUDINARY_API_KEY ??
-      context?.cf?.env?.CLOUDINARY_API_KEY ??
-      nodeEnv?.CLOUDINARY_API_KEY ??
-      localEnv.CLOUDINARY_API_KEY,
-    apiSecret:
-      context?.cloudflare?.env?.CLOUDINARY_API_SECRET ??
-      context?.cf?.env?.CLOUDINARY_API_SECRET ??
-      nodeEnv?.CLOUDINARY_API_SECRET ??
-      localEnv.CLOUDINARY_API_SECRET,
+    cloudName: get("CLOUD_NAME"),
+    apiKey: get("API_KEY"),
+    apiSecret: get("API_SECRET"),
   };
 }
 
-async function requireCloudinaryEnv(context?: CloudinaryEnv) {
-  const env = await readEnv(context);
+async function requireCloudinaryEnv(context: CloudinaryEnv | undefined, account: CloudinaryAccount = "image") {
+  const env = await readEnv(context, account);
 
   if (!env.cloudName || !env.apiKey || !env.apiSecret) {
-    throw new Error("Cloudinary environment variables are not configured.");
+    const prefix = account === "video" ? "CLOUDINARY_VIDEO_" : "CLOUDINARY_";
+    throw new Error(`${prefix}CLOUD_NAME, ${prefix}API_KEY, and ${prefix}API_SECRET are not configured.`);
   }
 
   return env;
@@ -133,8 +149,9 @@ async function cloudinaryAdminRequest<T>(
   path: string,
   context?: CloudinaryEnv,
   init: RequestInit = {},
+  account: CloudinaryAccount = "image",
 ) {
-  const env = await requireCloudinaryEnv(context);
+  const env = await requireCloudinaryEnv(context, account);
   const response = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudName}${path}`, {
     ...init,
     headers: {
@@ -169,7 +186,7 @@ async function signUpload(params: Record<string, string | number>, apiSecret: st
 }
 
 export async function uploadPackageImageToCloudinary(file: File, context?: CloudinaryEnv) {
-  const env = await requireCloudinaryEnv(context);
+  const env = await requireCloudinaryEnv(context, "image");
 
   if (!file.type.startsWith("image/")) {
     throw new Error("Only image files can be uploaded.");
@@ -215,6 +232,8 @@ export async function listCloudinaryImages(context?: CloudinaryEnv) {
     imageListPromise = cloudinaryAdminRequest<{ resources?: CloudinaryImageResource[] }>(
       "/resources/image/upload?prefix=edicut/&max_results=100",
       context,
+      {},
+      "image",
     )
       .then((result) => {
         const data = result.resources || [];
@@ -234,24 +253,119 @@ export async function listCloudinaryImages(context?: CloudinaryEnv) {
 export async function getCloudinaryUsage(context?: CloudinaryEnv) {
   const now = Date.now();
 
-  if (usageCache && usageCache.expiresAt > now) {
-    return usageCache.data;
+  if (imageUsageCache && imageUsageCache.expiresAt > now) {
+    return imageUsageCache.data;
   }
 
-  if (!usagePromise) {
-    usagePromise = cloudinaryAdminRequest<CloudinaryUsage>("/usage", context)
+  if (!imageUsagePromise) {
+    imageUsagePromise = cloudinaryAdminRequest<CloudinaryUsage>("/usage", context, {}, "image")
       .then((data) => {
-        usageCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
-        usagePromise = null;
+        imageUsageCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
+        imageUsagePromise = null;
         return data;
       })
       .catch((error) => {
-        usagePromise = null;
+        imageUsagePromise = null;
         throw error;
       });
   }
 
-  return usagePromise;
+  return imageUsagePromise;
+}
+
+export async function uploadPortfolioVideoToCloudinary(file: File, context?: CloudinaryEnv) {
+  const env = await requireCloudinaryEnv(context, "video");
+
+  if (!file.type.startsWith("video/")) {
+    throw new Error("Only video files can be uploaded.");
+  }
+
+  const timestamp = Math.round(Date.now() / 1000);
+  const uploadParams = {
+    folder: "edicut/portfolio",
+    timestamp,
+  };
+  const signature = await signUpload(uploadParams, env.apiSecret);
+  const formData = new FormData();
+
+  formData.set("file", file);
+  formData.set("api_key", env.apiKey);
+  formData.set("folder", uploadParams.folder);
+  formData.set("timestamp", String(timestamp));
+  formData.set("signature", signature);
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudName}/video/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  const result = await response.json() as Partial<CloudinaryVideoResource> & { error?: { message?: string } };
+
+  if (!response.ok || !result.secure_url || !result.public_id) {
+    throw new Error(result.error?.message || "Cloudinary video upload failed.");
+  }
+
+  clearCloudinaryCache();
+  return {
+    public_id: result.public_id,
+    secure_url: result.secure_url,
+    bytes: result.bytes || file.size,
+    width: result.width,
+    height: result.height,
+    duration: result.duration,
+    format: result.format || file.type.split("/")[1],
+  } satisfies CloudinaryVideoResource;
+}
+
+export async function listCloudinaryVideos(context?: CloudinaryEnv) {
+  const now = Date.now();
+
+  if (videoListCache && videoListCache.expiresAt > now) {
+    return videoListCache.data;
+  }
+
+  if (!videoListPromise) {
+    videoListPromise = cloudinaryAdminRequest<{ resources?: CloudinaryVideoResource[] }>(
+      "/resources/video/upload?prefix=edicut/portfolio&max_results=100",
+      context,
+      {},
+      "video",
+    )
+      .then((result) => {
+        const data = result.resources || [];
+        videoListCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
+        videoListPromise = null;
+        return data;
+      })
+      .catch((error) => {
+        videoListPromise = null;
+        throw error;
+      });
+  }
+
+  return videoListPromise;
+}
+
+export async function getCloudinaryVideoUsage(context?: CloudinaryEnv) {
+  const now = Date.now();
+
+  if (videoUsageCache && videoUsageCache.expiresAt > now) {
+    return videoUsageCache.data;
+  }
+
+  if (!videoUsagePromise) {
+    videoUsagePromise = cloudinaryAdminRequest<CloudinaryUsage>("/usage", context, {}, "video")
+      .then((data) => {
+        videoUsageCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
+        videoUsagePromise = null;
+        return data;
+      })
+      .catch((error) => {
+        videoUsagePromise = null;
+        throw error;
+      });
+  }
+
+  return videoUsagePromise;
 }
 
 export async function deleteCloudinaryImages(publicIds: string[], context?: CloudinaryEnv) {
@@ -272,6 +386,28 @@ export async function deleteCloudinaryImages(publicIds: string[], context?: Clou
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params,
     },
+    "image",
+  );
+  clearCloudinaryCache();
+}
+
+export async function deleteCloudinaryVideos(publicIds: string[], context?: CloudinaryEnv) {
+  if (!publicIds.length) return;
+
+  const params = new URLSearchParams();
+  for (const publicId of publicIds) {
+    params.append("public_ids[]", publicId);
+  }
+
+  await cloudinaryAdminRequest(
+    "/resources/video/upload",
+    context,
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params,
+    },
+    "video",
   );
   clearCloudinaryCache();
 }
@@ -282,5 +418,14 @@ export function removeCloudinaryUrlsFromPackages(packages: PricingPackage[], del
   return packages.map((pkg) => ({
     ...pkg,
     galleryImages: pkg.galleryImages.filter((imageUrl) => !deleted.has(imageUrl)),
+  }));
+}
+
+export function removeCloudinaryUrlsFromPortfolioSections(sections: PortfolioSection[], deletedUrls: string[]) {
+  const deleted = new Set(deletedUrls);
+
+  return sections.map((section) => ({
+    ...section,
+    videos: section.videos.filter((video) => !deleted.has(video.videoUrl)),
   }));
 }

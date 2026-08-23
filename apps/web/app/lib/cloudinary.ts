@@ -47,3 +47,19 @@ export function optimizeCloudinaryUrl(url: string | null | undefined): string {
 
   return `${base}/image/upload/${fullTransformations}/${pathWithoutTransformations}`;
 }
+
+export function isCloudinaryVideoUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.hostname === "res.cloudinary.com" && url.pathname.includes("/video/upload/");
+  } catch {
+    return false;
+  }
+}
+
+export function cloudinaryVideoThumbnailUrl(videoUrl: string) {
+  if (!isCloudinaryVideoUrl(videoUrl)) return "";
+  return videoUrl
+    .replace("/video/upload/", "/video/upload/so_0,f_jpg/")
+    .replace(/\.[a-z0-9]+$/i, ".jpg");
+}

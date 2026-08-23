@@ -21,16 +21,28 @@ import {
   savePricingPackages,
   type PricingPackage,
 } from "../lib/pricing.server";
-import { optimizeCloudinaryUrl } from "../lib/cloudinary";
+import { cloudinaryVideoThumbnailUrl, optimizeCloudinaryUrl } from "../lib/cloudinary";
 import {
+  deleteCloudinaryVideos,
   deleteCloudinaryImages,
+  getCloudinaryVideoUsage,
   getCloudinaryUsage,
+  listCloudinaryVideos,
   listCloudinaryImages,
+  removeCloudinaryUrlsFromPortfolioSections,
   removeCloudinaryUrlsFromPackages,
+  uploadPortfolioVideoToCloudinary,
   uploadPackageImageToCloudinary,
   type CloudinaryImageResource,
+  type CloudinaryVideoResource,
   type CloudinaryUsage,
 } from "../lib/cloudinary.server";
+import {
+  createPortfolioId,
+  getPortfolioSections,
+  savePortfolioSections,
+  type PortfolioSection,
+} from "../lib/portfolio.server";
 import {
   getAdminToolbarEnabled,
   getMaintenanceModeEnabled,
@@ -218,9 +230,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     maintenanceModeEnabled,
     promoBarSettings,
     roleFeatureAccess,
+    portfolioSections,
     cloudinaryImages,
     cloudinaryUsage,
-    cloudinaryError
+    cloudinaryError,
+    cloudinaryVideos,
+    cloudinaryVideoUsage,
+    cloudinaryVideoError
   ] = await Promise.all([
     db.select({ count: drizzleCount() }).from(usersTable).where(isNull(usersTable.deletedAt)),
     db.select({ count: drizzleCount() }).from(adminUsersTable).where(eq(adminUsersTable.active, true)),
@@ -235,12 +251,22 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     getMaintenanceModeEnabled(db, context),
     getPromoBarSettings(db, context),
     getRoleFeatureAccessSettings(db, context),
+    getPortfolioSections(db, context),
     listCloudinaryImages(context).catch((error) => {
       console.error("Cloudinary image list error:", error);
       return [] as CloudinaryImageResource[];
     }),
     getCloudinaryUsage(context).catch((error) => {
       console.error("Cloudinary usage error:", error);
+      return null as CloudinaryUsage | null;
+    }),
+    Promise.resolve(null as string | null),
+    listCloudinaryVideos(context).catch((error) => {
+      console.error("Cloudinary video list error:", error);
+      return [] as CloudinaryVideoResource[];
+    }),
+    getCloudinaryVideoUsage(context).catch((error) => {
+      console.error("Cloudinary video usage error:", error);
       return null as CloudinaryUsage | null;
     }),
     Promise.resolve(null as string | null),
@@ -261,9 +287,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     maintenanceModeEnabled,
     promoBarSettings,
     roleFeatureAccess,
+    portfolioSections,
     cloudinaryImages,
     cloudinaryUsage,
     cloudinaryError,
+    cloudinaryVideos,
+    cloudinaryVideoUsage,
+    cloudinaryVideoError,
     stats: {
       total: Number(totalCount[0].count || 0),
       admins: Number(adminCount[0].count || 0),
@@ -464,6 +494,61 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     await savePricingPackages(db, nextPackages);
     return { success: "Package deleted." };
+  }
+
+  if (intent === "upload-portfolio-video") {
+    const title = String(formData.get("title") || "").trim();
+    const sectionSlug = String(formData.get("sectionSlug") || "featured").trim();
+    const videoFile = formData.get("videoFile");
+
+    if (!title) return { error: "Video title is required." };
+    if (!(videoFile instanceof File) || videoFile.size === 0) return { error: "Choose a video to upload." };
+
+    const sections = await getPortfolioSections(db, context);
+    const targetSection = sections.find((section) => section.slug === sectionSlug) || sections[0];
+    if (!targetSection) return { error: "Create a portfolio section before uploading a video." };
+
+    try {
+      const uploaded = await uploadPortfolioVideoToCloudinary(videoFile, context);
+      const nextVideo = {
+        id: createPortfolioId("video"),
+        title,
+        creatorName: String(formData.get("creatorName") || "").trim(),
+        tag: String(formData.get("tag") || "Portfolio").trim() || "Portfolio",
+        uniqueSellingPoint: String(formData.get("uniqueSellingPoint") || "").trim(),
+        videoUrl: uploaded.secure_url,
+        youtubeId: "",
+        videoProvider: "cloudinary" as const,
+        thumbnailUrl: cloudinaryVideoThumbnailUrl(uploaded.secure_url),
+        orientation: formData.get("orientation") === "vertical" ? "vertical" as const : "horizontal" as const,
+        sortOrder: Math.max(0, ...targetSection.videos.map((video) => video.sortOrder)) + 1,
+      };
+
+      await savePortfolioSections(db, sections.map((section) => section.id === targetSection.id
+        ? { ...section, videos: [...section.videos, nextVideo] }
+        : section), context);
+      return { success: `Uploaded “${title}” to ${targetSection.name}.` };
+    } catch (error) {
+      console.error("Portfolio video upload error:", error);
+      return { error: error instanceof Error ? error.message : "Failed to upload portfolio video." };
+    }
+  }
+
+  if (intent === "delete-portfolio-videos") {
+    const publicIds = formData.getAll("publicIds").map(String).filter(Boolean);
+    const videoUrls = formData.getAll("videoUrls").map(String).filter(Boolean);
+
+    if (!publicIds.length) return { error: "Choose at least one portfolio video to delete." };
+
+    try {
+      await deleteCloudinaryVideos(publicIds, context);
+      const sections = await getPortfolioSections(db, context);
+      await savePortfolioSections(db, removeCloudinaryUrlsFromPortfolioSections(sections, videoUrls), context);
+      return { success: `Deleted ${publicIds.length} portfolio video${publicIds.length === 1 ? "" : "s"}.` };
+    } catch (error) {
+      console.error("Cloudinary video delete error:", error);
+      return { error: error instanceof Error ? error.message : "Failed to delete portfolio videos." };
+    }
   }
 
   if (intent === "update-admin-toolbar") {
@@ -685,6 +770,7 @@ function LegacyAdminRoute() {
     tab,
     view,
     pricingPackages,
+    portfolioSections,
     adminToolbarEnabled,
     searchCrawlingEnabled,
     maintenanceModeEnabled,
@@ -693,6 +779,9 @@ function LegacyAdminRoute() {
     cloudinaryImages,
     cloudinaryUsage,
     cloudinaryError,
+    cloudinaryVideos,
+    cloudinaryVideoUsage,
+    cloudinaryVideoError,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const actionError = actionData && "error" in actionData ? actionData.error : null;
@@ -743,7 +832,9 @@ function LegacyAdminRoute() {
   const pageTitle = tab === "packages"
     ? "Pricing Packages"
     : tab === "images"
-      ? "Images"
+    ? "Images"
+      : tab === "videos"
+        ? "Portfolio Videos"
       : tab === "roles"
         ? "Role Management"
         : tab === "settings"
@@ -769,10 +860,10 @@ function LegacyAdminRoute() {
                 Add Package
               </button>
             ) : null}
-            {tab === "images" ? (
+            {tab === "images" || tab === "videos" ? (
               <Link
                 reloadDocument
-                to="?tab=images"
+                to={`?tab=${tab}`}
                 className="hidden h-10 items-center gap-2 rounded-full border border-[#e5e7f2] bg-white px-4 text-xs font-black text-[#5f6378] transition hover:border-[#c8cbe0] sm:inline-flex"
               >
                 <span className="material-symbols-outlined text-[18px]">refresh</span>
@@ -1048,6 +1139,15 @@ function LegacyAdminRoute() {
             <PricingPackagesPanel packages={pricingPackages} actionData={actionData} navigationState={navigation.state} />
           ) : tab === "images" ? (
             <ImagesPanel images={cloudinaryImages} usage={cloudinaryUsage} error={cloudinaryError} actionData={actionData} navigationState={navigation.state} />
+          ) : tab === "videos" ? (
+            <VideoLibraryPanel
+              videos={cloudinaryVideos}
+              usage={cloudinaryVideoUsage}
+              error={cloudinaryVideoError}
+              sections={portfolioSections}
+              actionData={actionData}
+              navigationState={navigation.state}
+            />
           ) : tab === "roles" ? (
             <RoleManagementPanel roleFeatureAccess={roleFeatureAccess} navigationState={navigation.state} />
           ) : tab === "settings" ? (
@@ -1349,6 +1449,132 @@ function ImagesPanel({
                   <a href={image.secure_url} target="_blank" rel="noreferrer" className="inline-flex text-xs font-black text-slate-900 underline underline-offset-4">Open image</a>
                 </div>
               </label>
+            ))}
+          </div>
+        )}
+      </Form>
+    </div>
+  );
+}
+
+function VideoLibraryPanel({
+  videos,
+  usage,
+  error,
+  sections,
+  actionData,
+  navigationState,
+}: {
+  videos: CloudinaryVideoResource[];
+  usage: CloudinaryUsage | null;
+  error: string | null;
+  sections: PortfolioSection[];
+  actionData: { error?: string; success?: string } | undefined;
+  navigationState: "idle" | "submitting" | "loading";
+}) {
+  const isSubmitting = navigationState === "submitting";
+  const actionError = actionData && "error" in actionData ? actionData.error : null;
+  const actionSuccess = actionData && "success" in actionData ? actionData.success : null;
+  const totalBytes = videos.reduce((sum, video) => sum + (video.bytes || 0), 0);
+
+  return (
+    <div className="space-y-6">
+      {error ? <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-700">{error}</div> : null}
+      {actionError ? <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-600">{actionError}</div> : null}
+      {actionSuccess ? <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-sm font-bold text-emerald-700">{actionSuccess}</div> : null}
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <UsageCard label="Portfolio videos" value={String(videos.length)} icon="movie" />
+        <UsageCard label="Listed storage" value={formatBytes(totalBytes)} icon="sd_storage" />
+        <UsageCard label="Video cloud storage" value={usage?.storage ? formatUsage(usage.storage, "bytes") : "Unavailable"} icon="cloud" />
+        <UsageCard label="Video credits" value={usage?.credits ? formatUsage(usage.credits, "number") : "Unavailable"} icon="speed" />
+      </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-xl">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500">Separate video storage</p>
+            <h3 className="mt-1 text-2xl font-black text-slate-900">Add a portfolio video</h3>
+            <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+              Videos use the dedicated Cloudinary video account and are saved to <span className="font-black">edicut/portfolio</span>. Images continue using the existing image account.
+            </p>
+          </div>
+          <Form method="post" reloadDocument encType="multipart/form-data" className="grid w-full gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 xl:max-w-3xl">
+            <input type="hidden" name="intent" value="upload-portfolio-video" />
+            <label className="sm:col-span-2">
+              <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Title</span>
+              <input name="title" type="text" required placeholder="The story behind the edit" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+            </label>
+            <label>
+              <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Portfolio section</span>
+              <select name="sectionSlug" defaultValue={sections[0]?.slug || "featured"} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black">
+                {sections.map((section) => <option key={section.id} value={section.slug}>{section.name}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Orientation</span>
+              <select name="orientation" defaultValue="horizontal" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black">
+                <option value="horizontal">Horizontal</option>
+                <option value="vertical">Vertical / reel</option>
+              </select>
+            </label>
+            <label>
+              <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Creator / client</span>
+              <input name="creatorName" type="text" placeholder="Creator or brand name" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+            </label>
+            <label>
+              <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Tag</span>
+              <input name="tag" type="text" placeholder="Gaming, podcast, review" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+            </label>
+            <label className="sm:col-span-2">
+              <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Outcome label</span>
+              <input name="uniqueSellingPoint" type="text" placeholder="+18% retention, 620K views" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+            </label>
+            <label className="sm:col-span-2">
+              <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Video file</span>
+              <input name="videoFile" type="file" accept="video/*,.mp4,.webm,.mov" required className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold" />
+            </label>
+            <button type="submit" disabled={isSubmitting || sections.length === 0} className="sm:col-span-2 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-black text-white disabled:opacity-50">
+              <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
+              {isSubmitting ? "Uploading video..." : "Upload portfolio video"}
+            </button>
+          </Form>
+        </div>
+      </section>
+
+      <Form method="post" reloadDocument className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <input type="hidden" name="intent" value="delete-portfolio-videos" />
+        <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500">Library</p>
+            <h3 className="mt-1 text-xl font-black text-slate-900">Uploaded portfolio videos</h3>
+          </div>
+          <button type="submit" disabled={isSubmitting || videos.length === 0} onClick={(event) => !confirm("Delete selected videos and remove them from the portfolio?") && event.preventDefault()} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-black text-white disabled:opacity-50">
+            <span className="material-symbols-outlined text-[18px]">delete</span>
+            Delete selected
+          </button>
+        </div>
+
+        {videos.length === 0 ? (
+          <div className="py-20 text-center text-sm font-bold text-slate-400">No Cloudinary videos found in the edicut/portfolio folder.</div>
+        ) : (
+          <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {videos.map((video) => (
+              <article key={video.public_id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="relative bg-slate-950">
+                  <video src={video.secure_url} poster={cloudinaryVideoThumbnailUrl(video.secure_url)} controls preload="metadata" className="aspect-video w-full object-contain" />
+                  <input name="publicIds" value={video.public_id} type="checkbox" className="absolute right-3 top-3 h-5 w-5 accent-black" />
+                  <input name="videoUrls" value={video.secure_url} type="hidden" />
+                </div>
+                <div className="space-y-2 p-4">
+                  <p className="truncate text-sm font-black text-slate-900" title={video.public_id}>{video.public_id}</p>
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-500">
+                    <span>{formatBytes(video.bytes || 0)}</span>
+                    <span>{video.duration ? `${Math.round(video.duration)} sec` : video.format || "video"}</span>
+                  </div>
+                  <a href={video.secure_url} target="_blank" rel="noreferrer" className="inline-flex text-xs font-black text-slate-900 underline underline-offset-4">Open video</a>
+                </div>
+              </article>
             ))}
           </div>
         )}

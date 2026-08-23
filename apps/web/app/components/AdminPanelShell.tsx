@@ -9,6 +9,7 @@ export const adminPanelNavItems = [
   { label: "Roles", icon: "shield_person", tab: "roles" },
   { label: "Packages", icon: "sell", tab: "packages" },
   { label: "Images", icon: "image", tab: "images" },
+  { label: "Videos", icon: "movie", tab: "videos" },
   { label: "Projects", icon: "video_library", tab: "projects" },
   { label: "Payments", icon: "payments", tab: "payments" },
   { label: "Audit Logs", icon: "history", tab: "audit" },

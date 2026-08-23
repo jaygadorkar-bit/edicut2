@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation, useMatches } from "react-router";
 import { authHref } from "../auth/AuthModal";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
 import { faqs, legalLinks, navLinks, plans as defaultPlans, portfolio, testimonials, workflow } from "./data";
+import { CookieConsent } from "./CookieConsent.js";
 import type { PortfolioSection as PortfolioSectionView, PortfolioVideo } from "../../lib/portfolio.server";
 
 type PricingPlanView = {
@@ -573,6 +574,7 @@ export function PageShell({ children }: { children: React.ReactNode }) {
       <main>{children}</main>
       <SiteFooter />
       <MessageWidget />
+      <CookieConsent />
     </div>
   );
 }
@@ -609,79 +611,47 @@ export function TrustStrip() {
 }
 
 export function WorkflowSection() {
+  const outcomes = [
+    "A clear monthly editing scope",
+    "A ready-to-edit project brief",
+    "A publish-ready final cut",
+  ];
+
   return (
-    <section id="workflow" className="bg-white px-5 py-20 sm:px-6 lg:py-24">
+    <section id="workflow" className="bg-[#F7FAFB] px-5 py-20 sm:px-6 lg:py-24">
       <div className="mx-auto max-w-7xl">
-        <SectionIntro eyebrow="Workflow" title="A simple path from raw footage to final delivery." />
-
-        <div className="mt-14 hidden lg:block">
-          <div className="grid grid-cols-5 items-end gap-6">
-            {workflow.map(([step, title, , icon]) => (
-              <div key={`visual-${step}`} className="flex min-w-0 flex-col items-center text-center">
-                <span className="rounded-full bg-muted px-4 py-1.5 yt-tag font-black uppercase text-foreground shadow-sm">
-                  Step {Number(step)}
-                </span>
-                <div className={`mt-6 flex items-center justify-center text-primary ${step === "04" ? "h-40" : "h-28"}`}>
-                  {step === "04" ? (
-                    <div className="relative flex h-36 w-36 items-center justify-center rounded-full border-[3px] border-primary/25">
-                      <span className="material-symbols-outlined absolute -top-3 right-7 rotate-[-22deg] bg-white text-primary" style={{ fontSize: 32 }}>navigation</span>
-                      <span className="material-symbols-outlined drop-shadow-[14px_14px_0_rgba(0,0,0,0.06)]" style={{ fontSize: 68 }}>fact_check</span>
-                      <span className="absolute bottom-2 rounded-full bg-white px-3 py-1 yt-tag font-black uppercase tracking-wide text-foreground shadow-sm">Feedback</span>
-                    </div>
-                  ) : (
-                    <span className="material-symbols-outlined drop-shadow-[18px_18px_0_rgba(0,0,0,0.06)]" style={{ fontSize: 88 }}>
-                      {icon}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+        <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
+          <div>
+            <Eyebrow>How it works</Eyebrow>
+            <h2 className="mt-3 max-w-xl yt-title text-foreground">A clear path from raw footage to a finished upload.</h2>
+            <p className="mt-5 max-w-xl yt-subtitle leading-8 text-muted-foreground">
+              Choose the right level of support, send us the project, and keep control through a focused review process.
+            </p>
+            <Link to="/pricing" className="mt-7 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 yt-small font-black text-white shadow-lg shadow-red-500/15">
+              Choose editing plan
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </Link>
           </div>
 
-          <div className="relative mx-auto mt-6 grid grid-cols-5 px-8">
-            <div className="absolute left-10 right-10 top-1/2 h-5 -translate-y-1/2 rounded-full bg-primary shadow-[0_8px_22px_rgba(255,0,0,0.2)]">
-              <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-around text-white/75">
-                {workflow.slice(0, -1).map(([step]) => (
-                  <span key={`arrow-${step}`} className="material-symbols-outlined text-[28px]">chevron_right</span>
-                ))}
-              </div>
-            </div>
-            {workflow.map(([step]) => (
-              <div key={`node-${step}`} className="relative z-10 flex justify-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full border-[6px] border-primary bg-white shadow-[0_10px_28px_rgba(255,0,0,0.2)]">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white">
-                    <span className="material-symbols-outlined text-[24px]">{step === "04" ? "sync" : step === "01" ? "radio_button_unchecked" : "check"}</span>
-                  </div>
+          <div className="relative grid gap-4 md:grid-cols-3">
+            <div className="absolute left-[16%] right-[16%] top-8 hidden h-px bg-primary/20 md:block" aria-hidden="true" />
+            {workflow.map(([step, title, copy, icon], index) => (
+              <article key={step} className="relative z-10 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-red-500/5 sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-red-500/15">
+                    <span className="material-symbols-outlined text-[24px]">{icon}</span>
+                  </span>
+                  <span className="yt-tag font-black uppercase tracking-[0.16em] text-muted-foreground">Step {Number(step)}</span>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-7 grid grid-cols-5 gap-6">
-            {workflow.map(([step, title, copy]) => (
-              <article key={`copy-${step}`} className="min-w-0 text-center">
-                <span className="rounded-full bg-muted px-4 py-1.5 yt-tag font-black uppercase text-foreground">Step {Number(step)}</span>
-                <h3 className="mx-auto mt-5 max-w-[13rem] yt-title leading-[1.08] tracking-tight text-foreground">{title}</h3>
-                <p className="mx-auto mt-4 max-w-[14rem] yt-body font-medium leading-6 text-muted-foreground">{copy}</p>
+                <h3 className="mt-6 yt-title leading-tight text-foreground">{title}</h3>
+                <p className="mt-3 yt-small font-medium leading-6 text-muted-foreground">{copy}</p>
+                <div className="mt-6 border-t border-gray-100 pt-4">
+                  <p className="yt-tag font-black uppercase tracking-[0.14em] text-primary">You get</p>
+                  <p className="mt-2 yt-small font-black leading-5 text-foreground">{outcomes[index]}</p>
+                </div>
               </article>
             ))}
           </div>
-        </div>
-
-        <div className="mt-12 grid gap-4 lg:hidden">
-          {workflow.map(([step, title, copy, icon], index) => (
-            <article key={`mobile-${step}`} className="relative grid grid-cols-[3.75rem_minmax(0,1fr)] gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              {index < workflow.length - 1 ? <div className="absolute bottom-[-1rem] left-[2.85rem] top-16 w-1 rounded-full bg-primary/20" /> : null}
-              <div className="relative z-10 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
-                <span className="material-symbols-outlined" style={{ fontSize: 30 }}>{icon}</span>
-              </div>
-              <div className="min-w-0">
-                <span className="rounded-full bg-muted px-3 py-1 yt-tag font-black uppercase text-foreground">Step {Number(step)}</span>
-                <h3 className="mt-3 yt-title font-black leading-tight text-foreground">{title}</h3>
-                <p className="mt-2 yt-small font-medium leading-6 text-muted-foreground">{copy}</p>
-              </div>
-            </article>
-          ))}
         </div>
       </div>
     </section>
@@ -703,6 +673,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
       uniqueSellingPoint: item.tag,
       videoUrl: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`,
       youtubeId: "dQw4w9WgXcQ",
+      videoProvider: "youtube" as const,
       thumbnailUrl: `https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=800&auto=format&fit=crop`,
       orientation: index % 3 === 0 ? "vertical" : "horizontal",
       sortOrder: index + 1,
@@ -812,13 +783,25 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
               <span className="material-symbols-outlined text-[22px]">close</span>
             </button>
             <div className={`overflow-hidden rounded-[28px] bg-black shadow-2xl ${playingItem.orientation === "vertical" ? "mx-auto aspect-[9/16] max-h-[82vh] max-w-[460px]" : "aspect-video"}`}>
-              <iframe
-                className="h-full w-full"
-                src={`https://www.youtube.com/embed/${playingItem.youtubeId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
-                title={`${playingItem.title} video`}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+              {playingItem.videoProvider === "cloudinary" ? (
+                <video
+                  className="h-full w-full object-contain"
+                  src={playingItem.videoUrl}
+                  poster={playingItem.thumbnailUrl || undefined}
+                  title={`${playingItem.title} video`}
+                  controls
+                  autoPlay
+                  playsInline
+                />
+              ) : (
+                <iframe
+                  className="h-full w-full"
+                  src={`https://www.youtube.com/embed/${playingItem.youtubeId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+                  title={`${playingItem.title} video`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              )}
             </div>
           </div>
         </div>
@@ -948,7 +931,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
       podcastPrice: "$160",
       vlogPrice: "$160",
       description: "A lean creator package for clean edits with subtitles, sound, color, stock assets, proofing, reels, and thumbnail support.",
-      badge: "Base",
+      badge: "Essentials",
       icon: "smart_display",
       features: ["Subtitles", "Color grading", "Sound design & mixing", "Reels repurposing", "Thumbnail"],
     },
@@ -959,7 +942,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
       podcastPrice: "$240",
       vlogPrice: "$200",
       description: "For creators who need the core editing stack plus a stronger package price for podcast-length work and vlog footage.",
-      badge: "Balanced",
+      badge: "Most popular",
       icon: "trending_up",
       popular: true,
       features: ["Subtitles", "Color grading", "Sound design & mixing", "Reels repurposing", "Thumbnail"],
@@ -971,7 +954,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
       podcastPrice: "$600",
       vlogPrice: "$380",
       description: "The full creator package with project files, motion graphics, VFX, and AI voice over for more advanced edits.",
-      badge: "Full stack",
+      badge: "Advanced",
       icon: "movie_filter",
       features: ["Everything in Creator Plus", "After Effects / Premiere Pro files", "Motion graphics", "VFX", "AI voice over"],
     },
@@ -982,17 +965,17 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.45fr)] lg:items-end">
           <div>
-            <Eyebrow>Variable packages</Eyebrow>
-            <h2 className="mt-3 max-w-3xl yt-title">Creator packages built around footage and finished runtime.</h2>
+            <Eyebrow>Choose your editing plan</Eyebrow>
+            <h2 className="mt-3 max-w-3xl yt-title">Simple plans for a steadier publishing rhythm.</h2>
             <p className="mt-5 max-w-2xl yt-subtitle leading-8 text-muted-foreground">
-              Start with a base creator package, then price changes by podcast runtime, vlog raw footage, and advanced editing requirements.
+              Start with a monthly editing subscription, then add the footage coverage and advanced support your channel actually needs.
             </p>
           </div>
           <div className="rounded-lg border border-gray-200 bg-secondary p-4">
-            <p className="yt-tag font-black uppercase tracking-[0.14em] text-muted-foreground">Base scope bands</p>
+            <p className="yt-tag font-black uppercase tracking-[0.14em] text-muted-foreground">How pricing works</p>
             <div className="mt-3 grid gap-2">
-              <ScopeRow icon="podcasts" label="Podcast run time" value="60 min" />
-              <ScopeRow icon="video_file" label="Vlog raw footage" value="600 min" />
+              <ScopeRow icon="podcasts" label="Finished video coverage" value="Up to 60 min" />
+              <ScopeRow icon="video_file" label="Raw footage coverage" value="Up to 600 min" />
             </div>
           </div>
         </div>
@@ -1014,16 +997,21 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
                 <p className="mt-3 min-h-20 yt-small font-medium leading-6 text-muted-foreground">{plan.description}</p>
 
                 <div className="mt-5 border-y border-gray-100 py-4">
-                  <p className="yt-tag font-black uppercase tracking-[0.14em] text-muted-foreground">Base price starts at</p>
-                  <div className="mt-1 yt-title font-black tracking-tight">{plan.price}</div>
+                  <p className="yt-tag font-black uppercase tracking-[0.14em] text-muted-foreground">Monthly subscription</p>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="yt-title font-black tracking-tight">{plan.price}</span>
+                    <span className="yt-small font-bold text-muted-foreground">/month</span>
+                  </div>
                 </div>
 
-                <div className="mt-4 grid gap-2">
-                  <ScopeRow icon="podcasts" label="60 min podcast" value={plan.podcastPrice} compact />
-                  <ScopeRow icon="video_file" label="600 min vlog footage" value={plan.vlogPrice} compact />
+                <p className="mt-4 yt-tag font-black uppercase tracking-[0.14em] text-muted-foreground">Optional coverage</p>
+                <div className="mt-2 grid gap-2">
+                  <ScopeRow icon="podcasts" label="Up to 60 min finished video" value={`+${plan.podcastPrice}`} compact />
+                  <ScopeRow icon="video_file" label="Up to 600 min raw footage" value={`+${plan.vlogPrice}`} compact />
                 </div>
 
-                <ul className="mt-5 grid gap-3">
+                <p className="mt-5 yt-tag font-black uppercase tracking-[0.14em] text-muted-foreground">Every plan includes</p>
+                <ul className="mt-3 grid gap-3">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex gap-3 yt-small font-bold text-slate-800">
                       <span className="material-symbols-outlined text-[18px] text-primary">check</span>
@@ -1032,7 +1020,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
                   ))}
                 </ul>
                 <Link to={`/pricing/${plan.slug}`} className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 yt-small font-black ${plan.popular ? "bg-primary text-white" : "bg-foreground text-white"}`}>
-                  Choose subscription
+                  Choose {plan.name}
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </Link>
               </article>

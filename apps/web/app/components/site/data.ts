@@ -38,9 +38,9 @@ export const plans = [
 ];
 
 export const workflow = [
-  ["01", "Choose package", "Pick the lane that matches your upload cadence and scope."],
-  ["02", "Upload footage", "Send files, references, notes, and brand assets through the portal."],
-  ["03", "Review and approve", "Leave timestamped notes, request revisions, and approve final exports."],
+  ["01", "Choose your plan", "Pick the editing lane that matches your upload rhythm and content scope.", "sell"],
+  ["02", "Send your footage", "Upload raw files, references, notes, and brand assets through your workspace.", "cloud_upload"],
+  ["03", "Review and approve", "Leave timestamped notes, request revisions, and approve the final export.", "rate_review"],
 ];
 
 export const portfolio = [

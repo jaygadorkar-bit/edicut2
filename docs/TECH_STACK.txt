@@ -11,7 +11,8 @@ Current repository shape
   - Cloudflare Worker deployment via Wrangler
 - Platform services
   - Supabase Auth and Supabase PostgreSQL for hosted identity/data
-  - Cloudinary for managed image delivery and transformations
+- Cloudinary for managed image delivery and transformations
+- A separate Cloudinary account for portfolio video storage and delivery
   - Cloudflare Workers for the production edge runtime and custom domains
 - Backend API: apps/node-api (local/compatibility service)
   - Hono
@@ -66,5 +67,5 @@ Commands
 Provider configuration
 ---------------------
 - Browser build variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
-- Cloudflare Worker secrets: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- Cloudflare Worker secrets: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `CLOUDINARY_VIDEO_CLOUD_NAME`, `CLOUDINARY_VIDEO_API_KEY`, `CLOUDINARY_VIDEO_API_SECRET`
 - Apply the database schema with `npx supabase db push` after linking the hosted project.
