@@ -69,13 +69,13 @@ export function getSubscriptionPackage(name: string, slug: string, index: number
   return SUBSCRIPTION_PACKAGES[0];
 }
 
-export function getCheckoutTotal(subscription: SubscriptionPackage, options: { runtime: boolean; raw: boolean }) {
+export function getCheckoutTotal(subscription: SubscriptionPackage, options: { runtime?: boolean; raw?: boolean } = {}) {
   return subscription.basePrice
     + (options.runtime ? subscription.finishedRuntimePrice : 0)
     + (options.raw ? subscription.rawFootagePrice : 0);
 }
 
-export function getCheckoutUrl(subscription: SubscriptionPackage, options: { runtime: boolean; raw: boolean }) {
+export function getCheckoutUrl(subscription: SubscriptionPackage, options: { runtime?: boolean; raw?: boolean } = {}) {
   const params = new URLSearchParams();
   if (options.runtime) params.set("runtime", "1");
   if (options.raw) params.set("raw", "1");

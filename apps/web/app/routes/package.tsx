@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { useMemo, useState } from "react";
-import { ComparisonTable, ContactSection, PageShell } from "../components/site/Marketing.js";
+import { ButtonLink, ComparisonTable, ContactSection, PageShell, TrustStrip } from "../components/site/Marketing.js";
 import { getDbFromContext } from "../lib/db.server";
 import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
@@ -36,106 +36,173 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
 export default function PackagePage() {
   const { pkg, packageIndex, subscription } = useLoaderData<typeof loader>();
   const featureCards = [
-    ["paid", `Base starts at $${subscription.basePrice}`],
-    ["podcasts", `60 min podcast $${subscription.finishedRuntimePrice}`],
-    ["video_file", `600 min raw footage $${subscription.rawFootagePrice}`],
-    ["workspace_premium", subscription.badge],
+    ["paid", "Base Subscription", `Starts at $${subscription.basePrice}/mo`],
+    ["podcasts", "Finished Video Coverage", `Up to 60 min for +$${subscription.finishedRuntimePrice}`],
+    ["video_file", "Raw Footage Capacity", `Up to 600 min for +$${subscription.rawFootagePrice}`],
+    ["workspace_premium", "Channel Tier", subscription.badge],
   ];
 
   return (
     <PageShell>
-      <section className="px-5 pb-16 pt-32 sm:px-6">
-        <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_380px]">
+      {/* Hero & Subscription Builder Section */}
+      <section className="relative overflow-hidden border-b neo-line px-5 pb-16 pt-16 sm:px-6 lg:pb-24 lg:pt-20">
+        <div className="pointer-events-none absolute -right-24 top-16 h-72 w-72 rounded-full bg-[#e2c9ce]/35 blur-3xl" />
+        <div className="pointer-events-none absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-[#cbdbe8]/60 blur-3xl" />
+
+        <div className="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_400px]">
           <div>
-            <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black uppercase text-primary">{subscription.badge}</span>
-            <h1 className="mt-5 text-5xl font-black tracking-tight sm:text-6xl">{subscription.name} Subscription</h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">{subscription.description}</p>
-            <div className="mt-8 flex flex-wrap gap-4 text-sm font-black text-muted-foreground">
-              <span>Base package ${subscription.basePrice}</span>
-              <span>60 min podcast ${subscription.finishedRuntimePrice}</span>
-              <span>600 min raw vlog ${subscription.rawFootagePrice}</span>
+            <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
+              <span className="h-2 w-2 rounded-full bg-primary" />
+              {subscription.badge} Package
+            </div>
+
+            <h1 className="yt-display mt-7 neo-ink">{subscription.name} Plan</h1>
+            <p className="yt-subtitle mt-6 max-w-2xl leading-8 neo-muted">{subscription.description}</p>
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              {[
+                ["Base Plan", `$${subscription.basePrice}/mo`],
+                ["Podcast Coverage", `+$${subscription.finishedRuntimePrice}`],
+                ["Raw Vlog Coverage", `+$${subscription.rawFootagePrice}`],
+              ].map(([label, val]) => (
+                <div key={label} className="neo-pill rounded-2xl px-4 py-2.5">
+                  <p className="text-xs font-black uppercase tracking-wider neo-muted">{label}</p>
+                  <p className="mt-0.5 text-base font-black neo-ink">{val}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Benefits */}
+            <div className="neo-surface mt-10 rounded-[2rem] p-6 sm:p-8">
+              <p className="yt-tag neo-section-label">Best suited for</p>
+              <h3 className="mt-2 text-2xl font-black neo-ink">{subscription.bestFor}</h3>
+              <p className="mt-3 yt-small leading-relaxed neo-muted">
+                Select your base subscription, customize footage and runtime coverage on the right, and proceed directly to onboarding.
+              </p>
             </div>
           </div>
+
+          {/* Sticky Builder Sidebar */}
           <aside className="h-fit lg:sticky lg:top-24">
             <SubscriptionBuilder subscription={subscription} />
-            <Link to="/pricing" className="mt-3 inline-flex w-full justify-center rounded-lg border border-gray-200 bg-white px-5 py-4 text-sm font-black">Compare packages</Link>
+            <Link
+              to="/pricing"
+              className="neo-card mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl p-4 text-sm font-black neo-ink transition hover:border-primary/40"
+            >
+              <span className="material-symbols-outlined text-[18px]">compare_arrows</span>
+              Compare All Editing Plans
+            </Link>
           </aside>
         </div>
       </section>
 
+      {/* Gallery Section */}
       {pkg.galleryImages.length ? (
-        <section className="bg-secondary px-5 py-20 sm:px-6">
+        <section className="border-b neo-line px-5 py-20 sm:px-6">
           <div className="mx-auto max-w-7xl">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Gallery</p>
-            <h2 className="mt-3 text-4xl font-black tracking-tight">Package preview</h2>
+            <p className="yt-tag neo-section-label">Visual Showcase</p>
+            <h2 className="mt-3 yt-title font-black neo-ink">Package style previews</h2>
             <div className="mt-8 grid gap-4 md:grid-cols-3">
               {pkg.galleryImages.map((imageUrl, index) => (
-                <img
+                <div
                   key={imageUrl}
-                  src={optimizeCloudinaryUrl(imageUrl)}
-                  alt={`${pkg.name} package gallery image ${index + 1}`}
-                  className={`aspect-video w-full rounded-2xl border border-gray-200 bg-white object-cover shadow-sm ${index === 0 ? "md:col-span-2 md:row-span-2 md:aspect-[16/10]" : ""}`}
-                />
+                  className={`neo-card overflow-hidden rounded-2xl p-2 ${index === 0 ? "md:col-span-2 md:row-span-2" : ""}`}
+                >
+                  <img
+                    src={optimizeCloudinaryUrl(imageUrl)}
+                    alt={`${pkg.name} package gallery image ${index + 1}`}
+                    className="aspect-video w-full rounded-xl object-cover"
+                  />
+                </div>
               ))}
             </div>
           </div>
         </section>
       ) : null}
 
-      <section className="bg-secondary px-5 py-20 sm:px-6">
-        <div className="mx-auto grid max-w-7xl gap-5 md:grid-cols-4">
-          {featureCards.map(([icon, text]) => (
-            <article key={text} className="rounded-2xl border border-gray-200 bg-white p-6">
-              <span className="material-symbols-outlined text-primary">{icon}</span>
-              <p className="mt-4 text-xl font-black">{text}</p>
-            </article>
-          ))}
+      {/* Feature Specs Cards */}
+      <section className="border-b neo-line px-5 py-20 sm:px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {featureCards.map(([icon, title, desc]) => (
+              <article key={title} className="neo-card rounded-2xl p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <span className="material-symbols-outlined text-[22px]">{icon}</span>
+                </span>
+                <p className="mt-5 text-base font-black neo-ink">{title}</p>
+                <p className="mt-1 text-sm font-medium neo-muted">{desc}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="px-5 pb-20 sm:px-6">
+      {/* Deliverables Matrix */}
+      <section className="border-b neo-line px-5 py-20 sm:px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="neo-surface rounded-[2rem] p-6 sm:p-10">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="yt-tag neo-section-label">Included in every cut</p>
+                <h2 className="mt-2 yt-title font-black neo-ink">Package deliverables</h2>
+              </div>
+              <ButtonLink to={getCheckoutUrl(subscription)}>Get started with {subscription.name}</ButtonLink>
+            </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {subscription.deliverables.map((item) => (
+                <div key={item} className="neo-inset flex items-center gap-3 rounded-xl p-3.5">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                    <span className="material-symbols-outlined text-[14px]">check</span>
+                  </span>
+                  <span className="text-sm font-bold neo-ink">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Full Comparison Table */}
+      <section className="border-b neo-line px-5 py-20 sm:px-6">
         <div className="mx-auto max-w-7xl">
           <ComparisonTable />
         </div>
       </section>
 
-      <section className="px-5 py-20 sm:px-6">
-        <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-2">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Best for</p>
-            <h2 className="mt-3 text-4xl font-black tracking-tight">{subscription.bestFor}</h2>
-            <p className="mt-5 leading-8 text-muted-foreground">
-              Select the base subscription, add finished runtime coverage, add extra raw footage coverage, or combine both before sending the request.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-6">
-            <h3 className="text-2xl font-black">Deliverables</h3>
-            <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-              {subscription.deliverables.map((item) => (
-                <li key={item} className="flex gap-2 rounded-xl bg-secondary p-3 text-sm font-bold">
-                  <span className="material-symbols-outlined text-[18px] text-primary">check</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-secondary px-5 py-16 sm:px-6">
+      {/* Other Packages */}
+      <section className="border-b neo-line px-5 py-20 sm:px-6">
         <div className="mx-auto max-w-7xl">
-          <h2 className="text-3xl font-black tracking-tight">Other packages</h2>
-          <div className="mt-6 grid gap-5 md:grid-cols-3">
+          <div className="text-center">
+            <p className="yt-tag neo-section-label">Alternative Tiers</p>
+            <h2 className="mt-3 yt-title font-black neo-ink">Explore other packages</h2>
+          </div>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
             {SUBSCRIPTION_PACKAGES.filter((_, index) => index !== packageIndex).map((item) => (
-              <Link key={item.slug} to={`/pricing/${item.slug}`} className="rounded-2xl border border-gray-200 bg-white p-6 ">
-                <p className="text-xl font-black">{item.name}</p>
-                <p className="mt-2 text-sm font-bold text-muted-foreground">{item.description}</p>
-                <p className="mt-5 text-3xl font-black">${item.basePrice}<span className="text-sm text-muted-foreground"> base</span></p>
+              <Link
+                key={item.slug}
+                to={`/pricing/${item.slug}`}
+                className="neo-card flex flex-col justify-between rounded-2xl p-6 transition hover:border-primary/40"
+              >
+                <div>
+                  <span className="neo-pill rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wider neo-muted">
+                    {item.badge}
+                  </span>
+                  <p className="mt-4 text-xl font-black neo-ink">{item.name}</p>
+                  <p className="mt-2 text-sm font-medium leading-relaxed neo-muted">{item.description}</p>
+                </div>
+                <div className="mt-6 border-t neo-line pt-4 flex items-baseline gap-1">
+                  <span className="yt-title font-black neo-ink">${item.basePrice}</span>
+                  <span className="yt-small font-bold neo-muted">/month</span>
+                </div>
               </Link>
             ))}
           </div>
         </div>
       </section>
+
+      <TrustStrip />
       <ContactSection compact />
     </PageShell>
   );
@@ -144,64 +211,76 @@ export default function PackagePage() {
 function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPackage }) {
   const [includeFinishedRuntime, setIncludeFinishedRuntime] = useState(false);
   const [includeRawFootage, setIncludeRawFootage] = useState(false);
-  const total = useMemo(() => getCheckoutTotal(subscription, {
-    runtime: includeFinishedRuntime,
-    raw: includeRawFootage,
-  }), [includeFinishedRuntime, includeRawFootage, subscription]);
+  const total = useMemo(
+    () =>
+      getCheckoutTotal(subscription, {
+        runtime: includeFinishedRuntime,
+        raw: includeRawFootage,
+      }),
+    [includeFinishedRuntime, includeRawFootage, subscription]
+  );
   const checkoutHref = getCheckoutUrl(subscription, {
     runtime: includeFinishedRuntime,
     raw: includeRawFootage,
   });
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-xl shadow-black/5">
-      <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Choose subscription</p>
-      <h2 className="mt-2 text-2xl font-black">{subscription.name}</h2>
+    <section className="neo-surface rounded-[2rem] p-6 shadow-xl">
+      <div className="flex items-center justify-between">
+        <p className="yt-tag neo-section-label">Configure plan</p>
+        <span className="neo-pill rounded-full px-2.5 py-1 text-[11px] font-black uppercase neo-muted">
+          Instant Setup
+        </span>
+      </div>
+      <h2 className="mt-2 text-2xl font-black neo-ink">{subscription.name}</h2>
 
-      <div className="mt-5 rounded-lg border border-gray-200 bg-secondary p-3">
+      <div className="neo-inset mt-5 rounded-xl p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-black">Base package</p>
-            <p className="mt-1 text-xs font-bold text-muted-foreground">Core creator editing subscription.</p>
+            <p className="text-sm font-black neo-ink">Base monthly package</p>
+            <p className="mt-0.5 text-xs font-medium neo-muted">Core editing pipeline & sound design.</p>
           </div>
-          <p className="text-xl font-black">${subscription.basePrice}</p>
+          <p className="text-xl font-black neo-ink">${subscription.basePrice}</p>
         </div>
       </div>
 
-      <div className="mt-3 grid gap-3">
+      <div className="mt-4 space-y-3">
         <OptionCheckbox
           checked={includeFinishedRuntime}
           icon="podcasts"
-          label="Finished video duration"
-          description="Add 60 min finished podcast/runtime coverage."
+          label="Finished duration booster"
+          description="Add 60 min finished podcast/episode coverage."
           price={subscription.finishedRuntimePrice}
           onChange={setIncludeFinishedRuntime}
         />
         <OptionCheckbox
           checked={includeRawFootage}
           icon="video_file"
-          label="Extra raw video"
-          description="Add 600 min raw vlog footage coverage."
+          label="Extra raw footage booster"
+          description="Add 600 min raw vlog/stream footage coverage."
           price={subscription.rawFootagePrice}
           onChange={setIncludeRawFootage}
         />
       </div>
 
-      <div className="mt-5 border-t border-gray-100 pt-4">
+      <div className="mt-6 border-t neo-line pt-5">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Estimated total</p>
-            <p className="mt-1 text-sm font-bold text-muted-foreground">Final quote may vary after footage review.</p>
+            <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Estimated monthly total</p>
+            <p className="mt-0.5 text-xs font-medium neo-muted">Includes revisions & thumbnail</p>
           </div>
-          <p className="text-4xl font-black">${total}</p>
+          <p className="text-4xl font-black tracking-tight neo-ink">${total}</p>
         </div>
       </div>
 
-      <Link to={checkoutHref} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-4 text-sm font-black text-white">
-        Continue with subscription
+      <Link
+        to={checkoutHref}
+        className="neo-button neo-button--primary mt-6 w-full justify-center text-sm font-black uppercase tracking-wider"
+      >
+        <span>Proceed to checkout</span>
         <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
       </Link>
-      <p className="mt-3 text-center text-xs font-bold text-muted-foreground">Sign in opens first if you are not already logged in.</p>
+      <p className="mt-3 text-center text-xs font-medium neo-muted">Sign in or create an account at next step.</p>
     </section>
   );
 }
@@ -222,7 +301,11 @@ function OptionCheckbox({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${checked ? "border-primary bg-red-50" : "border-gray-200 bg-white"}`}>
+    <label
+      className={`neo-card flex cursor-pointer items-start gap-3 rounded-xl p-3.5 transition ${
+        checked ? "ring-2 ring-primary bg-[#fdf2f4]" : ""
+      }`}
+    >
       <input
         type="checkbox"
         checked={checked}
@@ -231,10 +314,10 @@ function OptionCheckbox({
       />
       <span className="material-symbols-outlined text-[20px] text-primary">{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-black">{label}</span>
-        <span className="mt-1 block text-xs font-bold leading-5 text-muted-foreground">{description}</span>
+        <span className="block text-sm font-black neo-ink">{label}</span>
+        <span className="mt-0.5 block text-xs font-medium leading-relaxed neo-muted">{description}</span>
       </span>
-      <span className="text-sm font-black">+${price}</span>
+      <span className="text-sm font-black neo-ink">+${price}</span>
     </label>
   );
 }

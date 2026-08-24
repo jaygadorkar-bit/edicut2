@@ -650,22 +650,21 @@ function AdminOverview() {
     >
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ["Total users", String(stats.total), "Active accounts", "group", "purple"],
-          ["Admin team", String(stats.admins), "Privileged accounts", "admin_panel_settings", "blue"],
-          ["Editors", String(stats.editors), "Production capacity", "movie_edit", "yellow"],
-          ["Media assets", String(cloudinaryImages.length), `${pricingPackages.length} packages published`, "perm_media", "pink"],
-        ].map(([label, value, hint, icon, tone]) => {
-          const toneMap = { purple: "bg-[#eeeaff] text-[#6448cc]", blue: "bg-[#e8efff] text-[#4d6ac4]", yellow: "bg-[#fff3d1] text-[#aa710d]", pink: "bg-[#ffebf7] text-[#c03a86]" };
+          ["Total users", String(stats.total), "Active accounts", "group"],
+          ["Admin team", String(stats.admins), "Privileged accounts", "admin_panel_settings"],
+          ["Editors", String(stats.editors), "Production capacity", "movie_edit"],
+          ["Media assets", String(cloudinaryImages.length), `${pricingPackages.length} packages published`, "perm_media"],
+        ].map(([label, value, hint, icon]) => {
           return (
-            <article key={label} className="rounded-[17px] bg-white p-4 shadow-[0_7px_24px_rgba(44,49,100,0.045)] ring-1 ring-white">
+            <article key={label} className="neo-workspace__stat-card rounded-[17px] p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#9699ac]">{label}</p>
-                  <p className="mt-2 text-3xl font-black tracking-[-0.05em]">{value}</p>
+                  <p className="neo-workspace__eyebrow">{label}</p>
+                  <p className="neo-workspace__stat-value mt-2">{value}</p>
                 </div>
-                <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${toneMap[tone as keyof typeof toneMap]}`}><span className="material-symbols-outlined text-[19px]">{icon}</span></span>
+                <span className="neo-workspace__stat-icon flex h-9 w-9 items-center justify-center rounded-xl"><span className="material-symbols-outlined text-[19px]">{icon}</span></span>
               </div>
-              <p className="mt-3 text-[10px] font-bold text-[#9a9cac]">{hint}</p>
+              <p className="neo-workspace__stat-hint mt-3">{hint}</p>
             </article>
           );
         })}
@@ -716,40 +715,40 @@ function AdminPlaceholder({ tab }: { tab: keyof typeof adminPlaceholderConfigs }
         </Link>
       )}
     >
-      <section className="rounded-[24px] bg-white p-6 shadow-[0_9px_30px_rgba(44,49,100,0.05)] sm:p-8">
+      <section className="neo-workspace__panel rounded-[24px] p-6 sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#eeeaff] text-[#6448cc]">
+            <span className="neo-workspace__module-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
               <span className="material-symbols-outlined text-[24px]">{config.icon}</span>
             </span>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.17em] text-[#9699ac]">Admin module</p>
-              <h2 className="mt-1 text-2xl font-black tracking-[-0.04em] text-[#17172a]">{config.title}</h2>
-              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#777b91]">{config.description}</p>
+              <p className="neo-workspace__eyebrow">Admin module</p>
+              <h2 className="neo-workspace__module-title mt-1">{config.title}</h2>
+              <p className="neo-workspace__module-copy mt-2 max-w-2xl">{config.description}</p>
             </div>
           </div>
-          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[#f4f5fb] px-3 py-2 text-[10px] font-black uppercase tracking-wider text-[#777b91]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#6d55e8]" />
+          <span className="neo-workspace__status inline-flex w-fit items-center gap-2 rounded-full px-3 py-2">
+            <span className="neo-workspace__status-dot h-1.5 w-1.5 rounded-full" />
             Coming soon
           </span>
         </div>
 
         <div className="mt-8 grid gap-3 md:grid-cols-3">
           {config.cards.map(([title, copy]) => (
-            <article key={title} className="rounded-2xl border border-[#edf0f7] bg-[#fafaff] p-4">
-              <span className="material-symbols-outlined text-[20px] text-[#6d55e8]">auto_awesome</span>
-              <h3 className="mt-4 text-sm font-black text-[#27263d]">{title}</h3>
-              <p className="mt-2 text-xs font-medium leading-5 text-[#8b8ea0]">{copy}</p>
+            <article key={title} className="neo-workspace__subpanel rounded-2xl p-4">
+              <span className="neo-workspace__accent-icon material-symbols-outlined text-[20px]">auto_awesome</span>
+              <h3 className="neo-workspace__subpanel-title mt-4 text-sm">{title}</h3>
+              <p className="neo-workspace__subpanel-copy mt-2">{copy}</p>
             </article>
           ))}
         </div>
 
-        <div className="mt-8 flex flex-col gap-3 rounded-2xl bg-[#f3f5ff] p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="neo-workspace__callout mt-8 flex flex-col gap-3 rounded-2xl p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-black text-[#27263d]">This admin module is being prepared.</p>
-            <p className="mt-1 text-xs font-medium text-[#777b91]">Navigation, access control, and the workspace shell are ready for the full workflow.</p>
+            <p className="neo-workspace__callout-title text-sm">This admin module is being prepared.</p>
+            <p className="neo-workspace__callout-copy mt-1 text-xs">Navigation, access control, and the workspace shell are ready for the full workflow.</p>
           </div>
-          <Link to="?tab=overview" className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white transition hover:bg-[#5b44d3]">
+          <Link to="?tab=overview" className="neo-workspace__secondary-action inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-xs">
             <span className="material-symbols-outlined text-[17px]">arrow_back</span>
             Back to dashboard
           </Link>
@@ -2082,33 +2081,26 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function MetricCard({ label, value, icon, color, to, active = false }: { label: string; value: number; icon: string; color: string; to?: string; active?: boolean }) {
-  const colorMap: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-600",
-    red: "bg-red-50 text-red-600",
-    indigo: "bg-indigo-50 text-indigo-600",
-    amber: "bg-amber-50 text-amber-600",
-    slate: "bg-slate-100 text-slate-700",
-  };
   const content = (
     <>
       <div className="flex items-center justify-between">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${colorMap[color]}`}><span className="material-symbols-outlined text-[20px]">{icon}</span></div>
-        <span className={`text-[10px] font-black uppercase tracking-widest ${active ? "text-slate-900" : "text-slate-400"}`}>{active ? "Selected" : "Realtime"}</span>
+        <div className="neo-workspace__metric-icon flex h-10 w-10 items-center justify-center rounded-xl"><span className="material-symbols-outlined text-[20px]">{icon}</span></div>
+        <span className={`neo-workspace__metric-state text-[10px] font-black uppercase tracking-widest ${active ? "is-active" : ""}`}>{active ? "Selected" : "Realtime"}</span>
       </div>
-      <div className="mt-4"><p className="text-3xl font-black tracking-tight text-slate-900">{value}</p><p className="text-xs font-bold text-slate-500">{label}</p></div>
+      <div className="mt-4"><p className="neo-workspace__metric-value">{value}</p><p className="neo-workspace__metric-label">{label}</p></div>
     </>
   );
 
   if (to) {
     return (
-      <Link reloadDocument to={to} className={`rounded-2xl border bg-white p-5 text-left shadow-sm ${active ? "border-slate-900 ring-2 ring-slate-900/10" : "border-slate-200"}`}>
+      <Link reloadDocument to={to} data-tone={color} className={`neo-workspace__metric-card rounded-2xl p-5 text-left ${active ? "is-active" : ""}`}>
         {content}
       </Link>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm -transform ">
+    <div data-tone={color} className="neo-workspace__metric-card rounded-2xl p-5">
       {content}
     </div>
   );

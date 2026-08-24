@@ -175,40 +175,40 @@ export default function DashboardPlaceholderRoute() {
         </Link>
       )}
     >
-      <section className="rounded-[24px] bg-white p-6 shadow-[0_9px_30px_rgba(44,49,100,0.05)] sm:p-8">
+      <section className="neo-workspace__panel rounded-[24px] p-6 sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#eeeaff] text-[#6448cc]">
+            <span className="neo-workspace__module-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
               <span className="material-symbols-outlined text-[24px]">{config.icon}</span>
             </span>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.17em] text-[#9699ac]">Workspace module</p>
-              <h2 className="mt-1 text-2xl font-black tracking-[-0.04em] text-[#17172a]">{config.label}</h2>
-              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#777b91]">{config.description}</p>
+              <p className="neo-workspace__eyebrow">Workspace module</p>
+              <h2 className="neo-workspace__module-title mt-1">{config.label}</h2>
+              <p className="neo-workspace__module-copy mt-2 max-w-2xl">{config.description}</p>
             </div>
           </div>
-          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-[#f4f5fb] px-3 py-2 text-[10px] font-black uppercase tracking-wider text-[#777b91]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#6d55e8]" />
+          <span className="neo-workspace__status inline-flex w-fit items-center gap-2 rounded-full px-3 py-2">
+            <span className="neo-workspace__status-dot h-1.5 w-1.5 rounded-full" />
             Coming soon
           </span>
         </div>
 
         <div className="mt-8 grid gap-3 md:grid-cols-3">
           {config.items.map(([title, copy]) => (
-            <article key={title} className="rounded-2xl border border-[#edf0f7] bg-[#fafaff] p-4">
-              <span className="material-symbols-outlined text-[20px] text-[#6d55e8]">auto_awesome</span>
-              <h3 className="mt-4 text-sm font-black text-[#27263d]">{title}</h3>
-              <p className="mt-2 text-xs font-medium leading-5 text-[#8b8ea0]">{copy}</p>
+            <article key={title} className="neo-workspace__subpanel rounded-2xl p-4">
+              <span className="neo-workspace__accent-icon material-symbols-outlined text-[20px]">auto_awesome</span>
+              <h3 className="neo-workspace__subpanel-title mt-4">{title}</h3>
+              <p className="neo-workspace__subpanel-copy mt-2">{copy}</p>
             </article>
           ))}
         </div>
 
-        <div className="mt-8 flex flex-col gap-3 rounded-2xl bg-[#f3f5ff] p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="neo-workspace__callout mt-8 flex flex-col gap-3 rounded-2xl p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-black text-[#27263d]">This workspace is being prepared.</p>
-            <p className="mt-1 text-xs font-medium text-[#777b91]">The navigation and access control are ready while the full workflow is being connected.</p>
+            <p className="neo-workspace__callout-title text-sm">This workspace is being prepared.</p>
+            <p className="neo-workspace__callout-copy mt-1 text-xs">The navigation and access control are ready while the full workflow is being connected.</p>
           </div>
-          <Link to="/dashboard" className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white transition hover:bg-[#5b44d3]">
+          <Link to="/dashboard" className="neo-workspace__secondary-action inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-xs">
             <span className="material-symbols-outlined text-[17px]">arrow_back</span>
             Back to dashboard
           </Link>

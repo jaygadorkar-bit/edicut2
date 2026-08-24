@@ -1,40 +1,83 @@
 import type { MetaFunction } from "react-router";
-import { PageShell } from "../components/site/Marketing.js";
+import { PageShell, TrustStrip } from "../components/site/Marketing.js";
 
-export const meta: MetaFunction = () => [{ title: "Privacy Policy | EdiCut" }];
+export const meta: MetaFunction = () => [
+  { title: "Privacy Policy | EdiCut Creator Post Production" },
+  { name: "description", content: "How EdiCut handles creator raw footage, project data, credentials, and confidential materials." },
+];
 
 const sections = [
-  ["Information we collect", "Contact details, project briefs, uploaded references, channel URLs, billing records, and workflow activity needed to deliver editing services."],
-  ["How we use information", "We use project information to scope work, assign editors, provide revisions, manage support, process payments, and improve the EdiCut workflow."],
-  ["File and project handling", "Video files, reference links, notes, and deliverables are handled for production purposes and shared only with the team members assigned to the project."],
-  ["Retention and deletion", "Project data is retained while an account or project relationship is active, unless a customer requests deletion where legally and operationally possible."],
-  ["Contact", "Questions about privacy can be sent to hello@edicut.com."],
+  {
+    icon: "database",
+    title: "1. Information We Collect",
+    copy: "We collect creator contact details, channel URLs, editing briefs, uploaded footage references, billing records, and project notes necessary to deliver high-quality editing services.",
+  },
+  {
+    icon: "handshake",
+    title: "2. How We Use Information",
+    copy: "Project information is used exclusively to scope work, assign dedicated lead editors and project managers, process revision cycles, provide customer support, and manage billing.",
+  },
+  {
+    icon: "lock",
+    title: "3. Raw Footage & Project Handling",
+    copy: "All raw video footage, assets, and project files are handled strictly for editing purposes and accessed only by assigned team members under strict non-disclosure agreements (NDAs).",
+  },
+  {
+    icon: "delete_sweep",
+    title: "4. Data Retention & Deletion",
+    copy: "Project files and deliverables are safely archived for 90 days after delivery to allow for re-exports and revisions, after which raw files may be permanently purged upon request.",
+  },
+  {
+    icon: "support_agent",
+    title: "5. Contact & Privacy Inquiries",
+    copy: "For any questions regarding data rights, NDAs, or custom security requirements, contact our data protection team directly at privacy@edicut.com.",
+  },
 ];
 
 export default function PrivacyPage() {
   return (
     <PageShell>
-      <LegalPage eyebrow="Privacy Policy" title="How EdiCut handles creator and project data." sections={sections} />
-    </PageShell>
-  );
-}
+      {/* Header */}
+      <section className="relative overflow-hidden border-b neo-line px-5 pb-14 pt-16 sm:px-6 lg:pb-20 lg:pt-20">
+        <div className="pointer-events-none absolute -right-24 top-16 h-72 w-72 rounded-full bg-[#e2c9ce]/35 blur-3xl" />
+        <div className="pointer-events-none absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-[#cbdbe8]/60 blur-3xl" />
 
-function LegalPage({ eyebrow, title, sections: items }: { eyebrow: string; title: string; sections: string[][] }) {
-  return (
-    <section className="px-5 pb-20 pt-32 sm:px-6">
-      <div className="mx-auto max-w-4xl">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">{eyebrow}</p>
-        <h1 className="mt-4 text-5xl font-black tracking-tight">{title}</h1>
-        <p className="mt-5 text-sm font-bold text-muted-foreground">Last updated: May 5, 2026</p>
-        <div className="mt-10 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
-          {items.map(([heading, copy]) => (
-            <article key={heading} className="p-6">
-              <h2 className="text-xl font-black">{heading}</h2>
-              <p className="mt-3 leading-7 text-muted-foreground">{copy}</p>
-            </article>
-          ))}
+        <div className="relative mx-auto max-w-4xl text-center">
+          <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
+            <span className="h-2 w-2 rounded-full bg-primary" />
+            Legal & Compliance
+          </div>
+
+          <h1 className="yt-display mt-7 neo-ink">Privacy Policy</h1>
+          <p className="yt-subtitle mx-auto mt-6 max-w-2xl leading-8 neo-muted">
+            How EdiCut protects creator footage, project assets, and confidential account information.
+          </p>
+          <p className="mt-4 yt-small font-black neo-muted">Effective Date: May 5, 2026</p>
         </div>
-      </div>
-    </section>
+      </section>
+
+      {/* Main Legal Content Document */}
+      <section className="border-b neo-line px-5 py-20 sm:px-6">
+        <div className="mx-auto max-w-4xl">
+          <div className="neo-surface rounded-[2rem] p-6 sm:p-10 lg:p-12 space-y-8">
+            {sections.map((section) => (
+              <article key={section.title} className="neo-card rounded-2xl p-6">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <span className="material-symbols-outlined text-[20px]">{section.icon}</span>
+                  </span>
+                  <h2 className="text-xl font-black neo-ink">{section.title}</h2>
+                </div>
+                <p className="mt-3.5 text-sm font-medium leading-relaxed neo-muted pl-12">
+                  {section.copy}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <TrustStrip />
+    </PageShell>
   );
 }

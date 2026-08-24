@@ -3,10 +3,10 @@ import { Avatar } from "./WorkspaceShell";
 type Tone = "purple" | "blue" | "yellow" | "pink";
 
 const toneClasses: Record<Tone, { gradient: string; border: string; soft: string; text: string; bar: string }> = {
-  purple: { gradient: "from-[#a47bf4] to-[#7c62e9]", border: "border-[#9876ec]", soft: "bg-[#f0eaff]", text: "text-[#6448cc]", bar: "bg-[#6a50d8]" },
-  blue: { gradient: "from-[#77a0f2] to-[#6284e7]", border: "border-[#7897ec]", soft: "bg-[#e9efff]", text: "text-[#4d6ac4]", bar: "bg-[#5274d6]" },
-  yellow: { gradient: "from-[#ffd268] to-[#f7b735]", border: "border-[#f5c14a]", soft: "bg-[#fff6dd]", text: "text-[#a86d08]", bar: "bg-[#e5a827]" },
-  pink: { gradient: "from-[#f56bbc] to-[#e957a3]", border: "border-[#ee62b0]", soft: "bg-[#ffebf7]", text: "text-[#c03a86]", bar: "bg-[#cf3e91]" },
+  purple: { gradient: "from-[#f4effb] to-[#e7e0f3]", border: "border-[#ded3ec]", soft: "bg-[#eee7f7]", text: "text-[#665678]", bar: "bg-[#8a73a9]" },
+  blue: { gradient: "from-[#eef4fb] to-[#dfeaf2]", border: "border-[#d5e2ed]", soft: "bg-[#e5eef6]", text: "text-[#526b7e]", bar: "bg-[#6d8da5]" },
+  yellow: { gradient: "from-[#fbf5e7] to-[#f2e8ca]", border: "border-[#eee0bd]", soft: "bg-[#f7efd8]", text: "text-[#8b7241]", bar: "bg-[#b89b5d]" },
+  pink: { gradient: "from-[#faeef3] to-[#f1dfe7]", border: "border-[#edd6e1]", soft: "bg-[#f7e7ee]", text: "text-[#8d6072]", bar: "bg-[#b77b92]" },
 };
 
 export type WorkspaceProject = {
@@ -32,19 +32,19 @@ export function WorkspaceProjectStrip({ projects }: { projects: WorkspaceProject
         {projects.map((project) => {
           const colors = toneClasses[project.tone];
           return (
-            <article key={project.title} className={`relative min-h-[126px] overflow-hidden rounded-[17px] border ${colors.border} bg-gradient-to-br ${colors.gradient} p-4 text-white shadow-[0_12px_26px_rgba(83,70,180,0.12)]`}>
-              <div className="absolute -right-6 -top-8 h-24 w-24 rounded-full border-[13px] border-white/10" />
+            <article key={project.title} className={`neo-workspace__project-card relative min-h-[126px] overflow-hidden rounded-[17px] border ${colors.border} bg-gradient-to-br ${colors.gradient} p-4 text-[#17202a]`}>
+              <div className="absolute -right-6 -top-8 h-24 w-24 rounded-full border-[13px] border-white/45" />
               <div className="relative flex items-start justify-between gap-2">
                 <div className="flex -space-x-1.5">
                   {project.members.map((member) => <Avatar key={member} name={member} size="sm" />)}
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/30 text-[9px] font-black">{project.count}</span>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/60 text-[9px] font-black text-[#53606b]">{project.count}</span>
                 </div>
-                <span className="material-symbols-outlined text-[18px] text-white/80">more_vert</span>
+                <span className="material-symbols-outlined text-[18px] text-[#687583]">more_vert</span>
               </div>
               <h3 className="relative mt-3 text-sm font-black">{project.title}</h3>
-              <p className="relative mt-0.5 truncate text-[10px] font-bold text-white/80">{project.description}</p>
+              <p className="relative mt-0.5 truncate text-[10px] font-bold text-[#687583]">{project.description}</p>
               <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-black/10">
-                <div className="h-full rounded-full bg-white/85" style={{ width: `${project.progress}%` }} />
+                <div className={`h-full rounded-full ${colors.bar}`} style={{ width: `${project.progress}%` }} />
               </div>
             </article>
           );
@@ -82,7 +82,7 @@ export function WorkspaceBoard({ columns }: { columns: WorkspaceColumn[] }) {
       </div>
       <div className="grid gap-3 lg:grid-cols-4">
         {columns.map((column) => (
-          <section key={column.title} className="min-h-[178px] rounded-[17px] bg-white/80 p-3 shadow-[0_7px_24px_rgba(44,49,100,0.045)] ring-1 ring-white">
+          <section key={column.title} className="neo-workspace__panel min-h-[178px] rounded-[17px] p-3">
             <div className="flex items-center justify-between px-1">
               <h3 className="text-xs font-black">{column.title}</h3>
               <button type="button" className="text-[#878a9d]" aria-label={`${column.title} options`}><span className="material-symbols-outlined text-[17px]">more_vert</span></button>
@@ -91,16 +91,16 @@ export function WorkspaceBoard({ columns }: { columns: WorkspaceColumn[] }) {
               {column.tasks.map((task) => {
                 const colors = toneClasses[task.tone];
                 return (
-                  <article key={task.title} className={`rounded-xl border ${task.done ? "border-[#e5e8f1] bg-[#fbfbfe]" : "border-transparent bg-[#f8f8fc]"} p-2.5`}>
+                  <article key={task.title} className={`neo-workspace__task rounded-xl border ${task.done ? "border-[#e2e6eb] bg-[#f6f8f9]" : "border-transparent bg-[#e9eef2]"} p-2.5`}>
                     <div className="flex items-start gap-2">
                       <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${colors.soft} ${colors.text}`}>
                         <span className="material-symbols-outlined text-[13px]">{task.done ? "check" : "description"}</span>
                       </span>
-                      <p className={`min-w-0 flex-1 text-[11px] font-bold leading-4 ${task.done ? "text-[#9b9dae] line-through" : "text-[#4d4e62]"}`}>{task.title}</p>
-                      {task.done ? <span className="material-symbols-outlined text-[15px] text-[#62b78f]">check_circle</span> : null}
+                      <p className={`min-w-0 flex-1 text-[11px] font-bold leading-4 ${task.done ? "text-[#9099a2] line-through" : "text-[#34414b]"}`}>{task.title}</p>
+                      {task.done ? <span className="material-symbols-outlined text-[15px] text-[#5a9b7b]">check_circle</span> : null}
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2 pl-7">
-                      <span className="truncate text-[9px] font-bold text-[#a2a4b3]">{task.meta}</span>
+                      <span className="truncate text-[9px] font-bold text-[#7b8790]">{task.meta}</span>
                       {task.members?.length ? <div className="flex -space-x-1.5">{task.members.map((member) => <Avatar key={member} name={member} size="sm" />)}</div> : null}
                     </div>
                   </article>
@@ -128,7 +128,7 @@ export function WorkspaceSchedule({ accent = "purple" }: { accent?: Tone }) {
   const accentColor = toneClasses[accent].bar;
 
   return (
-    <section className="overflow-hidden rounded-[20px] bg-white p-4 shadow-[0_9px_30px_rgba(44,49,100,0.05)] sm:p-5">
+    <section className="neo-workspace__panel overflow-hidden rounded-[20px] p-4 sm:p-5">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.17em] text-[#9699ac]">Weekly plan</p>

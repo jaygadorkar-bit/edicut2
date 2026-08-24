@@ -42,7 +42,7 @@ export function WorkflowSection() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
               <Link
                 to="/pricing"
-                className="inline-flex items-center justify-center rounded-2xl bg-primary px-6 py-3.5 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5 active:translate-y-0"
+                className="inline-flex items-center justify-center rounded-2xl bg-primary px-6 py-3.5 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-primary/20"
               >
                 Compare packages
               </Link>

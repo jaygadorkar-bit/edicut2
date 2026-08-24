@@ -46,7 +46,10 @@ export function AuthPage() {
 
     try {
       const formData = new FormData(form);
-      formData.set("g-recaptcha-response", await executeInvisibleRecaptcha(form, mode === "signup" ? "dashboard_signup" : "dashboard_signin"));
+      formData.set(
+        "g-recaptcha-response",
+        await executeInvisibleRecaptcha(form, mode === "signup" ? "dashboard_signup" : "dashboard_signin")
+      );
       fetcher.submit(formData, { method: "post", action: "/signin" });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
@@ -70,9 +73,10 @@ export function AuthPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7f8] px-3 py-4 text-foreground sm:px-6 sm:py-6 lg:px-8 lg:py-10">
-      <div className="mx-auto grid min-h-[calc(100vh-2rem)] w-full max-w-[1080px] items-stretch overflow-hidden rounded-2xl bg-white shadow-2xl sm:min-h-[calc(100vh-3rem)] sm:rounded-[28px] lg:min-h-[calc(100vh-5rem)] lg:grid-cols-2">
-        <section className="relative hidden min-h-[680px] overflow-hidden bg-[#e8ecec] lg:block">
+    <main className="min-h-screen neo-home flex items-center justify-center px-3 py-6 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto grid w-full max-w-[1080px] items-stretch overflow-hidden rounded-[2.5rem] neo-surface shadow-2xl lg:grid-cols-2">
+        {/* Left Side: Editorial Creator Visual Scene */}
+        <section className="relative hidden min-h-[640px] overflow-hidden bg-[#e8ecec] lg:block">
           <img
             src="/images/light-hero.png"
             alt="Minimal video production studio with camera and editing workstation"
@@ -82,21 +86,52 @@ export function AuthPage() {
           <div className="auth-scene-grid absolute inset-0 opacity-20" />
           <div className="auth-scene-orb auth-scene-orb-one absolute -left-24 top-24 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl" />
           <div className="auth-scene-orb auth-scene-orb-two absolute -right-28 bottom-24 h-80 w-80 rounded-full bg-white/35 blur-3xl" />
-          <Link to="/" className="absolute left-6 top-6 z-10 inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/75 px-3 py-2 text-xs font-black text-gray-700 shadow-sm backdrop-blur-md transition hover:bg-white hover:text-black" aria-label="Back to home">
+          
+          <Link
+            to="/"
+            className="neo-pill absolute left-6 top-6 z-10 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black neo-ink transition hover:scale-105"
+            aria-label="Back to home"
+          >
             <span className="material-symbols-outlined text-[16px]">arrow_back</span>
             Back to home
           </Link>
+
+          <div className="absolute bottom-8 left-8 right-8 z-10 neo-card rounded-2xl p-5 backdrop-blur-md bg-white/80">
+            <p className="yt-tag neo-section-label">Creator Workspace</p>
+            <p className="mt-1 text-base font-black neo-ink">Direct collaboration with your lead editor & PM.</p>
+          </div>
         </section>
 
-        <section className="mx-auto w-full max-w-[640px] overflow-y-auto px-5 py-6 sm:px-10 sm:py-10 lg:max-w-none lg:px-10 lg:py-8">
+        {/* Right Side: Tactile Neo Auth Form */}
+        <section className="mx-auto w-full max-w-[640px] overflow-y-auto px-6 py-8 sm:px-12 sm:py-12 lg:max-w-none lg:px-12 lg:py-10">
           <div className="mb-6 flex lg:hidden">
-            <Link to="/" className="inline-flex items-center gap-2 text-xs font-black text-gray-500 transition hover:text-black" aria-label="Back to home">
+            <Link
+              to="/"
+              className="neo-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-black neo-muted transition hover:text-black"
+              aria-label="Back to home"
+            >
               <span className="material-symbols-outlined text-[16px]">arrow_back</span>
               Back to home
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 rounded-full bg-gray-100 p-1 text-sm font-black" role="tablist" aria-label="Authentication">
+          <div>
+            <span className="neo-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-black uppercase tracking-wider neo-section-label">
+              <span className="h-2 w-2 rounded-full bg-primary" />
+              EdiCut Account
+            </span>
+            <h1 className="yt-title mt-3 font-black neo-ink">
+              {mode === "signup" ? "Create creator account" : "Welcome back"}
+            </h1>
+            <p className="mt-1 text-xs font-medium neo-muted">
+              {mode === "signup"
+                ? "Start submitting raw footage and managing YouTube edits."
+                : "Sign in to your client dashboard to view active deliverables."}
+            </p>
+          </div>
+
+          {/* Mode Switcher Tabs */}
+          <div className="neo-inset mt-6 grid grid-cols-2 rounded-full p-1.5" role="tablist" aria-label="Authentication">
             {[
               ["signin", "Sign in"],
               ["signup", "Sign up"],
@@ -107,65 +142,73 @@ export function AuthPage() {
                 onClick={() => setMode(value as AuthMode)}
                 role="tab"
                 aria-selected={mode === value}
-                className={`rounded-full px-4 py-3 transition ${mode === value ? "bg-white text-black shadow-sm" : "text-gray-500 hover:text-black"}`}
+                className={`rounded-full py-2.5 text-xs font-black uppercase tracking-wider transition ${
+                  mode === value
+                    ? "bg-white text-black shadow-md shadow-black/10"
+                    : "neo-muted hover:text-foreground"
+                }`}
               >
                 {label}
               </button>
             ))}
           </div>
 
-          <form ref={googleFormRef} method="post" action="/auth/google" onSubmit={handleGoogleSubmit} className="mt-8">
+          {/* Google Auth Button */}
+          <form ref={googleFormRef} method="post" action="/auth/google" onSubmit={handleGoogleSubmit} className="mt-6">
             <input type="hidden" name="returnTo" value={redirectTo} />
             <input type="hidden" name="g-recaptcha-response" value="" />
             <button
               type="submit"
               disabled={googleSubmitting || submitting}
-              className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white text-sm font-black transition hover:border-black disabled:cursor-not-allowed disabled:opacity-60"
+              className="neo-card flex h-12 w-full items-center justify-center gap-3 rounded-2xl text-xs font-black uppercase tracking-wider neo-ink transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <img src="/icons/google-flat.svg" alt="" className="h-5 w-5" />
+              <img src="/icons/google-flat.svg" alt="" className="h-4 w-4" />
               {googleSubmitting ? "Checking security..." : "Continue with Google"}
             </button>
           </form>
 
           <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-gray-200" />
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">or</div>
-            <div className="h-px flex-1 bg-gray-200" />
+            <div className="h-px flex-1 neo-line border-b" />
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] neo-muted">or continue with email</div>
+            <div className="h-px flex-1 neo-line border-b" />
           </div>
 
           {visibleError ? (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
               {visibleError}
             </div>
           ) : null}
 
           {resetComplete ? (
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700">
               Your password has been updated. Sign in with your new password.
             </div>
           ) : null}
 
+          {/* Main Credentials Form */}
           <fetcher.Form method="post" action="/signin" className="grid gap-4" onSubmit={handleSubmit}>
             <input type="hidden" name="intent" value={mode} />
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <input type="hidden" name="g-recaptcha-response" value="" />
-            {mode === "signup" ? <AuthField label="Full name" name="name" /> : null}
-            <AuthField label="Email" name="email" type="email" />
+            {mode === "signup" ? <AuthField label="Full name" name="name" placeholder="Alex Rivers" /> : null}
+            <AuthField label="Email address" name="email" type="email" placeholder="alex@creator.com" />
             <PasswordField
               label="Password"
               name="password"
               show={showPassword}
               onToggle={() => setShowPassword((value) => !value)}
             />
-            {mode === "signup" ? <input type="hidden" name="remember" value="on" /> : (
-              <div className="flex items-center justify-between gap-3">
-                <label className="inline-flex items-center gap-2 text-sm font-bold text-gray-600">
-                  <input type="checkbox" name="remember" className="h-4 w-4 rounded accent-red-600" />
+            {mode === "signup" ? (
+              <input type="hidden" name="remember" value="on" />
+            ) : (
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <label className="inline-flex items-center gap-2 text-xs font-bold neo-muted cursor-pointer">
+                  <input type="checkbox" name="remember" className="h-3.5 w-3.5 accent-red-600 rounded" />
                   Remember me
                 </label>
                 <Link
                   to={`/forgot-password?redirectTo=${encodeURIComponent(redirectTo)}`}
-                  className="text-sm font-black text-primary"
+                  className="text-xs font-black text-primary hover:underline"
                 >
                   Forgot password?
                 </Link>
@@ -175,15 +218,23 @@ export function AuthPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-black text-white transition hover:bg-[#cf141b] disabled:cursor-not-allowed disabled:opacity-50"
+              className="neo-button neo-button--primary mt-2 w-full justify-center text-sm font-black uppercase tracking-wider disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-[20px]">{mode === "signup" ? "person_add" : "login"}</span>
-              {submitting ? "Please wait..." : mode === "signup" ? "Create account" : "Sign in"}
+              <span>{submitting ? "Please wait..." : mode === "signup" ? "Create Account" : "Sign In"}</span>
             </button>
           </fetcher.Form>
 
-          <p className="mt-6 text-xs font-medium leading-5 text-gray-500">
-            By continuing, you agree to the EdiCut <a className="font-black text-black underline" href="/terms">Terms</a> and acknowledge our <a className="font-black text-black underline" href="/privacy">Privacy Policy</a>.
+          <p className="mt-6 text-center text-[11px] font-medium leading-5 neo-muted">
+            By continuing, you agree to the EdiCut{" "}
+            <Link className="font-black neo-ink underline" to="/terms">
+              Terms
+            </Link>{" "}
+            and acknowledge our{" "}
+            <Link className="font-black neo-ink underline" to="/privacy">
+              Privacy Policy
+            </Link>
+            .
           </p>
         </section>
       </div>
@@ -191,41 +242,63 @@ export function AuthPage() {
   );
 }
 
-function AuthField({ label, name, type = "text" }: { label: string; name: string; type?: string }) {
+function AuthField({
+  label,
+  name,
+  type = "text",
+  placeholder,
+}: {
+  label: string;
+  name: string;
+  type?: string;
+  placeholder?: string;
+}) {
   const autoComplete = name === "name" ? "name" : name === "email" ? "email" : undefined;
 
   return (
-    <label className="grid gap-2">
-      <span className="text-xs font-black uppercase tracking-[0.12em] text-gray-500">{label}</span>
+    <label className="grid gap-1.5">
+      <span className="text-[11px] font-black uppercase tracking-[0.14em] neo-muted">{label}</span>
       <input
         name={name}
         type={type}
         required
+        placeholder={placeholder}
         autoComplete={autoComplete}
-        className="h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold outline-none transition focus:border-black focus:ring-2 focus:ring-red-100"
+        className="neo-inset h-11 rounded-xl px-3.5 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"
       />
     </label>
   );
 }
 
-function PasswordField({ label, name, show, onToggle }: { label: string; name: string; show: boolean; onToggle: () => void }) {
+function PasswordField({
+  label,
+  name,
+  show,
+  onToggle,
+}: {
+  label: string;
+  name: string;
+  show: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <label className="relative grid gap-2">
-      <span className="text-xs font-black uppercase tracking-[0.12em] text-gray-500">{label}</span>
+    <label className="relative grid gap-1.5">
+      <span className="text-[11px] font-black uppercase tracking-[0.14em] neo-muted">{label}</span>
       <input
         name={name}
         type={show ? "text" : "password"}
         required
+        placeholder="••••••••"
         autoComplete={name === "confirmPassword" ? "new-password" : "current-password"}
-        className="h-11 rounded-xl border border-gray-300 bg-white px-3 pr-10 text-sm font-bold outline-none transition focus:border-black focus:ring-2 focus:ring-red-100"
+        className="neo-inset h-11 rounded-xl px-3.5 pr-10 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"
       />
       <button
         type="button"
         onClick={onToggle}
-        className="absolute bottom-2.5 right-3 text-gray-500 transition hover:text-black"
+        className="absolute bottom-2.5 right-3 text-gray-400 transition hover:text-black"
         aria-label={show ? "Hide password" : "Show password"}
       >
-        <span className="material-symbols-outlined text-[20px]">{show ? "visibility_off" : "visibility"}</span>
+        <span className="material-symbols-outlined text-[18px]">{show ? "visibility_off" : "visibility"}</span>
       </button>
     </label>
   );

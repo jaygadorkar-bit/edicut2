@@ -1,9 +1,8 @@
 export const navLinks = [
-  { label: "Home", to: "/" },
-  { label: "Portfolio", to: "/portfolio" },
-  { label: "Pricing", to: "/pricing" },
-  { label: "About", to: "/about" },
-  { label: "Contact", to: "/contact" },
+  { label: "Home", to: "/#" },
+  { label: "Pricing", to: "/#pricing" },
+  { label: "Portfolio", to: "/#portfolio" },
+  { label: "Contact", to: "/#contact" },
 ];
 
 export const legalLinks = [

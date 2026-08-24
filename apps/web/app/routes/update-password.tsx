@@ -89,30 +89,45 @@ export default function UpdatePasswordPage() {
   const hasRecoveryToken = Boolean(code || tokens.accessToken);
 
   return (
-    <main className="min-h-screen bg-[#f6f7f8] px-4 py-8 text-foreground sm:px-6 sm:py-10">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-[560px] items-center justify-center rounded-[28px] bg-white px-6 py-10 shadow-2xl sm:px-12">
+    <main className="min-h-screen neo-home flex items-center justify-center px-4 py-8 text-foreground sm:px-6">
+      <div className="mx-auto flex w-full max-w-[520px] items-center justify-center rounded-[2.5rem] neo-surface p-8 shadow-2xl sm:p-12">
         <section className="w-full">
-          <Link to="/signin" className="inline-flex items-center gap-2 text-xs font-black text-gray-500 transition hover:text-black">
+          <Link
+            to="/signin"
+            className="neo-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-black neo-muted transition hover:text-black"
+          >
             <span className="material-symbols-outlined text-[16px]">arrow_back</span>
             Back to sign in
           </Link>
 
-          <div className="mt-10">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">Account recovery</p>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-black">Choose a new password</h1>
-            <p className="mt-3 text-sm leading-6 text-gray-500">
-              Set a new password for your EdiCut account, then sign in again.
+          <div className="mt-8">
+            <span className="neo-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-xs font-black uppercase tracking-wider neo-section-label">
+              <span className="h-2 w-2 rounded-full bg-primary" />
+              Security Update
+            </span>
+            <h1 className="yt-title mt-3 font-black neo-ink">Choose a new password</h1>
+            <p className="mt-2 text-xs font-medium leading-relaxed neo-muted">
+              Set a strong new password for your EdiCut account, then sign in again.
             </p>
           </div>
 
           {!hasRecoveryToken ? (
-            <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-800">
-              Open the password reset link from your email to continue. If it has expired, request a new link.
+            <div className="neo-inset mt-8 rounded-2xl p-5 border border-amber-300 bg-amber-50/50 text-xs font-bold leading-relaxed text-amber-800">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-amber-600">warning</span>
+                <span>Invalid or expired link</span>
+              </div>
+              <p className="mt-2 text-amber-700">
+                Open the password reset link directly from your email. If it has expired, request a new link.
+              </p>
+              <Link to="/forgot-password" className="mt-4 inline-block font-black text-primary underline">
+                Request new password reset link →
+              </Link>
             </div>
           ) : (
             <Form method="post" className="mt-8 grid gap-4">
               {actionData?.error ? (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
                   {actionData.error}
                 </div>
               ) : null}
@@ -121,37 +136,39 @@ export default function UpdatePasswordPage() {
               <input type="hidden" name="refreshToken" value={tokens.refreshToken} />
               <input type="hidden" name="code" value={code} />
 
-              <label className="grid gap-2">
-                <span className="text-xs font-black uppercase tracking-[0.12em] text-gray-500">New password</span>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] neo-muted">New Password</span>
                 <input
                   name="password"
                   type="password"
                   required
                   minLength={6}
+                  placeholder="••••••••"
                   autoComplete="new-password"
-                  className="h-12 rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold outline-none transition focus:border-black focus:ring-2 focus:ring-red-100"
+                  className="neo-inset h-12 rounded-xl px-3.5 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"
                 />
               </label>
 
-              <label className="grid gap-2">
-                <span className="text-xs font-black uppercase tracking-[0.12em] text-gray-500">Confirm password</span>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] neo-muted">Confirm Password</span>
                 <input
                   name="confirmPassword"
                   type="password"
                   required
                   minLength={6}
+                  placeholder="••••••••"
                   autoComplete="new-password"
-                  className="h-12 rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold outline-none transition focus:border-black focus:ring-2 focus:ring-red-100"
+                  className="neo-inset h-12 rounded-xl px-3.5 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"
                 />
               </label>
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-2 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-black text-white transition hover:bg-[#cf141b] disabled:cursor-not-allowed disabled:opacity-50"
+                className="neo-button neo-button--primary mt-2 w-full justify-center text-sm font-black uppercase tracking-wider disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[20px]">lock_reset</span>
-                {submitting ? "Updating password..." : "Update password"}
+                <span>{submitting ? "Updating password..." : "Update Password"}</span>
               </button>
             </Form>
           )}

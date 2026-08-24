@@ -46,39 +46,32 @@ export function Header() {
         </div>
       ) : null}
       
-      <nav className="glass-nav sticky relative top-0 z-50 w-full border-b border-black/5 px-4 transition-all duration-300 sm:px-6">
+      <header className="neo-site-header sticky relative top-0 z-50 w-full border-b px-4 transition-all duration-300 sm:px-6">
         <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-4">
           <Link to="/" aria-label="EdiCut home" className="transition-opacity hover:opacity-80">
             <LogoMark className="h-11 sm:h-12" />
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden items-center gap-0.5 rounded-full border border-black/5 bg-white/60 p-1 backdrop-blur-md lg:flex">
+          <div className="neo-header-nav hidden items-center gap-0.5 rounded-full border p-1 backdrop-blur-md lg:flex">
             {navLinks.map((item) => (
-              <NavLink
+              <a
                 key={item.to}
-                to={item.to}
-                end={item.to === "/"}
-                className={({ isActive }) =>
-                  `rounded-full px-4 py-2 text-[13px] font-bold transition-all duration-200 ${
-                    isActive
-                      ? "bg-foreground text-white shadow-sm shadow-black/10"
-                      : "text-muted-foreground hover:bg-black/5 hover:text-foreground"
-                  }`
-                }
+                href={item.to}
+                className="neo-header-link rounded-full px-4 py-2 text-[13px] font-bold transition-all duration-200 hover:text-foreground"
               >
                 {item.label}
-              </NavLink>
+              </a>
             ))}
           </div>
 
           <div className="hidden items-center gap-3 lg:flex">
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
-              className="group inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.12em] text-white shadow-lg shadow-primary/25 transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary/90 active:translate-y-0"
+              className="neo-button neo-button--primary neo-button--compact uppercase tracking-[0.12em]"
             >
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white transition-colors">
-                <span className="material-symbols-outlined text-[13px]">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/5 text-current transition-colors">
+                <span className="material-symbols-outlined text-[13px] text-current">
                   {isSignedIn ? "dashboard_customize" : "person"}
                 </span>
               </span>
@@ -93,17 +86,16 @@ export function Header() {
             aria-expanded={isMenuOpen}
             aria-controls="mobile-navigation-drawer"
             onClick={() => setIsMenuOpen((value) => !value)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/5 bg-white/70 text-slate-900 shadow-sm transition hover:bg-white lg:hidden"
+            className="neo-header-menu flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition lg:hidden"
           >
             <span className="material-symbols-outlined text-[22px]">
               {isMenuOpen ? "close" : "menu"}
             </span>
           </button>
         </div>
+      </header>
 
-        {/* Compact navigation drawer for mobile and tablet widths */}
-      </nav>
-
+      {/* Mobile Drawer */}
       <div
         aria-hidden={!isMenuOpen}
         className={`fixed inset-0 z-[100] overflow-hidden lg:hidden ${
@@ -121,16 +113,16 @@ export function Header() {
           role="dialog"
           aria-label="Mobile navigation"
           aria-hidden={!isMenuOpen}
-          className={`absolute right-0 top-0 z-10 flex h-full w-[min(88vw,380px)] flex-col border-l border-black/5 bg-white/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-out ${
+          className={`neo-header-drawer absolute right-0 top-0 z-10 flex h-full w-[min(88vw,380px)] flex-col border-l shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-out ${
             isMenuOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
-          <div className="flex h-[72px] shrink-0 items-center justify-end border-b border-black/5 px-5 sm:px-6">
+          <div className="neo-header-drawer-head flex h-[72px] shrink-0 items-center justify-end border-b px-5 sm:px-6">
             <button
               type="button"
               aria-label="Close navigation"
               onClick={() => setIsMenuOpen(false)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/5 bg-white text-slate-900 shadow-sm transition hover:bg-gray-50"
+              className="neo-header-menu flex h-10 w-10 items-center justify-center rounded-xl border transition"
             >
               <span className="material-symbols-outlined text-[22px]">close</span>
             </button>
@@ -139,22 +131,15 @@ export function Header() {
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-5 sm:p-6">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Explore EdiCut</p>
             {navLinks.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
+              <a
+                key={item.label}
+                href={item.to}
                 onClick={() => setIsMenuOpen(false)}
-                className={({ isActive }) =>
-                  `flex min-h-12 items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-colors ${
-                    isActive
-                      ? "bg-foreground text-white shadow-sm"
-                      : "text-muted-foreground hover:bg-black/5 hover:text-foreground"
-                  }`
-                }
+                className="neo-header-link flex min-h-12 items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-colors hover:bg-black/5"
               >
                 {item.label}
                 <span className="material-symbols-outlined text-[18px] opacity-50">arrow_forward</span>
-              </NavLink>
+              </a>
             ))}
           </div>
 
@@ -162,7 +147,7 @@ export function Header() {
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
               onClick={() => setIsMenuOpen(false)}
-              className="flex h-12 items-center justify-center gap-2 rounded-xl bg-primary text-center text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-primary/20 transition-transform hover:bg-primary/90 active:scale-[0.98]"
+              className="neo-button neo-button--primary w-full uppercase tracking-[0.14em]"
             >
               <span className="material-symbols-outlined text-[19px]">
                 {isSignedIn ? "dashboard_customize" : "login"}

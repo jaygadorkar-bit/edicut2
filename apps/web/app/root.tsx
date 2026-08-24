@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   Links,
   Meta,
   Outlet,
   Scripts,
-  ScrollRestoration,
   isRouteErrorResponse,
   data,
   redirect,
@@ -12,6 +11,7 @@ import {
   type MetaFunction,
   useLoaderData,
   useLocation,
+  useNavigate,
   useNavigation,
   useRouteLoaderData,
   useRouteError,
@@ -31,6 +31,11 @@ import {
 import { AdminToolbar } from "./components/admin/AdminToolbar";
 import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 import { getSupabaseClient } from "./integrations/supabase/client.server";
+import { SmoothScroll } from "./components/site/SmoothScroll.js";
+
+const usePageTransitionLayoutEffect = typeof document === "undefined" ? useEffect : useLayoutEffect;
+const PAGE_TRANSITION_COVER_MS = 860;
+const PAGE_TRANSITION_REVEAL_MS = 920;
 
 export function links() {
   return [
@@ -38,8 +43,7 @@ export function links() {
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
     { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
     { rel: "icon", href: "/favicon.ico", type: "image/svg+xml" },
-    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" },
-    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" }
+    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" }
   ];
 }
 
@@ -167,6 +171,7 @@ export default function AppRoot() {
 
   return (
     <>
+      <SmoothScroll />
       <Outlet />
       <PageTransition />
       {data.isAdminSignedIn && data.adminToolbarEnabled && !isAdminArea ? <AdminToolbar /> : null}
@@ -178,7 +183,6 @@ export default function AppRoot() {
           data-edicut-recaptcha-site-key={data.recaptchaSiteKey}
         />
       ) : null}
-      <ScrollRestoration />
       <Scripts />
     </>
   );
@@ -187,15 +191,22 @@ export default function AppRoot() {
 function PageTransition() {
   const navigation = useNavigation();
   const location = useLocation();
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<"idle" | "covering" | "revealing">("idle");
   const startedAt = useRef<number | null>(null);
   const previousLocationKey = useRef(location.key);
+  const pendingNavigation = useRef<string | null>(null);
+  const navigationTimer = useRef<number | null>(null);
   const exitTimer = useRef<number | null>(null);
   const cleanupTimer = useRef<number | null>(null);
 
   const clearTimers = () => {
+    if (navigationTimer.current !== null) window.clearTimeout(navigationTimer.current);
     if (exitTimer.current !== null) window.clearTimeout(exitTimer.current);
     if (cleanupTimer.current !== null) window.clearTimeout(cleanupTimer.current);
+    navigationTimer.current = null;
+    exitTimer.current = null;
+    cleanupTimer.current = null;
   };
 
   const beginCover = () => {
@@ -205,43 +216,72 @@ function PageTransition() {
   };
 
   const revealAfterCover = () => {
+    if (exitTimer.current !== null || cleanupTimer.current !== null) return;
+
     const elapsed = startedAt.current === null ? 0 : Date.now() - startedAt.current;
-    const minimumCoverTime = 860;
-    const delay = Math.max(0, minimumCoverTime - elapsed);
+    const delay = Math.max(0, PAGE_TRANSITION_COVER_MS - elapsed);
 
     exitTimer.current = window.setTimeout(() => {
+      exitTimer.current = null;
       setPhase("revealing");
       cleanupTimer.current = window.setTimeout(() => {
+        cleanupTimer.current = null;
         startedAt.current = null;
         setPhase("idle");
-      }, 920);
+      }, PAGE_TRANSITION_REVEAL_MS);
     }, delay);
   };
 
   useEffect(() => {
-    if (navigation.state === "loading") {
+    const interceptInternalLink = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const anchor = target.closest("a");
+      if (!anchor || anchor.hasAttribute("download") || (anchor.target && anchor.target !== "_self")) return;
+
+      const nextUrl = new URL(anchor.href, window.location.href);
+      const currentUrl = new URL(window.location.href);
+      if (nextUrl.origin !== currentUrl.origin) return;
+      if (nextUrl.pathname === currentUrl.pathname && nextUrl.search === currentUrl.search) return;
+
+      event.preventDefault();
+      if (pendingNavigation.current !== null) return;
+
+      pendingNavigation.current = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
       beginCover();
+      navigationTimer.current = window.setTimeout(() => {
+        const targetUrl = pendingNavigation.current;
+        pendingNavigation.current = null;
+        navigationTimer.current = null;
+        if (targetUrl !== null) navigate(targetUrl);
+      }, PAGE_TRANSITION_COVER_MS);
+    };
+
+    document.addEventListener("click", interceptInternalLink, true);
+    return () => document.removeEventListener("click", interceptInternalLink, true);
+  }, [navigate]);
+
+  usePageTransitionLayoutEffect(() => {
+    if (navigation.state === "loading") {
+      if (startedAt.current === null) beginCover();
       return;
     }
 
     if (navigation.state !== "idle" || startedAt.current === null) return;
 
     revealAfterCover();
-
-    return () => {
-      clearTimers();
-    };
   }, [navigation.state]);
 
-  useEffect(() => {
+  usePageTransitionLayoutEffect(() => {
     if (previousLocationKey.current === location.key) return;
 
     previousLocationKey.current = location.key;
-    if (startedAt.current === null) {
-      beginCover();
-      revealAfterCover();
-    }
-  }, [location.key]);
+    if (startedAt.current === null) beginCover();
+    if (navigation.state === "idle") revealAfterCover();
+  }, [location.key, navigation.state]);
 
   useEffect(() => () => {
     clearTimers();
@@ -252,9 +292,51 @@ function PageTransition() {
   return (
     <div className="page-transition" data-phase={phase} role="status" aria-live="polite" aria-label="Loading EdiCut">
       <div className="page-transition__panel" aria-hidden="true">
-        <span className="page-transition__arc page-transition__arc--top" />
-        <span className="page-transition__arc page-transition__arc--bottom" />
-        <span className="page-transition__word">EdiCut</span>
+        <div className="page-transition__cap page-transition__cap--top">
+          <svg
+            className="page-transition__cap-svg"
+            viewBox="0 0 1000 100"
+            preserveAspectRatio="none"
+          >
+            <path
+              className="page-transition__cap-fill page-transition__cap-fill--top"
+              d="M -5 100 Q 500 0 1005 100 Z"
+            />
+            <path
+              className="page-transition__edge page-transition__edge--shadow"
+              d="M -5 101 Q 500 1.5 1005 101"
+            />
+            <path
+              className="page-transition__edge page-transition__edge--top"
+              d="M -5 100 Q 500 0 1005 100"
+            />
+          </svg>
+        </div>
+
+        <div className="page-transition__cap page-transition__cap--bottom">
+          <svg
+            className="page-transition__cap-svg"
+            viewBox="0 0 1000 100"
+            preserveAspectRatio="none"
+          >
+            <path
+              className="page-transition__cap-fill page-transition__cap-fill--bottom"
+              d="M -5 0 Q 500 100 1005 0 Z"
+            />
+            <path
+              className="page-transition__edge page-transition__edge--shadow"
+              d="M -5 -1 Q 500 98.5 1005 -1"
+            />
+            <path
+              className="page-transition__edge page-transition__edge--bottom"
+              d="M -5 0 Q 500 100 1005 0"
+            />
+          </svg>
+        </div>
+
+        <span className="page-transition__word">
+          <img src="/icons/edicut-logo.svg" alt="" className="page-transition__logo" />
+        </span>
       </div>
     </div>
   );

@@ -1,35 +1,88 @@
 import type { MetaFunction } from "react-router";
-import { PageShell } from "../components/site/Marketing.js";
+import { PageShell, TrustStrip } from "../components/site/Marketing.js";
 
-export const meta: MetaFunction = () => [{ title: "Terms and Conditions | EdiCut" }];
+export const meta: MetaFunction = () => [
+  { title: "Terms and Conditions | EdiCut Creator Post Production" },
+  { name: "description", content: "Terms of service and subscription agreements for creators working with EdiCut." },
+];
 
 const sections = [
-  ["Service scope", "EdiCut provides video editing, repurposing, thumbnail support, review workflows, and related creator post-production services according to the selected package."],
-  ["Customer responsibilities", "Customers are responsible for providing usable footage, references, brand assets, clear notes, lawful content rights, and timely review feedback."],
-  ["Revisions and approvals", "Revision rounds follow the selected package. Approval of a final deliverable confirms that the project stage is complete."],
-  ["Payments", "Payment terms, receipts, and manual payment review are handled according to the package agreement and project invoice."],
-  ["Acceptable use", "Customers may not submit unlawful, infringing, harmful, or misleading content for editing or distribution."],
-  ["Contact", "Questions about these terms can be sent to hello@edicut.com."],
+  {
+    icon: "assignment",
+    title: "1. Service Scope & Editing Lanes",
+    copy: "EdiCut provides video editing, pacing optimization, sound mixing, color grading, thumbnail packaging, and review workflows according to your selected subscription tier or custom project scope.",
+  },
+  {
+    icon: "folder_shared",
+    title: "2. Creator Responsibilities",
+    copy: "Creators are responsible for providing usable raw footage, brand assets, references, clear briefs, and lawful intellectual property rights for all source media provided for editing.",
+  },
+  {
+    icon: "rate_review",
+    title: "3. Revisions, Approvals & Turnaround",
+    copy: "First cuts are targeted for 48 hours for standard long-form uploads. Each tier includes revision rounds via timestamped feedback. Approval of a final deliverable confirms project stage completion.",
+  },
+  {
+    icon: "credit_card",
+    title: "4. Subscription Billing & Cancellation",
+    copy: "Subscriptions renew on a monthly cycle. You may pause, adjust footage coverage, or cancel your plan anytime before your next billing date through your client dashboard.",
+  },
+  {
+    icon: "verified_user",
+    title: "5. Acceptable Content & Rights",
+    copy: "Customers retain 100% full copyright ownership of all final delivered edits. Customers may not submit unlawful, infringing, hateful, or misleading content for post-production.",
+  },
+  {
+    icon: "support_agent",
+    title: "6. Legal & Support Inquiries",
+    copy: "Questions regarding these terms or enterprise master service agreements (MSAs) can be directed to legal@edicut.com.",
+  },
 ];
 
 export default function TermsPage() {
   return (
     <PageShell>
-      <section className="px-5 pb-20 pt-32 sm:px-6">
+      {/* Header */}
+      <section className="relative overflow-hidden border-b neo-line px-5 pb-14 pt-16 sm:px-6 lg:pb-20 lg:pt-20">
+        <div className="pointer-events-none absolute -right-24 top-16 h-72 w-72 rounded-full bg-[#e2c9ce]/35 blur-3xl" />
+        <div className="pointer-events-none absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-[#cbdbe8]/60 blur-3xl" />
+
+        <div className="relative mx-auto max-w-4xl text-center">
+          <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
+            <span className="h-2 w-2 rounded-full bg-primary" />
+            Terms of Service
+          </div>
+
+          <h1 className="yt-display mt-7 neo-ink">Terms & Conditions</h1>
+          <p className="yt-subtitle mx-auto mt-6 max-w-2xl leading-8 neo-muted">
+            The service agreement, turnaround expectations, and revision terms for working with EdiCut.
+          </p>
+          <p className="mt-4 yt-small font-black neo-muted">Effective Date: May 5, 2026</p>
+        </div>
+      </section>
+
+      {/* Main Legal Content Document */}
+      <section className="border-b neo-line px-5 py-20 sm:px-6">
         <div className="mx-auto max-w-4xl">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">Terms and Conditions</p>
-          <h1 className="mt-4 text-5xl font-black tracking-tight">The service terms for working with EdiCut.</h1>
-          <p className="mt-5 text-sm font-bold text-muted-foreground">Last updated: May 5, 2026</p>
-          <div className="mt-10 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
-            {sections.map(([heading, copy]) => (
-              <article key={heading} className="p-6">
-                <h2 className="text-xl font-black">{heading}</h2>
-                <p className="mt-3 leading-7 text-muted-foreground">{copy}</p>
+          <div className="neo-surface rounded-[2rem] p-6 sm:p-10 lg:p-12 space-y-8">
+            {sections.map((section) => (
+              <article key={section.title} className="neo-card rounded-2xl p-6">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <span className="material-symbols-outlined text-[20px]">{section.icon}</span>
+                  </span>
+                  <h2 className="text-xl font-black neo-ink">{section.title}</h2>
+                </div>
+                <p className="mt-3.5 text-sm font-medium leading-relaxed neo-muted pl-12">
+                  {section.copy}
+                </p>
               </article>
             ))}
           </div>
         </div>
       </section>
+
+      <TrustStrip />
     </PageShell>
   );
 }
