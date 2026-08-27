@@ -188,13 +188,24 @@ export default function AppRoot() {
   );
 }
 
+function isPageChange(
+  from: { pathname: string; search: string },
+  to: { pathname: string; search: string },
+) {
+  return from.pathname !== to.pathname || from.search !== to.search;
+}
+
 function PageTransition() {
   const navigation = useNavigation();
   const location = useLocation();
   const navigate = useNavigate();
   const [phase, setPhase] = useState<"idle" | "covering" | "revealing">("idle");
   const startedAt = useRef<number | null>(null);
-  const previousLocationKey = useRef(location.key);
+  const previousLocation = useRef({
+    key: location.key,
+    pathname: location.pathname,
+    search: location.search,
+  });
   const pendingNavigation = useRef<string | null>(null);
   const navigationTimer = useRef<number | null>(null);
   const exitTimer = useRef<number | null>(null);
@@ -266,22 +277,31 @@ function PageTransition() {
 
   usePageTransitionLayoutEffect(() => {
     if (navigation.state === "loading") {
-      if (startedAt.current === null) beginCover();
+      if (startedAt.current === null && navigation.location && isPageChange(location, navigation.location)) {
+        beginCover();
+      }
       return;
     }
 
     if (navigation.state !== "idle" || startedAt.current === null) return;
 
     revealAfterCover();
-  }, [navigation.state]);
+  }, [location.pathname, location.search, navigation.location, navigation.state]);
 
   usePageTransitionLayoutEffect(() => {
-    if (previousLocationKey.current === location.key) return;
+    if (previousLocation.current.key === location.key) return;
 
-    previousLocationKey.current = location.key;
+    const previous = previousLocation.current;
+    previousLocation.current = {
+      key: location.key,
+      pathname: location.pathname,
+      search: location.search,
+    };
+
+    if (!isPageChange(previous, location)) return;
     if (startedAt.current === null) beginCover();
     if (navigation.state === "idle") revealAfterCover();
-  }, [location.key, navigation.state]);
+  }, [location.key, location.pathname, location.search, navigation.state]);
 
   useEffect(() => () => {
     clearTimers();

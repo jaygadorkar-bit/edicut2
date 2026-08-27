@@ -1,8 +1,8 @@
 export const navLinks = [
-  { label: "Home", to: "/#" },
-  { label: "Pricing", to: "/#pricing" },
-  { label: "Portfolio", to: "/#portfolio" },
-  { label: "Contact", to: "/#contact" },
+  { label: "Home", to: "/" },
+  { label: "Pricing", to: "/pricing" },
+  { label: "Portfolio", to: "/portfolio" },
+  { label: "Contact", to: "/contact" },
 ];
 
 export const legalLinks = [
@@ -62,4 +62,7 @@ export const testimonials = [
   ["EdiCut helped us publish twice as often without watering down the edits.", "Sarah Jenkins", "Tech reviewer, 1.2M subscribers"],
   ["The first draft is already close, and my team can leave notes fast.", "Mike Ross", "Creator and educator"],
   ["They turned our long podcast into clips that actually hold attention.", "Elena Martinez", "Interview channel producer"],
+  ["Our weekly uploads finally feel consistent, polished, and easy to review.", "Aisha Rahman", "Lifestyle creator, 780K subscribers"],
+  ["The short-form cutdowns gave our best moments a second life across every platform.", "Jordan Lee", "Podcast host and producer"],
+  ["EdiCut understood the tone immediately and made every revision round feel simple.", "Nina Patel", "Wellness channel founder"],
 ];

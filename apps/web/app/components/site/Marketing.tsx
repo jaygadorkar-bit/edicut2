@@ -64,9 +64,9 @@ export function SiteHeader() {
       ) : null}
       
       <header className="neo-site-header sticky relative top-0 z-50 w-full border-b px-4 transition-all duration-300 sm:px-6">
-        <div className="relative mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-4">
+        <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 sm:h-[72px] sm:gap-4">
           <Link to="/" aria-label="EdiCut home" className="transition-opacity hover:opacity-80">
-            <Logo className="h-11 sm:h-12" />
+            <Logo className="h-9 sm:h-12" />
           </Link>
 
           <nav className="neo-header-nav hidden items-center gap-0.5 rounded-full border p-1 backdrop-blur-md lg:absolute lg:left-1/2 lg:flex lg:-translate-x-1/2">
@@ -132,7 +132,7 @@ export function SiteHeader() {
             isMenuOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
-          <div className="neo-header-drawer-head flex h-[72px] shrink-0 items-center justify-end border-b px-5 sm:px-6">
+          <div className="neo-header-drawer-head flex h-16 shrink-0 items-center justify-end border-b px-5 sm:h-[72px] sm:px-6">
             <button
               type="button"
               aria-label="Close navigation"
@@ -332,14 +332,14 @@ export function SiteFooter() {
       label: "Explore",
       links: [
         { label: "Who it's for", to: "/#creators" },
-        { label: "Pricing", to: "/#pricing" },
-        { label: "Portfolio", to: "/#portfolio" },
+        { label: "Pricing", to: "/pricing" },
+        { label: "Portfolio", to: "/portfolio" },
       ],
     },
     {
       label: "Support",
       links: [
-        { label: "Contact", to: "/#contact" },
+        { label: "Contact", to: "/contact" },
         { label: "FAQ", to: "/faq" },
         { label: "Privacy", to: "/privacy" },
         { label: "Terms", to: "/terms" },
@@ -359,7 +359,7 @@ export function SiteFooter() {
               Editing support, creator tips, and useful updates for a steadier publishing rhythm.
             </p>
           </div>
-          <form className="mt-6 flex max-w-[440px] flex-wrap gap-2" onSubmit={handleNewsletterSubmit}>
+          <form className="mt-6 flex max-w-[440px] flex-wrap items-center gap-2" onSubmit={handleNewsletterSubmit}>
             <input type="hidden" name="g-recaptcha-response" value="" />
             <label className="sr-only" htmlFor="footer-email">Your email address</label>
             <input
@@ -371,7 +371,7 @@ export function SiteFooter() {
               autoComplete="email"
               className="neo-footer-input h-10 min-w-[180px] flex-1 rounded-full border px-4 text-sm font-medium outline-none"
             />
-            <button type="submit" className="neo-button neo-button--dark neo-button--compact shrink-0 rounded-full">
+            <button type="submit" className="neo-button neo-button--dark neo-button--compact h-10 min-h-10 shrink-0 rounded-full py-0">
               Sign Up
             </button>
           </form>
@@ -625,7 +625,7 @@ export function WorkflowSection() {
   ];
 
   return (
-    <section id="workflow" className="border-b neo-line px-5 py-20 sm:px-6 lg:py-24">
+    <section id="workflow" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20 lg:py-24">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
           <div>
@@ -634,10 +634,10 @@ export function WorkflowSection() {
             <p className="mt-5 max-w-xl yt-subtitle leading-8 neo-muted">
               Choose the right level of support, send us the project, and keep control through a focused review process.
             </p>
-            <a href="/#pricing" className="neo-button neo-button--primary mt-7">
+            <Link to="/pricing" className="neo-button neo-button--primary mt-7">
               Choose editing plan
               <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            </a>
+            </Link>
           </div>
 
           <div className="relative grid gap-4 md:grid-cols-3">
@@ -747,7 +747,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   }, [playingItem]);
 
   return (
-    <section id="portfolio" className={`border-b neo-line px-5 py-20 sm:px-6 ${className}`}>
+    <section id="portfolio" className={`border-b neo-line px-5 py-14 sm:px-6 sm:py-20 ${className}`}>
       <div className="mx-auto max-w-7xl">
         <SectionIntro title="Edits built to keep viewers watching." />
 
@@ -1116,7 +1116,7 @@ export function DifferentiatorsSection() {
     ["auto_awesome_mosaic", "Repurposing ready", "Turn long-form episodes into Shorts, TikToks, and Reels without starting over."],
   ];
   return (
-    <section className="border-b neo-line px-5 py-20 sm:px-6">
+    <section className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
         <SectionIntro eyebrow="Why EdiCut" title="A production partner, not just an editing queue." />
         <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
@@ -1125,7 +1125,7 @@ export function DifferentiatorsSection() {
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27]">
                 <span className="material-symbols-outlined">{icon}</span>
               </span>
-              <h3 className="mt-5 yt-title font-black neo-ink">{title}</h3>
+              <h3 className="neo-differentiator-title mt-5 font-black neo-ink">{title}</h3>
               <p className="mt-3 yt-small leading-6 neo-muted">{copy}</p>
             </article>
           ))}
@@ -1174,7 +1174,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
   ];
 
   return (
-    <section id="pricing" className="border-b neo-line px-5 py-20 sm:px-6">
+    <section id="pricing" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.45fr)] lg:items-end">
           <div>
@@ -1403,20 +1403,24 @@ function FeatureValue({ value }: { value: string }) {
 
 export function TestimonialsSection() {
   return (
-    <section className="border-b neo-line px-5 py-20 sm:px-6">
+    <section className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-5 md:grid-cols-3">
+        <PortfolioScroller>
           {testimonials.map(([quote, name, role]) => (
-            <article key={name} className="neo-card rounded-2xl p-7">
-              <div className="flex items-center gap-1 text-primary" aria-label="5 out of 5 stars">
-                {[1, 2, 3, 4, 5].map((star) => <span key={star} className="material-symbols-outlined text-[17px]">star</span>)}
-              </div>
-              <p className="mt-5 yt-subtitle font-bold leading-8 neo-ink">"{quote}"</p>
-              <p className="mt-6 font-black neo-ink">{name}</p>
-              <p className="mt-1 yt-small font-bold neo-muted">{role}</p>
-            </article>
+            <div key={name} className="neo-testimonial-slide">
+              <article className="neo-card flex h-full min-h-[270px] flex-col rounded-2xl p-7">
+                <div className="flex items-center gap-1 text-primary" aria-label="5 out of 5 stars">
+                  {[1, 2, 3, 4, 5].map((star) => <span key={star} className="neo-rating-star material-symbols-outlined text-[17px]">star</span>)}
+                </div>
+                <p className="mt-5 flex-1 yt-subtitle font-bold leading-8 neo-ink">"{quote}"</p>
+                <div className="mt-6">
+                  <p className="font-black neo-ink">{name}</p>
+                  <p className="mt-1 yt-small font-bold neo-muted">{role}</p>
+                </div>
+              </article>
+            </div>
           ))}
-        </div>
+        </PortfolioScroller>
       </div>
     </section>
   );
@@ -1424,14 +1428,14 @@ export function TestimonialsSection() {
 
 export function FAQSection() {
   return (
-    <section id="faq" className="border-b neo-line px-5 py-20 sm:px-6">
+    <section id="faq" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-4xl">
         <SectionIntro eyebrow="FAQ" title="What creators usually ask before starting." />
         <div className="neo-surface mt-10 divide-y neo-line rounded-2xl p-2">
           {faqs.map(([q, a]) => (
-            <details key={q} className="group rounded-xl p-5 transition hover:bg-white/50" open={q === faqs[0][0]}>
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 yt-subtitle font-black neo-ink">
-                {q}<span className="material-symbols-outlined neo-muted group-open:rotate-180">expand_more</span>
+            <details key={q} className="group rounded-xl p-5 transition hover:bg-transparent" open={q === faqs[0][0]}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 yt-subtitle font-black neo-ink transition-colors group-hover:text-black">
+                {q}<span className="material-symbols-outlined neo-muted transition-colors group-hover:text-black group-open:rotate-180">expand_more</span>
               </summary>
               <p className="mt-4 leading-7 neo-muted">{a}</p>
             </details>
@@ -1442,7 +1446,7 @@ export function FAQSection() {
   );
 }
 
-export function ContactSection({ compact = false, status }: { compact?: boolean; status?: "sent" | "security-error" | "invalid-error" }) {
+export function ContactSection({ compact = false, status, action = "/#contact" }: { compact?: boolean; status?: "sent" | "security-error" | "invalid-error"; action?: string }) {
   const [securityError, setSecurityError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1460,7 +1464,7 @@ export function ContactSection({ compact = false, status }: { compact?: boolean;
   }
 
   return (
-    <section id="contact" className="px-5 py-20 sm:px-6">
+    <section id="contact" className="px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_0.75fr]">
         <div className="neo-surface flex flex-col justify-center rounded-[2rem] p-7 sm:p-10">
           <p className="yt-tag neo-section-label">Contact us</p>
@@ -1470,7 +1474,7 @@ export function ContactSection({ compact = false, status }: { compact?: boolean;
             <p className="text-sm font-bold leading-6 neo-ink">Tell us your format, volume, and deadline. We will recommend the cleanest lane to start.</p>
           </div>
         </div>
-        <form method="post" action="/#contact" className="neo-card grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit}>
+        <form method="post" action={action} className="neo-card grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit}>
           <input type="hidden" name="g-recaptcha-response" value="" />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Name" name="name" autoComplete="name" required />

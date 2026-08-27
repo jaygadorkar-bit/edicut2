@@ -43,9 +43,9 @@ export function WorkspaceShell({
           <div className={`flex items-center ${isCollapsed ? "justify-center" : "justify-between gap-3"}`}>
             <Link to="/" className="flex min-w-0 items-center justify-center px-2" aria-label="EdiCut home" title="EdiCut home">
               {isCollapsed ? (
-                <span className="neo-workspace__brand-mark">E</span>
+                <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-8 w-auto object-contain" />
               ) : (
-                <span className="neo-workspace__brand-word">EdiCut</span>
+                <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto object-contain" />
               )}
             </Link>
             <button
@@ -87,7 +87,7 @@ export function WorkspaceShell({
           <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
             <div className="min-w-0">
               <div className="flex items-center gap-2 lg:hidden">
-                <span className="neo-workspace__mobile-brand">EdiCut</span>
+                <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-8 w-auto object-contain" />
               </div>
               <p className="neo-workspace__eyebrow mt-1">{subtitle || "Your creative workspace"}</p>
               <h1 className="neo-workspace__title mt-1 truncate">{title}</h1>

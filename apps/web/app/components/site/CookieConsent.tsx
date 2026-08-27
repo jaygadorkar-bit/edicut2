@@ -53,7 +53,7 @@ export function CookieConsent() {
 
   return (
     <aside
-      className="fixed bottom-4 right-4 z-[90] w-[min(31rem,calc(100vw-2rem))] rounded-[1.25rem] border border-slate-200 bg-[#fbfcf7] p-5 text-slate-950 shadow-[0_24px_80px_-24px_rgba(15,23,42,0.45)] sm:bottom-6 sm:right-6 sm:p-6"
+      className="fixed bottom-3 right-3 z-[90] w-[min(28rem,calc(100vw-1.5rem))] rounded-2xl border border-[var(--neo-line)] bg-[var(--neo-bg)] p-4 text-[var(--neo-ink)] shadow-[0_20px_55px_-24px_var(--neo-shadow-dark)] sm:bottom-5 sm:right-5 sm:p-5 lg:left-5 lg:right-auto"
       role="dialog"
       aria-labelledby="cookie-consent-title"
       aria-describedby="cookie-consent-description"
@@ -61,28 +61,28 @@ export function CookieConsent() {
       {!isManaging ? (
         <>
           <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined mt-0.5 text-[22px] text-slate-700" aria-hidden="true">cookie</span>
+            <span className="material-symbols-outlined mt-0.5 text-[20px] text-[var(--neo-muted)]" aria-hidden="true">cookie</span>
             <div>
-              <h2 id="cookie-consent-title" className="text-lg font-black tracking-tight">Helping your journey stay smooth</h2>
-              <p id="cookie-consent-description" className="mt-3 text-sm leading-6 text-slate-700">
+              <h2 id="cookie-consent-title" className="text-base font-black tracking-tight sm:text-lg">Helping your journey stay smooth</h2>
+              <p id="cookie-consent-description" className="mt-2 text-[13px] leading-5 text-[var(--neo-muted)]">
                 We use cookies to make the site work and to understand how visitors use EdiCut. You can reject optional cookies or manage your preferences. See our{" "}
                 <Link to="/privacy" className="font-bold underline underline-offset-2 hover:text-primary">Cookie Policy</Link>{" "}for more details.
               </p>
             </div>
           </div>
 
-          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => saveConsent({ analytics: false, marketing: false })}
-              className="inline-flex min-h-12 items-center justify-center rounded-full border border-slate-950 bg-transparent px-4 py-3 text-center text-sm font-black transition hover:bg-slate-100"
+              className="inline-flex min-h-10 items-center justify-center rounded-full border border-[var(--neo-ink)] bg-transparent px-3 py-2 text-center text-[13px] font-black transition hover:bg-white/40"
             >
               Reject non-essential
             </button>
             <button
               type="button"
               onClick={() => saveConsent({ analytics: true, marketing: true })}
-              className="inline-flex min-h-12 items-center justify-center rounded-full bg-slate-950 px-4 py-3 text-center text-sm font-black text-white transition hover:bg-slate-800"
+              className="inline-flex min-h-10 items-center justify-center rounded-full bg-slate-950 px-3 py-2 text-center text-[13px] font-black text-white transition hover:bg-slate-800"
             >
               Accept all cookies
             </button>
@@ -91,7 +91,7 @@ export function CookieConsent() {
           <button
             type="button"
             onClick={() => setIsManaging(true)}
-            className="mt-5 text-left text-sm font-bold text-slate-900 underline underline-offset-4 transition hover:text-primary"
+            className="mt-3 text-left text-[13px] font-bold text-[var(--neo-ink)] underline underline-offset-4 transition hover:text-primary"
           >
             Manage preferences
           </button>
@@ -112,11 +112,11 @@ export function CookieConsent() {
             </button>
           </div>
 
-          <p id="cookie-consent-description" className="mt-3 text-sm leading-6 text-slate-700">
+          <p id="cookie-consent-description" className="mt-2 text-[13px] leading-5 text-[var(--neo-muted)]">
             Essential cookies keep the site secure and working. Optional cookies help us improve the experience and measure campaigns.
           </p>
 
-          <div className="mt-5 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+          <div className="mt-4 divide-y divide-[var(--neo-line)] rounded-xl border border-[var(--neo-line)] bg-[var(--neo-surface-strong)]">
             <CookiePreferenceRow label="Essential cookies" description="Always active for security, sign-in, and core site features." checked disabled onChange={() => undefined} />
             <CookiePreferenceRow label="Analytics cookies" description="Help us understand which pages and features are useful." checked={analytics} onChange={setAnalytics} />
             <CookiePreferenceRow label="Marketing cookies" description="Help measure campaigns and show more relevant promotions." checked={marketing} onChange={setMarketing} />

@@ -30,7 +30,7 @@ export function Testimonials() {
             <article key={item.name} className="rounded-2xl border border-gray-200 bg-white p-7 shadow-sm">
               <div className="flex gap-1 text-primary">
                 {[0, 1, 2, 3, 4].map((star) => (
-                  <span key={star} className="material-symbols-outlined text-[18px]">star</span>
+                  <span key={star} className="neo-rating-star material-symbols-outlined text-[18px]">star</span>
                 ))}
               </div>
               <p className="mt-6 min-h-32 text-lg leading-8 text-slate-800">"{item.quote}"</p>

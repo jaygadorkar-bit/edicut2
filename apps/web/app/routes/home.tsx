@@ -210,7 +210,7 @@ export default function HomePage() {
     <PageShell>
       <div className="neo-home">
         {/* Symmetrical Center-Aligned Hero with Organic Floating Solid White Video Objects */}
-        <section className="relative overflow-hidden border-b neo-line px-4 pb-20 pt-16 sm:px-6 lg:pb-32 lg:pt-24">
+        <section className="relative overflow-hidden border-b neo-line px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:pb-32 lg:pt-24">
           {/* Ambient Glows */}
           <div className="pointer-events-none absolute -left-20 top-10 h-80 w-80 rounded-full bg-[#cbdbe8]/50 blur-3xl" />
           <div className="pointer-events-none absolute -right-20 top-10 h-80 w-80 rounded-full bg-[#e2c9ce]/40 blur-3xl" />
@@ -335,43 +335,38 @@ export default function HomePage() {
               <span className="block">Publish better</span>
               <span className="block">
                 videos{" "}
-                <span className="text-primary relative inline-block">
-                  without living
-                  <svg className="absolute -bottom-2 left-0 h-3 w-full text-primary/30 -z-10" viewBox="0 0 100 20" preserveAspectRatio="none">
-                    <path d="M0 15 Q 50 0 100 15" stroke="currentColor" strokeWidth="6" fill="transparent" strokeLinecap="round" />
-                  </svg>
-                </span>
+                <span className="inline-block">without living</span>
               </span>
               <span className="block">in the timeline.</span>
             </h1>
 
             {/* Subtitle */}
-            <p className="yt-subtitle mx-auto mt-6 max-w-2xl leading-8 neo-muted">
+            <p className="neo-hero-subtitle yt-subtitle mx-auto mt-5 max-w-2xl leading-7 neo-muted sm:mt-6 sm:leading-8">
               A calm, creator-first editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables.
             </p>
 
             {/* Neomorphic CTA Action Buttons */}
-            <div className="mt-9 flex flex-col items-center justify-center gap-3.5 sm:flex-row">
-              <ButtonLink to="/#pricing">
+            <div className="neo-hero-actions mt-8 flex flex-col items-center justify-center gap-3 sm:mt-9 sm:flex-row sm:gap-3.5">
+              <ButtonLink to="/pricing">
                 <span className="material-symbols-outlined text-[18px]">play_circle</span>
                 Choose editing plan
               </ButtonLink>
-              <ButtonLink to="/#portfolio" variant="secondary">
+              <ButtonLink to="/portfolio" variant="secondary">
                 <span className="material-symbols-outlined text-[18px]">movie_filter</span>
                 View portfolio
               </ButtonLink>
             </div>
 
             {/* Key Metrics Neomorphic Badges */}
-            <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-10 grid w-full max-w-md grid-cols-3 items-stretch gap-2 sm:mt-12 sm:flex sm:w-auto sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
               {[
                 ["48h", "first cuts turnaround"],
                 ["500+", "videos published"],
                 ["4.9 / 5", "creator satisfaction"],
               ].map(([value, label]) => (
-                <div key={label} className="neo-pill rounded-2xl px-4 py-2.5 text-center">
+                <div key={label} className="neo-pill min-w-0 rounded-2xl px-2 py-2.5 text-center sm:px-4">
                   <p className="text-lg font-black tracking-tight neo-ink">{value}</p>
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] neo-muted">{label}</p>
+                  <p className="text-[10px] font-black uppercase leading-4 tracking-[0.1em] neo-muted sm:leading-normal sm:tracking-[0.12em]">{label}</p>
                 </div>
               ))}
             </div>
@@ -390,9 +385,9 @@ export default function HomePage() {
             {/* 3 - 4 - 3 Centered Rows */}
             <div className="mt-12 space-y-4 sm:space-y-5">
               {/* Top Row: 3 items */}
-              <div className="flex flex-wrap items-stretch justify-center gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
                 {topRowAudience.map(([icon, title, description]) => (
-                  <article key={title} className="neo-card group flex w-full max-w-[260px] flex-col items-center rounded-2xl p-5 text-center">
+                  <article key={title} className="neo-card group flex w-full max-w-none flex-col items-center rounded-2xl p-4 text-center sm:max-w-[260px] sm:p-5">
                     <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27] transition-colors group-hover:bg-primary group-hover:text-white">
                       <span className="material-symbols-outlined text-[22px]">{icon}</span>
                     </span>
@@ -403,9 +398,9 @@ export default function HomePage() {
               </div>
 
               {/* Middle Row: 4 items */}
-              <div className="flex flex-wrap items-stretch justify-center gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
                 {middleRowAudience.map(([icon, title, description]) => (
-                  <article key={title} className="neo-card group flex w-full max-w-[260px] flex-col items-center rounded-2xl p-5 text-center">
+                  <article key={title} className="neo-card group flex w-full max-w-none flex-col items-center rounded-2xl p-4 text-center sm:max-w-[260px] sm:p-5">
                     <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27] transition-colors group-hover:bg-primary group-hover:text-white">
                       <span className="material-symbols-outlined text-[22px]">{icon}</span>
                     </span>
@@ -416,9 +411,9 @@ export default function HomePage() {
               </div>
 
               {/* Bottom Row: 3 items */}
-              <div className="flex flex-wrap items-stretch justify-center gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
                 {bottomRowAudience.map(([icon, title, description]) => (
-                  <article key={title} className="neo-card group flex w-full max-w-[260px] flex-col items-center rounded-2xl p-5 text-center">
+                  <article key={title} className="neo-card group flex w-full max-w-none flex-col items-center rounded-2xl p-4 text-center sm:max-w-[260px] sm:p-5">
                     <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27] transition-colors group-hover:bg-primary group-hover:text-white">
                       <span className="material-symbols-outlined text-[22px]">{icon}</span>
                     </span>
