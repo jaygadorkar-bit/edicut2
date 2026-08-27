@@ -332,12 +332,12 @@ export default function HomePage() {
 
             {/* Main Hero Headline */}
             <h1 className="neo-hero-title mt-7 tracking-tight neo-ink">
-              <span className="block">Publish better</span>
-              <span className="block">
+              <span className="neo-hero-title-line neo-hero-title-line--one">Publish better</span>
+              <span className="neo-hero-title-line neo-hero-title-line--two">
                 videos{" "}
                 <span className="inline-block">without living</span>
               </span>
-              <span className="block">in the timeline.</span>
+              <span className="neo-hero-title-line neo-hero-title-line--three">in the timeline.</span>
             </h1>
 
             {/* Subtitle */}

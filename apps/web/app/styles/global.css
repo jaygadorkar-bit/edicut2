@@ -133,6 +133,40 @@
   line-height: 1.04;
 }
 
+.neo-hero-title-line {
+  display: block;
+  opacity: 0;
+  transform: translateY(1.25rem);
+  animation: neo-hero-title-line-in 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.neo-hero-title-line--one {
+  animation-delay: 80ms;
+}
+
+.neo-hero-title-line--two {
+  animation-delay: 180ms;
+}
+
+.neo-hero-title-line--three {
+  animation-delay: 280ms;
+}
+
+@keyframes neo-hero-title-line-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-hero-title-line {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+}
+
 @media (max-width: 639px) {
   .neo-hero-title {
     font-size: clamp(2.25rem, 11vw, 3.25rem);
