@@ -30,7 +30,10 @@ export default defineConfig(({ isSsrBuild }) => ({
               react: ["react", "react-dom", "react-router"],
             },
           },
-        },
+      },
+  },
+  ssr: {
+    noExternal: true,
   },
   plugins: [reactRouter(), tsconfigPaths(), tailwindcss()],
 }));
