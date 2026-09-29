@@ -33,7 +33,7 @@ export default defineConfig(({ isSsrBuild }) => ({
       },
   },
   ssr: {
-    noExternal: true,
+    noExternal: ["react-router", "@react-router/dev", "@react-router/cloudflare"],
   },
   plugins: [reactRouter(), tsconfigPaths(), tailwindcss()],
 }));
