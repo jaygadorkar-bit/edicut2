@@ -304,7 +304,7 @@ function Panel({
     <section className="neo-surface rounded-[2rem] p-6">
       <div className="flex items-center justify-between border-b neo-line pb-4">
         <h2 className="flex items-center gap-2 text-base font-black neo-ink">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="neo-icon-badge flex h-7 w-7 items-center justify-center rounded-lg">
             <span className="material-symbols-outlined text-[18px]">{icon}</span>
           </span>
           {title}

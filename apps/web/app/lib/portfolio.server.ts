@@ -3,6 +3,9 @@ import type { SupabaseRuntimeContext } from "../integrations/supabase/client.ser
 import { cloudinaryVideoThumbnailUrl, isCloudinaryVideoUrl } from "./cloudinary";
 import { getSiteSetting, saveSiteSetting } from "./site-settings.server";
 
+import { defaultPortfolioSections } from "./portfolio-demo";
+export { defaultPortfolioSections } from "./portfolio-demo";
+
 const PORTFOLIO_SECTIONS_KEY = "portfolio_sections";
 
 export type PortfolioVideo = {
@@ -27,95 +30,6 @@ export type PortfolioSection = {
   sortOrder: number;
   videos: PortfolioVideo[];
 };
-
-const demoVideos = {
-  cinematic: {
-    title: "The Ridge",
-    creatorName: "Northline Films",
-    tag: "YouTube",
-    uniqueSellingPoint: "+18% retention",
-    videoUrl: "https://www.youtube.com/watch?v=ysz5S6PUM-U",
-    orientation: "horizontal" as const,
-  },
-  music: {
-    title: "Neon Pulse",
-    creatorName: "Mira Lane",
-    tag: "Music",
-    uniqueSellingPoint: "620K views",
-    videoUrl: "https://www.youtube.com/watch?v=ScMzIvxBSi4",
-    orientation: "vertical" as const,
-  },
-  commercial: {
-    title: "Apex Drive",
-    creatorName: "Apex Motors",
-    tag: "Commercial",
-    uniqueSellingPoint: "1.2M reach",
-    videoUrl: "https://www.youtube.com/watch?v=jNQXAC9IVRw",
-    orientation: "horizontal" as const,
-  },
-  review: {
-    title: "Product Review",
-    creatorName: "Tech Table",
-    tag: "Review",
-    uniqueSellingPoint: "+9% CTR",
-    videoUrl: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
-    orientation: "horizontal" as const,
-  },
-  podcast: {
-    title: "Founder Interview",
-    creatorName: "Build Room",
-    tag: "Podcast",
-    uniqueSellingPoint: "42 min watch",
-    videoUrl: "https://www.youtube.com/watch?v=M7lc1UVf-VE",
-    orientation: "horizontal" as const,
-  },
-  podcastClip: {
-    title: "Podcast Clips",
-    creatorName: "Build Room",
-    tag: "Podcast",
-    uniqueSellingPoint: "12 clips",
-    videoUrl: "https://www.youtube.com/watch?v=M7lc1UVf-VE",
-    orientation: "vertical" as const,
-  },
-  gaming: {
-    title: "Boss Rush Highlights",
-    creatorName: "PixelForge",
-    tag: "Gaming",
-    uniqueSellingPoint: "71% completion",
-    videoUrl: "https://www.youtube.com/watch?v=ScMzIvxBSi4",
-    orientation: "vertical" as const,
-  },
-  beauty: {
-    title: "Glow Routine",
-    creatorName: "Luma Studio",
-    tag: "Health & Beauty",
-    uniqueSellingPoint: "330K saves",
-    videoUrl: "https://www.youtube.com/watch?v=ysz5S6PUM-U",
-    orientation: "vertical" as const,
-  },
-};
-
-const sectionDefinitions = [
-  { name: "Featured", slug: "featured", videos: [demoVideos.cinematic, demoVideos.music, demoVideos.commercial, demoVideos.review, demoVideos.podcast] },
-  { name: "Podcast", slug: "podcast", videos: [demoVideos.podcast, demoVideos.podcastClip, demoVideos.cinematic, demoVideos.review, demoVideos.commercial] },
-  { name: "Gaming", slug: "gaming", videos: [demoVideos.cinematic, demoVideos.gaming, demoVideos.review, demoVideos.commercial, demoVideos.podcast] },
-  { name: "Commercial", slug: "commercial", videos: [demoVideos.commercial, demoVideos.music, demoVideos.cinematic, demoVideos.review, demoVideos.podcast] },
-  { name: "Health and Beauty", slug: "health-and-beauty", videos: [demoVideos.cinematic, demoVideos.beauty, demoVideos.commercial, demoVideos.review, demoVideos.podcast] },
-  { name: "Review", slug: "review", videos: [demoVideos.review, demoVideos.beauty, demoVideos.cinematic, demoVideos.commercial, demoVideos.podcast] },
-];
-
-export const defaultPortfolioSections: PortfolioSection[] = sectionDefinitions.map((section, sectionIndex) => ({
-  id: `portfolio-${section.slug}`,
-  name: section.name,
-  slug: section.slug,
-  active: true,
-  sortOrder: sectionIndex + 1,
-  videos: section.videos.map((video, videoIndex) => normalizeVideo({
-    ...video,
-    id: `video-${section.slug}-${videoIndex + 1}`,
-    sortOrder: videoIndex + 1,
-  }, videoIndex)).filter((video): video is PortfolioVideo => Boolean(video)),
-}));
 
 function normalizeSlug(value: string) {
   return value
@@ -239,6 +153,6 @@ export function publicPortfolioSections(sections: PortfolioSection[]) {
     .filter((section) => section.active)
     .map((section) => ({
       ...section,
-      videos: sortVideos(section.videos).slice(0, 5),
+      videos: sortVideos(section.videos),
     }));
 }

@@ -662,7 +662,7 @@ function AdminOverview() {
                   <p className="neo-workspace__eyebrow">{label}</p>
                   <p className="neo-workspace__stat-value mt-2">{value}</p>
                 </div>
-                <span className="neo-workspace__stat-icon flex h-9 w-9 items-center justify-center rounded-xl"><span className="material-symbols-outlined text-[19px]">{icon}</span></span>
+                <span className="neo-icon-badge neo-workspace__stat-icon flex h-9 w-9 items-center justify-center rounded-xl"><span className="material-symbols-outlined text-[19px]">{icon}</span></span>
               </div>
               <p className="neo-workspace__stat-hint mt-3">{hint}</p>
             </article>
@@ -718,7 +718,7 @@ function AdminPlaceholder({ tab }: { tab: keyof typeof adminPlaceholderConfigs }
       <section className="neo-workspace__panel rounded-[24px] p-6 sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <span className="neo-workspace__module-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+            <span className="neo-icon-badge neo-workspace__module-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
               <span className="material-symbols-outlined text-[24px]">{config.icon}</span>
             </span>
             <div>
@@ -2084,7 +2084,7 @@ function MetricCard({ label, value, icon, color, to, active = false }: { label: 
   const content = (
     <>
       <div className="flex items-center justify-between">
-        <div className="neo-workspace__metric-icon flex h-10 w-10 items-center justify-center rounded-xl"><span className="material-symbols-outlined text-[20px]">{icon}</span></div>
+        <div className="neo-icon-badge neo-workspace__metric-icon flex h-10 w-10 items-center justify-center rounded-xl"><span className="material-symbols-outlined text-[20px]">{icon}</span></div>
         <span className={`neo-workspace__metric-state text-[10px] font-black uppercase tracking-widest ${active ? "is-active" : ""}`}>{active ? "Selected" : "Realtime"}</span>
       </div>
       <div className="mt-4"><p className="neo-workspace__metric-value">{value}</p><p className="neo-workspace__metric-label">{label}</p></div>

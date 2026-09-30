@@ -136,12 +136,14 @@ export default function FAQPage() {
                       <span className="text-lg font-black neo-ink group-open:text-primary transition-colors">
                         {faq.question}
                       </span>
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-gray-600 neo-card group-open:rotate-180 transition-transform">
-                        <span className="material-symbols-outlined text-[20px]">expand_more</span>
+                      <span className="neo-icon-badge flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
+                        <span className="material-symbols-outlined neo-faq-arrow text-[20px]">expand_more</span>
                       </span>
                     </summary>
-                    <div className="mt-4 border-t neo-line pt-4 text-base font-medium leading-relaxed neo-muted">
-                      {faq.answer}
+                    <div className="neo-faq-answer">
+                      <div className="neo-faq-answer__content pt-4 text-base font-medium leading-relaxed neo-muted">
+                        {faq.answer}
+                      </div>
                     </div>
                   </details>
                 </article>
@@ -157,7 +159,7 @@ export default function FAQPage() {
 
           {/* Still Have Questions CTA */}
           <div className="neo-surface mt-14 rounded-[2rem] p-8 text-center sm:p-10">
-            <span className="flex mx-auto h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span className="neo-icon-badge flex mx-auto h-12 w-12 items-center justify-center rounded-2xl">
               <span className="material-symbols-outlined text-[26px]">support_agent</span>
             </span>
             <h3 className="mt-4 yt-title font-black neo-ink">Still have a specific question?</h3>

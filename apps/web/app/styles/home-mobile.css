@@ -1,0 +1,531 @@
+/* Phone-only homepage refinements. Shared pages and desktop keep their layout. */
+@media (max-width: 639px) {
+  .neo-homepage-shell {
+    --neo-muted: #5b6875;
+    --color-muted-foreground: var(--neo-muted);
+    --type-size-display: clamp(2rem, 8.7vw, 2.375rem);
+    --type-size-title: clamp(1.625rem, 7.2vw, 1.875rem);
+    --type-size-body: 1rem;
+    --type-size-control: 1rem;
+  }
+
+  .neo-homepage > section {
+    padding: 2.5rem 1.25rem;
+    scroll-margin-top: 5rem;
+  }
+
+  .neo-homepage .yt-title {
+    text-wrap: balance;
+  }
+
+  .neo-homepage .yt-subtitle {
+    line-height: var(--type-leading-small);
+  }
+
+  .neo-homepage .neo-homepage-hero {
+    padding: 2rem 1.25rem 2.5rem;
+  }
+
+  .neo-homepage .neo-homepage-hero .neo-section-label {
+    padding-inline: 0.75rem;
+    font-size: var(--type-size-caption);
+  }
+
+  .neo-homepage .neo-hero-title {
+    margin-top: 1.5rem;
+    line-height: var(--type-leading-heading);
+    text-wrap: balance;
+  }
+
+  .neo-homepage .neo-hero-title-line,
+  .neo-homepage .neo-hero-title-line > span {
+    display: inline;
+  }
+
+  .neo-homepage .neo-hero-title-line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .neo-homepage .neo-hero-title-line:not(:last-child)::after {
+    content: " ";
+  }
+
+  .neo-homepage .neo-hero-title-mobile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: clamp(1.75rem, 8vw, 2rem);
+    line-height: var(--type-leading-heading);
+  }
+
+  .neo-homepage .neo-hero-title-mobile > span {
+    display: block;
+  }
+
+  .neo-homepage .neo-hero-subtitle {
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    line-height: 1.35;
+    text-wrap: pretty;
+  }
+
+  .neo-homepage .neo-hero-actions {
+    margin-top: 1.5rem;
+    gap: 0.75rem;
+  }
+
+  .neo-homepage .neo-hero-metrics {
+    display: none;
+  }
+
+  .neo-homepage .neo-audience-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 1.75rem;
+  }
+
+  .neo-homepage .neo-audience-row {
+    display: contents;
+    margin: 0;
+  }
+
+  .neo-homepage .neo-audience-grid article {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 0.75rem;
+    text-align: left;
+  }
+
+  .neo-homepage .neo-audience-grid .neo-icon-badge {
+    height: 2.25rem;
+    width: 2.25rem;
+    grid-row: auto;
+  }
+
+  .neo-homepage .neo-audience-grid h3 {
+    margin: 0;
+    font-size: var(--type-size-small);
+  }
+
+  .neo-homepage .neo-audience-grid p {
+    display: none;
+  }
+
+  .neo-homepage .neo-trust-strip {
+    padding-block: 1.5rem;
+    text-align: center;
+  }
+
+  .neo-homepage .neo-trust-strip > div {
+    gap: 1rem;
+  }
+
+  .neo-homepage .neo-trust-strip > div > div {
+    column-gap: 1.25rem;
+    row-gap: 0.5rem;
+  }
+
+  .neo-homepage .neo-trust-strip-mobile-logos {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .neo-homepage .neo-trust-strip-scroller {
+    display: block;
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .neo-homepage .neo-trust-logo {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .neo-homepage #pricing > div > .grid,
+  .neo-homepage .neo-benefits > div > .grid,
+  .neo-homepage #faq .neo-surface {
+    margin-top: 1.75rem;
+  }
+
+  .neo-homepage .neo-pricing-intro {
+    text-align: center;
+  }
+
+  .neo-homepage .neo-pricing-intro .neo-section-label {
+    display: flex;
+    width: fit-content;
+    margin-inline: auto;
+  }
+
+  .neo-homepage .neo-pricing-intro h2 {
+    margin-inline: auto;
+  }
+
+  .neo-homepage .neo-portfolio-view-all {
+    display: flex;
+  }
+
+  .neo-homepage .neo-pricing-card h3 {
+    margin-top: 0.75rem;
+  }
+
+  .neo-homepage .neo-pricing-description {
+    min-height: 0;
+    margin-top: 0.5rem;
+    line-height: var(--type-leading-small);
+  }
+
+  .neo-homepage .neo-pricing-amount {
+    margin-top: 1rem;
+    padding-block: 0.75rem;
+  }
+
+  .neo-homepage .neo-pricing-features {
+    gap: 0.5rem;
+  }
+
+  .neo-homepage .neo-pricing-features li {
+    align-items: start;
+    gap: 0.5rem;
+  }
+
+  .neo-homepage .neo-pricing-features .material-symbols-outlined {
+    flex-shrink: 0;
+    padding-top: 0.125rem;
+  }
+
+  .neo-homepage .neo-pricing-card .neo-button {
+    margin-top: 1.25rem;
+  }
+
+  .neo-homepage .neo-portfolio-tabs {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    margin-top: 1.5rem;
+    border-radius: 1rem;
+  }
+
+  .neo-homepage .neo-portfolio-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding-inline: 0.875rem;
+    font-size: var(--type-size-small);
+  }
+
+  .neo-homepage .neo-portfolio-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .neo-homepage .neo-portfolio-panel {
+    margin-top: 1.5rem;
+  }
+
+  .neo-homepage .neo-portfolio-slide {
+    flex-basis: min(78vw, 22rem);
+  }
+
+  .neo-homepage .neo-portfolio-slide button {
+    border-radius: 1.25rem;
+  }
+
+  .neo-homepage .neo-portfolio-slide h3 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: var(--type-size-body);
+    line-height: var(--type-leading-body);
+    text-wrap: pretty;
+  }
+
+  .neo-homepage .neo-portfolio-slide .yt-tag {
+    font-size: var(--type-size-caption);
+  }
+
+  .neo-homepage .neo-portfolio-view-all > a {
+    width: 100%;
+    max-width: 16rem;
+    min-height: 3.25rem;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 1rem;
+    box-shadow: 8px 8px 18px rgba(145, 158, 171, 0.2), -6px -6px 16px rgba(255, 255, 255, 0.9);
+  }
+
+  .neo-homepage .neo-benefits article.neo-benefit-mobile-hidden {
+    display: none;
+  }
+
+  .neo-homepage .neo-benefits article {
+    display: grid;
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+    gap: 0.5rem 0.875rem;
+    padding: 1.25rem;
+  }
+
+  .neo-homepage .neo-benefits article > .neo-icon-badge {
+    grid-row: 1 / 3;
+  }
+
+  .neo-homepage .neo-benefits h3 {
+    margin: 0;
+    font-size: var(--type-size-body);
+    line-height: var(--type-leading-body);
+  }
+
+  .neo-homepage .neo-benefits article > p {
+    grid-column: 2;
+    margin: 0;
+    line-height: var(--type-leading-small);
+  }
+
+  .neo-homepage .neo-testimonial-slide article {
+    min-height: 15rem;
+    padding: 1.25rem;
+  }
+
+  .neo-homepage #faq details {
+    padding: 1rem;
+  }
+
+  .neo-homepage #faq summary {
+    min-height: 2.75rem;
+    gap: 0.75rem;
+  }
+
+  .neo-homepage .neo-faq-answer__content {
+    padding-top: 0.75rem;
+    font-size: var(--type-size-body);
+    line-height: var(--type-leading-small);
+  }
+
+  .neo-homepage .neo-contact-layout {
+    gap: 0.875rem;
+    padding: 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    border-radius: 1.5rem;
+    background: linear-gradient(145deg, var(--neo-surface-strong), var(--neo-surface));
+    box-shadow: 10px 10px 24px rgba(145, 158, 171, 0.18), -8px -8px 22px rgba(255, 255, 255, 0.82);
+  }
+
+  .neo-homepage .neo-contact-layout .neo-surface,
+  .neo-homepage .neo-contact-layout form {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .neo-homepage .neo-contact-layout .neo-contact-prompt {
+    display: none;
+  }
+
+  .neo-homepage .neo-contact-layout .neo-contact-title,
+  .neo-homepage .neo-contact-layout .neo-contact-description {
+    display: none;
+  }
+
+  .neo-homepage .neo-contact-layout .neo-section-label {
+    width: fit-content;
+    margin-inline: auto;
+  }
+
+  .neo-homepage .neo-contact-invitation {
+    display: block;
+    margin-top: 0.5rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: var(--neo-muted);
+  }
+
+  .neo-homepage #contact .neo-contact-field--compact input::placeholder,
+  .neo-homepage #contact .neo-contact-field--compact textarea::placeholder {
+    color: var(--neo-muted);
+    opacity: 1;
+  }
+
+  .neo-homepage .neo-contact-response {
+    white-space: nowrap;
+    font-size: 9px;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .neo-homepage-shell .neo-footer__lead {
+    align-items: center;
+    text-align: center;
+  }
+
+  .neo-homepage-shell .neo-footer__lead > div {
+    width: 100%;
+  }
+
+  .neo-homepage-shell .neo-footer__eyebrow {
+    display: none;
+  }
+
+  .neo-homepage-shell .neo-footer__lead h2 {
+    margin-top: 0;
+  }
+
+  .neo-homepage-shell .neo-footer__lead > div > p:last-child {
+    margin-inline: auto;
+  }
+
+  .neo-homepage-shell .neo-footer__lead form {
+    width: 100%;
+  }
+
+  .neo-homepage #contact input,
+  .neo-homepage #contact textarea,
+  .neo-homepage-shell .neo-footer-input {
+    font-size: var(--type-size-body);
+  }
+
+  .neo-homepage-shell .neo-footer__lead form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .neo-homepage-shell .neo-footer-input {
+    min-width: 0;
+    width: 100%;
+    height: 3rem;
+    text-align: center;
+  }
+
+  .neo-homepage-shell .neo-footer-input::placeholder {
+    text-align: center;
+  }
+
+  .neo-homepage-shell .neo-footer__lead form .neo-button {
+    width: 100%;
+    min-height: 2.75rem;
+    font-size: var(--type-size-small);
+  }
+
+  .neo-home .neo-support-launcher,
+  .neo-home .neo-support-panel {
+    display: none;
+  }
+
+  .neo-home .neo-mobile-support {
+    position: relative;
+    z-index: 20;
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+
+  .neo-home .neo-mobile-support-card {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 0.75rem);
+    left: 0;
+    z-index: 30;
+    width: 100%;
+    max-height: min(55dvh, 30rem);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    background: linear-gradient(145deg, var(--neo-surface-strong), var(--neo-surface));
+    box-shadow: 8px 8px 18px rgba(145, 158, 171, 0.16), -6px -6px 16px rgba(255, 255, 255, 0.82);
+    overscroll-behavior: contain;
+  }
+
+  .neo-home .neo-mobile-support-card[hidden] {
+    display: none;
+  }
+
+  .neo-home .neo-mobile-support-trigger {
+    font-family: var(--type-font-body);
+    font-size: 1rem;
+    font-weight: 750;
+  }
+
+  .neo-home .neo-mobile-whatsapp-link {
+    min-height: 3rem;
+    border-radius: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .neo-homepage-shell .neo-footer__group > button,
+  .neo-homepage-shell .neo-footer-link {
+    min-height: 2.75rem;
+  }
+
+  .neo-homepage-shell .neo-footer-link {
+    display: flex;
+    align-items: center;
+  }
+
+  .neo-homepage-shell .neo-footer__group nav.max-h-0,
+  .neo-homepage-shell .neo-support-panel[aria-hidden="true"] {
+    visibility: hidden;
+  }
+
+  .neo-homepage-shell .neo-support-launcher {
+    right: 1rem;
+    bottom: max(1rem, env(safe-area-inset-bottom));
+    padding: 0.375rem;
+    border-radius: 50%;
+  }
+
+  .neo-homepage-shell .neo-support-panel {
+    bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 3.75rem);
+    margin-right: 1rem;
+  }
+
+  .neo-homepage-shell .neo-support-panel button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+
+  .neo-homepage-shell .neo-support-panel > div:first-child {
+    background: var(--neo-ink);
+  }
+
+}
+
+@media (min-width: 640px) {
+  .neo-homepage #contact .neo-contact-field--compact input::placeholder,
+  .neo-homepage #contact .neo-contact-field--compact textarea::placeholder {
+    color: transparent;
+  }
+}
+
+@media (max-width: 359px) {
+  .neo-homepage .neo-audience-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .neo-homepage .neo-audience-grid article {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    gap: 0.5rem 0.75rem;
+    align-items: start;
+    text-align: left;
+  }
+
+  .neo-homepage .neo-audience-grid .neo-icon-badge {
+    grid-row: auto;
+  }
+
+  .neo-homepage .neo-audience-grid h3,
+  .neo-homepage .neo-audience-grid p {
+    margin: 0;
+  }
+
+  .neo-homepage .neo-audience-grid p {
+    grid-column: 2;
+  }
+}

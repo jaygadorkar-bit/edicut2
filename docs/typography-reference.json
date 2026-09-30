@@ -1,0 +1,327 @@
+{
+  "source": "https://madebyalphabet.com/thebureau",
+  "collectedOn": "2026-10-01",
+  "measurements": [
+    {
+      "styles": [
+        {
+          "className": "inline-block relative font-sans-primary font-bold text-white text-4xl sm:text-5xl lg:text-6xl hover:translate-x-8 tracking-wide leading-none hover:opacity-50 ",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "72px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.72px",
+          "lineHeight": "72px",
+          "tag": "A",
+          "text": "Work",
+          "textTransform": "none"
+        },
+        {
+          "className": "font-sans-primary font-bold tracking-wide leading-tight text-black text-lg lg:text-xl site__menu-project-heading",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "20px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.2px",
+          "lineHeight": "25px",
+          "tag": "DIV",
+          "text": "Featured Projects",
+          "textTransform": "none"
+        },
+        {
+          "className": "inline-block relative font-sans-primary font-bold text-black text-4xl sm:text-5xl lg:text-6xl tracking-wide leading-tight hover:translate-x-8 relative z-20",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "72px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.72px",
+          "lineHeight": "90px",
+          "tag": "A",
+          "text": "Fable & Mane",
+          "textTransform": "none"
+        },
+        {
+          "className": "w-full font-sans-primary text-lg lg:text-xl leading-tight tracking-wide text-black",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "20px",
+          "fontWeight": "400",
+          "letterSpacing": "-0.2px",
+          "lineHeight": "25px",
+          "tag": "P",
+          "text": "Established in 2001, The Bureau is a Bafta-winning and Oscar, Cesar and Academy Award® nom",
+          "textTransform": "none"
+        },
+        {
+          "className": "font-sans-primary text-white font-bold text-lg lg:text-xl leading-tight mr-4 mb-3 sm:mb-0",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "20px",
+          "fontWeight": "700",
+          "letterSpacing": "normal",
+          "lineHeight": "25px",
+          "tag": "DIV",
+          "text": "Related Projects",
+          "textTransform": "none"
+        }
+      ],
+      "viewport": {
+        "height": 884,
+        "width": 1517
+      }
+    },
+    {
+      "styles": [
+        {
+          "className": "inline-block relative font-sans-primary font-bold text-white text-4xl sm:text-5xl lg:text-6xl hover:translate-x-8 tracking-wide leading-none hover:opacity-50 ",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "48px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.48px",
+          "lineHeight": "48px",
+          "tag": "A",
+          "text": "Work",
+          "textTransform": "none"
+        },
+        {
+          "className": "font-sans-primary font-bold tracking-wide leading-tight text-black text-lg lg:text-xl site__menu-project-heading",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "DIV",
+          "text": "Featured Projects",
+          "textTransform": "none"
+        },
+        {
+          "className": "inline-block relative font-sans-primary font-bold text-black text-4xl sm:text-5xl lg:text-6xl tracking-wide leading-tight hover:translate-x-8 relative z-20",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "48px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.48px",
+          "lineHeight": "60px",
+          "tag": "A",
+          "text": "Fable & Mane",
+          "textTransform": "none"
+        },
+        {
+          "className": "font-sans-primary font-bold text-black text-3xl sm:text-4xl lg:text-6xl leading-none tracking-wide aos-init aos-animate",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "36px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.36px",
+          "lineHeight": "36px",
+          "tag": "H1",
+          "text": "The Bureau",
+          "textTransform": "none"
+        },
+        {
+          "className": "w-full font-sans-primary text-lg lg:text-xl leading-tight tracking-wide text-black",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "400",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "P",
+          "text": "Established in 2001, The Bureau is a Bafta-winning and Oscar, Cesar and Academy Award® nom",
+          "textTransform": "none"
+        },
+        {
+          "className": "",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "STRONG",
+          "text": "Timeless Composition",
+          "textTransform": "none"
+        },
+        {
+          "className": "font-sans-primary text-white font-bold text-lg lg:text-xl leading-tight mr-4 mb-3 sm:mb-0",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "normal",
+          "lineHeight": "22.5px",
+          "tag": "DIV",
+          "text": "Related Projects",
+          "textTransform": "none"
+        },
+        {
+          "className": "w-full font-sans-primary text-white text-lg lg:text-xl leading-tight mb-5 tracking-wide",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "400",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "DIV",
+          "text": "Bringing Japan to Manchester",
+          "textTransform": "none"
+        },
+        {
+          "className": "button__text",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "SPAN",
+          "text": "View Project",
+          "textTransform": "none"
+        },
+        {
+          "className": "underlined text-black js-redactor__link",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "400",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "A",
+          "text": "hello@madebyalphabet.com",
+          "textTransform": "none"
+        },
+        {
+          "className": "underlined text-black js-redactor__link",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "A",
+          "text": "Google Maps +",
+          "textTransform": "none"
+        }
+      ],
+      "viewport": {
+        "height": 1024,
+        "width": 768
+      }
+    },
+    {
+      "styles": [
+        {
+          "className": "inline-block relative font-sans-primary font-bold text-white text-4xl sm:text-5xl lg:text-6xl hover:translate-x-8 tracking-wide leading-none hover:opacity-50 ",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "36px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.36px",
+          "lineHeight": "36px",
+          "tag": "A",
+          "text": "Work",
+          "textTransform": "none"
+        },
+        {
+          "className": "font-sans-primary font-bold tracking-wide leading-tight text-black text-lg lg:text-xl site__menu-project-heading",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "DIV",
+          "text": "Featured Projects",
+          "textTransform": "none"
+        },
+        {
+          "className": "inline-block relative font-sans-primary font-bold text-black text-4xl sm:text-5xl lg:text-6xl tracking-wide leading-tight hover:translate-x-8 relative z-20",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "36px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.36px",
+          "lineHeight": "45px",
+          "tag": "A",
+          "text": "Fable & Mane",
+          "textTransform": "none"
+        },
+        {
+          "className": "font-sans-primary font-bold text-black text-3xl sm:text-4xl lg:text-6xl leading-none tracking-wide aos-init aos-animate",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "30px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.3px",
+          "lineHeight": "30px",
+          "tag": "H1",
+          "text": "The Bureau",
+          "textTransform": "none"
+        },
+        {
+          "className": "w-full font-sans-primary text-lg lg:text-xl leading-tight tracking-wide text-black",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "400",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "P",
+          "text": "Established in 2001, The Bureau is a Bafta-winning and Oscar, Cesar and Academy Award® nom",
+          "textTransform": "none"
+        },
+        {
+          "className": "",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "STRONG",
+          "text": "Timeless Composition",
+          "textTransform": "none"
+        },
+        {
+          "className": "font-sans-primary text-white font-bold text-lg lg:text-xl leading-tight mr-4 mb-3 sm:mb-0",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "normal",
+          "lineHeight": "22.5px",
+          "tag": "DIV",
+          "text": "Related Projects",
+          "textTransform": "none"
+        },
+        {
+          "className": "w-full font-sans-primary text-white text-lg lg:text-xl leading-tight mb-5 tracking-wide",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "400",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "DIV",
+          "text": "Bringing Japan to Manchester",
+          "textTransform": "none"
+        },
+        {
+          "className": "button__text",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "SPAN",
+          "text": "View Project",
+          "textTransform": "none"
+        },
+        {
+          "className": "underlined text-black js-redactor__link",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "400",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "A",
+          "text": "hello@madebyalphabet.com",
+          "textTransform": "none"
+        },
+        {
+          "className": "underlined text-black js-redactor__link",
+          "fontFamily": "CircularStd, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "letterSpacing": "-0.18px",
+          "lineHeight": "22.5px",
+          "tag": "A",
+          "text": "Google Maps +",
+          "textTransform": "none"
+        }
+      ],
+      "viewport": {
+        "height": 844,
+        "width": 390
+      }
+    }
+  ]
+}

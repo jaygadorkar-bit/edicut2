@@ -12,7 +12,7 @@ export default function MaintenancePage() {
     <main className="min-h-screen neo-home flex items-center justify-center px-5 py-16 text-foreground">
       <div className="mx-auto flex w-full max-w-2xl items-center justify-center">
         <section className="neo-surface w-full rounded-[2.5rem] p-8 text-center sm:p-14 shadow-2xl">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-white neo-red-glow">
+          <div className="neo-icon-badge mx-auto flex h-16 w-16 items-center justify-center rounded-2xl neo-red-glow">
             <span className="material-symbols-outlined text-[32px]">build</span>
           </div>
 

@@ -40,8 +40,10 @@ const PAGE_TRANSITION_REVEAL_MS = 920;
 export function links() {
   return [
     { rel: "stylesheet", href: stylesheetUrl },
+    { rel: "preload", href: "/fonts/dm-sans-latin-normal.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
     { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+    { rel: "preconnect", href: "https://www.youtube.com" },
     { rel: "icon", href: "/favicon.ico", type: "image/svg+xml" },
     { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" }
   ];
@@ -256,7 +258,21 @@ function PageTransition() {
       const nextUrl = new URL(anchor.href, window.location.href);
       const currentUrl = new URL(window.location.href);
       if (nextUrl.origin !== currentUrl.origin) return;
-      if (nextUrl.pathname === currentUrl.pathname && nextUrl.search === currentUrl.search) return;
+      if (nextUrl.pathname === currentUrl.pathname && nextUrl.search === currentUrl.search) {
+        if (nextUrl.hash !== currentUrl.hash) return;
+
+        event.preventDefault();
+        if (nextUrl.hash) {
+          if (window.__lenis) {
+            window.__lenis.scrollTo(nextUrl.hash, { immediate: true });
+          } else {
+            document.getElementById(decodeURIComponent(nextUrl.hash.slice(1)))?.scrollIntoView();
+          }
+        } else {
+          window.location.reload();
+        }
+        return;
+      }
 
       event.preventDefault();
       if (pendingNavigation.current !== null) return;

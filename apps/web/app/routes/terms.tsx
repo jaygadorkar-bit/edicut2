@@ -68,7 +68,7 @@ export default function TermsPage() {
             {sections.map((section) => (
               <article key={section.title} className="neo-card rounded-2xl p-6">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <span className="neo-icon-badge flex h-9 w-9 items-center justify-center rounded-xl">
                     <span className="material-symbols-outlined text-[20px]">{section.icon}</span>
                   </span>
                   <h2 className="text-xl font-black neo-ink">{section.title}</h2>

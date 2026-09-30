@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData } from "react-router";
 import { contactIntakeSchema } from "@edicut/shared/contracts/operations";
@@ -127,6 +127,17 @@ const bottomRowAudience = [
   ["auto_awesome", "And more", "Tell us what you make and we will match the right editing lane."],
 ] as const;
 
+const heroParallax = {
+  clapperboard: { x: -0.08, y: 0.24, rotation: -14, rotationPerPixel: 0.04 },
+  videoCamera: { x: 0.12, y: -0.32, rotation: 8, rotationPerPixel: -0.05 },
+  scissors: { x: -0.14, y: 0.36, rotation: -22, rotationPerPixel: 0.06 },
+  playCircle: { x: -0.1, y: -0.28, rotation: 12, rotationPerPixel: 0.05 },
+  filmReel: { x: 0.1, y: 0.32, rotation: -10, rotationPerPixel: -0.04 },
+  camera: { x: 0.12, y: -0.36, rotation: 15, rotationPerPixel: -0.05 },
+  microphone: { x: 0.08, y: 0.42, rotation: -8, rotationPerPixel: 0.03 },
+  sparkles: { x: -0.08, y: -0.4, rotation: 10, rotationPerPixel: -0.03 },
+} as const;
+
 export const meta: MetaFunction = () => {
   return [
     { title: "EdiCut — Editing built for YouTubers" },
@@ -187,44 +198,107 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export default function HomePage() {
   const { packages, portfolioSections, sent, error } = useLoaderData<typeof loader>();
-  const [scrollY, setScrollY] = useState(0);
+  const heroRef = useRef<HTMLElement>(null);
   const contactStatus = sent ? "sent" : error === "security" ? "security-error" : error === "invalid" ? "invalid-error" : undefined;
 
   useEffect(() => {
-    let ticking = false;
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          setScrollY(window.scrollY);
-          ticking = false;
-        });
-        ticking = true;
+    const hero = heroRef.current;
+    if (!hero) return;
+
+    const icons = new Map(
+      Array.from(hero.querySelectorAll<HTMLElement>("[data-home-parallax]"))
+        .map((icon) => [icon.dataset.homeParallax || "", icon]),
+    );
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let isVisible = false;
+    let motionAllowed = !motionPreference.matches;
+    let frame = 0;
+
+    const resetParallax = () => {
+      for (const icon of icons.values()) {
+        icon.style.removeProperty("translate");
+        icon.style.removeProperty("rotate");
       }
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    const updateParallax = () => {
+      frame = 0;
+      if (!isVisible || !motionAllowed) return;
+
+      const scrollY = window.scrollY;
+      for (const [name, settings] of Object.entries(heroParallax)) {
+        const icon = icons.get(name);
+        if (!icon) continue;
+
+        icon.style.setProperty("translate", `${scrollY * settings.x}px ${scrollY * settings.y}px`);
+        icon.style.setProperty("rotate", `${settings.rotation + scrollY * settings.rotationPerPixel}deg`);
+      }
+    };
+
+    const scheduleParallax = () => {
+      if (!isVisible || !motionAllowed || frame !== 0) return;
+      frame = window.requestAnimationFrame(updateParallax);
+    };
+
+    const observer = typeof IntersectionObserver === "undefined"
+      ? null
+      : new IntersectionObserver(([entry]) => {
+          isVisible = entry?.isIntersecting ?? false;
+          if (isVisible) {
+            scheduleParallax();
+          } else if (frame !== 0) {
+            window.cancelAnimationFrame(frame);
+            frame = 0;
+          }
+        });
+
+    const updateMotionPreference = () => {
+      motionAllowed = !motionPreference.matches;
+      if (motionAllowed) {
+        scheduleParallax();
+      } else {
+        if (frame !== 0) window.cancelAnimationFrame(frame);
+        frame = 0;
+        resetParallax();
+      }
+    };
+
+    if (observer) {
+      observer.observe(hero);
+    } else {
+      isVisible = true;
+      scheduleParallax();
+    }
+    window.addEventListener("scroll", scheduleParallax, { passive: true });
+    motionPreference.addEventListener("change", updateMotionPreference);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("scroll", scheduleParallax);
+      motionPreference.removeEventListener("change", updateMotionPreference);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+    };
   }, []);
 
   return (
-    <PageShell>
-      <div className="neo-home">
+    <PageShell className="neo-homepage-shell">
+      <div className="neo-home neo-homepage">
         {/* Symmetrical Center-Aligned Hero with Organic Floating Solid White Video Objects */}
-        <section className="relative overflow-hidden border-b neo-line px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:pb-32 lg:pt-24">
+        <section ref={heroRef} className="neo-homepage-hero relative overflow-hidden border-b neo-line px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:pb-32 lg:pt-24">
           {/* Ambient Glows */}
           <div className="pointer-events-none absolute -left-20 top-10 h-80 w-80 rounded-full bg-[#cbdbe8]/50 blur-3xl" />
           <div className="pointer-events-none absolute -right-20 top-10 h-80 w-80 rounded-full bg-[#e2c9ce]/40 blur-3xl" />
           <div className="pointer-events-none absolute left-1/2 -top-24 h-72 w-96 -translate-x-1/2 rounded-full bg-white/60 blur-3xl" />
 
           {/* Standalone Solid White Neomorphic Floating Icons (Modern Clean Vector Icons) */}
-          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
             {/* 1. Clapperboard (Top Left) */}
             <div
-              className="neo-floating-icon-1 absolute transition-transform duration-150 ease-out hidden sm:block"
+              data-home-parallax="clapperboard"
+              className="neo-floating-icon-1 absolute hidden sm:block"
               style={{
                 top: "12%",
                 left: "9%",
-                transform: `translate3d(${scrollY * -0.08}px, ${scrollY * 0.24}px, 0) rotate(${-14 + scrollY * 0.04}deg)`,
                 filter: "drop-shadow(6px 10px 18px rgba(132, 148, 163, 0.35)) drop-shadow(-4px -4px 12px rgba(255, 255, 255, 0.95)) drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
               }}
             >
@@ -233,11 +307,11 @@ export default function HomePage() {
 
             {/* 2. Cinema Video Camera (Mid Left) */}
             <div
-              className="neo-floating-icon-2 absolute transition-transform duration-150 ease-out hidden md:block"
+              data-home-parallax="videoCamera"
+              className="neo-floating-icon-2 absolute hidden md:block"
               style={{
                 top: "45%",
                 left: "5%",
-                transform: `translate3d(${scrollY * 0.12}px, ${scrollY * -0.32}px, 0) rotate(${8 - scrollY * 0.05}deg)`,
                 filter: "drop-shadow(6px 10px 18px rgba(132, 148, 163, 0.35)) drop-shadow(-4px -4px 12px rgba(255, 255, 255, 0.95)) drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
               }}
             >
@@ -246,11 +320,11 @@ export default function HomePage() {
 
             {/* 3. Editing Scissors (Bottom Left) */}
             <div
-              className="neo-floating-icon-3 absolute transition-transform duration-150 ease-out hidden sm:block"
+              data-home-parallax="scissors"
+              className="neo-floating-icon-3 absolute hidden sm:block"
               style={{
                 top: "72%",
                 left: "13%",
-                transform: `translate3d(${scrollY * -0.14}px, ${scrollY * 0.36}px, 0) rotate(${-22 + scrollY * 0.06}deg)`,
                 filter: "drop-shadow(6px 10px 18px rgba(132, 148, 163, 0.35)) drop-shadow(-4px -4px 12px rgba(255, 255, 255, 0.95)) drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
               }}
             >
@@ -259,11 +333,11 @@ export default function HomePage() {
 
             {/* 4. Circle Play Button (Top Right) */}
             <div
-              className="neo-floating-icon-2 absolute transition-transform duration-150 ease-out hidden sm:block"
+              data-home-parallax="playCircle"
+              className="neo-floating-icon-2 absolute hidden sm:block"
               style={{
                 top: "14%",
                 right: "10%",
-                transform: `translate3d(${scrollY * -0.1}px, ${scrollY * -0.28}px, 0) rotate(${12 + scrollY * 0.05}deg)`,
                 filter: "drop-shadow(6px 10px 18px rgba(132, 148, 163, 0.35)) drop-shadow(-4px -4px 12px rgba(255, 255, 255, 0.95)) drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
               }}
             >
@@ -272,11 +346,11 @@ export default function HomePage() {
 
             {/* 5. 35mm Film Reel (Mid Right) */}
             <div
-              className="neo-floating-icon-1 absolute transition-transform duration-150 ease-out hidden md:block"
+              data-home-parallax="filmReel"
+              className="neo-floating-icon-1 absolute hidden md:block"
               style={{
                 top: "47%",
                 right: "6%",
-                transform: `translate3d(${scrollY * 0.1}px, ${scrollY * 0.32}px, 0) rotate(${-10 - scrollY * 0.04}deg)`,
                 filter: "drop-shadow(6px 10px 18px rgba(132, 148, 163, 0.35)) drop-shadow(-4px -4px 12px rgba(255, 255, 255, 0.95)) drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
               }}
             >
@@ -285,11 +359,11 @@ export default function HomePage() {
 
             {/* 6. DSLR Camera (Bottom Right) */}
             <div
-              className="neo-floating-icon-3 absolute transition-transform duration-150 ease-out hidden sm:block"
+              data-home-parallax="camera"
+              className="neo-floating-icon-3 absolute hidden sm:block"
               style={{
                 top: "73%",
                 right: "12%",
-                transform: `translate3d(${scrollY * 0.12}px, ${scrollY * -0.36}px, 0) rotate(${15 - scrollY * 0.05}deg)`,
                 filter: "drop-shadow(6px 10px 18px rgba(132, 148, 163, 0.35)) drop-shadow(-4px -4px 12px rgba(255, 255, 255, 0.95)) drop-shadow(0 2px 4px rgba(0,0,0,0.06))",
               }}
             >
@@ -298,11 +372,11 @@ export default function HomePage() {
 
             {/* 7. Studio Microphone (Top Center-Left behind headline) */}
             <div
-              className="neo-floating-icon-1 absolute transition-transform duration-150 ease-out hidden lg:block opacity-65"
+              data-home-parallax="microphone"
+              className="neo-floating-icon-1 absolute hidden lg:block opacity-65"
               style={{
                 top: "7%",
                 left: "27%",
-                transform: `translate3d(${scrollY * 0.08}px, ${scrollY * 0.42}px, 0) rotate(${-8 + scrollY * 0.03}deg)`,
                 filter: "drop-shadow(4px 8px 14px rgba(132, 148, 163, 0.3)) drop-shadow(-3px -3px 10px rgba(255, 255, 255, 0.9))",
               }}
             >
@@ -311,11 +385,11 @@ export default function HomePage() {
 
             {/* 8. Sparkles (Top Center-Right behind headline) */}
             <div
-              className="neo-floating-icon-2 absolute transition-transform duration-150 ease-out hidden lg:block opacity-65"
+              data-home-parallax="sparkles"
+              className="neo-floating-icon-2 absolute hidden lg:block opacity-65"
               style={{
                 top: "9%",
                 right: "27%",
-                transform: `translate3d(${scrollY * -0.08}px, ${scrollY * -0.4}px, 0) rotate(${10 - scrollY * 0.03}deg)`,
                 filter: "drop-shadow(4px 8px 14px rgba(132, 148, 163, 0.3)) drop-shadow(-3px -3px 10px rgba(255, 255, 255, 0.9))",
               }}
             >
@@ -327,22 +401,31 @@ export default function HomePage() {
           <div className="relative z-10 mx-auto max-w-3xl text-center">
             {/* Section Eyebrow Pill */}
             <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
-              YouTube Post-Production Studio
+              <span className="hidden sm:inline">YouTube Post-Production Studio</span>
+              <span className="sm:hidden">Video Editing Service</span>
             </div>
 
             {/* Main Hero Headline */}
             <h1 className="neo-hero-title mt-7 tracking-tight neo-ink">
-              <span className="neo-hero-title-line neo-hero-title-line--one">Publish better</span>
-              <span className="neo-hero-title-line neo-hero-title-line--two">
-                videos{" "}
-                <span className="inline-block">without living</span>
+              <span className="hidden sm:block">
+                <span className="neo-hero-title-line neo-hero-title-line--one">Publish better</span>
+                <span className="neo-hero-title-line neo-hero-title-line--two">
+                  videos{" "}
+                  <span className="inline-block">without living</span>
+                </span>
+                <span className="neo-hero-title-line neo-hero-title-line--three">in the timeline.</span>
               </span>
-              <span className="neo-hero-title-line neo-hero-title-line--three">in the timeline.</span>
+              <span className="neo-hero-title-mobile sm:hidden">
+                <span>Publish better</span>
+                <span>videos without</span>
+                <span>the timeline.</span>
+              </span>
             </h1>
 
             {/* Subtitle */}
             <p className="neo-hero-subtitle yt-subtitle mx-auto mt-5 max-w-2xl leading-7 neo-muted sm:mt-6 sm:leading-8">
-              A calm, creator-first editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables.
+              <span className="hidden sm:inline">A calm, creator-first editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables.</span>
+              <span className="sm:hidden">Editing for YouTube videos, Shorts, and more.</span>
             </p>
 
             {/* Neomorphic CTA Action Buttons */}
@@ -358,7 +441,7 @@ export default function HomePage() {
             </div>
 
             {/* Key Metrics Neomorphic Badges */}
-            <div className="mt-10 grid w-full max-w-md grid-cols-3 items-stretch gap-2 sm:mt-12 sm:flex sm:w-auto sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
+            <div className="neo-hero-metrics mt-10 grid w-full max-w-md grid-cols-3 items-stretch gap-2 sm:mt-12 sm:flex sm:w-auto sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
               {[
                 ["48h", "first cuts turnaround"],
                 ["500+", "videos published"],
@@ -383,12 +466,12 @@ export default function HomePage() {
             </div>
 
             {/* 3 - 4 - 3 Centered Rows */}
-            <div className="mt-12 space-y-4 sm:space-y-5">
+            <div className="neo-audience-grid mt-12 space-y-4 sm:space-y-5">
               {/* Top Row: 3 items */}
-              <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
+              <div className="neo-audience-row grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
                 {topRowAudience.map(([icon, title, description]) => (
                   <article key={title} className="neo-card group flex w-full max-w-none flex-col items-center rounded-2xl p-4 text-center sm:max-w-[260px] sm:p-5">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27] transition-colors group-hover:bg-primary group-hover:text-white">
+                    <span className="neo-icon-badge flex h-11 w-11 items-center justify-center rounded-xl transition-colors">
                       <span className="material-symbols-outlined text-[22px]">{icon}</span>
                     </span>
                     <h3 className="mt-3.5 text-sm font-black leading-tight neo-ink sm:text-base">{title}</h3>
@@ -398,10 +481,10 @@ export default function HomePage() {
               </div>
 
               {/* Middle Row: 4 items */}
-              <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
+              <div className="neo-audience-row grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
                 {middleRowAudience.map(([icon, title, description]) => (
                   <article key={title} className="neo-card group flex w-full max-w-none flex-col items-center rounded-2xl p-4 text-center sm:max-w-[260px] sm:p-5">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27] transition-colors group-hover:bg-primary group-hover:text-white">
+                    <span className="neo-icon-badge flex h-11 w-11 items-center justify-center rounded-xl transition-colors">
                       <span className="material-symbols-outlined text-[22px]">{icon}</span>
                     </span>
                     <h3 className="mt-3.5 text-sm font-black leading-tight neo-ink sm:text-base">{title}</h3>
@@ -411,10 +494,10 @@ export default function HomePage() {
               </div>
 
               {/* Bottom Row: 3 items */}
-              <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
+              <div className="neo-audience-row grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:flex sm:flex-wrap sm:justify-center sm:gap-5">
                 {bottomRowAudience.map(([icon, title, description]) => (
                   <article key={title} className="neo-card group flex w-full max-w-none flex-col items-center rounded-2xl p-4 text-center sm:max-w-[260px] sm:p-5">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27] transition-colors group-hover:bg-primary group-hover:text-white">
+                    <span className="neo-icon-badge flex h-11 w-11 items-center justify-center rounded-xl transition-colors">
                       <span className="material-symbols-outlined text-[22px]">{icon}</span>
                     </span>
                     <h3 className="mt-3.5 text-sm font-black leading-tight neo-ink sm:text-base">{title}</h3>

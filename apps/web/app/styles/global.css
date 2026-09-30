@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "./typography.css";
+@import "./home-mobile.css";
 
 @theme {
   --color-background: hsl(0 0% 100%);
@@ -22,26 +24,15 @@
   --color-border: hsl(0 0% 90%);
   --color-input: hsl(0 0% 90%);
   --color-ring: hsl(0 100% 50%);
-  --font-sans: Arial, Helvetica, sans-serif;
-  --font-serif: Arial, Helvetica, sans-serif;
+  --color-icon-surface: #dfe9f2;
+  --color-icon-ink: #000;
+  --color-icon-hover-surface: var(--color-primary);
+  --color-icon-hover-ink: #fff;
+  --color-rating-star: var(--color-primary);
   --radius-xl: 0.75rem;
 }
 
 :root {
-  /* Keep the critical layout on a local, immediately available font stack. */
-  --font-family-base: Arial, Helvetica, sans-serif;
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
-  --font-weight-bold: 700;
-  --font-weight-black: 900;
-
-  --text-display: clamp(2.5rem, 8vw, 4.5rem);
-  --text-title: clamp(1.75rem, 5vw, 2.5rem);
-  --text-subtitle: 1.125rem;
-  --text-small: 0.875rem;
-  --text-body: 1rem;
-  --text-tag: 0.75rem;
-
   --neo-bg: #edf2f6;
   --neo-surface: #f3f6f9;
   --neo-surface-strong: #f8fafc;
@@ -67,17 +58,8 @@
   body {
     background: var(--color-background);
     color: var(--color-foreground);
-    font-family: var(--font-family-base);
-    font-size: var(--text-body);
-    line-height: 1.5;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
   }
 
   input,
@@ -85,52 +67,8 @@
   button,
   select {
     font: inherit;
+    font-family: var(--font-family-control);
   }
-}
-
-/* Semantic typography tokens used by the marketing surfaces. */
-.yt-display, .yt-title, .yt-subtitle, .yt-small, .yt-body, .yt-tag {
-  font-family: var(--font-family-base);
-}
-
-.yt-display {
-  font-size: var(--text-display);
-  font-weight: var(--font-weight-black);
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-}
-
-.yt-title {
-  font-size: var(--text-title);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: -0.02em;
-}
-
-.yt-subtitle {
-  font-size: var(--text-subtitle);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-muted-foreground);
-}
-
-.yt-small {
-  font-size: var(--text-small);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-muted-foreground);
-}
-
-
-.yt-display {
-  font-size: var(--text-display);
-  font-weight: var(--font-weight-black);
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-}
-
-.neo-hero-title {
-  font-size: clamp(3rem, 7vw, 4rem);
-  font-weight: var(--font-weight-black);
-  letter-spacing: -0.04em;
-  line-height: 1.04;
 }
 
 .neo-hero-title-line {
@@ -168,15 +106,6 @@
 }
 
 @media (max-width: 639px) {
-  .neo-hero-title {
-    font-size: clamp(2.25rem, 11vw, 3.25rem);
-    line-height: 1.02;
-  }
-
-  .neo-hero-subtitle {
-    font-size: 1rem;
-  }
-
   .neo-hero-actions > .neo-button {
     width: min(100%, 22rem);
   }
@@ -184,42 +113,6 @@
   .neo-home .neo-hero-actions .neo-button {
     min-height: 3.25rem;
   }
-}
-
-.yt-title {
-  font-size: var(--text-title);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: -0.02em;
-}
-
-.yt-subtitle {
-  font-size: var(--text-subtitle);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-muted-foreground);
-}
-
-.yt-small {
-  font-size: var(--text-small);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-muted-foreground);
-}
-
-.neo-differentiator-title {
-  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
-  line-height: 1.1;
-}
-
-.yt-body {
-  font-size: var(--text-body);
-  font-weight: var(--font-weight-regular);
-  color: var(--color-muted-foreground);
-}
-
-.yt-tag {
-  font-size: var(--text-tag);
-  font-weight: var(--font-weight-bold);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
 }
 
 /* Homepage-only soft neo-editorial system. The footer and support widget sit
@@ -360,7 +253,7 @@ a.neo-button {
   color: var(--neo-ink);
   padding: 0.75rem 1.65rem;
   min-height: 3rem;
-  font-size: var(--text-small);
+  font-size: var(--type-size-control);
   font-weight: var(--font-weight-black);
   border-radius: 0.55rem;
   background: linear-gradient(145deg, #f4f8fb, #e5ecf2);
@@ -371,7 +264,7 @@ a.neo-button {
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
-  line-height: 1;
+  line-height: var(--type-leading-body);
   cursor: pointer;
   user-select: none;
   position: relative;
@@ -517,9 +410,9 @@ a.neo-button:active {
 .neo-workspace__brand-word,
 .neo-workspace__mobile-brand {
   color: var(--workspace-ink);
-  font-size: 1rem;
+  font-size: var(--type-size-ui);
   font-weight: var(--font-weight-black);
-  letter-spacing: -0.055em;
+  letter-spacing: var(--type-tracking-heading);
 }
 
 .neo-workspace__brand-mark {
@@ -532,7 +425,7 @@ a.neo-button:active {
   border-radius: 0.75rem;
   background: linear-gradient(145deg, #f8fafc, #dce5eb);
   color: var(--workspace-ink);
-  font-size: 0.9rem;
+  font-size: var(--type-size-small);
   font-weight: var(--font-weight-black);
   box-shadow:
     4px 4px 9px rgba(132, 148, 163, 0.2),
@@ -573,10 +466,10 @@ a.neo-button:active {
 
 .neo-workspace__eyebrow {
   color: var(--workspace-muted);
-  font-size: 0.625rem;
+  font-size: var(--type-size-micro);
   font-weight: var(--font-weight-black);
-  letter-spacing: 0.17em;
-  line-height: 1.2;
+  letter-spacing: var(--type-tracking-label);
+  line-height: var(--type-leading-body);
   text-transform: uppercase;
 }
 
@@ -589,7 +482,7 @@ a.neo-button:active {
   border-radius: 0.9rem;
   padding: 0.65rem 0.75rem;
   color: var(--workspace-muted);
-  font-size: 0.75rem;
+  font-size: var(--type-size-label);
   font-weight: var(--font-weight-black);
   transition: color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
 }
@@ -619,7 +512,7 @@ a.neo-button:active {
   min-height: 2.25rem;
   border-radius: 999px;
   padding: 0.5rem 0.8rem;
-  font-size: 0.6875rem;
+  font-size: var(--type-size-caption);
 }
 
 .neo-workspace__nav-item--compact.is-active {
@@ -634,13 +527,13 @@ a.neo-button:active {
 
 .neo-workspace__account-name {
   color: var(--workspace-ink);
-  font-size: 0.75rem;
+  font-size: var(--type-size-label);
   font-weight: var(--font-weight-black);
 }
 
 .neo-workspace__account-detail {
   color: var(--workspace-muted);
-  font-size: 0.625rem;
+  font-size: var(--type-size-micro);
   font-weight: var(--font-weight-bold);
 }
 
@@ -663,7 +556,7 @@ a.neo-button:active {
   border-radius: 999px;
   background: var(--workspace-ink);
   color: var(--workspace-surface);
-  font-size: 0.625rem;
+  font-size: var(--type-size-micro);
   font-weight: var(--font-weight-black);
   box-shadow:
     3px 3px 7px rgba(132, 148, 163, 0.16),
@@ -673,7 +566,7 @@ a.neo-button:active {
 .neo-workspace__avatar--sm {
   height: 1.5rem;
   width: 1.5rem;
-  font-size: 0.5rem;
+  font-size: var(--type-size-tiny);
 }
 
 .neo-workspace__header {
@@ -683,15 +576,15 @@ a.neo-button:active {
 
 .neo-workspace__mobile-brand {
   color: var(--workspace-muted);
-  font-size: 0.75rem;
+  font-size: var(--type-size-label);
 }
 
 .neo-workspace__title {
   color: var(--workspace-ink);
-  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
+  font-size: var(--type-size-ui-heading);
   font-weight: var(--font-weight-black);
-  letter-spacing: -0.055em;
-  line-height: 1.1;
+  letter-spacing: var(--type-tracking-heading);
+  line-height: var(--type-leading-heading);
 }
 
 .neo-workspace__notification-dot {
@@ -729,15 +622,15 @@ a.neo-button:active {
 
 .neo-workspace__stat-value {
   color: var(--workspace-ink);
-  font-size: 1.875rem;
+  font-size: var(--type-size-ui-number);
   font-weight: var(--font-weight-black);
-  letter-spacing: -0.055em;
-  line-height: 1;
+  letter-spacing: var(--type-tracking-heading);
+  line-height: var(--type-leading-display);
 }
 
 .neo-workspace__stat-icon {
   border: 1px solid rgba(255, 255, 255, 0.8);
-  background: var(--workspace-inset);
+  background: var(--color-icon-surface);
   color: var(--workspace-ink);
   box-shadow:
     inset 2px 2px 5px rgba(132, 148, 163, 0.12),
@@ -746,7 +639,7 @@ a.neo-button:active {
 
 .neo-workspace__stat-hint {
   color: var(--workspace-muted);
-  font-size: 0.625rem;
+  font-size: var(--type-size-micro);
   font-weight: var(--font-weight-bold);
 }
 
@@ -769,7 +662,7 @@ a.neo-button:active {
 
 .neo-workspace__metric-icon {
   border: 1px solid rgba(255, 255, 255, 0.8);
-  background: var(--workspace-inset);
+  background: var(--color-icon-surface);
   color: var(--workspace-ink);
   box-shadow:
     inset 2px 2px 5px rgba(132, 148, 163, 0.12),
@@ -787,15 +680,15 @@ a.neo-button:active {
 
 .neo-workspace__metric-value {
   color: var(--workspace-ink);
-  font-size: 1.875rem;
+  font-size: var(--type-size-ui-number);
   font-weight: var(--font-weight-black);
-  letter-spacing: -0.05em;
-  line-height: 1;
+  letter-spacing: var(--type-tracking-heading);
+  line-height: var(--type-leading-display);
 }
 
 .neo-workspace__metric-label {
   margin-top: 0.25rem;
-  font-size: 0.75rem;
+  font-size: var(--type-size-label);
   font-weight: var(--font-weight-bold);
 }
 
@@ -807,7 +700,7 @@ a.neo-button:active {
 
 .neo-workspace__module-icon {
   border: 1px solid rgba(255, 255, 255, 0.78);
-  background: var(--workspace-inset);
+  background: var(--color-icon-surface);
   color: var(--workspace-ink);
   box-shadow:
     inset 3px 3px 7px rgba(132, 148, 163, 0.14),
@@ -816,28 +709,28 @@ a.neo-button:active {
 
 .neo-workspace__module-title {
   color: var(--workspace-ink);
-  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-size: var(--type-size-ui-title);
   font-weight: var(--font-weight-black);
-  letter-spacing: -0.055em;
-  line-height: 1.1;
+  letter-spacing: var(--type-tracking-heading);
+  line-height: var(--type-leading-heading);
 }
 
 .neo-workspace__module-copy,
 .neo-workspace__subpanel-copy,
 .neo-workspace__callout-copy {
   color: var(--workspace-muted);
-  font-size: 0.875rem;
+  font-size: var(--type-size-small);
   font-weight: var(--font-weight-medium);
-  line-height: 1.6;
+  line-height: var(--type-leading-reading);
 }
 
 .neo-workspace__status {
   border: 1px solid rgba(255, 255, 255, 0.78);
   background: var(--workspace-inset);
   color: var(--workspace-muted);
-  font-size: 0.625rem;
+  font-size: var(--type-size-micro);
   font-weight: var(--font-weight-black);
-  letter-spacing: 0.08em;
+  letter-spacing: var(--type-tracking-label);
   text-transform: uppercase;
   box-shadow:
     inset 2px 2px 5px rgba(132, 148, 163, 0.12),
@@ -867,7 +760,7 @@ a.neo-button:active {
 }
 
 .neo-workspace__subpanel-copy {
-  font-size: 0.75rem;
+  font-size: var(--type-size-label);
 }
 
 .neo-workspace__callout {
@@ -984,6 +877,14 @@ a.neo-button:active {
   color: #17202a;
 }
 
+.neo-site-header .neo-header-sign-in {
+  color: #687583;
+}
+
+.neo-portfolio-tabs {
+  border-radius: 1.25rem;
+}
+
 .neo-portfolio-tab {
   border: 1px solid transparent;
   color: var(--neo-muted);
@@ -995,23 +896,26 @@ a.neo-button:active {
     transform 240ms ease;
 }
 
+.neo-portfolio-tab:focus-visible,
+.neo-portfolio-panel:focus-visible {
+  outline: 2px solid var(--neo-muted);
+  outline-offset: 4px;
+}
+
 .neo-portfolio-tab-indicator {
   position: absolute;
   top: 0;
   left: 0;
   border: 1px solid rgba(255, 255, 255, 0.94);
-  border-radius: 999px;
+  border-radius: 0.75rem;
   background: #fff;
-  box-shadow:
-    5px 5px 11px rgba(132, 148, 163, 0.22),
-    -4px -4px 10px rgba(255, 255, 255, 0.92);
+  box-shadow: 0 3px 10px rgba(132, 148, 163, 0.18);
   pointer-events: none;
   transition:
     opacity 220ms ease,
-    transform 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
     width 360ms cubic-bezier(0.22, 1, 0.36, 1),
     height 360ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform, width, height;
 }
 
 .neo-portfolio-tab--active {
@@ -1026,7 +930,33 @@ a.neo-button:active {
 }
 
 .neo-portfolio-panel {
-  animation: neo-portfolio-panel-in 520ms cubic-bezier(0.22, 1, 0.36, 1);
+  min-height: 240px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.neo-portfolio-panel.is-switching {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+
+.neo-portfolio-slide--enter,
+.neo-portfolio-empty {
+  animation: neo-portfolio-card-in 440ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (min-width: 640px) {
+  .neo-portfolio-panel {
+    min-height: 320px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .neo-portfolio-panel {
+    min-height: 340px;
+  }
 }
 
 .neo-portfolio-scroller {
@@ -1039,6 +969,11 @@ a.neo-button:active {
   touch-action: pan-y;
   user-select: none;
   cursor: grab;
+}
+
+.neo-trust-logo {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .neo-portfolio-scroller.is-dragging {
@@ -1069,27 +1004,46 @@ a.neo-button:active {
   flex-basis: min(86vw, 560px);
 }
 
+.neo-portfolio-slide--landscape {
+  flex-basis: min(86vw, 600px);
+}
+
 .neo-testimonial-slide {
   flex: 0 0 min(82vw, 390px);
 }
 
-.neo-portfolio-card-title--hero {
-  font-size: clamp(2.25rem, 4.5vw, 3.25rem);
-  font-weight: var(--font-weight-black);
-  letter-spacing: -0.045em;
-  line-height: 0.98;
+.neo-testimonial-scroller {
+  margin-block: -16px -28px;
+  padding-block: 16px 28px;
 }
 
-@keyframes neo-portfolio-panel-in {
+@keyframes neo-portfolio-card-in {
   from {
     opacity: 0;
-    filter: blur(4px);
-    transform: translateY(14px) scale(0.985);
+    transform: translateY(22px) scale(0.985);
   }
   to {
     opacity: 1;
-    filter: blur(0);
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-portfolio-tab,
+  .neo-portfolio-tab-indicator,
+  .neo-portfolio-panel,
+  .neo-portfolio-panel img,
+  .neo-portfolio-panel button > span {
+    transition: none;
+  }
+
+  .neo-portfolio-panel.is-switching {
+    transform: none;
+  }
+
+  .neo-portfolio-slide--enter,
+  .neo-portfolio-empty {
+    animation: none;
   }
 }
 
@@ -1181,9 +1135,9 @@ a.neo-button:active {
 .neo-footer__utility-label {
   margin: 0;
   color: var(--neo-ink);
-  font-size: 0.8rem;
+  font-size: var(--type-size-label);
   font-weight: var(--font-weight-black);
-  letter-spacing: -0.01em;
+  letter-spacing: var(--type-tracking-control);
 }
 
 .neo-footer__copyright {
@@ -1233,9 +1187,9 @@ a.neo-button:active {
   box-shadow:
     inset 2px 2px 5px rgba(132, 148, 163, 0.14),
     inset -2px -2px 5px rgba(255, 255, 255, 0.72);
-  font-size: 0.625rem;
+  font-size: var(--type-size-micro);
   font-weight: var(--font-weight-black);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--type-tracking-control);
 }
 
 @media (max-width: 767px) {
@@ -1312,10 +1266,76 @@ a.neo-button:active {
   font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
   display: inline-block;
   vertical-align: middle;
+  color: var(--color-icon-ink);
+}
+
+.neo-icon-badge {
+  background: var(--color-icon-surface);
+  color: var(--color-icon-ink);
+  transition: background-color 180ms ease, color 180ms ease, transform 220ms ease;
+}
+
+.neo-icon-badge:hover,
+.group:hover .neo-icon-badge {
+  background: var(--color-icon-hover-surface);
+  color: var(--color-icon-hover-ink);
+}
+
+.neo-icon-badge .material-symbols-outlined,
+.neo-icon-badge svg {
+  color: inherit;
+}
+
+.text-white .material-symbols-outlined,
+.neo-workspace__nav-item--compact.is-active .material-symbols-outlined,
+.neo-workspace__secondary-action .material-symbols-outlined {
+  color: inherit;
 }
 
 .neo-rating-star {
   font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 24;
+  color: var(--color-rating-star);
+}
+
+.neo-faq-arrow {
+  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+details[open] .neo-faq-arrow {
+  transform: rotate(180deg);
+}
+
+.neo-faq-answer {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+details[open] > .neo-faq-answer {
+  grid-template-rows: 1fr;
+}
+
+.neo-faq-answer__content {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-0.25rem);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+details[open] > .neo-faq-answer > .neo-faq-answer__content {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-icon-badge,
+  .neo-faq-arrow,
+  .neo-faq-answer,
+  .neo-faq-answer__content {
+    transition-duration: 0.01ms;
+  }
 }
 
 .auth-scene-image {

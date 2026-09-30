@@ -66,7 +66,7 @@ export function PricingCards() {
               <ul className="mt-8 space-y-3">
                 {displayFeatures.map((feature) => (
                   <li key={feature} className="flex items-center gap-3 text-sm font-bold text-slate-800">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-50 text-primary">
+                    <span className="neo-icon-badge flex h-6 w-6 items-center justify-center rounded-full">
                       <span className="material-symbols-outlined text-[16px]">check</span>
                     </span>
                     {feature}

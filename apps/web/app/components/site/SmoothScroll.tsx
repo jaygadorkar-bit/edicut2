@@ -1,5 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import Lenis from "lenis";
+import { useLocation } from "react-router";
+
+const useIsomorphicLayoutEffect = typeof document === "undefined" ? useEffect : useLayoutEffect;
 
 declare global {
   interface Window {
@@ -8,6 +11,22 @@ declare global {
 }
 
 export function SmoothScroll() {
+  const location = useLocation();
+  const previousPathname = useRef(location.pathname);
+
+  useIsomorphicLayoutEffect(() => {
+    const pathnameChanged = previousPathname.current !== location.pathname;
+    previousPathname.current = location.pathname;
+
+    if (!pathnameChanged || location.hash) return;
+
+    if (window.__lenis) {
+      window.__lenis.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [location.hash, location.pathname]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 

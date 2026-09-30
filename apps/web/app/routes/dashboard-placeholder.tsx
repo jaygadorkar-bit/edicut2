@@ -178,7 +178,7 @@ export default function DashboardPlaceholderRoute() {
       <section className="neo-workspace__panel rounded-[24px] p-6 sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <span className="neo-workspace__module-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+            <span className="neo-icon-badge neo-workspace__module-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
               <span className="material-symbols-outlined text-[24px]">{config.icon}</span>
             </span>
             <div>

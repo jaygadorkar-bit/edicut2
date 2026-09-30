@@ -1,0 +1,240 @@
+/* Global typography. Edit the role tokens here to update the entire site. */
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("/fonts/dm-sans-latin-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("/fonts/dm-sans-latin-ext-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: italic;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("/fonts/dm-sans-latin-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "DM Sans";
+  font-style: italic;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url("/fonts/dm-sans-latin-ext-italic.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  --font-family-base: "DM Sans", Arial, Helvetica, sans-serif;
+  --font-family-heading: var(--font-family-base);
+  --font-family-body: var(--font-family-base);
+  --font-family-control: var(--font-family-body);
+  --font-family-code: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --type-weight-regular: 400;
+  --type-weight-medium: 500;
+  --type-weight-strong: 700;
+  --font-weight-regular: var(--type-weight-regular);
+
+  --type-size-display: 1.875rem;
+  --type-size-menu: 2.25rem;
+  --type-size-title: 1.875rem;
+  --type-size-card-title: 1.5rem;
+  --type-size-body: 1.125rem;
+  --type-size-small: 0.875rem;
+  --type-size-control: 0.875rem;
+  --type-size-price: 2rem;
+  --type-size-tag: 0.75rem;
+  --type-size-ui: 1rem;
+  --type-size-ui-heading: clamp(1.25rem, 2.4vw, 1.75rem);
+  --type-size-ui-title: clamp(1.5rem, 3vw, 2rem);
+  --type-size-ui-number: 1.875rem;
+  --type-size-label: 0.75rem;
+  --type-size-caption: 0.6875rem;
+  --type-size-micro: 0.625rem;
+  --type-size-tiny: 0.5rem;
+
+  --type-leading-display: 1;
+  --type-leading-heading: 1.1;
+  --type-leading-body: 1.25;
+  --type-leading-small: 1.5;
+  --type-leading-reading: 1.6;
+  --type-tracking-heading: -0.01em;
+  --type-tracking-body: -0.01em;
+  --type-tracking-control: -0.01em;
+  --type-tracking-label: 0.05em;
+
+  /* Backwards-compatible aliases for existing components. */
+  --text-display: var(--type-size-display);
+  --text-title: var(--type-size-title);
+  --text-subtitle: var(--type-size-body);
+  --text-body: var(--type-size-body);
+  --text-small: var(--type-size-small);
+  --text-tag: var(--type-size-tag);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --type-size-display: 2.25rem;
+    --type-size-menu: 3rem;
+    --type-size-title: 2.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --type-size-display: 4.5rem;
+    --type-size-menu: 4.5rem;
+    --type-size-title: 3rem;
+    --type-size-card-title: 1.75rem;
+    --type-size-body: 1.25rem;
+    --type-size-small: 1rem;
+    --type-size-control: 1rem;
+    --type-size-price: 2.5rem;
+  }
+}
+
+/* Tailwind text and weight utilities share the same global role settings. */
+@theme inline {
+  --font-sans: var(--font-family-body);
+  --font-serif: var(--font-family-heading);
+  --font-display: var(--font-family-heading);
+  --font-mono: var(--font-family-code);
+  --font-weight-normal: var(--type-weight-regular);
+  --font-weight-medium: var(--type-weight-medium);
+  --font-weight-semibold: var(--type-weight-strong);
+  --font-weight-bold: var(--type-weight-strong);
+  --font-weight-extrabold: var(--type-weight-strong);
+  --font-weight-black: var(--type-weight-strong);
+  --text-xs: var(--type-size-label);
+  --text-sm: var(--type-size-small);
+  --text-base: var(--type-size-ui);
+  --text-lg: var(--type-size-body);
+  --text-xl: 1.25rem;
+  --text-2xl: var(--type-size-card-title);
+  --text-3xl: var(--type-size-ui-number);
+  --text-4xl: var(--type-size-price);
+  --text-5xl: var(--type-size-title);
+  --text-6xl: var(--type-size-display);
+}
+
+@layer base {
+  body {
+    font-family: var(--font-family-body);
+    font-size: var(--type-size-ui);
+    font-weight: var(--type-weight-regular);
+    line-height: var(--type-leading-small);
+    letter-spacing: var(--type-tracking-body);
+    font-optical-sizing: auto;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-family-heading);
+    font-weight: var(--type-weight-strong);
+    line-height: var(--type-leading-heading);
+    letter-spacing: var(--type-tracking-heading);
+  }
+
+  input, textarea, button, select, label {
+    font-family: var(--font-family-control);
+  }
+}
+
+.yt-display, .neo-hero-title {
+  font-family: var(--font-family-heading);
+  font-size: var(--type-size-display);
+  font-weight: var(--type-weight-strong);
+  line-height: var(--type-leading-display);
+  letter-spacing: var(--type-tracking-heading);
+}
+
+.yt-title {
+  font-family: var(--font-family-heading);
+  font-size: var(--type-size-title);
+  font-weight: var(--type-weight-strong);
+  line-height: var(--type-leading-heading);
+  letter-spacing: var(--type-tracking-heading);
+}
+
+.type-card-title, h3.yt-title, .neo-differentiator-title, .neo-portfolio-card-title--hero {
+  font-family: var(--font-family-heading);
+  font-size: var(--type-size-card-title);
+  font-weight: var(--type-weight-strong);
+  line-height: var(--type-leading-heading);
+  letter-spacing: var(--type-tracking-heading);
+}
+
+.yt-subtitle, .yt-body {
+  font-family: var(--font-family-body);
+  font-size: var(--type-size-body);
+  font-weight: var(--type-weight-regular);
+  line-height: var(--type-leading-body);
+  letter-spacing: var(--type-tracking-body);
+  color: var(--color-muted-foreground);
+}
+
+.yt-small {
+  font-family: var(--font-family-body);
+  font-size: var(--type-size-small);
+  font-weight: var(--type-weight-regular);
+  line-height: var(--type-leading-small);
+  letter-spacing: var(--type-tracking-body);
+  color: var(--color-muted-foreground);
+}
+
+.yt-tag, .neo-section-label {
+  font-family: var(--font-family-control);
+  font-size: var(--type-size-tag);
+  font-weight: var(--type-weight-strong);
+  line-height: var(--type-leading-body);
+  text-transform: uppercase;
+  letter-spacing: var(--type-tracking-label);
+}
+
+.type-control, .neo-button, .neo-portfolio-tab {
+  font-family: var(--font-family-control);
+  font-size: var(--type-size-control);
+  font-weight: var(--type-weight-strong);
+  line-height: var(--type-leading-body);
+  letter-spacing: var(--type-tracking-control);
+}
+
+.type-menu {
+  font-family: var(--font-family-heading);
+  font-size: var(--type-size-menu);
+  font-weight: var(--type-weight-strong);
+  line-height: var(--type-leading-display);
+  letter-spacing: var(--type-tracking-heading);
+}
+
+.type-question {
+  font-family: var(--font-family-heading);
+  font-size: var(--type-size-body);
+  font-weight: var(--type-weight-strong);
+  line-height: var(--type-leading-body);
+  letter-spacing: var(--type-tracking-heading);
+}
+
+.type-price {
+  font-family: var(--font-family-heading);
+  font-size: var(--type-size-price);
+  font-weight: var(--type-weight-strong);
+  line-height: var(--type-leading-display);
+  letter-spacing: var(--type-tracking-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+input.yt-body, textarea.yt-body, label.yt-small {
+  font-family: var(--font-family-control);
+}

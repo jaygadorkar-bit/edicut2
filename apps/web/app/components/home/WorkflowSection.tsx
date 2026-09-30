@@ -66,7 +66,7 @@ export function WorkflowSection() {
                   <div className="absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,rgba(255,0,0,0.35),rgba(255,0,0,0.08))]" />
                   <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
                     <div className="flex items-center gap-4 sm:w-56 sm:shrink-0 sm:flex-col sm:items-start lg:w-64">
-                      <div className="relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
+                      <div className="neo-icon-badge relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-lg shadow-primary/20">
                         <span className="material-symbols-outlined text-[26px]">{item.icon}</span>
                       </div>
                       <div>

@@ -39,7 +39,9 @@ export default function PackagePage() {
     ["paid", "Base Subscription", `Starts at $${subscription.basePrice}/mo`],
     ["podcasts", "Finished Video Coverage", `Up to 60 min for +$${subscription.finishedRuntimePrice}`],
     ["video_file", "Raw Footage Capacity", `Up to 600 min for +$${subscription.rawFootagePrice}`],
-    ["workspace_premium", "Channel Tier", subscription.badge],
+    ["auto_awesome", "Advanced deliverables", subscription.slug === "creator-pro"
+      ? "Project files, motion graphics, VFX, and AI voice over are included in Creator Pro."
+      : "Project files, motion graphics, VFX, and AI voice over are available with Creator Pro."],
   ];
 
   return (
@@ -79,6 +81,27 @@ export default function PackagePage() {
               <p className="mt-3 yt-small leading-relaxed neo-muted">
                 Select your base subscription, customize footage and runtime coverage on the right, and proceed directly to onboarding.
               </p>
+            </div>
+
+            <div className="neo-inset mt-6 rounded-2xl p-5 sm:p-6">
+              <h2 className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">How pricing works</h2>
+              <p className="mt-3 text-sm leading-6 neo-muted">
+                Start with the ${subscription.basePrice}/month base subscription, then select optional coverage. Each selected option adds to your monthly total.
+              </p>
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                {[
+                  ["podcasts", "Finished video coverage", "Up to 60 min"],
+                  ["video_file", "Raw footage coverage", "Up to 600 min"],
+                ].map(([icon, label, value]) => (
+                  <div key={label} className="neo-card rounded-xl p-4">
+                    <dt className="flex items-center gap-2 text-sm font-bold neo-ink">
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{icon}</span>
+                      {label}
+                    </dt>
+                    <dd className="mt-2 text-sm neo-muted">{value}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           </div>
 
@@ -123,10 +146,12 @@ export default function PackagePage() {
       {/* Feature Specs Cards */}
       <section className="border-b neo-line px-5 py-20 sm:px-6">
         <div className="mx-auto max-w-7xl">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <p className="yt-tag neo-section-label">Quote factors</p>
+          <h2 className="mt-3 yt-title font-black neo-ink">What changes the final price?</h2>
+          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {featureCards.map(([icon, title, desc]) => (
               <article key={title} className="neo-card rounded-2xl p-6">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <span className="neo-icon-badge flex h-11 w-11 items-center justify-center rounded-xl">
                   <span className="material-symbols-outlined text-[22px]">{icon}</span>
                 </span>
                 <p className="mt-5 text-base font-black neo-ink">{title}</p>
@@ -152,7 +177,7 @@ export default function PackagePage() {
             <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {subscription.deliverables.map((item) => (
                 <div key={item} className="neo-inset flex items-center gap-3 rounded-xl p-3.5">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                  <span className="neo-icon-badge flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
                     <span className="material-symbols-outlined text-[14px]">check</span>
                   </span>
                   <span className="text-sm font-bold neo-ink">{item}</span>
@@ -193,7 +218,7 @@ export default function PackagePage() {
                   <p className="mt-2 text-sm font-medium leading-relaxed neo-muted">{item.description}</p>
                 </div>
                 <div className="mt-6 border-t neo-line pt-4 flex items-baseline gap-1">
-                  <span className="yt-title font-black neo-ink">${item.basePrice}</span>
+                  <span className="type-price neo-ink">${item.basePrice}</span>
                   <span className="yt-small font-bold neo-muted">/month</span>
                 </div>
               </Link>
@@ -244,7 +269,8 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
         </div>
       </div>
 
-      <div className="mt-4 space-y-3">
+      <p className="mt-5 yt-tag font-black uppercase tracking-[0.14em] neo-muted">Optional coverage</p>
+      <div className="mt-3 space-y-3">
         <OptionCheckbox
           checked={includeFinishedRuntime}
           icon="podcasts"
@@ -269,7 +295,7 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
             <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Estimated monthly total</p>
             <p className="mt-0.5 text-xs font-medium neo-muted">Includes revisions & thumbnail</p>
           </div>
-          <p className="text-4xl font-black tracking-tight neo-ink">${total}</p>
+          <p className="type-price neo-ink">${total}</p>
         </div>
       </div>
 

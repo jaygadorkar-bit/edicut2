@@ -1,9 +1,11 @@
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useMatches } from "react-router";
 import { authHref } from "../auth/AuthModal";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
-import { faqs, legalLinks, navLinks, plans as defaultPlans, portfolio, testimonials, workflow } from "./data";
+import { faqs, legalLinks, navLinks, plans as defaultPlans, testimonials, workflow } from "./data";
+import { defaultPortfolioSections } from "../../lib/portfolio-demo";
+import { wrapLoopPosition } from "../../lib/portfolio-loop";
 import { CookieConsent } from "./CookieConsent.js";
 import type { PortfolioSection as PortfolioSectionView, PortfolioVideo } from "../../lib/portfolio.server";
 
@@ -17,6 +19,8 @@ type PricingPlanView = {
   popular?: boolean;
   badge?: string;
 };
+
+const PortfolioCopyContext = createContext(false);
 
 export function Logo({ className = "h-10" }: { className?: string }) {
   return (
@@ -74,7 +78,7 @@ export function SiteHeader() {
               <a
                 key={item.label}
                 href={item.to}
-                className="neo-header-link rounded-full px-4 py-2 text-[13px] font-bold transition-all duration-200 hover:text-foreground"
+                className="neo-header-link type-control rounded-full px-4 py-2 transition-all duration-200 hover:text-foreground"
               >
                 {item.label}
               </a>
@@ -84,7 +88,7 @@ export function SiteHeader() {
           <div className="hidden items-center gap-3 lg:flex">
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
-              className="neo-button neo-button--primary neo-button--compact uppercase tracking-[0.12em]"
+              className="neo-button neo-button--primary neo-button--compact neo-header-sign-in uppercase tracking-[0.12em]"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/5 text-current transition-colors">
                 <span className="material-symbols-outlined text-[13px] text-current">
@@ -150,7 +154,7 @@ export function SiteHeader() {
                 key={item.label}
                 href={item.to}
                 onClick={() => setIsMenuOpen(false)}
-                className="neo-header-link flex min-h-12 items-center justify-between rounded-xl px-4 py-3 text-sm font-bold transition-colors hover:bg-black/5"
+                className="neo-header-link type-menu flex min-h-12 items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-black/5"
               >
                 {item.label}
                 <span className="material-symbols-outlined text-[18px] opacity-50">arrow_forward</span>
@@ -159,6 +163,7 @@ export function SiteHeader() {
           </div>
 
           <div className="border-t border-black/5 p-5 sm:p-6">
+            <MobileSupportMenu isMenuOpen={isMenuOpen} />
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
               onClick={() => setIsMenuOpen(false)}
@@ -173,6 +178,38 @@ export function SiteHeader() {
         </div>
       </div>
     </>
+  );
+}
+
+function MobileSupportMenu({ isMenuOpen }: { isMenuOpen: boolean }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const panelId = useId();
+  const whatsappUrl = "https://wa.me/8801515688142?text=Hi%20EdiCut%2C%20I%27d%20like%20to%20ask%20about%20video%20editing.";
+
+  useEffect(() => {
+    if (!isMenuOpen) setIsOpen(false);
+  }, [isMenuOpen]);
+
+  return (
+    <div className="neo-mobile-support sm:hidden">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={panelId}
+        onClick={() => setIsOpen((value) => !value)}
+        className="neo-button neo-button--primary neo-mobile-support-trigger w-full justify-center uppercase tracking-[0.14em]"
+      >
+        <span className="material-symbols-outlined text-[19px]" aria-hidden="true">chat_bubble_outline</span>
+        Chat with us
+        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{isOpen ? "expand_more" : "expand_less"}</span>
+      </button>
+      <div id={panelId} hidden={!isOpen} className="neo-mobile-support-card rounded-2xl p-2">
+        <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp" className="neo-button neo-button--primary neo-mobile-whatsapp-link w-full justify-center gap-2">
+          <span className="material-symbols-outlined text-[19px]" aria-hidden="true">chat</span>
+          WhatsApp
+        </a>
+      </div>
+    </div>
   );
 }
 
@@ -253,7 +290,7 @@ function LegacySiteFooter() {
               <h4 className="yt-tag font-black uppercase tracking-widest text-foreground">Get in touch</h4>
               <div className="flex flex-col gap-4 lg:items-end">
                 <a href="mailto:hello@edicut.com" className="flex items-center gap-3 yt-small font-bold text-muted-foreground hover:text-primary transition-colors lg:flex-row-reverse">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-primary">
+                  <span className="neo-icon-badge flex h-8 w-8 items-center justify-center rounded-lg">
                     <span className="material-symbols-outlined text-[18px]">mail</span>
                   </span>
                   hello@edicut.com
@@ -348,13 +385,13 @@ export function SiteFooter() {
   ];
 
   return (
-    <footer className="neo-footer relative overflow-hidden border-t">
-      <div className="neo-footer__inner mx-auto max-w-7xl px-5 pb-5 pt-8 sm:px-8 sm:pb-7 sm:pt-12 md:pb-10 md:pt-14">
+    <footer className="neo-footer relative overflow-hidden border-t px-4 sm:px-6">
+      <div className="neo-footer__inner mx-auto max-w-7xl pb-5 pt-8 sm:pb-7 sm:pt-12 md:pb-10 md:pt-14">
         <div className="grid gap-4 md:grid-cols-[minmax(18rem,1.45fr)_minmax(9rem,1fr)_minmax(11rem,1fr)] md:items-stretch">
         <section className="neo-footer__lead flex flex-col justify-between p-5 md:p-6">
           <div>
-            <p className="yt-tag font-black tracking-[0.14em] neo-footer-muted">EdiCut / creator post-production</p>
-            <h2 className="mt-3 text-[21px] font-medium tracking-[-0.02em] neo-footer-ink sm:text-2xl">Keep in touch</h2>
+            <p className="neo-footer__eyebrow yt-tag font-black tracking-[0.14em] neo-footer-muted">EdiCut / creator post-production</p>
+            <h2 className="mt-3 type-card-title neo-footer-ink">Keep in touch</h2>
             <p className="mt-2 max-w-md text-sm leading-5 neo-footer-muted sm:text-[15px]">
               Editing support, creator tips, and useful updates for a steadier publishing rhythm.
             </p>
@@ -506,7 +543,7 @@ export function MessageWidget() {
 
       <div
         aria-hidden={!isOpen}
-        className={`!fixed right-0 bottom-[calc(20%+2rem)] z-[70] w-[20rem] max-w-[calc(100vw-1.5rem)] mr-3 transition-all duration-300 ease-out md:bottom-[20%] ${isOpen ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-6 opacity-0"}`}
+        className={`neo-support-panel !fixed right-0 bottom-[calc(20%+2rem)] z-[70] w-[20rem] max-w-[calc(100vw-1.5rem)] mr-3 transition-all duration-300 ease-out md:bottom-[20%] ${isOpen ? "pointer-events-auto translate-x-0 opacity-100" : "pointer-events-none translate-x-6 opacity-0"}`}
       >
         <div className="pointer-events-none absolute inset-0 isolate rounded-3xl bg-neutral-900/50 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.5)] ring-1 ring-white/15 backdrop-blur-lg backdrop-saturate-150" />
         <div className="relative overflow-hidden rounded-3xl text-white">
@@ -570,9 +607,9 @@ export function MessageWidget() {
   );
 }
 
-export function PageShell({ children }: { children: React.ReactNode }) {
+export function PageShell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="min-h-screen neo-home text-foreground">
+    <div className={`min-h-screen neo-home text-foreground ${className}`}>
       <SiteHeader />
       <main>{children}</main>
       <SiteFooter />
@@ -606,11 +643,18 @@ export function ButtonLink({ to, children, variant = "primary" }: { to: string; 
 
 export function TrustStrip() {
   return (
-    <section className="border-b neo-line px-5 py-8 sm:px-6">
+    <section className="neo-trust-strip border-b neo-line px-5 py-8 sm:px-6">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 sm:flex-row">
         <p className="yt-tag font-black tracking-[0.16em] neo-muted">Trusted creative output, without the production drag</p>
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 yt-small font-black tracking-[0.22em] neo-muted">
+        <div className="hidden flex-wrap items-center justify-center gap-x-8 gap-y-3 yt-small font-black tracking-[0.22em] neo-muted sm:flex">
           {["TECHRIVA", "VOGUE", "APEX", "LUXE", "NEON"].map((logo) => <span key={logo}>{logo}</span>)}
+        </div>
+        <div className="neo-trust-strip-mobile-logos sm:hidden">
+          <PortfolioScroller className="neo-trust-strip-scroller" ariaLabel="Client logos" mobileOnly>
+            {["TECHRIVA", "VOGUE", "APEX", "LUXE", "NEON"].map((logo) => (
+              <span key={logo} className="neo-trust-logo yt-small font-black tracking-[0.22em] neo-muted">{logo}</span>
+            ))}
+          </PortfolioScroller>
         </div>
       </div>
     </section>
@@ -645,7 +689,7 @@ export function WorkflowSection() {
             {workflow.map(([step, title, copy, icon], index) => (
               <article key={step} className="neo-card relative z-10 rounded-2xl p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="neo-red-glow flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white">
+                  <span className="neo-icon-badge neo-red-glow flex h-12 w-12 items-center justify-center rounded-2xl">
                     <span className="material-symbols-outlined text-[24px]">{icon}</span>
                   </span>
                   <span className="yt-tag font-black uppercase tracking-[0.16em] neo-muted">Step {Number(step)}</span>
@@ -666,37 +710,22 @@ export function WorkflowSection() {
 }
 
 export function PortfolioSection({ full = false, sections, className = "" }: { full?: boolean; sections?: PortfolioSectionView[]; className?: string }) {
-  const fallbackSections = useMemo<PortfolioSectionView[]>(() => [{
-    id: "fallback-featured",
-    name: "Featured",
-    slug: "featured",
-    active: true,
-    sortOrder: 1,
-    videos: portfolio.slice(0, 5).map((item, index) => ({
-      id: `fallback-${item.title}`,
-      title: item.title,
-      creatorName: item.type,
-      tag: item.tag,
-      uniqueSellingPoint: item.tag,
-      videoUrl: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`,
-      youtubeId: "dQw4w9WgXcQ",
-      videoProvider: "youtube" as const,
-      thumbnailUrl: `https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=800&auto=format&fit=crop`,
-      orientation: index % 3 === 0 ? "vertical" : "horizontal",
-      sortOrder: index + 1,
-    })),
-  }], []);
   const portfolioSections = useMemo(() => {
-    const source = sections?.length ? sections : fallbackSections;
+    const source = sections?.length ? sections : defaultPortfolioSections;
     return source.filter((section) => section.slug && section.name);
-  }, [fallbackSections, sections]);
+  }, [sections]);
   const firstTabSlug = portfolioSections[0]?.slug || "featured";
   const [activeTab, setActiveTab] = useState(firstTabSlug);
+  const [displayedTab, setDisplayedTab] = useState(firstTabSlug);
+  const [isSwitching, setIsSwitching] = useState(false);
+  const portfolioId = useId();
   const [playingItem, setPlayingItem] = useState<PortfolioVideo | null>(null);
+  const [isPlayerLoading, setIsPlayerLoading] = useState(false);
+  const [playerLoadFailed, setPlayerLoadFailed] = useState(false);
   const tabListRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [tabIndicator, setTabIndicator] = useState({ left: 0, top: 0, width: 0, height: 0 });
-  const activeSection = portfolioSections.find((section) => section.slug === activeTab) || portfolioSections[0];
+  const activeSection = portfolioSections.find((section) => section.slug === displayedTab) || portfolioSections[0];
   const displayPortfolio = useMemo(() => buildPortfolioLayout(activeSection?.videos || []), [activeSection]);
 
   useEffect(() => {
@@ -704,6 +733,21 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
       setActiveTab(firstTabSlug);
     }
   }, [activeTab, firstTabSlug, portfolioSections]);
+
+  useEffect(() => {
+    if (activeTab === displayedTab) {
+      setIsSwitching(false);
+      return;
+    }
+
+    setIsSwitching(true);
+    const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160;
+    const timeout = window.setTimeout(() => {
+      setDisplayedTab(activeTab);
+      setIsSwitching(false);
+    }, delay);
+    return () => window.clearTimeout(timeout);
+  }, [activeTab, displayedTab]);
 
   useEffect(() => {
     const updateTabIndicator = () => {
@@ -714,8 +758,8 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
       const tabListRect = tabList.getBoundingClientRect();
       const activeButtonRect = activeButton.getBoundingClientRect();
       setTabIndicator({
-        left: activeButtonRect.left - tabListRect.left,
-        top: activeButtonRect.top - tabListRect.top,
+        left: activeButtonRect.left - tabListRect.left + tabList.scrollLeft,
+        top: activeButtonRect.top - tabListRect.top + tabList.scrollTop,
         width: activeButtonRect.width,
         height: activeButtonRect.height,
       });
@@ -735,7 +779,33 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
 
   useEffect(() => {
     setPlayingItem(null);
+    setIsPlayerLoading(false);
+    setPlayerLoadFailed(false);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!playingItem || !isPlayerLoading || playingItem.videoProvider === "cloudinary") return;
+
+    // Some embedded videos never dispatch load when playback is blocked. Keep a
+    // clear recovery path instead of leaving the user with an indefinite spinner.
+    const timeout = window.setTimeout(() => {
+      setIsPlayerLoading(false);
+      setPlayerLoadFailed(true);
+    }, 12000);
+    return () => window.clearTimeout(timeout);
+  }, [isPlayerLoading, playingItem]);
+
+  const playPortfolioItem = (item: PortfolioVideo) => {
+    setPlayerLoadFailed(false);
+    setIsPlayerLoading(true);
+    setPlayingItem(item);
+  };
+
+  const closePlayer = () => {
+    setPlayingItem(null);
+    setIsPlayerLoading(false);
+    setPlayerLoadFailed(false);
+  };
 
   useEffect(() => {
     if (!playingItem) return;
@@ -751,7 +821,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
       <div className="mx-auto max-w-7xl">
         <SectionIntro title="Edits built to keep viewers watching." />
 
-        <div ref={tabListRef} className="neo-inset relative mx-auto mt-8 flex w-fit max-w-full flex-wrap justify-center gap-2 rounded-full p-1.5" role="tablist" aria-label="Portfolio categories">
+        <div ref={tabListRef} className="neo-inset neo-portfolio-tabs relative mx-auto mt-8 flex w-fit max-w-full flex-wrap justify-center gap-1 p-1.5" role="tablist" aria-label="Portfolio categories">
           <span
             aria-hidden="true"
             className="neo-portfolio-tab-indicator"
@@ -762,7 +832,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
               transform: `translate3d(${tabIndicator.left}px, ${tabIndicator.top}px, 0)`,
             }}
           />
-          {portfolioSections.map((section) => (
+          {portfolioSections.map((section, index) => (
             <button
               key={section.id}
               ref={(node) => {
@@ -770,10 +840,24 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
               }}
               type="button"
               onClick={() => setActiveTab(section.slug)}
+              onKeyDown={(event) => {
+                let nextIndex = index;
+                if (event.key === "ArrowRight") nextIndex = (index + 1) % portfolioSections.length;
+                else if (event.key === "ArrowLeft") nextIndex = (index - 1 + portfolioSections.length) % portfolioSections.length;
+                else if (event.key === "Home") nextIndex = 0;
+                else if (event.key === "End") nextIndex = portfolioSections.length - 1;
+                else return;
+                event.preventDefault();
+                const nextSection = portfolioSections[nextIndex];
+                setActiveTab(nextSection.slug);
+                tabRefs.current[nextSection.slug]?.focus();
+              }}
+              id={`${portfolioId}-tab-${section.slug}`}
               role="tab"
+              tabIndex={activeTab === section.slug ? 0 : -1}
               aria-selected={activeTab === section.slug}
-              aria-controls={`portfolio-panel-${section.slug}`}
-              className={`neo-portfolio-tab relative z-10 rounded-full px-4 py-2 yt-small font-black transition ${
+              aria-controls={`${portfolioId}-panel`}
+              className={`neo-portfolio-tab relative z-10 inline-flex min-h-11 items-center rounded-xl px-4 py-2 yt-small font-black ${
                 activeTab === section.slug
                   ? "neo-portfolio-tab--active"
                   : "neo-portfolio-tab--inactive"
@@ -784,23 +868,28 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
           ))}
         </div>
 
-        <div key={activeTab} id={`portfolio-panel-${activeSection?.slug || "empty"}`} className="neo-portfolio-panel mt-10" role="tabpanel">
+        <div key={displayedTab} id={`${portfolioId}-panel`} className={`neo-portfolio-panel mt-8 ${isSwitching ? "is-switching" : ""}`} role="tabpanel" aria-labelledby={`${portfolioId}-tab-${activeSection?.slug || firstTabSlug}`} aria-busy={isSwitching} tabIndex={0} inert={isSwitching}>
           {displayPortfolio.length ? (
             <PortfolioScroller>
               {displayPortfolio.map((item, index) => (
-                <div key={item.id} className={`neo-portfolio-slide ${index === 0 ? "neo-portfolio-slide--featured" : ""}`}>
-                  <PortfolioCard item={item} variant="slider" onPlay={setPlayingItem} />
+                <div key={item.id} style={{ animationDelay: `${Math.min(index, 3) * 55}ms` }} className={`neo-portfolio-slide neo-portfolio-slide--enter ${item.orientation === "horizontal" ? "neo-portfolio-slide--landscape" : ""} ${index === 0 ? "neo-portfolio-slide--featured" : ""}`}>
+                  <PortfolioCard item={item} variant="slider" onPlay={playPortfolioItem} />
                 </div>
               ))}
             </PortfolioScroller>
           ) : null}
+          {displayPortfolio.length === 0 ? (
+            <div className="neo-inset neo-portfolio-empty rounded-3xl border border-dashed border-slate-300 py-16 text-center yt-small font-bold neo-muted">
+              No portfolio items found for {activeSection?.name || "this tab"}.
+            </div>
+          ) : null}
         </div>
-
-        {displayPortfolio.length === 0 ? (
-            <div className="neo-inset mt-8 rounded-3xl border border-dashed border-slate-300 py-16 text-center yt-small font-bold neo-muted">
-            No portfolio items found for {activeSection?.name || "this tab"}.
-          </div>
-        ) : null}
+        <div className="neo-portfolio-view-all mt-6 hidden justify-center">
+          <ButtonLink to="/portfolio">
+            View more
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+          </ButtonLink>
+        </div>
       </div>
 
       {playingItem ? (
@@ -809,18 +898,18 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
           role="dialog"
           aria-modal="true"
           aria-label={`${playingItem.title} video player`}
-          onClick={() => setPlayingItem(null)}
+          onClick={closePlayer}
         >
           <div className="relative w-full max-w-5xl" onClick={(event) => event.stopPropagation()}>
             <button
               type="button"
-              onClick={() => setPlayingItem(null)}
+              onClick={closePlayer}
               className="absolute -right-2 -top-12 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black shadow-lg transition hover:bg-primary hover:text-white"
               aria-label="Close video player"
             >
               <span className="material-symbols-outlined text-[22px]">close</span>
             </button>
-            <div className={`overflow-hidden rounded-[28px] bg-black shadow-2xl ${playingItem.orientation === "vertical" ? "mx-auto aspect-[9/16] max-h-[82vh] max-w-[460px]" : "aspect-video"}`}>
+            <div className={`relative overflow-hidden rounded-[28px] bg-black shadow-2xl ${playingItem.orientation === "vertical" ? "mx-auto aspect-[9/16] max-h-[82vh] max-w-[460px]" : "aspect-video"}`}>
               {playingItem.videoProvider === "cloudinary" ? (
                 <video
                   className="h-full w-full object-contain"
@@ -830,6 +919,11 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
                   controls
                   autoPlay
                   playsInline
+                  onCanPlay={() => setIsPlayerLoading(false)}
+                  onError={() => {
+                    setIsPlayerLoading(false);
+                    setPlayerLoadFailed(true);
+                  }}
                 />
               ) : (
                 <iframe
@@ -838,8 +932,30 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
                   title={`${playingItem.title} video`}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
+                  loading="eager"
+                  onLoad={() => setIsPlayerLoading(false)}
+                  onError={() => {
+                    setIsPlayerLoading(false);
+                    setPlayerLoadFailed(true);
+                  }}
                 />
               )}
+              {isPlayerLoading ? (
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 text-center text-white" role="status" aria-live="polite">
+                  <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+                  <span className="text-sm font-semibold">Starting video…</span>
+                </div>
+              ) : null}
+              {playerLoadFailed ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 px-5 text-center text-white" role="status">
+                  <p className="font-semibold">This video is taking a while to load.</p>
+                  {playingItem.videoProvider === "youtube" && playingItem.youtubeId ? (
+                    <a className="rounded-full bg-white px-4 py-2 text-sm font-bold text-black transition hover:bg-slate-200" href={`https://www.youtube.com/watch?v=${encodeURIComponent(playingItem.youtubeId)}`} target="_blank" rel="noreferrer">
+                      Watch on YouTube
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -848,7 +964,17 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   );
 }
 
-function PortfolioScroller({ children }: { children: React.ReactNode }) {
+function PortfolioScroller({
+  children,
+  className = "",
+  ariaLabel,
+  mobileOnly = false,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  ariaLabel?: string;
+  mobileOnly?: boolean;
+}) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const firstSegmentRef = useRef<HTMLDivElement>(null);
   const autoFrameRef = useRef<number | null>(null);
@@ -856,6 +982,7 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
   const resumeAutoRef = useRef<number | null>(null);
   const autoRemainderRef = useRef(0);
   const autoPausedRef = useRef(false);
+  const reducedMotionRef = useRef(false);
   const dragRef = useRef({
     didDrag: false,
     dragging: false,
@@ -868,13 +995,12 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
 
   const getLoopWidth = () => firstSegmentRef.current?.offsetWidth || 0;
 
-  const normalizeScrollPosition = () => {
+  const advanceScroll = (movement: number) => {
     const scroller = scrollerRef.current;
     const loopWidth = getLoopWidth();
     if (!scroller || loopWidth <= 0) return;
 
-    if (scroller.scrollLeft >= loopWidth) scroller.scrollLeft -= loopWidth;
-    if (scroller.scrollLeft < 0) scroller.scrollLeft += loopWidth;
+    scroller.scrollLeft = wrapLoopPosition(scroller.scrollLeft + movement, loopWidth);
   };
 
   const pauseAutoScroll = () => {
@@ -888,9 +1014,17 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
   const scheduleAutoScroll = () => {
     if (resumeAutoRef.current !== null) window.clearTimeout(resumeAutoRef.current);
     resumeAutoRef.current = window.setTimeout(() => {
-      autoPausedRef.current = false;
+      autoPausedRef.current = scrollerRef.current?.matches(":hover, :focus-within") || false;
       resumeAutoRef.current = null;
     }, 1200);
+  };
+
+  const resumeAutoScrollOnPointerLeave = () => {
+    if (resumeAutoRef.current !== null) {
+      window.clearTimeout(resumeAutoRef.current);
+      resumeAutoRef.current = null;
+    }
+    autoPausedRef.current = scrollerRef.current?.matches(":focus-within") || false;
   };
 
   const stopMomentum = () => {
@@ -902,14 +1036,11 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
 
   const startMomentum = () => {
     const scroller = scrollerRef.current;
-    if (!scroller) return;
+    if (!scroller || reducedMotionRef.current) return;
 
     let velocity = dragRef.current.velocity * 16;
     const step = () => {
-      const loopWidth = getLoopWidth();
-      if (velocity < 0 && scroller.scrollLeft <= 0 && loopWidth > 0) scroller.scrollLeft = loopWidth;
-      scroller.scrollLeft += velocity;
-      normalizeScrollPosition();
+      advanceScroll(velocity);
       velocity *= 0.94;
 
       if (Math.abs(velocity) < 0.15) {
@@ -939,7 +1070,6 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
       pointerId: event.pointerId,
       velocity: 0,
     };
-    scroller.setPointerCapture(event.pointerId);
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -949,6 +1079,7 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
 
     if (!drag.dragging && Math.abs(event.clientX - drag.lastX) < 6) return;
 
+    if (!drag.dragging) scroller.setPointerCapture(event.pointerId);
     drag.dragging = true;
     drag.didDrag = true;
     setIsDragging(true);
@@ -957,9 +1088,7 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
     const now = performance.now();
     const elapsed = Math.max(now - drag.lastTime, 1);
     const deltaX = event.clientX - drag.lastX;
-    if (deltaX > 0 && scroller.scrollLeft <= 0 && getLoopWidth() > 0) scroller.scrollLeft = getLoopWidth();
-    scroller.scrollLeft -= deltaX;
-    normalizeScrollPosition();
+    advanceScroll(-deltaX);
     drag.velocity = Math.max(-2.5, Math.min(2.5, -deltaX / elapsed));
     drag.lastX = event.clientX;
     drag.lastTime = now;
@@ -973,28 +1102,89 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
     if (scroller.hasPointerCapture(event.pointerId)) scroller.releasePointerCapture(event.pointerId);
     drag.pointerId = -1;
     setIsDragging(false);
-    if (drag.didDrag) startMomentum();
+    if (drag.didDrag && event.type !== "pointercancel") startMomentum();
     drag.dragging = false;
     scheduleAutoScroll();
   };
 
   useEffect(() => {
-    const autoScroll = () => {
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const mobileViewport = window.matchMedia("(max-width: 639px)");
+    const scroller = scrollerRef.current;
+    let lastFrameTime = 0;
+    let isVisible = typeof IntersectionObserver === "undefined";
+    const canAutoScroll = () =>
+      isVisible &&
+      !document.hidden &&
+      !reducedMotionRef.current &&
+      (!mobileOnly || mobileViewport.matches);
+
+    const autoScroll = (time: number) => {
+      const elapsed = lastFrameTime ? Math.min(time - lastFrameTime, 64) : 0;
+      lastFrameTime = time;
       const scroller = scrollerRef.current;
-      if (!autoPausedRef.current && scroller) {
-        const movement = 0.45 + autoRemainderRef.current;
+      if (canAutoScroll() && !autoPausedRef.current && scroller) {
+        const movement = elapsed * 0.027 + autoRemainderRef.current;
         const pixels = Math.floor(movement);
         autoRemainderRef.current = movement - pixels;
-        if (pixels > 0) {
-          scroller.scrollLeft += pixels;
-          normalizeScrollPosition();
-        }
+        if (pixels > 0) advanceScroll(pixels);
       }
-      autoFrameRef.current = requestAnimationFrame(autoScroll);
+      autoFrameRef.current = canAutoScroll() ? requestAnimationFrame(autoScroll) : null;
     };
 
-    autoFrameRef.current = requestAnimationFrame(autoScroll);
+    const syncAutoScroll = () => {
+      if (!canAutoScroll()) {
+        if (autoFrameRef.current !== null) cancelAnimationFrame(autoFrameRef.current);
+        autoFrameRef.current = null;
+        lastFrameTime = 0;
+        stopMomentum();
+        return;
+      }
+
+      if (autoFrameRef.current === null) {
+        lastFrameTime = 0;
+        autoFrameRef.current = requestAnimationFrame(autoScroll);
+      }
+    };
+
+    const visibilityObserver = typeof IntersectionObserver === "undefined" || !scroller
+      ? null
+      : new IntersectionObserver((entries) => {
+          const nextIsVisible = entries.some((entry) => entry.isIntersecting);
+          if (nextIsVisible === isVisible) return;
+          isVisible = nextIsVisible;
+          syncAutoScroll();
+        });
+    if (visibilityObserver && scroller) visibilityObserver.observe(scroller);
+
+    const updateMotionPreference = () => {
+      reducedMotionRef.current = motionPreference.matches;
+      syncAutoScroll();
+    };
+    const handleWheel = (event: WheelEvent) => {
+      const movement = event.deltaX || (event.shiftKey ? event.deltaY : 0);
+      if (!movement || !scroller) return;
+      event.preventDefault();
+      pauseAutoScroll();
+      stopMomentum();
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? scroller.clientWidth : 1;
+      advanceScroll(movement * unit);
+      scheduleAutoScroll();
+    };
+    scroller?.addEventListener("wheel", handleWheel, { passive: false });
+    const resizeObserver = new ResizeObserver(() => advanceScroll(0));
+    if (firstSegmentRef.current) resizeObserver.observe(firstSegmentRef.current);
+    updateMotionPreference();
+    motionPreference.addEventListener("change", updateMotionPreference);
+    document.addEventListener("visibilitychange", updateMotionPreference);
+    if (mobileOnly) mobileViewport.addEventListener("change", updateMotionPreference);
     return () => {
+      motionPreference.removeEventListener("change", updateMotionPreference);
+      document.removeEventListener("visibilitychange", updateMotionPreference);
+      if (mobileOnly) mobileViewport.removeEventListener("change", updateMotionPreference);
+      scroller?.removeEventListener("wheel", handleWheel);
+      visibilityObserver?.disconnect();
+      resizeObserver.disconnect();
       if (autoFrameRef.current !== null) cancelAnimationFrame(autoFrameRef.current);
       if (resumeAutoRef.current !== null) window.clearTimeout(resumeAutoRef.current);
       stopMomentum();
@@ -1004,24 +1194,36 @@ function PortfolioScroller({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={scrollerRef}
-      className={`neo-portfolio-scroller ${isDragging ? "is-dragging" : ""}`}
+      role={ariaLabel ? "region" : undefined}
+      className={`neo-portfolio-scroller ${className} ${isDragging ? "is-dragging" : ""}`}
+      aria-label={ariaLabel}
+      tabIndex={ariaLabel ? 0 : undefined}
+      onPointerEnter={pauseAutoScroll}
+      onPointerLeave={resumeAutoScrollOnPointerLeave}
+      onFocusCapture={pauseAutoScroll}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) scheduleAutoScroll();
+      }}
       onClickCapture={(event) => {
         if (!dragRef.current.didDrag) return;
+        dragRef.current.didDrag = false;
+        if (event.detail === 0) return;
         event.preventDefault();
         event.stopPropagation();
-        dragRef.current.didDrag = false;
       }}
       onPointerCancel={handlePointerUp}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onWheel={(event) => {
-        if (event.deltaX !== 0 || event.shiftKey) event.preventDefault();
+      onScroll={() => {
+        if ((scrollerRef.current?.scrollLeft || 0) >= getLoopWidth()) advanceScroll(0);
       }}
     >
       <div className="neo-portfolio-track">
         <div ref={firstSegmentRef} className="neo-portfolio-track-segment">{children}</div>
-        <div className="neo-portfolio-track-segment" aria-hidden="true">{children}</div>
+        <div className="neo-portfolio-track-segment" aria-hidden="true">
+          <PortfolioCopyContext.Provider value={true}>{children}</PortfolioCopyContext.Provider>
+        </div>
       </div>
     </div>
   );
@@ -1040,8 +1242,7 @@ function buildPortfolioLayout(videos: PortfolioVideo[]) {
   const reel = take(orderedVideos.find((video) => video.orientation === "vertical") || orderedVideos.find((video) => !selectedIds.has(video.id)));
   const bottomVideos = orderedVideos
     .filter((video) => !selectedIds.has(video.id))
-    .sort((a, b) => Number(b.orientation === "horizontal") - Number(a.orientation === "horizontal") || a.sortOrder - b.sortOrder)
-    .slice(0, 3);
+    .sort((a, b) => Number(b.orientation === "horizontal") - Number(a.orientation === "horizontal") || a.sortOrder - b.sortOrder);
 
   bottomVideos.forEach((video) => selectedIds.add(video.id));
 
@@ -1059,9 +1260,10 @@ function PortfolioCard({
   featured?: boolean;
   onPlay: (item: PortfolioVideo) => void;
 }) {
+  const isCopy = useContext(PortfolioCopyContext);
   const sizeClass = {
     hero: "aspect-[4/3] sm:aspect-video lg:aspect-auto lg:h-[514px]",
-    slider: "h-[340px] sm:h-[420px] lg:h-[500px]",
+    slider: "h-[240px] w-full sm:h-[320px] lg:h-[340px]",
     wide: "aspect-video",
     reel: featured ? "aspect-[9/14] lg:h-[514px] lg:aspect-auto" : "aspect-[9/14]",
   }[variant];
@@ -1069,40 +1271,35 @@ function PortfolioCard({
   return (
     <button
       type="button"
+      tabIndex={isCopy ? -1 : undefined}
       onClick={() => onPlay(item)}
-      className={`group relative block overflow-hidden rounded-[28px] border border-white bg-black text-left shadow-[0_18px_50px_rgba(15,23,42,0.14)] ${sizeClass}`}
-      aria-label={`Play ${item.title} video`}
+      className={`group relative block overflow-hidden rounded-[28px] border border-white bg-black text-left shadow-none ${sizeClass}`}
+      aria-label={`Watch ${item.title} video`}
     >
       <img
         src={item.thumbnailUrl}
         alt={`${item.title} ${item.creatorName} video`}
         loading="lazy"
         decoding="async"
+        onError={(event) => {
+          if (item.videoProvider !== "youtube" || !item.thumbnailUrl.endsWith("/maxresdefault.jpg")) return;
+          const fallback = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+          if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+        }}
         className="h-full w-full object-cover opacity-90 transition duration-300 group-hover:scale-[1.03] group-hover:opacity-100"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-black/5" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
 
-      <span className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center text-white drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)] transition duration-300 group-hover:scale-110 group-hover:text-primary">
-        <svg
-          className="h-16 w-16"
-          viewBox="0 0 64 64"
-          aria-hidden="true"
-          focusable="false"
-        >
-          <path
-            d="M22 14.5 51 32 22 49.5Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+      <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white shadow-md ring-1 ring-white/20" aria-hidden="true">
+        <svg className="h-[17px] w-[17px]" viewBox="0 0 24 24" fill="none" focusable="false">
+          <rect x="3" y="6" width="13" height="12" rx="2.5" fill="currentColor" />
+          <path d="m16 10 5-3v10l-5-3" fill="currentColor" />
         </svg>
       </span>
 
       <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
         <p className="yt-tag font-black uppercase text-white/70">{item.creatorName}</p>
-        <h3 className={`${variant === "hero" ? "neo-portfolio-card-title--hero" : "yt-title"} mt-1 font-black text-white`}>{item.title}</h3>
+        <h3 className="type-card-title mt-1 text-white">{item.title}</h3>
       </div>
     </button>
   );
@@ -1116,13 +1313,13 @@ export function DifferentiatorsSection() {
     ["auto_awesome_mosaic", "Repurposing ready", "Turn long-form episodes into Shorts, TikToks, and Reels without starting over."],
   ];
   return (
-    <section className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
+    <section className="neo-benefits border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
         <SectionIntro eyebrow="Why EdiCut" title="A production partner, not just an editing queue." />
         <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {items.map(([icon, title, copy]) => (
-            <article key={title} className="neo-card rounded-2xl p-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27]">
+          {items.map(([icon, title, copy], index) => (
+            <article key={title} className={`neo-benefit-card neo-card rounded-2xl p-6 ${index === 3 ? "neo-benefit-mobile-hidden" : ""}`}>
+              <span className="neo-icon-badge flex h-11 w-11 items-center justify-center rounded-xl">
                 <span className="material-symbols-outlined">{icon}</span>
               </span>
               <h3 className="neo-differentiator-title mt-5 font-black neo-ink">{title}</h3>
@@ -1141,8 +1338,6 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
       name: "Creator",
       slug: "creator",
       price: "$80",
-      podcastPrice: "$160",
-      vlogPrice: "$160",
       description: "A lean creator package for clean edits with subtitles, sound, color, stock assets, proofing, reels, and thumbnail support.",
       badge: "Essentials",
       icon: "smart_display",
@@ -1152,8 +1347,6 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
       name: "Creator Plus",
       slug: "creator-plus",
       price: "$120",
-      podcastPrice: "$240",
-      vlogPrice: "$200",
       description: "For creators who need the core editing stack plus a stronger package price for podcast-length work and vlog footage.",
       badge: "Most popular",
       icon: "trending_up",
@@ -1164,8 +1357,6 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
       name: "Creator Pro",
       slug: "creator-pro",
       price: "$300",
-      podcastPrice: "$600",
-      vlogPrice: "$380",
       description: "The full creator package with project files, motion graphics, VFX, and AI voice over for more advanced edits.",
       badge: "Advanced",
       icon: "movie_filter",
@@ -1176,29 +1367,20 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
   return (
     <section id="pricing" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.45fr)] lg:items-end">
-          <div>
-            <p className="yt-tag neo-section-label">Choose your editing plan</p>
-            <h2 className="mt-3 max-w-3xl yt-title neo-ink">Simple plans for a steadier publishing rhythm.</h2>
-            <p className="mt-5 max-w-2xl yt-subtitle leading-8 neo-muted">
-              Start with a monthly editing subscription, then add the footage coverage and advanced support your channel actually needs.
-            </p>
-          </div>
-          <div className="neo-inset rounded-2xl p-4">
-            <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">How pricing works</p>
-            <div className="mt-3 grid gap-2">
-              <ScopeRow icon="podcasts" label="Finished video coverage" value="Up to 60 min" />
-              <ScopeRow icon="video_file" label="Raw footage coverage" value="Up to 600 min" />
-            </div>
-          </div>
+        <div className="neo-pricing-intro">
+          <p className="yt-tag neo-section-label">Choose your editing plan</p>
+          <h2 className="mt-3 max-w-3xl yt-title neo-ink">
+            <span className="hidden sm:inline">Simple plans for a steadier publishing rhythm.</span>
+            <span className="sm:hidden">Simple editing plans.</span>
+          </h2>
         </div>
 
         <div className="mt-10 grid gap-4 lg:grid-cols-3">
           {editingPlans.map((plan) => {
             return (
-              <article key={plan.name} className={`neo-card relative rounded-2xl p-5 ${plan.popular ? "ring-2 ring-primary/60" : ""}`}>
+              <article key={plan.name} className={`neo-pricing-card neo-card relative rounded-2xl p-5 ${plan.popular ? "ring-2 ring-primary/60" : ""}`}>
                 <div className="flex items-start justify-between gap-4">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e9cdd1] text-[#a91b27]">
+                  <span className="neo-icon-badge flex h-10 w-10 items-center justify-center rounded-xl">
                     <span className="material-symbols-outlined text-[21px]">{plan.icon}</span>
                   </span>
                   <span className={`rounded-full px-2.5 py-1 yt-tag font-black uppercase ${plan.popular ? "bg-primary text-white" : "neo-inset neo-muted"}`}>
@@ -1206,25 +1388,20 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
                   </span>
                 </div>
 
-                <h3 className="mt-5 yt-title font-black neo-ink">{plan.name}</h3>
-                <p className="mt-3 min-h-20 yt-small font-medium leading-6 neo-muted">{plan.description}</p>
+                <h3 className="mt-5 type-card-title neo-ink">{plan.name}</h3>
+                <p className="neo-pricing-description mt-3 min-h-20 yt-small font-medium leading-6 neo-muted">{plan.description}</p>
 
-                <div className="mt-5 border-y neo-line py-4">
+                <div className="neo-pricing-amount mt-5 border-y neo-line py-4">
                   <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Monthly subscription</p>
+                  <p className="mt-2 yt-small font-bold neo-muted">Starting from</p>
                   <div className="mt-1 flex items-baseline gap-2">
-                    <span className="yt-title font-black tracking-tight neo-ink">{plan.price}</span>
+                    <span className="type-price neo-ink">{plan.price}</span>
                     <span className="yt-small font-bold neo-muted">/month</span>
                   </div>
                 </div>
 
-                <p className="mt-4 yt-tag font-black uppercase tracking-[0.14em] neo-muted">Optional coverage</p>
-                <div className="mt-2 grid gap-2">
-                  <ScopeRow icon="podcasts" label="Up to 60 min finished video" value={`+${plan.podcastPrice}`} compact />
-                  <ScopeRow icon="video_file" label="Up to 600 min raw footage" value={`+${plan.vlogPrice}`} compact />
-                </div>
-
                 <p className="mt-5 yt-tag font-black uppercase tracking-[0.14em] neo-muted">Every plan includes</p>
-                <ul className="mt-3 grid gap-3">
+                <ul className="neo-pricing-features mt-3 grid gap-3">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex gap-3 yt-small font-bold neo-ink">
                       <span className="material-symbols-outlined text-[18px] text-primary">check_circle</span>
@@ -1241,46 +1418,9 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
           })}
         </div>
 
-         <section className="neo-inset mt-5 rounded-2xl p-5">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Quote factors</p>
-              <h3 className="mt-2 yt-title font-black neo-ink">What changes the final price?</h3>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:w-[680px]">
-              {[
-                ["paid", "Creator base price", "$80, $120, or $300 depending on package level."],
-                ["podcasts", "60 min run time", "Podcast-style work varies from $160 to $600."],
-                ["video_file", "600 min raw footage", "Vlog raw footage varies from $160 to $380."],
-                ["auto_awesome", "Advanced add-ons", "Project files, motion graphics, VFX, and AI voice over are Pro-only."],
-              ].map(([icon, title, copy]) => (
-                <div key={title} className="neo-card rounded-xl p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[18px] text-primary">{icon}</span>
-                    <p className="yt-small font-black neo-ink">{title}</p>
-                  </div>
-                  <p className="mt-2 yt-tag font-bold leading-5 neo-muted">{copy}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
         {comparison ? <ComparisonTable /> : null}
       </div>
     </section>
-  );
-}
-
-function ScopeRow({ icon, label, value, compact = false }: { icon: string; label: string; value: string; compact?: boolean }) {
-  return (
-    <div className={`neo-card flex items-center justify-between gap-3 rounded-lg ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="material-symbols-outlined text-[18px] text-primary">{icon}</span>
-        <span className="truncate yt-small font-black neo-ink">{label}</span>
-      </div>
-      <span className="shrink-0 yt-small font-black neo-muted">{value}</span>
-    </div>
   );
 }
 
@@ -1319,7 +1459,7 @@ export function ComparisonTable() {
     <section className="mt-8 rounded-lg bg-[#F7FAFB] p-3 sm:p-4">
       <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside>
-          <h2 className="max-w-[230px] yt-title leading-tight tracking-tight text-foreground sm:text-[2.7rem]">Compare packages</h2>
+          <h2 className="max-w-[230px] yt-title text-foreground">Compare packages</h2>
           <p className="mt-4 max-w-[250px] text-base font-medium leading-7 text-muted-foreground">
             Choose the editing subscription that matches your footage volume, runtime, and advanced deliverables.
           </p>
@@ -1347,8 +1487,8 @@ export function ComparisonTable() {
           <div className="grid md:grid-cols-3">
             {packages.map(([name, price, copy], index) => (
               <article key={name} className={`h-fit border-r border-gray-100 bg-white p-5 last:border-r-0 ${index === 1 ? "relative z-10 ring-1 ring-primary" : ""}`}>
-                <h3 className="yt-subtitle font-black">{name}</h3>
-                <p className="mt-3 yt-title font-black tracking-tight">{price}<span className="yt-tag font-bold text-muted-foreground"> base</span></p>
+                <h3 className="type-card-title">{name}</h3>
+                <p className="mt-3 type-price">{price}<span className="yt-tag font-bold text-muted-foreground"> base</span></p>
                 <p className="mt-3 yt-small font-medium leading-6 text-muted-foreground">{copy}</p>
               </article>
             ))}
@@ -1362,7 +1502,7 @@ export function ComparisonTable() {
           </div>
         </div>
 
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
             <div className="min-w-[860px]">
               <div className="grid grid-cols-[230px_repeat(3,minmax(150px,1fr))] border-b border-gray-200 bg-[#FBFCFD]">
@@ -1403,17 +1543,17 @@ function FeatureValue({ value }: { value: string }) {
 
 export function TestimonialsSection() {
   return (
-    <section className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
+    <section className="neo-testimonials border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
-        <PortfolioScroller>
+        <PortfolioScroller className="neo-testimonial-scroller">
           {testimonials.map(([quote, name, role]) => (
             <div key={name} className="neo-testimonial-slide">
-              <article className="neo-card flex h-full min-h-[270px] flex-col rounded-2xl p-7">
-                <div className="flex items-center gap-1 text-primary" aria-label="5 out of 5 stars">
+              <article className="neo-card flex h-full min-h-[270px] flex-col items-center rounded-2xl p-7 text-center">
+                <div className="flex items-center justify-center gap-1" aria-label="5 out of 5 stars">
                   {[1, 2, 3, 4, 5].map((star) => <span key={star} className="neo-rating-star material-symbols-outlined text-[17px]">star</span>)}
                 </div>
-                <p className="mt-5 flex-1 yt-subtitle font-bold leading-8 neo-ink">"{quote}"</p>
-                <div className="mt-6">
+                <p className="mt-5 w-full flex-1 yt-subtitle font-bold leading-8 neo-ink">"{quote}"</p>
+                <div className="mt-6 w-full text-center">
                   <p className="font-black neo-ink">{name}</p>
                   <p className="mt-1 yt-small font-bold neo-muted">{role}</p>
                 </div>
@@ -1429,15 +1569,22 @@ export function TestimonialsSection() {
 export function FAQSection() {
   return (
     <section id="faq" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-7xl">
         <SectionIntro eyebrow="FAQ" title="What creators usually ask before starting." />
         <div className="neo-surface mt-10 divide-y neo-line rounded-2xl p-2">
           {faqs.map(([q, a]) => (
             <details key={q} className="group rounded-xl p-5 transition hover:bg-transparent" open={q === faqs[0][0]}>
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 yt-subtitle font-black neo-ink transition-colors group-hover:text-black">
-                {q}<span className="material-symbols-outlined neo-muted transition-colors group-hover:text-black group-open:rotate-180">expand_more</span>
+              <summary className="type-question flex cursor-pointer list-none items-center justify-between gap-4 neo-ink transition-colors group-hover:text-black">
+                {q}
+                <span className="neo-icon-badge flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+                  <span className="material-symbols-outlined neo-faq-arrow">expand_more</span>
+                </span>
               </summary>
-              <p className="mt-4 leading-7 neo-muted">{a}</p>
+              <div className="neo-faq-answer">
+                <div className="neo-faq-answer__content pt-4 leading-7 neo-muted">
+                  {a}
+                </div>
+              </div>
             </details>
           ))}
         </div>
@@ -1465,36 +1612,41 @@ export function ContactSection({ compact = false, status, action = "/#contact" }
 
   return (
     <section id="contact" className="px-5 py-14 sm:px-6 sm:py-20">
-      <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_0.75fr]">
+      <div className="neo-contact-layout mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_0.75fr]">
         <div className="neo-surface flex flex-col justify-center rounded-[2rem] p-7 sm:p-10">
           <p className="yt-tag neo-section-label">Contact us</p>
-          <h2 className="mt-3 max-w-2xl yt-title tracking-tight neo-ink sm:text-5xl">Tell us what you are editing next.</h2>
-          <p className="mt-5 max-w-2xl yt-subtitle leading-8 neo-muted">We will review your channel and match you with the most efficient editing lane for your upload rhythm.</p>
-          <div className="neo-inset mt-8 flex items-center gap-3 rounded-2xl p-4">
+          <p className="neo-contact-invitation hidden">Have a question? Send it below—we’re happy to help.</p>
+          <h2 className="neo-contact-title mt-3 max-w-2xl yt-title neo-ink">
+            Tell us what you are editing next.
+          </h2>
+          <p className="neo-contact-description mt-5 max-w-2xl yt-subtitle leading-8 neo-muted">
+            We will review your channel and match you with the most efficient editing lane for your upload rhythm.
+          </p>
+          <div className="neo-contact-prompt neo-inset mt-8 flex items-center gap-3 rounded-2xl p-4">
             <p className="text-sm font-bold leading-6 neo-ink">Tell us your format, volume, and deadline. We will recommend the cleanest lane to start.</p>
           </div>
         </div>
         <form method="post" action={action} className="neo-card grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit}>
           <input type="hidden" name="g-recaptcha-response" value="" />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Name" name="name" autoComplete="name" required />
-            <Input label="Email" name="email" type="email" autoComplete="email" required />
+          <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+            <Input label="Name" name="name" autoComplete="name" required compact={compact} />
+            <Input label="Email" name="email" type="email" autoComplete="email" required compact={compact} />
           </div>
           {!compact ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input label="Project type" name="projectType" autoComplete="off" />
-              <Input label="Monthly volume" name="monthlyVolume" autoComplete="off" />
+              <Input label="Project type" name="projectType" autoComplete="off" compact={compact} />
+              <Input label="Monthly volume" name="monthlyVolume" autoComplete="off" compact={compact} />
             </div>
           ) : null}
-          <label className="grid gap-2 yt-small font-black">
-            Message
-            <textarea name="brief" required minLength={20} autoComplete="off" className="neo-inset min-h-28 rounded-xl px-4 py-3 font-medium outline-none focus:border-foreground" />
+          <label className={`grid gap-2 yt-small font-black ${compact ? "neo-contact-field--compact" : ""}`}>
+            <span className={compact ? "sr-only sm:not-sr-only" : undefined}>Message</span>
+            <textarea name="brief" required minLength={20} autoComplete="off" placeholder={compact ? "Message" : undefined} className="neo-inset min-h-28 rounded-xl px-4 py-3 font-medium outline-none focus:border-foreground" />
           </label>
           <button type="submit" className="neo-button neo-button--primary w-full">Send inquiry</button>
           {status === "sent" ? <p className="neo-inset rounded-xl px-4 py-3 yt-small font-black text-primary">Message sent. We will reply shortly.</p> : null}
           {securityError || status === "security-error" ? <p className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">{securityError || "Security check failed. Please try again."}</p> : null}
           {status === "invalid-error" ? <p className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">Check the form details and try again.</p> : null}
-          <p className="yt-small font-bold neo-muted">hello@edicut.com · Replies within 24 hours</p>
+          <p className="neo-contact-response yt-small font-bold neo-muted">hello@edicut.com · Replies within 24 hours</p>
         </form>
       </div>
     </section>
@@ -1507,17 +1659,19 @@ function Input({
   type = "text",
   required = false,
   autoComplete,
+  compact = false,
 }: {
   label: string;
   name: string;
   type?: string;
   required?: boolean;
   autoComplete?: string;
+  compact?: boolean;
 }) {
   return (
-    <label className="grid gap-2 yt-small font-black">
-      {label}
-      <input name={name} type={type} required={required} autoComplete={autoComplete} className="neo-inset h-12 rounded-xl px-4 yt-body font-medium outline-none focus:border-foreground" />
+    <label className={`neo-contact-field grid gap-2 yt-small font-black ${compact ? "neo-contact-field--compact" : ""}`}>
+      <span className={compact ? "sr-only sm:not-sr-only" : undefined}>{label}</span>
+      <input name={name} type={type} required={required} autoComplete={autoComplete} placeholder={compact ? label : undefined} className="neo-inset h-12 min-w-0 w-full rounded-xl px-4 yt-body font-medium outline-none focus:border-foreground" />
     </label>
   );
 }
