@@ -37,20 +37,18 @@ export function SmoothScroll() {
     // Keep normal anchor deep-links such as /#portfolio intact.
     if (!window.location.hash) {
       window.scrollTo(0, 0);
-      let forceFrames = 20;
-      const forceTop = () => {
-        window.scrollTo(0, 0);
-        if (--forceFrames > 0) window.requestAnimationFrame(forceTop);
-      };
-      window.requestAnimationFrame(forceTop);
     }
 
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
 
+    const isCompactViewport = window.matchMedia?.("(max-width: 639px)").matches ?? false;
     const lenis = new Lenis({
       duration: 1.15,
       easing: (time: number) => Math.min(1, 1.001 - Math.pow(2, -10 * time)),
-      smoothWheel: true,
+      // On phone-sized layouts, let wheel/trackpad input follow the browser's
+      // native scroll immediately. Long Lenis easing can keep moving against
+      // a quick direction change and makes narrow pages feel like they jump.
+      smoothWheel: !isCompactViewport,
       anchors: true,
       stopInertiaOnNavigate: true,
       touchMultiplier: 1.4,

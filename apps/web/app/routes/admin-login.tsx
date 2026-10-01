@@ -290,7 +290,7 @@ export default function AdminLoginRoute() {
             href={`/auth/google?mode=admin&returnTo=${encodeURIComponent(redirectTo)}`}
             className="mt-6 inline-flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white px-5 text-sm font-black text-foreground shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
           >
-            <img src="/icons/google-flat.svg" alt="" className="h-5 w-5" aria-hidden="true" />
+            <img src="/icons/google-g.png" alt="" className="h-5 w-auto shrink-0" aria-hidden="true" />
             Continue with Google
           </a>
 

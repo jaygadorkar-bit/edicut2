@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { Link, useFetcher, useSearchParams } from "react-router";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
 
@@ -23,26 +24,29 @@ export function AuthPage() {
   const requestedMode = searchParams.get("mode") || searchParams.get("auth");
   const redirectTo = sanitizeRedirect(searchParams.get("redirectTo") || "/dashboard");
   const resetComplete = searchParams.get("reset") === "success";
-  const [mode, setMode] = useState<AuthMode>(requestedMode === "signup" ? "signup" : "signin");
+  const mode: AuthMode = requestedMode === "signup" ? "signup" : "signin";
   const [showPassword, setShowPassword] = useState(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
-  const googleFormRef = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    if (requestedMode === "signup") setMode("signup");
-    if (requestedMode === "signin") setMode("signin");
-  }, [requestedMode]);
+  const [emailChecking, setEmailChecking] = useState(false);
 
   const error = fetcher.data?.intent === mode ? fetcher.data.error : undefined;
   const visibleError = securityError || error;
   const submitting = fetcher.state !== "idle";
+  const busy = submitting || emailChecking || googleSubmitting;
+
+  useEffect(() => {
+    setSecurityError(null);
+    setShowPassword(false);
+  }, [mode]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
 
     event.preventDefault();
+    if (busy) return;
     setSecurityError(null);
+    setEmailChecking(true);
 
     try {
       const formData = new FormData(form);
@@ -53,6 +57,8 @@ export function AuthPage() {
       fetcher.submit(formData, { method: "post", action: "/signin" });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+    } finally {
+      setEmailChecking(false);
     }
   }
 
@@ -60,6 +66,7 @@ export function AuthPage() {
     const form = event.currentTarget;
 
     event.preventDefault();
+    if (busy) return;
     setSecurityError(null);
     setGoogleSubmitting(true);
 
@@ -73,170 +80,89 @@ export function AuthPage() {
   }
 
   return (
-    <main className="min-h-screen neo-home flex items-center justify-center px-3 py-6 text-foreground sm:px-6 lg:px-8">
-      <div className="mx-auto grid w-full max-w-[1080px] items-stretch overflow-hidden rounded-[2.5rem] neo-surface shadow-2xl lg:grid-cols-2">
-        {/* Left Side: Editorial Creator Visual Scene */}
-        <section className="relative hidden min-h-[640px] overflow-hidden bg-[#e8ecec] lg:block">
-          <img
-            src="/images/light-hero.png"
-            alt="Minimal video production studio with camera and editing workstation"
-            className="auth-scene-image absolute inset-0 h-full w-full object-cover"
-          />
-          <div className="auth-scene-vignette absolute inset-0" />
-          <div className="auth-scene-grid absolute inset-0 opacity-20" />
-          <div className="auth-scene-orb auth-scene-orb-one absolute -left-24 top-24 h-72 w-72 rounded-full bg-cyan-300/15 blur-3xl" />
-          <div className="auth-scene-orb auth-scene-orb-two absolute -right-28 bottom-24 h-80 w-80 rounded-full bg-white/35 blur-3xl" />
-          
-          <Link
-            to="/"
-            className="neo-pill absolute left-6 top-6 z-10 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black neo-ink transition hover:scale-105"
-            aria-label="Back to home"
-          >
-            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-            Back to home
-          </Link>
-
-          <div className="absolute bottom-8 left-8 right-8 z-10 neo-card rounded-2xl p-5 backdrop-blur-md bg-white/80">
-            <p className="yt-tag neo-section-label">Creator Workspace</p>
-            <p className="mt-1 text-base font-black neo-ink">Direct collaboration with your lead editor & PM.</p>
-          </div>
-        </section>
-
-        {/* Right Side: Tactile Neo Auth Form */}
-        <section className="mx-auto w-full max-w-[640px] overflow-y-auto px-6 py-8 sm:px-12 sm:py-12 lg:max-w-none lg:px-12 lg:py-10">
-          <div className="mb-6 flex lg:hidden">
-            <Link
-              to="/"
-              className="neo-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-black neo-muted transition hover:text-black"
-              aria-label="Back to home"
-            >
-              <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+    <main className="auth-page neo-home">
+      <div className="auth-layout">
+        <section className="auth-card" aria-labelledby="auth-title">
+          <header className="auth-topbar">
+            <Link to="/" className="auth-brand" aria-label="EdiCut home">
+              <img src="/icons/edicut-logo.svg" alt="EdiCut" width="1162" height="506" />
+            </Link>
+            <Link to="/" className="auth-home-link">
+              <ArrowLeft size={16} aria-hidden="true" />
               Back to home
             </Link>
+          </header>
+
+          <div className="auth-heading">
+            <h1 id="auth-title">{mode === "signup" ? "Create your account" : "Welcome back"}</h1>
+            <p>{mode === "signup" ? "Your edits, feedback, and files in one place." : "Sign in to your EdiCut workspace."}</p>
           </div>
 
-          <div>
-            <span className="neo-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-black uppercase tracking-wider neo-section-label">
-              <span className="h-2 w-2 rounded-full bg-primary" />
-              EdiCut Account
-            </span>
-            <h1 className="yt-title mt-3 font-black neo-ink">
-              {mode === "signup" ? "Create creator account" : "Welcome back"}
-            </h1>
-            <p className="mt-1 text-xs font-medium neo-muted">
-              {mode === "signup"
-                ? "Start submitting raw footage and managing YouTube edits."
-                : "Sign in to your client dashboard to view active deliverables."}
-            </p>
-          </div>
-
-          {/* Mode Switcher Tabs */}
-          <div className="neo-inset mt-6 grid grid-cols-2 rounded-full p-1.5" role="tablist" aria-label="Authentication">
-            {[
-              ["signin", "Sign in"],
-              ["signup", "Sign up"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMode(value as AuthMode)}
-                role="tab"
-                aria-selected={mode === value}
-                className={`rounded-full py-2.5 text-xs font-black uppercase tracking-wider transition ${
-                  mode === value
-                    ? "bg-white text-black shadow-md shadow-black/10"
-                    : "neo-muted hover:text-foreground"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* Google Auth Button */}
-          <form ref={googleFormRef} method="post" action="/auth/google" onSubmit={handleGoogleSubmit} className="mt-6">
+          <form method="post" action="/auth/google" onSubmit={handleGoogleSubmit} className="auth-google-form" aria-busy={googleSubmitting}>
             <input type="hidden" name="returnTo" value={redirectTo} />
             <input type="hidden" name="g-recaptcha-response" value="" />
-            <button
-              type="submit"
-              disabled={googleSubmitting || submitting}
-              className="neo-card flex h-12 w-full items-center justify-center gap-3 rounded-2xl text-xs font-black uppercase tracking-wider neo-ink transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <img src="/icons/google-flat.svg" alt="" className="h-4 w-4" />
-              {googleSubmitting ? "Checking security..." : "Continue with Google"}
+            <button type="submit" disabled={busy} className="auth-button">
+              <img src="/icons/google-g.png" alt="" width="200" height="204" className="auth-google-icon" />
+              <span aria-live="polite">{googleSubmitting ? "Checking security…" : "Continue with Google"}</span>
             </button>
           </form>
 
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 neo-line border-b" />
-            <div className="text-[11px] font-black uppercase tracking-[0.18em] neo-muted">or continue with email</div>
-            <div className="h-px flex-1 neo-line border-b" />
-          </div>
+          <div className="auth-divider" aria-hidden="true"><span>or</span></div>
 
           {visibleError ? (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
-              {visibleError}
-            </div>
+            <p id="auth-feedback" className="auth-alert auth-alert--error" role="alert">{visibleError}</p>
           ) : null}
-
           {resetComplete ? (
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-bold text-emerald-700">
-              Your password has been updated. Sign in with your new password.
-            </div>
+            <p className="auth-alert auth-alert--success" role="status">Your password has been updated. Sign in with your new password.</p>
           ) : null}
 
-          {/* Main Credentials Form */}
-          <fetcher.Form method="post" action="/signin" className="grid gap-4" onSubmit={handleSubmit}>
+          <fetcher.Form method="post" action="/signin" className="auth-form" onSubmit={handleSubmit} aria-busy={emailChecking || submitting} aria-describedby={visibleError ? "auth-feedback" : undefined}>
             <input type="hidden" name="intent" value={mode} />
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <input type="hidden" name="g-recaptcha-response" value="" />
-            {mode === "signup" ? <AuthField label="Full name" name="name" placeholder="Alex Rivers" /> : null}
-            <AuthField label="Email address" name="email" type="email" placeholder="alex@creator.com" />
+            {mode === "signup" ? <AuthField label="Full name" name="name" placeholder="Your name" /> : null}
+            <AuthField label="Email address" name="email" type="email" placeholder="you@example.com" />
             <PasswordField
               label="Password"
               name="password"
               show={showPassword}
               onToggle={() => setShowPassword((value) => !value)}
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
             />
             {mode === "signup" ? (
               <input type="hidden" name="remember" value="on" />
             ) : (
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <label className="inline-flex items-center gap-2 text-xs font-bold neo-muted cursor-pointer">
-                  <input type="checkbox" name="remember" className="h-3.5 w-3.5 accent-red-600 rounded" />
-                  Remember me
+              <div className="auth-options">
+                <label className="auth-remember">
+                  <input type="checkbox" name="remember" />
+                  <span>Remember me</span>
                 </label>
-                <Link
-                  to={`/forgot-password?redirectTo=${encodeURIComponent(redirectTo)}`}
-                  className="text-xs font-black text-primary hover:underline"
-                >
-                  Forgot password?
-                </Link>
+                <Link to={`/forgot-password?redirectTo=${encodeURIComponent(redirectTo)}`} className="auth-link">Forgot password?</Link>
               </div>
             )}
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="neo-button neo-button--primary mt-2 w-full justify-center text-sm font-black uppercase tracking-wider disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined text-[20px]">{mode === "signup" ? "person_add" : "login"}</span>
-              <span>{submitting ? "Please wait..." : mode === "signup" ? "Create Account" : "Sign In"}</span>
+            <button type="submit" disabled={busy} className="auth-button auth-button--primary">
+              <span aria-live="polite">
+                {emailChecking ? "Checking security…" : submitting ? (mode === "signup" ? "Creating account…" : "Signing in…") : mode === "signup" ? "Create account" : "Sign in"}
+              </span>
             </button>
           </fetcher.Form>
 
-          <p className="mt-6 text-center text-[11px] font-medium leading-5 neo-muted">
-            By continuing, you agree to the EdiCut{" "}
-            <Link className="font-black neo-ink underline" to="/terms">
-              Terms
-            </Link>{" "}
-            and acknowledge our{" "}
-            <Link className="font-black neo-ink underline" to="/privacy">
-              Privacy Policy
+          <p className="auth-account-switch">
+            {mode === "signup" ? "Already have an account?" : "New to EdiCut?"}{" "}
+            <Link
+              to={authHref("/signin", "", mode === "signup" ? "signin" : "signup", redirectTo)}
+              className="auth-link"
+              aria-disabled={busy}
+              onClick={(event) => { if (busy) event.preventDefault(); }}
+            >
+              {mode === "signup" ? "Sign in" : "Create an account"}
             </Link>
-            .
           </p>
         </section>
+
+        <p className="auth-legal">
+          By continuing, you agree to our <Link to="/terms">Terms</Link> and acknowledge our <Link to="/privacy">Privacy Policy</Link>.
+        </p>
       </div>
     </main>
   );
@@ -256,17 +182,18 @@ function AuthField({
   const autoComplete = name === "name" ? "name" : name === "email" ? "email" : undefined;
 
   return (
-    <label className="grid gap-1.5">
-      <span className="text-[11px] font-black uppercase tracking-[0.14em] neo-muted">{label}</span>
+    <div className="auth-field">
+      <label htmlFor={`auth-${name}`}>{label}</label>
       <input
+        id={`auth-${name}`}
         name={name}
         type={type}
         required
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className="neo-inset h-11 rounded-xl px-3.5 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"
+        className="auth-input"
       />
-    </label>
+    </div>
   );
 }
 
@@ -275,32 +202,33 @@ function PasswordField({
   name,
   show,
   onToggle,
+  autoComplete,
 }: {
   label: string;
   name: string;
   show: boolean;
   onToggle: () => void;
+  autoComplete: "current-password" | "new-password";
 }) {
   return (
-    <label className="relative grid gap-1.5">
-      <span className="text-[11px] font-black uppercase tracking-[0.14em] neo-muted">{label}</span>
-      <input
-        name={name}
-        type={show ? "text" : "password"}
-        required
-        placeholder="••••••••"
-        autoComplete={name === "confirmPassword" ? "new-password" : "current-password"}
-        className="neo-inset h-11 rounded-xl px-3.5 pr-10 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"
-      />
-      <button
-        type="button"
-        onClick={onToggle}
-        className="absolute bottom-2.5 right-3 text-gray-400 transition hover:text-black"
-        aria-label={show ? "Hide password" : "Show password"}
-      >
-        <span className="material-symbols-outlined text-[18px]">{show ? "visibility_off" : "visibility"}</span>
-      </button>
-    </label>
+    <div className="auth-field">
+      <label htmlFor={`auth-${name}`}>{label}</label>
+      <div className="auth-password-control">
+        <input
+          id={`auth-${name}`}
+          name={name}
+          type={show ? "text" : "password"}
+          required
+          minLength={6}
+          placeholder={autoComplete === "new-password" ? "At least 6 characters" : "Enter your password"}
+          autoComplete={autoComplete}
+          className="auth-input"
+        />
+        <button type="button" onClick={onToggle} className="auth-password-toggle" aria-label={show ? "Hide password" : "Show password"}>
+          {show ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+        </button>
+      </div>
+    </div>
   );
 }
 

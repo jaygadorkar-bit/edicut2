@@ -14,7 +14,9 @@ export default defineConfig(({ isSsrBuild }) => ({
     },
     hmr: {
       host: "localhost",
-      clientPort: 3000,
+      // The container listens on 3000, while the browser reaches it through
+      // Docker's host port 3002.
+      clientPort: 3002,
       overlay: true,
     },
   },

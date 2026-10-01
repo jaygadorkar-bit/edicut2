@@ -43,7 +43,7 @@ export function WorkspaceShell({
           <div className={`flex items-center ${isCollapsed ? "justify-center" : "justify-between gap-3"}`}>
             <Link to="/" className="flex min-w-0 items-center justify-center px-2" aria-label="EdiCut home" title="EdiCut home">
               {isCollapsed ? (
-                <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-8 w-auto object-contain" />
+                <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-auto w-9 object-contain" />
               ) : (
                 <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto object-contain" />
               )}

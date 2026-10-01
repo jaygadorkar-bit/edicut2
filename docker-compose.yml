@@ -31,6 +31,7 @@ services:
       pnpm --filter @edicut/db build &&
       pnpm --filter @edicut/web exec react-router dev --host 0.0.0.0 --port 3000"
     ports:
+      - "127.0.0.1:3000:3000"
       - "3002:3000"
     volumes:
       - .:/app

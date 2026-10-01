@@ -402,7 +402,7 @@ export default function HomePage() {
             {/* Section Eyebrow Pill */}
             <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
               <span className="hidden sm:inline">YouTube Post-Production Studio</span>
-              <span className="sm:hidden">Video Editing Service</span>
+              <span className="sm:hidden">Video editing for creators</span>
             </div>
 
             {/* Main Hero Headline */}
@@ -425,20 +425,26 @@ export default function HomePage() {
             {/* Subtitle */}
             <p className="neo-hero-subtitle yt-subtitle mx-auto mt-5 max-w-2xl leading-7 neo-muted sm:mt-6 sm:leading-8">
               <span className="hidden sm:inline">A calm, creator-first editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables.</span>
-              <span className="sm:hidden">Editing for YouTube videos, Shorts, and more.</span>
+              <span className="sm:hidden">YouTube and Shorts edits, ready to publish.</span>
             </p>
 
             {/* Neomorphic CTA Action Buttons */}
             <div className="neo-hero-actions mt-8 flex flex-col items-center justify-center gap-3 sm:mt-9 sm:flex-row sm:gap-3.5">
               <ButtonLink to="/pricing">
-                <span className="material-symbols-outlined text-[18px]">play_circle</span>
-                Choose editing plan
+                <span className="hidden sm:inline">Choose editing plan</span>
+                <span className="sm:hidden">See editing plans</span>
               </ButtonLink>
-              <ButtonLink to="/portfolio" variant="secondary">
-                <span className="material-symbols-outlined text-[18px]">movie_filter</span>
-                View portfolio
+              <ButtonLink to="/portfolio">
+                <span className="hidden sm:inline">View portfolio</span>
+                <span className="sm:hidden">See recent edits</span>
               </ButtonLink>
             </div>
+
+            <p className="neo-hero-proof mx-auto mt-4 flex items-center justify-center gap-2 text-xs font-semibold neo-muted sm:hidden">
+              <span><strong>48h</strong> first cuts</span>
+              <span aria-hidden="true" className="neo-hero-proof__separator">·</span>
+              <span><strong>500+</strong> videos published</span>
+            </p>
 
             {/* Key Metrics Neomorphic Badges */}
             <div className="neo-hero-metrics mt-10 grid w-full max-w-md grid-cols-3 items-stretch gap-2 sm:mt-12 sm:flex sm:w-auto sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
@@ -461,8 +467,14 @@ export default function HomePage() {
           <div className="mx-auto max-w-7xl text-center">
             {/* Center Header */}
             <div className="mx-auto max-w-2xl">
-              <p className="yt-tag neo-section-label">Who EdiCut is for</p>
-              <h2 className="yt-title mt-3 neo-ink">Editing support for every kind of creator.</h2>
+              <p className="yt-tag neo-section-label">
+                <span className="hidden sm:inline">Who EdiCut is for</span>
+                <span className="sm:hidden">Who we edit for</span>
+              </p>
+              <h2 className="yt-title mt-3 neo-ink">
+                <span className="hidden sm:inline">Editing support for every kind of creator.</span>
+                <span className="sm:hidden">Editing for every creator.</span>
+              </h2>
             </div>
 
             {/* 3 - 4 - 3 Centered Rows */}

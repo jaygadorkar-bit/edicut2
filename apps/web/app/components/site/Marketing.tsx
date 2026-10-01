@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import type { FormEvent, PointerEvent as ReactPointerEvent } from "react";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useMatches } from "react-router";
 import { authHref } from "../auth/AuthModal";
@@ -24,7 +24,7 @@ const PortfolioCopyContext = createContext(false);
 
 export function Logo({ className = "h-10" }: { className?: string }) {
   return (
-    <img src="/icons/edicut-logo.svg" alt="EdiCut" className={`${className} w-auto`} />
+    <img src="/icons/edicut-logo.svg" alt="EdiCut" width="1162" height="506" className={`${className} w-auto`} />
   );
 }
 
@@ -75,13 +75,14 @@ export function SiteHeader() {
 
           <nav className="neo-header-nav hidden items-center gap-0.5 rounded-full border p-1 backdrop-blur-md lg:absolute lg:left-1/2 lg:flex lg:-translate-x-1/2">
             {navLinks.map((item) => (
-              <a
+              <NavLink
                 key={item.label}
-                href={item.to}
-                className="neo-header-link type-control rounded-full px-4 py-2 transition-all duration-200 hover:text-foreground"
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) => `neo-header-link type-control rounded-full px-4 py-2 transition-all duration-200 hover:text-foreground ${isActive ? "neo-header-active" : ""}`}
               >
                 {item.label}
-              </a>
+              </NavLink>
             ))}
           </nav>
 
@@ -150,15 +151,16 @@ export function SiteHeader() {
           <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-5 sm:p-6">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Explore EdiCut</p>
             {navLinks.map((item) => (
-              <a
+              <NavLink
                 key={item.label}
-                href={item.to}
+                to={item.to}
+                end={item.to === "/"}
                 onClick={() => setIsMenuOpen(false)}
-                className="neo-header-link type-menu flex min-h-12 items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-black/5"
+                className={({ isActive }) => `neo-header-link type-menu flex min-h-12 items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-black/5 ${isActive ? "neo-header-active" : ""}`}
               >
                 {item.label}
                 <span className="material-symbols-outlined text-[18px] opacity-50">arrow_forward</span>
-              </a>
+              </NavLink>
             ))}
           </div>
 
@@ -724,9 +726,62 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   const [playerLoadFailed, setPlayerLoadFailed] = useState(false);
   const tabListRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const tabDragRef = useRef<{ pointerId: number; startX: number; lastX: number; moved: boolean } | null>(null);
+  const skipDraggedTabClickUntilRef = useRef(0);
+  const [isDraggingTabList, setIsDraggingTabList] = useState(false);
   const [tabIndicator, setTabIndicator] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const activeSection = portfolioSections.find((section) => section.slug === displayedTab) || portfolioSections[0];
   const displayPortfolio = useMemo(() => buildPortfolioLayout(activeSection?.videos || []), [activeSection]);
+
+  const startTabListDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+
+    tabDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      lastX: event.clientX,
+      moved: false,
+    };
+  };
+
+  const moveTabListDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = tabDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    if (!drag.moved && Math.abs(event.clientX - drag.startX) < 6) return;
+
+    if (!drag.moved) {
+      drag.moved = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setIsDraggingTabList(true);
+    }
+
+    event.preventDefault();
+    event.currentTarget.scrollLeft -= event.clientX - drag.lastX;
+    drag.lastX = event.clientX;
+  };
+
+  const endTabListDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = tabDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    if (drag.moved) skipDraggedTabClickUntilRef.current = performance.now() + 350;
+    tabDragRef.current = null;
+    if (drag.moved) setIsDraggingTabList(false);
+
+    if (event.type !== "lostpointercapture" && event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const suppressClickAfterTabDrag = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.detail === 0 || performance.now() > skipDraggedTabClickUntilRef.current) return;
+    if (!(event.target instanceof Element) || !event.target.closest("[role='tab']")) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    skipDraggedTabClickUntilRef.current = 0;
+  };
 
   useEffect(() => {
     if (!portfolioSections.some((section) => section.slug === activeTab)) {
@@ -819,9 +874,21 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   return (
     <section id="portfolio" className={`border-b neo-line px-5 py-14 sm:px-6 sm:py-20 ${className}`}>
       <div className="mx-auto max-w-7xl">
-        <SectionIntro title="Edits built to keep viewers watching." />
+        <SectionIntro eyebrow="Selected work" title="Edits built to keep viewers watching." />
 
-        <div ref={tabListRef} className="neo-inset neo-portfolio-tabs relative mx-auto mt-8 flex w-fit max-w-full flex-wrap justify-center gap-1 p-1.5" role="tablist" aria-label="Portfolio categories">
+        <div
+          ref={tabListRef}
+          className={`neo-inset neo-portfolio-tabs relative mx-auto mt-8 flex w-fit max-w-full flex-nowrap justify-center gap-1 p-1.5 ${isDraggingTabList ? "is-pointer-dragging" : ""}`}
+          role="tablist"
+          aria-label="Portfolio categories"
+          onPointerDown={startTabListDrag}
+          onPointerMove={moveTabListDrag}
+          onPointerUp={endTabListDrag}
+          onPointerCancel={endTabListDrag}
+          onLostPointerCapture={endTabListDrag}
+          onClickCapture={suppressClickAfterTabDrag}
+          onDragStart={(event) => event.preventDefault()}
+        >
           <span
             aria-hidden="true"
             className="neo-portfolio-tab-indicator"
@@ -857,7 +924,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
               tabIndex={activeTab === section.slug ? 0 : -1}
               aria-selected={activeTab === section.slug}
               aria-controls={`${portfolioId}-panel`}
-              className={`neo-portfolio-tab relative z-10 inline-flex min-h-11 items-center rounded-xl px-4 py-2 yt-small font-black ${
+              className={`neo-portfolio-tab relative z-10 inline-flex min-h-12 shrink-0 items-center rounded-xl px-3 py-2 yt-small font-black sm:px-4 ${
                 activeTab === section.slug
                   ? "neo-portfolio-tab--active"
                   : "neo-portfolio-tab--inactive"
@@ -868,9 +935,14 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
           ))}
         </div>
 
+        <p className="neo-portfolio-swipe-hint mt-1 flex items-center justify-end gap-1 px-2 text-[0.6875rem] font-bold neo-muted sm:hidden">
+          Drag or swipe for more
+          <span className="material-symbols-outlined text-[14px]" aria-hidden="true">chevron_right</span>
+        </p>
+
         <div key={displayedTab} id={`${portfolioId}-panel`} className={`neo-portfolio-panel mt-8 ${isSwitching ? "is-switching" : ""}`} role="tabpanel" aria-labelledby={`${portfolioId}-tab-${activeSection?.slug || firstTabSlug}`} aria-busy={isSwitching} tabIndex={0} inert={isSwitching}>
           {displayPortfolio.length ? (
-            <PortfolioScroller>
+            <PortfolioScroller ariaLabel={`${activeSection?.name || "Selected"} video reel`}>
               {displayPortfolio.map((item, index) => (
                 <div key={item.id} style={{ animationDelay: `${Math.min(index, 3) * 55}ms` }} className={`neo-portfolio-slide neo-portfolio-slide--enter ${item.orientation === "horizontal" ? "neo-portfolio-slide--landscape" : ""} ${index === 0 ? "neo-portfolio-slide--featured" : ""}`}>
                   <PortfolioCard item={item} variant="slider" onPlay={playPortfolioItem} />

@@ -4,7 +4,7 @@ import { authHref } from "../auth/AuthModal";
 import { navLinks } from "../site/data";
 
 export function LogoMark({ className = "h-10" }: { className?: string }) {
-  return <img src="/icons/edicut-logo.svg" alt="EdiCut" className={`${className} w-auto`} />;
+  return <img src="/icons/edicut-logo.svg" alt="EdiCut" width="1162" height="506" className={`${className} w-auto`} />;
 }
 
 export function Header() {
