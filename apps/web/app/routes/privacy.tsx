@@ -10,7 +10,7 @@ const sections = [
   {
     icon: "database",
     title: "1. Information We Collect",
-    copy: "We collect creator contact details, channel URLs, editing briefs, uploaded footage references, billing records, and project notes necessary to deliver high-quality editing services.",
+    copy: "We store account details, channel and project briefs, source-file sharing links, review decisions, billing details, and invoice links submitted through the workspace. The workspace stores sharing links, not the raw files themselves.",
   },
   {
     icon: "handshake",
@@ -20,17 +20,17 @@ const sections = [
   {
     icon: "lock",
     title: "3. Raw Footage & Project Handling",
-    copy: "All raw video footage, assets, and project files are handled strictly for editing purposes and accessed only by assigned team members under strict non-disclosure agreements (NDAs).",
+    copy: "Source files remain with the storage provider you choose. Anyone with access to a link may be able to view or download its file, depending on that provider's settings. Set link permissions for your editor and avoid public links for unreleased footage.",
   },
   {
     icon: "delete_sweep",
     title: "4. Data Retention & Deletion",
-    copy: "Project files and deliverables are safely archived for 90 days after delivery to allow for re-exports and revisions, after which raw files may be permanently purged upon request.",
+    copy: "Removing a source link from the workspace deletes its saved link record; it does not delete the original file in your storage provider. To request deletion of account or project information stored by EdiCut, contact privacy@edicut.com.",
   },
   {
     icon: "support_agent",
     title: "5. Contact & Privacy Inquiries",
-    copy: "For any questions regarding data rights, NDAs, or custom security requirements, contact our data protection team directly at privacy@edicut.com.",
+    copy: "For questions about privacy, data rights, or custom security requirements, contact privacy@edicut.com.",
   },
 ];
 
@@ -52,7 +52,7 @@ export default function PrivacyPage() {
           <p className="yt-subtitle mx-auto mt-6 max-w-2xl leading-8 neo-muted">
             How EdiCut protects creator footage, project assets, and confidential account information.
           </p>
-          <p className="mt-4 yt-small font-black neo-muted">Effective Date: May 5, 2026</p>
+          <p className="mt-4 yt-small font-black neo-muted">Effective Date: October 1, 2026</p>
         </div>
       </section>
 

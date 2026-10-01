@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import Lenis from "lenis";
+import type Lenis from "lenis";
 import { useLocation } from "react-router";
 
 const useIsomorphicLayoutEffect = typeof document === "undefined" ? useEffect : useLayoutEffect;
@@ -30,43 +30,66 @@ export function SmoothScroll() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    if ("scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
+    const managesScrollRestoration = "scrollRestoration" in window.history;
+    const previousScrollRestoration = managesScrollRestoration ? window.history.scrollRestoration : undefined;
+    if (managesScrollRestoration) window.history.scrollRestoration = "manual";
+    const restoreScrollRestoration = () => {
+      if (managesScrollRestoration && previousScrollRestoration && window.history.scrollRestoration === "manual") {
+        window.history.scrollRestoration = previousScrollRestoration;
+      }
+    };
 
     // Keep normal anchor deep-links such as /#portfolio intact.
     if (!window.location.hash) {
       window.scrollTo(0, 0);
     }
 
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return restoreScrollRestoration;
 
     const isCompactViewport = window.matchMedia?.("(max-width: 639px)").matches ?? false;
-    const lenis = new Lenis({
-      duration: 1.15,
-      easing: (time: number) => Math.min(1, 1.001 - Math.pow(2, -10 * time)),
-      // On phone-sized layouts, let wheel/trackpad input follow the browser's
-      // native scroll immediately. Long Lenis easing can keep moving against
-      // a quick direction change and makes narrow pages feel like they jump.
-      smoothWheel: !isCompactViewport,
-      anchors: true,
-      stopInertiaOnNavigate: true,
-      touchMultiplier: 1.4,
-    });
-    window.__lenis = lenis;
-
+    let disposed = false;
+    let lenis: Lenis | null = null;
     let animationFrame = 0;
-    const loop = (time: number) => {
-      lenis.raf(time);
+
+    const startLenis = async () => {
+      const { default: LenisConstructor } = await import("lenis");
+      if (disposed) return;
+
+      lenis = new LenisConstructor({
+        duration: 1.15,
+        easing: (time: number) => Math.min(1, 1.001 - Math.pow(2, -10 * time)),
+        // On phone-sized layouts, let wheel/trackpad input follow the browser's
+        // native scroll immediately. Long Lenis easing can keep moving against
+        // a quick direction change and makes narrow pages feel like they jump.
+        smoothWheel: !isCompactViewport,
+        anchors: true,
+        stopInertiaOnNavigate: true,
+        touchMultiplier: 1.4,
+      });
+
+      const instance = lenis;
+      window.__lenis = instance;
+
+      const loop = (time: number) => {
+        if (disposed) return;
+        instance.raf(time);
+        animationFrame = window.requestAnimationFrame(loop);
+      };
+
       animationFrame = window.requestAnimationFrame(loop);
     };
 
-    animationFrame = window.requestAnimationFrame(loop);
+    void startLenis().catch(() => {
+      // Enhanced scrolling is optional; keep native browser scrolling on chunk/network failure.
+      restoreScrollRestoration();
+    });
 
     return () => {
-      window.cancelAnimationFrame(animationFrame);
-      lenis.destroy();
+      disposed = true;
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      lenis?.destroy();
       if (window.__lenis === lenis) delete window.__lenis;
+      restoreScrollRestoration();
     };
   }, []);
 

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { siteSettings } from "@edicut/db/schema";
 import type { DatabaseClient } from "@edicut/db/client";
 import {
@@ -18,28 +18,76 @@ const PROMO_BAR_MESSAGE_KEY = "promo_bar_message";
 const ROLE_FEATURE_ACCESS_KEY = "role_feature_access";
 const SEARCH_CRAWLING_ENABLED_KEY = "search_crawling_enabled";
 const MAINTENANCE_MODE_ENABLED_KEY = "maintenance_mode_enabled";
+const DEFAULT_PROMO_BAR_MESSAGE = "Welcome to EdiCut! Black Friday Special: 20% off all packages.";
+
+export type SiteSettingsSnapshot = {
+  adminToolbarEnabled: boolean;
+  searchCrawlingEnabled: boolean;
+  maintenanceModeEnabled: boolean;
+  promoBarSettings: { enabled: boolean; message: string };
+};
+
+export async function getSiteSettings(
+  db: DatabaseClient | null | undefined,
+  keys: string[],
+  context?: SupabaseRuntimeContext,
+): Promise<Record<string, string | undefined>> {
+  const uniqueKeys = [...new Set(keys)];
+  if (uniqueKeys.length === 0) return {};
+
+  const supabase = getSupabaseClient(context);
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("site_settings")
+      .select("key, value")
+      .in("key", uniqueKeys);
+
+    if (!error) return Object.fromEntries((data ?? []).map((row) => [row.key, row.value ?? undefined]));
+    console.error(`Supabase site settings read failed for ${uniqueKeys.join(", ")}:`, error.message);
+    return {};
+  }
+
+  if (!db) return {};
+  const rows = await db
+    .select({ key: siteSettings.key, value: siteSettings.value })
+    .from(siteSettings)
+    .where(inArray(siteSettings.key, uniqueKeys));
+  return Object.fromEntries(rows.map((row) => [row.key, row.value ?? undefined]));
+}
+
+export async function getSiteSettingsSnapshot(
+  db: DatabaseClient | null | undefined,
+  context?: SupabaseRuntimeContext,
+  options: { includeAdminToolbar?: boolean; includePromoBar?: boolean } = {},
+): Promise<SiteSettingsSnapshot> {
+  const keys = [
+    ...(options.includeAdminToolbar ? [ADMIN_TOOLBAR_ENABLED_KEY] : []),
+    SEARCH_CRAWLING_ENABLED_KEY,
+    MAINTENANCE_MODE_ENABLED_KEY,
+    ...(options.includePromoBar ? [PROMO_BAR_ENABLED_KEY, PROMO_BAR_MESSAGE_KEY] : []),
+  ];
+  const values = await getSiteSettings(db, keys, context);
+
+  return {
+    adminToolbarEnabled: options.includeAdminToolbar === true && values[ADMIN_TOOLBAR_ENABLED_KEY] !== "false",
+    searchCrawlingEnabled: values[SEARCH_CRAWLING_ENABLED_KEY] !== "false",
+    maintenanceModeEnabled: values[MAINTENANCE_MODE_ENABLED_KEY] === "true",
+    promoBarSettings: options.includePromoBar
+      ? {
+          enabled: values[PROMO_BAR_ENABLED_KEY] === "true",
+          message: values[PROMO_BAR_MESSAGE_KEY] || DEFAULT_PROMO_BAR_MESSAGE,
+        }
+      : { enabled: false, message: "" },
+  };
+}
 
 export async function getSiteSetting(
   db: DatabaseClient | null | undefined,
   key: string,
   context?: SupabaseRuntimeContext,
 ) {
-  const supabase = getSupabaseClient(context);
-  if (supabase) {
-    const { data, error } = await supabase
-      .from("site_settings")
-      .select("value")
-      .eq("key", key)
-      .maybeSingle();
-
-    if (!error) return data?.value;
-    console.error(`Supabase site setting read failed for ${key}:`, error.message);
-    return undefined;
-  }
-
-  if (!db) return undefined;
-  const [row] = await db.select().from(siteSettings).where(eq(siteSettings.key, key)).limit(1);
-  return row?.value;
+  const values = await getSiteSettings(db, [key], context);
+  return values[key];
 }
 
 export async function saveSiteSetting(
@@ -112,11 +160,10 @@ export async function saveMaintenanceModeEnabled(db: DatabaseClient | null | und
 }
 
 export async function getPromoBarSettings(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {
-  const enabledStr = await getSetting(db, PROMO_BAR_ENABLED_KEY, context);
-  const message = await getSetting(db, PROMO_BAR_MESSAGE_KEY, context);
+  const values = await getSiteSettings(db, [PROMO_BAR_ENABLED_KEY, PROMO_BAR_MESSAGE_KEY], context);
   return {
-    enabled: enabledStr === "true",
-    message: message || "Welcome to EdiCut! Black Friday Special: 20% off all packages.",
+    enabled: values[PROMO_BAR_ENABLED_KEY] === "true",
+    message: values[PROMO_BAR_MESSAGE_KEY] || DEFAULT_PROMO_BAR_MESSAGE,
   };
 }
 

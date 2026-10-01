@@ -22,16 +22,14 @@ import type { LoaderContext } from "./types";
 import { getAdminSession, getSession } from "./lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./lib/admin-paths";
 import { getDbFromContext } from "./lib/db.server";
-import {
-  getAdminToolbarEnabled,
-  getMaintenanceModeEnabled,
-  getPromoBarSettings,
-  getSearchCrawlingEnabled,
-} from "./lib/site-settings.server";
+import { getSiteSettingsSnapshot } from "./lib/site-settings.server";
 import { AdminToolbar } from "./components/admin/AdminToolbar";
 import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 import { getSupabaseClient } from "./integrations/supabase/client.server";
 import { SmoothScroll } from "./components/site/SmoothScroll.js";
+import { shouldEnableSiteMotion } from "./lib/site-motion";
+import { shouldLoadPromoBarSettings, shouldLoadRootSiteSettings } from "./lib/root-data-requirements";
+import { getMaterialSymbolsStylesheetUrl } from "./lib/material-symbols";
 
 const usePageTransitionLayoutEffect = typeof document === "undefined" ? useEffect : useLayoutEffect;
 const PAGE_TRANSITION_COVER_MS = 860;
@@ -45,7 +43,7 @@ export function links() {
     { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
     { rel: "preconnect", href: "https://www.youtube.com" },
     { rel: "icon", href: "/favicon.ico", type: "image/svg+xml" },
-    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" }
+    { rel: "stylesheet", href: getMaterialSymbolsStylesheetUrl() }
   ];
 }
 
@@ -56,23 +54,28 @@ export async function loader({
   request: Request;
   context?: LoaderContext;
 }) {
+  const url = new URL(request.url);
+  const legacyAuthMode = url.searchParams.get("auth");
+  if (url.pathname === "/" && (legacyAuthMode === "signin" || legacyAuthMode === "signup")) {
+    const params = new URLSearchParams({ mode: legacyAuthMode });
+    const legacyRedirectTo = url.searchParams.get("redirectTo");
+    if (legacyRedirectTo) params.set("redirectTo", legacyRedirectTo);
+    throw redirect(`/signin?${params.toString()}`);
+  }
+
   const env = resolveWebEnv(context);
-  const session = await getSession(request.headers.get("Cookie"), context);
-  const adminSession = await getAdminSession(request.headers.get("Cookie"), context);
+  const cookieHeader = request.headers.get("Cookie");
+  const [session, adminSession] = await Promise.all([
+    getSession(cookieHeader, context),
+    getAdminSession(cookieHeader, context),
+  ]);
   const userId = session.get("userId");
   const adminUserId = adminSession.get("adminUserId");
   const userAdminUserId = session.get("adminUserId");
   const isAdminSignedIn =
     (typeof adminUserId === "string" && adminUserId.length > 0) ||
     (typeof userAdminUserId === "string" && userAdminUserId.length > 0);
-  const db = getSupabaseClient(context) ? null : getDbFromContext(context ?? {});
-  const [adminToolbarEnabled, searchCrawlingEnabled, maintenanceModeEnabled, promoBarSettings] = await Promise.all([
-    isAdminSignedIn ? getAdminToolbarEnabled(db, context) : Promise.resolve(false),
-    getSearchCrawlingEnabled(db, context),
-    getMaintenanceModeEnabled(db, context),
-    getPromoBarSettings(db, context),
-  ]);
-  const url = new URL(request.url);
+
   const isAdminArea = url.pathname.startsWith(ADMIN_BASE_PATH);
   const isAdminLogin = url.pathname === ADMIN_LOGIN_PATH;
   const isMaintenancePage = url.pathname === "/maintenance";
@@ -88,13 +91,22 @@ export async function loader({
     url.pathname === "/favicon.ico" ||
     url.pathname === "/robots.txt";
 
-  const legacyAuthMode = url.searchParams.get("auth");
-  if (url.pathname === "/" && (legacyAuthMode === "signin" || legacyAuthMode === "signup")) {
-    const params = new URLSearchParams({ mode: legacyAuthMode });
-    const legacyRedirectTo = url.searchParams.get("redirectTo");
-    if (legacyRedirectTo) params.set("redirectTo", legacyRedirectTo);
-    throw redirect(`/signin?${params.toString()}`);
-  }
+  const siteSettings = shouldLoadRootSiteSettings(url.pathname)
+    ? await getSiteSettingsSnapshot(
+        getSupabaseClient(context) ? null : getDbFromContext(context ?? {}),
+        context,
+        {
+          includeAdminToolbar: isAdminSignedIn,
+          includePromoBar: shouldLoadPromoBarSettings(url.pathname),
+        },
+      )
+    : {
+        adminToolbarEnabled: false,
+        searchCrawlingEnabled: false,
+        maintenanceModeEnabled: false,
+        promoBarSettings: { enabled: false, message: "" },
+      };
+  const { adminToolbarEnabled, searchCrawlingEnabled, maintenanceModeEnabled, promoBarSettings } = siteSettings;
 
   const maintenanceBlocksRequest =
     maintenanceModeEnabled &&
@@ -170,13 +182,18 @@ export default function AppRoot() {
   const data = useLoaderData<typeof loader>();
   const location = useLocation();
   const isAdminArea = location.pathname.startsWith(ADMIN_BASE_PATH);
+  const isWorkspaceShellDashboard = location.pathname.startsWith("/dashboard") && location.pathname !== "/dashboard/messages";
+  const showAdminToolbar = data.isAdminSignedIn && data.adminToolbarEnabled && !isAdminArea && !isWorkspaceShellDashboard;
+  const useSiteMotion = shouldEnableSiteMotion(location.pathname);
 
   return (
     <>
-      <SmoothScroll />
-      <Outlet />
-      <PageTransition />
-      {data.isAdminSignedIn && data.adminToolbarEnabled && !isAdminArea ? <AdminToolbar /> : null}
+      {useSiteMotion ? <SmoothScroll /> : null}
+      <div className={`neo-app-shell${showAdminToolbar ? " neo-app-shell--admin-toolbar" : ""}`}>
+        {showAdminToolbar ? <AdminToolbar /> : null}
+        <Outlet />
+        {useSiteMotion ? <PageTransition /> : null}
+      </div>
       {data.recaptchaSiteKey ? (
         <script
           src="https://www.google.com/recaptcha/api.js?render=explicit"
@@ -258,6 +275,7 @@ function PageTransition() {
       const nextUrl = new URL(anchor.href, window.location.href);
       const currentUrl = new URL(window.location.href);
       if (nextUrl.origin !== currentUrl.origin) return;
+      if (!shouldEnableSiteMotion(currentUrl.pathname) || !shouldEnableSiteMotion(nextUrl.pathname)) return;
       if (nextUrl.pathname === currentUrl.pathname && nextUrl.search === currentUrl.search) {
         if (nextUrl.hash !== currentUrl.hash) return;
 

@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790832011978,
+      "tag": "0000_customer-workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790832363168,
+      "tag": "0001_checkout-billing-details",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790832878391,
+      "tag": "0002_workspace-file-kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790834236565,
+      "tag": "0003_workspace-billing-invoice-links",
+      "breakpoints": true
+    }
+  ]
+}

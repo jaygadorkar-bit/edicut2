@@ -3,14 +3,14 @@ import { PageShell, TrustStrip } from "../components/site/Marketing.js";
 
 export const meta: MetaFunction = () => [
   { title: "Terms and Conditions | EdiCut Creator Post Production" },
-  { name: "description", content: "Terms of service and subscription agreements for creators working with EdiCut." },
+  { name: "description", content: "Service scope, monthly plan estimates, project billing, and cancellation terms for EdiCut customers." },
 ];
 
 const sections = [
   {
     icon: "assignment",
     title: "1. Service Scope & Editing Lanes",
-    copy: "EdiCut provides video editing, pacing optimization, sound mixing, color grading, thumbnail packaging, and review workflows according to your selected subscription tier or custom project scope.",
+    copy: "EdiCut provides video editing, pacing optimization, sound mixing, color grading, thumbnail packaging, and review workflows according to the monthly plan or custom project scope confirmed with you.",
   },
   {
     icon: "folder_shared",
@@ -24,8 +24,8 @@ const sections = [
   },
   {
     icon: "credit_card",
-    title: "4. Subscription Billing & Cancellation",
-    copy: "Subscriptions renew on a monthly cycle. You may pause, adjust footage coverage, or cancel your plan anytime before your next billing date through your client dashboard.",
+    title: "4. Estimates, Billing & Cancellation",
+    copy: "Package prices are estimates for monthly editing plans. Submitting a project request does not start a subscription or collect payment. EdiCut confirms scope, price, billing cadence, and service terms with you before work begins. Contact support to change or cancel an active plan under its confirmed agreement.",
   },
   {
     icon: "verified_user",
@@ -57,7 +57,7 @@ export default function TermsPage() {
           <p className="yt-subtitle mx-auto mt-6 max-w-2xl leading-8 neo-muted">
             The service agreement, turnaround expectations, and revision terms for working with EdiCut.
           </p>
-          <p className="mt-4 yt-small font-black neo-muted">Effective Date: May 5, 2026</p>
+          <p className="mt-4 yt-small font-black neo-muted">Effective Date: October 1, 2026</p>
         </div>
       </section>
 

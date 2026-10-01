@@ -98,6 +98,7 @@ export default function DashboardProfileRoute() {
       mobileMenu
       hideMobileHeading
       profileTo="/dashboard/profile"
+      settingsTo="/dashboard/settings"
       accountAction={(
         <Form method="post">
           <input type="hidden" name="intent" value="logout" />

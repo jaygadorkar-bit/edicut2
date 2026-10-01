@@ -31,3 +31,10 @@ export function getDbFromContext(context: DbContext) {
 
   return createCloudflareDb(env);
 }
+
+export function hasReturnedRows(result: unknown) {
+  if (Array.isArray(result)) return result.length > 0;
+  if (!result || typeof result !== "object" || !("rows" in result)) return false;
+  const rows = (result as { rows?: unknown }).rows;
+  return Array.isArray(rows) && rows.length > 0;
+}

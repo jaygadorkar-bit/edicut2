@@ -21,6 +21,7 @@ export default [
   route("dashboard/messages", "routes/dashboard-messages.tsx"),
   route("dashboard/:section", "routes/dashboard-placeholder.tsx"),
   route("signin", "routes/signin.tsx"),
+  route("signout", "routes/signout.ts"),
   route("forgot-password", "routes/forgot-password.tsx"),
   route("update-password", "routes/update-password.tsx"),
   route("auth/google", "routes/auth-google.ts"),

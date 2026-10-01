@@ -16,7 +16,7 @@ import {
 } from "../lib/subscriptions";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: data?.subscription ? `${data.subscription.name} Subscription | EdiCut` : "Editing Package | EdiCut" },
+  { title: data?.subscription ? `${data.subscription.name} Editing Plan | EdiCut` : "Editing Package | EdiCut" },
   { name: "description", content: data?.subscription?.description || "EdiCut creator editing package details." },
 ];
 
@@ -36,9 +36,9 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
 export default function PackagePage() {
   const { pkg, packageIndex, subscription } = useLoaderData<typeof loader>();
   const featureCards = [
-    ["paid", "Base Subscription", `Starts at $${subscription.basePrice}/mo`],
-    ["podcasts", "Finished Video Coverage", `Up to 60 min for +$${subscription.finishedRuntimePrice}`],
-    ["video_file", "Raw Footage Capacity", `Up to 600 min for +$${subscription.rawFootagePrice}`],
+    ["paid", "Base monthly plan", `Estimate starts at $${subscription.basePrice}/mo`],
+    ["podcasts", "Finished Video Coverage", `Up to 60 min for +$${subscription.finishedRuntimePrice}/mo estimate`],
+    ["video_file", "Raw Footage Capacity", `Up to 600 min for +$${subscription.rawFootagePrice}/mo estimate`],
     ["auto_awesome", "Advanced deliverables", subscription.slug === "creator-pro"
       ? "Project files, motion graphics, VFX, and AI voice over are included in Creator Pro."
       : "Project files, motion graphics, VFX, and AI voice over are available with Creator Pro."],
@@ -46,7 +46,7 @@ export default function PackagePage() {
 
   return (
     <PageShell>
-      {/* Hero & Subscription Builder Section */}
+      {/* Hero & monthly plan estimate section */}
       <section className="relative overflow-hidden border-b neo-line px-5 pb-16 pt-16 sm:px-6 lg:pb-24 lg:pt-20">
         <div className="pointer-events-none absolute -right-24 top-16 h-72 w-72 rounded-full bg-[#e2c9ce]/35 blur-3xl" />
         <div className="pointer-events-none absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-[#cbdbe8]/60 blur-3xl" />
@@ -63,9 +63,9 @@ export default function PackagePage() {
 
             <div className="mt-8 flex flex-wrap gap-3">
               {[
-                ["Base Plan", `$${subscription.basePrice}/mo`],
-                ["Podcast Coverage", `+$${subscription.finishedRuntimePrice}`],
-                ["Raw Vlog Coverage", `+$${subscription.rawFootagePrice}`],
+                ["Base plan estimate", `$${subscription.basePrice}/mo`],
+                ["Podcast Coverage", `+$${subscription.finishedRuntimePrice}/mo`],
+                ["Raw Vlog Coverage", `+$${subscription.rawFootagePrice}/mo`],
               ].map(([label, val]) => (
                 <div key={label} className="neo-pill rounded-2xl px-4 py-2.5">
                   <p className="text-xs font-black uppercase tracking-wider neo-muted">{label}</p>
@@ -79,14 +79,14 @@ export default function PackagePage() {
               <p className="yt-tag neo-section-label">Best suited for</p>
               <h3 className="mt-2 text-2xl font-black neo-ink">{subscription.bestFor}</h3>
               <p className="mt-3 yt-small leading-relaxed neo-muted">
-                Select your base subscription, customize footage and runtime coverage on the right, and proceed directly to onboarding.
+                Choose a monthly plan estimate, adjust coverage, and send a project request. EdiCut confirms the scope and billing with you before work begins.
               </p>
             </div>
 
             <div className="neo-inset mt-6 rounded-2xl p-5 sm:p-6">
               <h2 className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">How pricing works</h2>
               <p className="mt-3 text-sm leading-6 neo-muted">
-                Start with the ${subscription.basePrice}/month base subscription, then select optional coverage. Each selected option adds to your monthly total.
+                The base monthly plan estimate is ${subscription.basePrice}. Optional coverage changes the estimate. Requesting a plan does not start a subscription or collect payment.
               </p>
               <dl className="mt-4 grid gap-3 sm:grid-cols-2">
                 {[
@@ -134,6 +134,8 @@ export default function PackagePage() {
                   <img
                     src={optimizeCloudinaryUrl(imageUrl)}
                     alt={`${pkg.name} package gallery image ${index + 1}`}
+                    loading="lazy"
+                    decoding="async"
                     className="aspect-video w-full rounded-xl object-cover"
                   />
                 </div>
@@ -171,7 +173,7 @@ export default function PackagePage() {
                 <p className="yt-tag neo-section-label">Included in every cut</p>
                 <h2 className="mt-2 yt-title font-black neo-ink">Package deliverables</h2>
               </div>
-              <ButtonLink to={getCheckoutUrl(subscription)}>Get started with {subscription.name}</ButtonLink>
+              <ButtonLink to={getCheckoutUrl(subscription)}>Request {subscription.name}</ButtonLink>
             </div>
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -219,7 +221,7 @@ export default function PackagePage() {
                 </div>
                 <div className="mt-6 border-t neo-line pt-4 flex items-baseline gap-1">
                   <span className="type-price neo-ink">${item.basePrice}</span>
-                  <span className="yt-small font-bold neo-muted">/month</span>
+                  <span className="yt-small font-bold neo-muted">/month estimate</span>
                 </div>
               </Link>
             ))}
@@ -254,7 +256,7 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
       <div className="flex items-center justify-between">
         <p className="yt-tag neo-section-label">Configure plan</p>
         <span className="neo-pill rounded-full px-2.5 py-1 text-[11px] font-black uppercase neo-muted">
-          Instant Setup
+          Estimate only
         </span>
       </div>
       <h2 className="mt-2 text-2xl font-black neo-ink">{subscription.name}</h2>
@@ -265,7 +267,7 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
             <p className="text-sm font-black neo-ink">Base monthly package</p>
             <p className="mt-0.5 text-xs font-medium neo-muted">Core editing pipeline & sound design.</p>
           </div>
-          <p className="text-xl font-black neo-ink">${subscription.basePrice}</p>
+          <p className="text-xl font-black neo-ink">${subscription.basePrice}<span className="text-xs font-bold neo-muted">/mo</span></p>
         </div>
       </div>
 
@@ -275,7 +277,7 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
           checked={includeFinishedRuntime}
           icon="podcasts"
           label="Finished duration booster"
-          description="Add 60 min finished podcast/episode coverage."
+          description="Add 60 min finished podcast/episode coverage per month."
           price={subscription.finishedRuntimePrice}
           onChange={setIncludeFinishedRuntime}
         />
@@ -283,7 +285,7 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
           checked={includeRawFootage}
           icon="video_file"
           label="Extra raw footage booster"
-          description="Add 600 min raw vlog/stream footage coverage."
+          description="Add 600 min raw vlog/stream footage coverage per month."
           price={subscription.rawFootagePrice}
           onChange={setIncludeRawFootage}
         />
@@ -292,10 +294,10 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
       <div className="mt-6 border-t neo-line pt-5">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Estimated monthly total</p>
-            <p className="mt-0.5 text-xs font-medium neo-muted">Includes revisions & thumbnail</p>
+            <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Estimated monthly plan total</p>
+            <p className="mt-0.5 text-xs font-medium neo-muted">Final scope and billing are confirmed with you.</p>
           </div>
-          <p className="type-price neo-ink">${total}</p>
+          <p className="type-price neo-ink" role="status" aria-live="polite" aria-atomic="true">${total}</p>
         </div>
       </div>
 
@@ -303,10 +305,10 @@ function SubscriptionBuilder({ subscription }: { subscription: SubscriptionPacka
         to={checkoutHref}
         className="neo-button neo-button--primary mt-6 w-full justify-center text-sm font-black uppercase tracking-wider"
       >
-        <span>Proceed to checkout</span>
+        <span>Request this plan</span>
         <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
       </Link>
-      <p className="mt-3 text-center text-xs font-medium neo-muted">Sign in or create an account at next step.</p>
+      <p className="mt-3 text-center text-xs font-medium neo-muted">No charge today. Sign in to send a project request.</p>
     </section>
   );
 }
@@ -343,7 +345,7 @@ function OptionCheckbox({
         <span className="block text-sm font-black neo-ink">{label}</span>
         <span className="mt-0.5 block text-xs font-medium leading-relaxed neo-muted">{description}</span>
       </span>
-      <span className="text-sm font-black neo-ink">+${price}</span>
+      <span className="text-sm font-black neo-ink">+${price}/mo</span>
     </label>
   );
 }

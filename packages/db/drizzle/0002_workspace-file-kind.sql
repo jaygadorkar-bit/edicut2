@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_project_files" ADD COLUMN "kind" varchar(16) DEFAULT 'source' NOT NULL;

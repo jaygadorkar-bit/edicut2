@@ -2,8 +2,8 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { Form, Link, data, redirect, useActionData, useLoaderData, useLocation, useNavigation, useSearchParams } from "react-router";
 import bcrypt from "bcryptjs";
 import { updateUserRole } from "@edicut/db/repositories/users";
-import { adminUsers as adminUsersTable, users as usersTable } from "@edicut/db/schema";
-import { getDbFromContext } from "../lib/db.server";
+import { adminUsers as adminUsersTable, users as usersTable, workspaceProjectFiles, workspaceProjects } from "@edicut/db/schema";
+import { getDbFromContext, hasReturnedRows } from "../lib/db.server";
 import {
   destroyAdminSession,
   commitAdminSession,
@@ -44,24 +44,24 @@ import {
   type PortfolioSection,
 } from "../lib/portfolio.server";
 import {
-  getAdminToolbarEnabled,
-  getMaintenanceModeEnabled,
   saveAdminToolbarEnabled,
-  getPromoBarSettings,
-  getSearchCrawlingEnabled,
   savePromoBarSettings,
   saveMaintenanceModeEnabled,
   saveSearchCrawlingEnabled,
+  getSiteSettingsSnapshot,
   getRoleFeatureAccessSettings,
   saveRoleFeatureAccessSettings,
 } from "../lib/site-settings.server";
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, count as drizzleCount } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, count as drizzleCount } from "drizzle-orm";
 import { useState, useEffect, type ReactNode } from "react";
-import { DASHBOARD_FEATURES, type RoleFeatureAccess } from "../lib/role-feature-access";
+import { DASHBOARD_FEATURES, DEFAULT_ROLE_FEATURE_ACCESS, type RoleFeatureAccess } from "../lib/role-feature-access";
+import { getAdminDataRequirements, getPageWithinRange, getPositivePage } from "../lib/admin-data-requirements";
 import { AdminPanelShell } from "../components/AdminPanelShell";
 import { WorkspaceBoard, WorkspaceProjectStrip, WorkspaceSchedule } from "../components/WorkspaceWidgets";
+import { isMissingWorkspaceSchema, parseBillingAmountToCents, parseWorkspaceShareUrl, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
 
 const PAGE_SIZE = 10;
+const WORKSPACE_PROJECT_PAGE_SIZE = 20;
 
 const adminPlaceholderConfigs = {
   projects: {
@@ -163,11 +163,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const tab = url.searchParams.get("tab") || "overview";
   const q = url.searchParams.get("q") || "";
   const roleFilter = url.searchParams.get("role") || "";
-  const page = Math.max(Number(url.searchParams.get("page") || "1"), 1);
+  const page = getPositivePage(url.searchParams.get("page"));
+  const requestedWorkspaceProjectPage = getPositivePage(url.searchParams.get("projectPage"));
   const sort = url.searchParams.get("sort") || "createdAt";
   const order = url.searchParams.get("order") || "desc";
   const view = url.searchParams.get("view") || "active"; // active or trash
   const adminDirectory = view === "admins";
+  const requirements = getAdminDataRequirements(tab);
 
   // Build filters for users
   const filters = [];
@@ -198,37 +200,96 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   // Fetch users with pagination
   const [users, totalResult, adminUsers, adminTotalResult] = await Promise.all([
-    adminDirectory ? Promise.resolve([]) : db.select().from(usersTable)
+    !requirements.userDirectory || adminDirectory ? Promise.resolve([]) : db.select().from(usersTable)
       .where(whereClause)
       .orderBy(orderBy)
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
-    adminDirectory ? Promise.resolve([{ count: 0 }]) : db.select({ count: drizzleCount() }).from(usersTable).where(whereClause),
-    adminDirectory ? db.select().from(adminUsersTable)
+    !requirements.userDirectory || adminDirectory ? Promise.resolve([{ count: 0 }]) : db.select({ count: drizzleCount() }).from(usersTable).where(whereClause),
+    requirements.userDirectory && adminDirectory ? db.select().from(adminUsersTable)
       .where(adminFilters)
       .orderBy(adminOrderBy)
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE) : Promise.resolve([]),
-    adminDirectory ? db.select({ count: drizzleCount() }).from(adminUsersTable).where(adminFilters) : Promise.resolve([{ count: 0 }])
+    requirements.userDirectory && adminDirectory ? db.select({ count: drizzleCount() }).from(adminUsersTable).where(adminFilters) : Promise.resolve([{ count: 0 }])
   ]);
 
   const totalUsersCount = adminDirectory ? adminTotalResult[0]?.count ?? 0 : totalResult[0]?.count ?? 0;
   const totalPages = Math.ceil(totalUsersCount / PAGE_SIZE);
+  let workspaceProjectRows: Array<{
+    project: Pick<
+      typeof workspaceProjects.$inferSelect,
+      "id" | "title" | "channelName" | "packageSlug" | "notes" | "status" | "billingStatus" | "finalAmountCents" | "invoiceUrl"
+    >;
+    ownerName: string | null;
+    ownerEmail: string | null;
+  }> = [];
+  let workspaceFiles: Pick<
+    typeof workspaceProjectFiles.$inferSelect,
+    "id" | "projectId" | "kind" | "fileName" | "shareUrl"
+  >[] = [];
+  let workspaceProjectCount = 0;
+  let workspaceProjectReviewCount = 0;
+  let workspaceProjectPage = requestedWorkspaceProjectPage;
+  let workspaceProjectPageCount = 1;
+  let workspaceReady = true;
+  if (tab === "projects") {
+    try {
+      const selectProjectsForPage = (pageNumber: number) => db.select({
+          project: {
+            id: workspaceProjects.id,
+            title: workspaceProjects.title,
+            channelName: workspaceProjects.channelName,
+            packageSlug: workspaceProjects.packageSlug,
+            notes: workspaceProjects.notes,
+            status: workspaceProjects.status,
+            billingStatus: workspaceProjects.billingStatus,
+            finalAmountCents: workspaceProjects.finalAmountCents,
+            invoiceUrl: workspaceProjects.invoiceUrl,
+          },
+          ownerName: usersTable.name,
+          ownerEmail: usersTable.email,
+        })
+          .from(workspaceProjects)
+          .leftJoin(usersTable, eq(workspaceProjects.ownerId, usersTable.id))
+          .orderBy(desc(workspaceProjects.updatedAt))
+          .limit(WORKSPACE_PROJECT_PAGE_SIZE)
+          .offset((pageNumber - 1) * WORKSPACE_PROJECT_PAGE_SIZE);
+      const projectStats = await db.select({
+        total: drizzleCount(),
+        awaitingReview: sql<number>`count(*) FILTER (WHERE ${inArray(workspaceProjects.status, ["review", "client_review"])})`.mapWith(Number),
+      }).from(workspaceProjects);
+      workspaceProjectCount = projectStats[0]?.total ?? 0;
+      workspaceProjectReviewCount = projectStats[0]?.awaitingReview ?? 0;
+      workspaceProjectPageCount = Math.max(1, Math.ceil(workspaceProjectCount / WORKSPACE_PROJECT_PAGE_SIZE));
+      workspaceProjectPage = getPageWithinRange(requestedWorkspaceProjectPage, workspaceProjectPageCount);
+      workspaceProjectRows = await selectProjectsForPage(workspaceProjectPage);
 
-  // Global Stats (Using separate queries for maximum compatibility)
+      const visibleProjectIds = workspaceProjectRows.map(({ project }) => project.id);
+      if (visibleProjectIds.length) {
+        workspaceFiles = await db.select({
+          id: workspaceProjectFiles.id,
+          projectId: workspaceProjectFiles.projectId,
+          kind: workspaceProjectFiles.kind,
+          fileName: workspaceProjectFiles.fileName,
+          shareUrl: workspaceProjectFiles.shareUrl,
+        }).from(workspaceProjectFiles)
+          .where(inArray(workspaceProjectFiles.projectId, visibleProjectIds))
+          .orderBy(desc(workspaceProjectFiles.createdAt));
+      }
+    } catch (error) {
+      if (!isMissingWorkspaceSchema(error)) throw error;
+      workspaceReady = false;
+    }
+  }
+
+  // Aggregate user totals in one PostgreSQL pass; keep the separate admin
+  // table count because privileged accounts live in a different table.
   const [
-    totalCount,
+    userStatsResult,
     adminCount,
-    managerCount,
-    editorCount,
-    customerCount,
-    supportCount,
-    trashCount,
     pricingPackages,
-    adminToolbarEnabled,
-    searchCrawlingEnabled,
-    maintenanceModeEnabled,
-    promoBarSettings,
+    siteSettingsSnapshot,
     roleFeatureAccess,
     portfolioSections,
     cloudinaryImages,
@@ -238,37 +299,45 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     cloudinaryVideoUsage,
     cloudinaryVideoError
   ] = await Promise.all([
-    db.select({ count: drizzleCount() }).from(usersTable).where(isNull(usersTable.deletedAt)),
-    db.select({ count: drizzleCount() }).from(adminUsersTable).where(eq(adminUsersTable.active, true)),
-    db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "project_manager"), isNull(usersTable.deletedAt))),
-    db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "editor"), isNull(usersTable.deletedAt))),
-    db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "customer"), isNull(usersTable.deletedAt))),
-    db.select({ count: drizzleCount() }).from(usersTable).where(and(eq(usersTable.role, "customer_support"), isNull(usersTable.deletedAt))),
-    db.select({ count: drizzleCount() }).from(usersTable).where(isNotNull(usersTable.deletedAt)),
-    getPricingPackages(db),
-    getAdminToolbarEnabled(db, context),
-    getSearchCrawlingEnabled(db, context),
-    getMaintenanceModeEnabled(db, context),
-    getPromoBarSettings(db, context),
-    getRoleFeatureAccessSettings(db, context),
-    getPortfolioSections(db, context),
-    listCloudinaryImages(context).catch((error) => {
+    requirements.stats
+      ? db.select({
+          total: sql<number>`count(*) FILTER (WHERE ${isNull(usersTable.deletedAt)})`.mapWith(Number),
+          managers: sql<number>`count(*) FILTER (WHERE ${and(eq(usersTable.role, "project_manager"), isNull(usersTable.deletedAt))})`.mapWith(Number),
+          editors: sql<number>`count(*) FILTER (WHERE ${and(eq(usersTable.role, "editor"), isNull(usersTable.deletedAt))})`.mapWith(Number),
+          customers: sql<number>`count(*) FILTER (WHERE ${and(eq(usersTable.role, "customer"), isNull(usersTable.deletedAt))})`.mapWith(Number),
+          support: sql<number>`count(*) FILTER (WHERE ${and(eq(usersTable.role, "customer_support"), isNull(usersTable.deletedAt))})`.mapWith(Number),
+          trash: sql<number>`count(*) FILTER (WHERE ${isNotNull(usersTable.deletedAt)})`.mapWith(Number),
+        }).from(usersTable)
+      : Promise.resolve([{ total: 0, managers: 0, editors: 0, customers: 0, support: 0, trash: 0 }]),
+    requirements.stats ? db.select({ count: drizzleCount() }).from(adminUsersTable).where(eq(adminUsersTable.active, true)) : Promise.resolve([{ count: 0 }]),
+    requirements.pricingPackages ? getPricingPackages(db) : Promise.resolve([]),
+    requirements.siteSettings
+      ? getSiteSettingsSnapshot(db, context, { includeAdminToolbar: true, includePromoBar: true })
+      : Promise.resolve({
+          adminToolbarEnabled: false,
+          searchCrawlingEnabled: false,
+          maintenanceModeEnabled: false,
+          promoBarSettings: { enabled: false, message: "" },
+        }),
+    requirements.roleFeatureAccess ? getRoleFeatureAccessSettings(db, context) : Promise.resolve(DEFAULT_ROLE_FEATURE_ACCESS),
+    requirements.portfolioSections ? getPortfolioSections(db, context) : Promise.resolve([]),
+    requirements.images ? listCloudinaryImages(context).catch((error) => {
       console.error("Cloudinary image list error:", error);
       return [] as CloudinaryImageResource[];
-    }),
-    getCloudinaryUsage(context).catch((error) => {
+    }) : Promise.resolve([] as CloudinaryImageResource[]),
+    requirements.imageUsage ? getCloudinaryUsage(context).catch((error) => {
       console.error("Cloudinary usage error:", error);
       return null as CloudinaryUsage | null;
-    }),
+    }) : Promise.resolve(null as CloudinaryUsage | null),
     Promise.resolve(null as string | null),
-    listCloudinaryVideos(context).catch((error) => {
+    requirements.videos ? listCloudinaryVideos(context).catch((error) => {
       console.error("Cloudinary video list error:", error);
       return [] as CloudinaryVideoResource[];
-    }),
-    getCloudinaryVideoUsage(context).catch((error) => {
+    }) : Promise.resolve([] as CloudinaryVideoResource[]),
+    requirements.videoUsage ? getCloudinaryVideoUsage(context).catch((error) => {
       console.error("Cloudinary video usage error:", error);
       return null as CloudinaryUsage | null;
-    }),
+    }) : Promise.resolve(null as CloudinaryUsage | null),
     Promise.resolve(null as string | null),
   ]);
 
@@ -280,28 +349,37 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     totalPages,
     currentPage: page,
     tab,
+    workspaceProjectRows,
+    workspaceFiles,
+    workspaceProjectCount,
+    workspaceProjectReviewCount,
+    workspaceProjectPage,
+    workspaceProjectPageCount,
+    workspaceReady,
     view,
-    pricingPackages,
-    adminToolbarEnabled,
-    searchCrawlingEnabled,
-    maintenanceModeEnabled,
-    promoBarSettings,
+    pricingPackages: tab === "packages" ? pricingPackages : [],
+    pricingPackageCount: pricingPackages.length,
+    adminToolbarEnabled: siteSettingsSnapshot.adminToolbarEnabled,
+    searchCrawlingEnabled: siteSettingsSnapshot.searchCrawlingEnabled,
+    maintenanceModeEnabled: siteSettingsSnapshot.maintenanceModeEnabled,
+    promoBarSettings: siteSettingsSnapshot.promoBarSettings,
     roleFeatureAccess,
     portfolioSections,
-    cloudinaryImages,
+    cloudinaryImages: tab === "images" ? cloudinaryImages : [],
+    cloudinaryImageCount: cloudinaryImages.length,
     cloudinaryUsage,
     cloudinaryError,
     cloudinaryVideos,
     cloudinaryVideoUsage,
     cloudinaryVideoError,
     stats: {
-      total: Number(totalCount[0].count || 0),
+      total: Number(userStatsResult[0]?.total || 0),
       admins: Number(adminCount[0].count || 0),
-      managers: Number(managerCount[0].count || 0),
-      editors: Number(editorCount[0].count || 0),
-      customers: Number(customerCount[0].count || 0),
-      support: Number(supportCount[0].count || 0),
-      trash: Number(trashCount[0].count || 0),
+      managers: Number(userStatsResult[0]?.managers || 0),
+      editors: Number(userStatsResult[0]?.editors || 0),
+      customers: Number(userStatsResult[0]?.customers || 0),
+      support: Number(userStatsResult[0]?.support || 0),
+      trash: Number(userStatsResult[0]?.trash || 0),
     }
   };
 
@@ -314,7 +392,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   });
 }
 
-export async function action({ request, context }: ActionFunctionArgs) {
+type AdminActionData = { error?: string; success?: string };
+
+export async function action({ request, context }: ActionFunctionArgs): Promise<AdminActionData | Response> {
   const db = getDbFromContext(context);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
@@ -332,6 +412,86 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (!isAdminRole(adminUser.role)) {
     return { error: "Permission denied." };
+  }
+
+  if (intent === "workspace-project-status") {
+    const projectId = String(formData.get("projectId") || "");
+    const status = String(formData.get("status") || "");
+    const reviewUrl = parseWorkspaceShareUrl(String(formData.get("reviewUrl") || ""));
+    if (!projectId || !["intake", "editing", "review", "revision", "delivered"].includes(status)) {
+      return { error: "Choose a valid project and status." };
+    }
+    if (status === "review" && !reviewUrl) return { error: "Add the HTTPS preview link before moving a project to customer review." };
+    try {
+      if (status === "review" && reviewUrl) {
+        const result = await db.execute(sql`
+          WITH updated AS (
+            UPDATE workspace_projects
+            SET status = ${status}, updated_at = now()
+            WHERE id = ${projectId}
+            RETURNING id, owner_id
+          )
+          INSERT INTO workspace_project_files (owner_id, project_id, kind, file_name, share_url)
+          SELECT owner_id, id, 'review', 'Review cut', ${reviewUrl}
+          FROM updated
+          RETURNING id
+        `);
+        if (!hasReturnedRows(result)) return { error: "Project request not found." };
+      } else {
+        const [updated] = await db.update(workspaceProjects)
+          .set({ status, updatedAt: new Date() })
+          .where(eq(workspaceProjects.id, projectId))
+          .returning();
+        if (!updated) return { error: "Project request not found." };
+      }
+      return { success: status === "review" ? "Project moved to customer review with a preview link." : "Project status updated." };
+    } catch (error) {
+      if (isMissingWorkspaceSchema(error)) return { error: WORKSPACE_MIGRATION_NOTICE };
+      throw error;
+    }
+  }
+
+  if (intent === "workspace-project-billing") {
+    const projectId = String(formData.get("projectId") || "");
+    const billingStatus = String(formData.get("billingStatus") || "");
+    const rawFinalAmount = String(formData.get("finalAmount") || "").trim();
+    const invoiceUrlValue = String(formData.get("invoiceUrl") || "").trim();
+    const invoiceUrl = invoiceUrlValue ? parseWorkspaceShareUrl(invoiceUrlValue) : null;
+    const finalAmountCents = billingStatus === "quote_requested" ? null : parseBillingAmountToCents(rawFinalAmount);
+
+    if (!projectId || !["quote_requested", "quote_approved", "invoice_pending", "paid"].includes(billingStatus)) {
+      return { error: "Choose a valid project and billing status." };
+    }
+    if (billingStatus !== "quote_requested" && finalAmountCents === null) {
+      return { error: "Enter a final amount greater than zero, using up to two decimal places." };
+    }
+    if (invoiceUrlValue && !invoiceUrl) return { error: "Enter a valid HTTPS invoice or payment link." };
+    if (billingStatus === "invoice_pending" && !invoiceUrl) {
+      return { error: "Add the HTTPS invoice or payment link before marking an invoice as sent." };
+    }
+
+    try {
+      const [updated] = await db.update(workspaceProjects)
+        .set({
+          billingStatus,
+          finalAmountCents,
+          invoiceUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(workspaceProjects.id, projectId))
+        .returning();
+      if (!updated) return { error: "Project request not found." };
+      const labels: Record<string, string> = {
+        quote_requested: "Billing moved back to quote requested.",
+        quote_approved: "Final quote saved for the customer.",
+        invoice_pending: "Invoice link shared with the customer.",
+        paid: "Payment marked as received.",
+      };
+      return { success: labels[billingStatus] };
+    } catch (error) {
+      if (isMissingWorkspaceSchema(error)) return { error: WORKSPACE_MIGRATION_NOTICE };
+      throw error;
+    }
   }
 
   if (intent === "create-user") {
@@ -629,12 +789,109 @@ export async function action({ request, context }: ActionFunctionArgs) {
 export default function AdminRoute() {
   const { tab } = useLoaderData<typeof loader>();
   if (tab === "overview") return <AdminOverview />;
-  if (tab === "projects" || tab === "payments" || tab === "audit") return <AdminPlaceholder tab={tab} />;
+  if (tab === "projects") return <AdminProjects />;
+  if (tab === "payments" || tab === "audit") return <AdminPlaceholder tab={tab} />;
   return <LegacyAdminRoute />;
 }
 
+function AdminProjects() {
+  const {
+    adminUser,
+    workspaceProjectRows,
+    workspaceFiles,
+    workspaceProjectCount,
+    workspaceProjectReviewCount,
+    workspaceProjectPage,
+    workspaceProjectPageCount,
+    workspaceReady,
+  } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state !== "idle";
+  const filesByProject = new Map<string, typeof workspaceFiles>();
+  for (const file of workspaceFiles) {
+    const projectFiles = filesByProject.get(file.projectId);
+    if (projectFiles) projectFiles.push(file);
+    else filesByProject.set(file.projectId, [file]);
+  }
+
+  return (
+    <AdminPanelShell
+      title="Customer projects"
+      activeTab="projects"
+      account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
+      notificationCount={workspaceProjectReviewCount}
+      headerActions={(
+        <Link to="?tab=overview" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
+          <span className="material-symbols-outlined text-[17px]" aria-hidden="true">dashboard_customize</span>
+          Dashboard
+        </Link>
+      )}
+    >
+      <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="customer-projects-title">
+        <p className="neo-workspace__eyebrow">Production queue</p>
+        <h2 id="customer-projects-title" className="neo-workspace__module-title mt-1">Customer project requests</h2>
+        <p className="neo-workspace__module-copy mt-2">Review submitted briefs and move each project to editing or customer review. Customers can approve a review cut or request revisions in their workspace.</p>
+        <p className="mt-2 text-xs font-bold text-[#687583]" role="status">Showing {workspaceProjectRows.length} of {workspaceProjectCount} projects</p>
+        {actionData?.error ? <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700" role="alert">{actionData.error}</p> : null}
+        {actionData?.success ? <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700" role="status">{actionData.success}</p> : null}
+        {!workspaceReady ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900" role="status">{WORKSPACE_MIGRATION_NOTICE}</p> : null}
+        {workspaceProjectRows.length ? (
+          <div className="mt-5 grid gap-3">
+            {workspaceProjectRows.map(({ project, ownerName, ownerEmail }) => {
+              const projectFiles = filesByProject.get(project.id) ?? [];
+              return (
+              <article key={project.id} className="rounded-2xl border border-[#edf0f2] p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0"><h3 className="truncate text-base font-black text-[#17202a]">{project.title}</h3><p className="mt-1 text-xs text-[#687583]">{project.channelName} · {project.packageSlug}</p><p className="mt-1 text-xs font-bold text-[#536779]">{ownerName || "Customer"} · {ownerEmail}</p></div>
+                  <span className="rounded-full bg-[#f0ecfb] px-3 py-1 text-[10px] font-black text-[#6550c7]">{project.status.replace(/[_-]/g, " ")}</span>
+                </div>
+                {project.notes ? <p className="mt-3 whitespace-pre-wrap text-sm text-[#536779]">{project.notes}</p> : null}
+                {projectFiles.length ? (
+                  <ul className="mt-3 flex flex-wrap gap-2" aria-label="Project shared links">
+                    {projectFiles.map((file) => (
+                      <li key={file.id}><a href={file.shareUrl} target="_blank" rel="noopener noreferrer" className="inline-flex rounded-full bg-[#f5f6fa] px-3 py-2 text-xs font-bold text-[#536779] underline">{file.kind === "review" ? "Review cut" : "Source"}: {file.fileName}</a></li>
+                    ))}
+                  </ul>
+                ) : null}
+                <Form method="post" className="mt-4 grid gap-3 rounded-xl bg-[#f8f8fb] p-4 sm:grid-cols-[minmax(160px,0.7fr)_minmax(190px,1fr)_minmax(190px,1fr)_auto] sm:items-end">
+                  <input type="hidden" name="intent" value="workspace-project-billing" />
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <label className="grid gap-2 text-xs font-black text-[#536779]">Billing status<select name="billingStatus" defaultValue={project.billingStatus} className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="quote_requested">Quote requested</option><option value="quote_approved">Quote confirmed</option><option value="invoice_pending">Invoice sent</option><option value="paid">Paid</option></select></label>
+                  <label className="grid gap-2 text-xs font-black text-[#536779]">Final amount (USD)<input name="finalAmount" type="number" min="0.01" max="9999999.99" step="0.01" defaultValue={project.finalAmountCents == null ? "" : (project.finalAmountCents / 100).toFixed(2)} placeholder="80.00" className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
+                  <label className="grid gap-2 text-xs font-black text-[#536779]">Invoice or payment link<input name="invoiceUrl" type="url" maxLength={2048} defaultValue={project.invoiceUrl || ""} placeholder="https://…" className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
+                  <button type="submit" disabled={isSubmitting} className="neo-workspace__secondary-action h-11 rounded-xl px-4 text-xs font-black disabled:opacity-60">{isSubmitting ? "Saving…" : "Save billing"}</button>
+                </Form>
+                <Form method="post" className="mt-4 flex flex-wrap items-end gap-3">
+                  <input type="hidden" name="intent" value="workspace-project-status" />
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <label className="grid gap-2 text-xs font-black text-[#536779]">Move project to<select name="status" defaultValue={project.status} className="neo-workspace__profile-input h-11 min-w-[190px] rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="intake">Intake</option><option value="editing">Editing</option><option value="review">Customer review</option><option value="revision">Revision</option><option value="delivered">Delivered</option></select></label>
+                  <label className="grid gap-2 text-xs font-black text-[#536779]">Preview link <input type="url" name="reviewUrl" placeholder="Required for customer review" className="neo-workspace__profile-input h-11 min-w-[220px] rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
+                  <button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit h-11 rounded-xl px-4 text-xs font-black disabled:opacity-60">{isSubmitting ? "Saving…" : "Update status"}</button>
+                </Form>
+              </article>
+              );
+            })}
+          </div>
+        ) : <div className="mt-5 rounded-2xl bg-[#f5f6fa] p-5"><h3 className="text-sm font-black text-[#17202a]">No customer requests yet</h3><p className="mt-1 text-sm text-[#687583]">New requests will appear here when customers submit an editing brief.</p></div>}
+        {workspaceReady && workspaceProjectPageCount > 1 ? (
+          <nav className="mt-5 flex items-center justify-between gap-3 border-t border-[#edf0f2] pt-4" aria-label="Customer project pages">
+            {workspaceProjectPage > 1 ? (
+              <Link to={`?tab=projects&projectPage=${workspaceProjectPage - 1}`} className="neo-workspace__secondary-action inline-flex h-10 items-center rounded-xl px-4 text-xs font-black">Previous</Link>
+            ) : <span className="neo-workspace__secondary-action inline-flex h-10 items-center rounded-xl px-4 text-xs font-black opacity-45" aria-disabled="true">Previous</span>}
+            <p className="text-xs font-bold text-[#687583]">Page {workspaceProjectPage} of {workspaceProjectPageCount}</p>
+            {workspaceProjectPage < workspaceProjectPageCount ? (
+              <Link to={`?tab=projects&projectPage=${workspaceProjectPage + 1}`} className="neo-workspace__secondary-action inline-flex h-10 items-center rounded-xl px-4 text-xs font-black">Next</Link>
+            ) : <span className="neo-workspace__secondary-action inline-flex h-10 items-center rounded-xl px-4 text-xs font-black opacity-45" aria-disabled="true">Next</span>}
+          </nav>
+        ) : null}
+      </section>
+    </AdminPanelShell>
+  );
+}
+
 function AdminOverview() {
-  const { adminUser, stats, cloudinaryImages, pricingPackages } = useLoaderData<typeof loader>();
+  const { adminUser, stats, cloudinaryImageCount, pricingPackageCount } = useLoaderData<typeof loader>();
 
   return (
     <AdminPanelShell
@@ -653,7 +910,7 @@ function AdminOverview() {
           ["Total users", String(stats.total), "Active accounts", "group"],
           ["Admin team", String(stats.admins), "Privileged accounts", "admin_panel_settings"],
           ["Editors", String(stats.editors), "Production capacity", "movie_edit"],
-          ["Media assets", String(cloudinaryImages.length), `${pricingPackages.length} packages published`, "perm_media"],
+          ["Media assets", String(cloudinaryImageCount), `${pricingPackageCount} packages published`, "perm_media"],
         ].map(([label, value, hint, icon]) => {
           return (
             <article key={label} className="neo-workspace__stat-card rounded-[17px] p-4">
@@ -675,8 +932,8 @@ function AdminOverview() {
           mobileCarousel
           projects={[
             { title: "User operations", description: "Manage access, roles, and onboarding...", tone: "purple", progress: 78, members: [adminUser.name || "Admin"], count: String(stats.total) },
-            { title: "Content pipeline", description: "Keep packages and portfolio content...", tone: "blue", progress: 62, members: [adminUser.name || "Admin"], count: String(pricingPackages.length) },
-            { title: "Media library", description: "Cloudinary assets ready for publishing...", tone: "yellow", progress: 84, members: [adminUser.name || "Admin"], count: String(cloudinaryImages.length) },
+            { title: "Content pipeline", description: "Keep packages and portfolio content...", tone: "blue", progress: 62, members: [adminUser.name || "Admin"], count: String(pricingPackageCount) },
+            { title: "Media library", description: "Cloudinary assets ready for publishing...", tone: "yellow", progress: 84, members: [adminUser.name || "Admin"], count: String(cloudinaryImageCount) },
             { title: "Security review", description: "Role access and toolbar settings...", tone: "pink", progress: 91, members: [adminUser.name || "Admin"], count: "OK" },
           ]}
         />
@@ -1435,7 +1692,7 @@ function ImagesPanel({
             {images.map((image) => (
               <label key={image.public_id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="relative">
-                  <img src={optimizeCloudinaryUrl(image.secure_url)} alt={image.public_id} className="aspect-video w-full bg-slate-100 object-cover" />
+                  <img src={optimizeCloudinaryUrl(image.secure_url)} alt={image.public_id} loading="lazy" decoding="async" width={image.width || undefined} height={image.height || undefined} className="aspect-video w-full bg-slate-100 object-cover" />
                   <span className="absolute left-3 top-3 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black uppercase text-white">{image.format || "image"}</span>
                   <input name="publicIds" value={image.public_id} type="checkbox" className="absolute right-3 top-3 h-5 w-5 accent-black" />
                   <input name="imageUrls" value={image.secure_url} type="hidden" />
@@ -1562,7 +1819,7 @@ function VideoLibraryPanel({
             {videos.map((video) => (
               <article key={video.public_id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="relative bg-slate-950">
-                  <video src={video.secure_url} poster={cloudinaryVideoThumbnailUrl(video.secure_url)} controls preload="metadata" className="aspect-video w-full object-contain" />
+                  <video src={video.secure_url} poster={cloudinaryVideoThumbnailUrl(video.secure_url)} controls preload="none" className="aspect-video w-full object-contain" />
                   <input name="publicIds" value={video.public_id} type="checkbox" className="absolute right-3 top-3 h-5 w-5 accent-black" />
                   <input name="videoUrls" value={video.secure_url} type="hidden" />
                 </div>
@@ -2040,7 +2297,7 @@ function PackageForm({
         {pkg?.galleryImages?.length ? (
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {pkg.galleryImages.map((imageUrl) => (
-              <img key={imageUrl} src={optimizeCloudinaryUrl(imageUrl)} alt="" className="aspect-video w-full rounded-xl border border-slate-200 bg-white object-cover" />
+              <img key={imageUrl} src={optimizeCloudinaryUrl(imageUrl)} alt="" loading="lazy" decoding="async" className="aspect-video w-full rounded-xl border border-slate-200 bg-white object-cover" />
             ))}
           </div>
         ) : null}

@@ -10,6 +10,8 @@ EdiCut is a video editing platform for YouTube creators. This repository is a pn
 - `packages/db`: Drizzle/PostgreSQL data layer.
 - `packages/platform-core`: shared platform logic, including auth-oriented helpers.
 
+Frontend architecture and contribution guidance: [apps/web/README.md](apps/web/README.md).
+
 ## Local Development
 
 Install dependencies:
@@ -47,6 +49,7 @@ The Docker development profile disables the production-domain reCAPTCHA keys for
 Docker exposes:
 
 - Web: `http://localhost:3000`
+- Compatibility alias: `http://localhost:3002`
 
 Local Google OAuth uses the callback `http://localhost:3000/api/auth/callback/google` and returns to the app on the same port.
 
@@ -55,7 +58,9 @@ The local Postgres and Node API containers are not part of the Docker workflow. 
 ## Quality
 
 ```bash
+pnpm test
 pnpm typecheck
 pnpm build
 pnpm health
+pnpm audit --prod
 ```

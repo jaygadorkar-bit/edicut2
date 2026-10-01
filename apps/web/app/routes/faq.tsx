@@ -13,7 +13,7 @@ const allFaqs = [
   {
     category: "Workflow",
     question: "How does the raw footage handoff and editing process work?",
-    answer: "Once you subscribe, we set up a dedicated private channel in our creator portal and Slack. You drop your Google Drive, Dropbox, or Frame.io footage links along with any rough notes or timestamps. Our lead editor and project manager begin the assembly within 24 hours and deliver your first cut in 48 hours.",
+    answer: "After EdiCut confirms your project scope and billing, add a Google Drive, Dropbox, OneDrive, or Frame.io sharing link and your notes in the workspace. Set the link permissions for your editor in that storage service. First-cut timing is agreed with the team for each project.",
   },
   {
     category: "Workflow",
@@ -22,13 +22,13 @@ const allFaqs = [
   },
   {
     category: "Pricing",
-    question: "Can I pause or cancel my editing subscription anytime?",
-    answer: "Yes! There are no long-term contracts. You can pause or cancel your subscription at any time directly from your billing portal before your next billing cycle.",
+    question: "How do I change or cancel a monthly editing plan?",
+    answer: "The workspace records project requests and invoices but does not manage recurring charges. Contact EdiCut support to discuss changes or cancellation under your confirmed service agreement before the next billing cycle.",
   },
   {
     category: "Pricing",
     question: "What happens if my video is longer than the included package limit?",
-    answer: "Our packages include up to 60 minutes of finished runtime and up to 600 minutes of raw footage. If you have extra-long podcasts, live stream VODs, or multi-day vlogs, you can easily add raw footage coverage or runtime boosters during checkout or on your dashboard.",
+    answer: "The monthly plan estimates include up to 60 minutes of finished runtime and up to 600 minutes of raw footage. You can select additional coverage with your project request, then the team will confirm what is available and the final price before work begins.",
   },
   {
     category: "Footage",
@@ -43,7 +43,7 @@ const allFaqs = [
   {
     category: "Security",
     question: "How secure is my unreleased footage and intellectual property?",
-    answer: "Your footage is 100% confidential. All our editors and managers sign comprehensive NDAs, and all file transfers use encrypted cloud storage. We never share, leak, or publish your footage without your explicit written consent.",
+    answer: "Your workspace stores the sharing links and project details you submit. Keep source footage in your own storage provider and set its sharing permissions for your editor. Avoid public links for unreleased media; ask support about approved transfer options if you need a different workflow.",
   },
 ];
 

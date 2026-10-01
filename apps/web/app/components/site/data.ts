@@ -38,7 +38,7 @@ export const plans = [
 
 export const workflow = [
   ["01", "Choose your plan", "Pick the editing lane that matches your upload rhythm and content scope.", "sell"],
-  ["02", "Send your footage", "Upload raw files, references, notes, and brand assets through your workspace.", "cloud_upload"],
+  ["02", "Share your footage", "Keep large files in your own storage and add private sharing links, references, and notes to the project.", "cloud_upload"],
   ["03", "Review and approve", "Leave timestamped notes, request revisions, and approve the final export.", "rate_review"],
 ];
 

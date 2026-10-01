@@ -1,14 +1,11 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { getDbFromContext } from "../lib/db.server";
-import { getMaintenanceModeEnabled, getSearchCrawlingEnabled } from "../lib/site-settings.server";
+import { getSiteSettingsSnapshot } from "../lib/site-settings.server";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = getSupabaseClient(context) ? null : getDbFromContext(context ?? {});
-  const [searchCrawlingEnabled, maintenanceModeEnabled] = await Promise.all([
-    getSearchCrawlingEnabled(db, context),
-    getMaintenanceModeEnabled(db, context),
-  ]);
+  const { searchCrawlingEnabled, maintenanceModeEnabled } = await getSiteSettingsSnapshot(db, context);
   const disallowCrawling = !searchCrawlingEnabled || maintenanceModeEnabled;
   const body = disallowCrawling
     ? "User-agent: *\nDisallow: /\n"

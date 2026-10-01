@@ -118,7 +118,7 @@ export function SiteHeader() {
 
       <div
         aria-hidden={!isMenuOpen}
-        className={`fixed inset-0 z-[100] overflow-hidden lg:hidden ${
+        className={`neo-header-drawer-overlay fixed inset-0 z-[100] overflow-hidden lg:hidden ${
             isMenuOpen ? "pointer-events-auto" : "pointer-events-none"
         }`}
       >
@@ -1464,7 +1464,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
                 <p className="neo-pricing-description mt-3 min-h-20 yt-small font-medium leading-6 neo-muted">{plan.description}</p>
 
                 <div className="neo-pricing-amount mt-5 border-y neo-line py-4">
-                  <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Monthly subscription</p>
+                  <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Monthly plan estimate</p>
                   <p className="mt-2 yt-small font-bold neo-muted">Starting from</p>
                   <div className="mt-1 flex items-baseline gap-2">
                     <span className="type-price neo-ink">{plan.price}</span>
@@ -1489,6 +1489,10 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
             );
           })}
         </div>
+
+        <p className="mt-5 max-w-3xl text-sm font-medium leading-6 neo-muted">
+          Prices are monthly plan estimates. Choosing a plan sends a project request; it does not start recurring billing or collect payment. EdiCut confirms the scope and billing with you before work begins.
+        </p>
 
         {comparison ? <ComparisonTable /> : null}
       </div>
@@ -1533,7 +1537,7 @@ export function ComparisonTable() {
         <aside>
           <h2 className="max-w-[230px] yt-title text-foreground">Compare packages</h2>
           <p className="mt-4 max-w-[250px] text-base font-medium leading-7 text-muted-foreground">
-            Choose the editing subscription that matches your footage volume, runtime, and advanced deliverables.
+            Compare monthly editing plan estimates by footage volume, runtime, and deliverables. EdiCut confirms final scope and billing before work begins.
           </p>
           <div className="mt-6 inline-flex rounded-full bg-gray-200 p-1 yt-tag font-black" role="tablist" aria-label="Compare feature mode">
             <button

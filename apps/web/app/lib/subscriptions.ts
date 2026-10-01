@@ -75,6 +75,22 @@ export function getCheckoutTotal(subscription: SubscriptionPackage, options: { r
     + (options.raw ? subscription.rawFootagePrice : 0);
 }
 
+export function formatRequestedCoverageNotes(
+  subscription: SubscriptionPackage,
+  userNotes: string,
+  options: { runtime?: boolean; raw?: boolean } = {},
+) {
+  const selectedCoverage = [
+    options.runtime ? `60 min finished runtime (+$${subscription.finishedRuntimePrice}/mo estimate)` : null,
+    options.raw ? `600 min raw footage (+$${subscription.rawFootagePrice}/mo estimate)` : null,
+  ].filter((item): item is string => item !== null);
+  const brief = userNotes.trim();
+  if (!selectedCoverage.length) return brief || null;
+
+  const coverage = `Requested monthly coverage: ${selectedCoverage.join("; ")}.`;
+  return brief ? `${coverage}\n\nCustomer brief:\n${brief}` : coverage;
+}
+
 export function getCheckoutUrl(subscription: SubscriptionPackage, options: { runtime?: boolean; raw?: boolean } = {}) {
   const params = new URLSearchParams();
   if (options.runtime) params.set("runtime", "1");

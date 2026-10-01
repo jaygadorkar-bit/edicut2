@@ -98,7 +98,7 @@ export function Header() {
       {/* Mobile Drawer */}
       <div
         aria-hidden={!isMenuOpen}
-        className={`fixed inset-0 z-[100] overflow-hidden lg:hidden ${
+        className={`neo-header-drawer-overlay fixed inset-0 z-[100] overflow-hidden lg:hidden ${
           isMenuOpen ? "pointer-events-auto" : "pointer-events-none"
         }`}
       >

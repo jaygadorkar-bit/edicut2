@@ -1131,6 +1131,84 @@ a.neo-button:active {
   background: #f8fafc;
 }
 
+.neo-app-shell--admin-toolbar {
+  --neo-admin-toolbar-height: 36px;
+}
+
+.neo-app-shell--admin-toolbar .neo-site-header {
+  top: var(--neo-admin-toolbar-height);
+}
+
+.neo-app-shell--admin-toolbar .neo-header-drawer-overlay {
+  inset: var(--neo-admin-toolbar-height) 0 0;
+  height: auto;
+}
+
+.neo-admin-toolbar {
+  --neo-admin-toolbar-accent: #c70f20;
+  position: sticky;
+  z-index: 1000;
+  top: 0;
+  height: var(--neo-admin-toolbar-height, 36px);
+  border-bottom: 1px solid var(--neo-line);
+  background: var(--neo-bg);
+  color: var(--neo-ink);
+  box-shadow: 0 2px 8px rgba(132, 148, 163, 0.1);
+}
+
+.neo-admin-toolbar__inner {
+  display: flex;
+  width: 100%;
+  max-width: 80rem;
+  height: 100%;
+  align-items: center;
+  gap: 1rem;
+  margin-inline: auto;
+  padding-inline: 0;
+}
+
+.neo-admin-toolbar__signout {
+  display: flex;
+  margin-left: auto;
+}
+
+.neo-admin-toolbar__action {
+  display: inline-flex;
+  position: relative;
+  min-height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--neo-ink);
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: none;
+  transition: color 160ms ease;
+}
+
+.neo-admin-toolbar__action:hover {
+  color: var(--neo-admin-toolbar-accent);
+}
+
+.neo-admin-toolbar__action:focus-visible {
+  outline: 2px solid var(--neo-ink);
+  outline-offset: 2px;
+}
+
+.neo-admin-toolbar__action:active {
+  box-shadow: none;
+}
+
+.neo-admin-toolbar__action svg {
+  flex: 0 0 auto;
+}
+
 .neo-header-drawer {
   background: linear-gradient(160deg, rgba(243, 246, 249, 0.98), rgba(231, 237, 242, 0.98));
   border-color: rgba(64, 82, 99, 0.12);
@@ -1963,50 +2041,180 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
   border-radius: 0.4rem;
 }
 
+.neo-workspace__mobile-heading {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.neo-workspace__mobile-heading-divider {
+  width: 1px;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  background: var(--workspace-line);
+}
+
 .neo-workspace__mobile-logo:focus-visible,
 .neo-workspace__menu-toggle:focus-visible,
-.neo-workspace__mobile-menu a:focus-visible,
+.neo-workspace__mobile-drawer a:focus-visible,
+.neo-workspace__mobile-drawer button:focus-visible,
 .neo-workspace__carousel-arrow:focus-visible,
 .neo-workspace__carousel-dot:focus-visible {
   outline: 2px solid #536779;
   outline-offset: 3px;
 }
 
-.neo-workspace__mobile-menu {
+.neo-workspace__mobile-drawer-shell {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear 300ms;
+}
+
+.neo-workspace__mobile-drawer-shell.is-open {
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+.neo-workspace__mobile-drawer-backdrop {
   position: absolute;
-  z-index: 50;
-  top: calc(100% + 0.75rem);
-  right: 0;
-  left: 0;
-  display: grid;
-  gap: 0.75rem;
-  max-height: min(72vh, 38rem);
-  overflow-y: auto;
-  padding: 0.75rem;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.25);
+  opacity: 0;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  transition: opacity 300ms ease;
+}
+
+.neo-workspace__mobile-drawer-shell.is-open .neo-workspace__mobile-drawer-backdrop {
+  opacity: 1;
+}
+
+.neo-workspace__mobile-drawer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(88vw, 380px);
+  height: 100%;
+  max-height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+  border-style: solid;
+  border-width: 0 0 0 1px;
+  border-radius: 0;
+  box-shadow: -18px 0 44px rgba(15, 23, 42, 0.18);
+  transform: translate3d(100%, 0, 0);
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.neo-workspace__mobile-drawer-shell.is-open .neo-workspace__mobile-drawer {
+  transform: translate3d(0, 0, 0);
+}
+
+.neo-workspace__mobile-drawer-head {
+  display: flex;
+  height: 72px;
+  flex: 0 0 72px;
+  align-items: center;
+  justify-content: flex-end;
+  border-bottom: 1px solid rgba(64, 82, 99, 0.12);
+  padding: 0 1.25rem;
+}
+
+.neo-workspace__mobile-drawer-close {
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 1.25rem;
-  background: linear-gradient(145deg, rgba(248, 250, 252, 0.98), rgba(231, 237, 242, 0.98));
-  box-shadow: 10px 14px 32px rgba(76, 91, 105, 0.2), -5px -5px 14px rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(24px);
+  border-radius: 0.75rem;
+  transition: background-color 180ms ease, box-shadow 180ms ease;
 }
 
-.neo-workspace__mobile-menu[hidden] {
-  display: none;
+.neo-workspace__mobile-drawer-close:hover {
+  background: #f8fafc;
 }
 
-.neo-workspace__mobile-menu-nav {
+.neo-workspace__mobile-drawer-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 1.25rem;
+  overscroll-behavior: contain;
+}
+
+.neo-workspace__mobile-drawer-title {
+  margin: 0;
+  padding: 0.15rem 0.5rem 0.9rem;
+  color: #9aa2aa;
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-black);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.neo-workspace__mobile-drawer-nav {
   display: grid;
   gap: 0.25rem;
 }
 
-.neo-workspace__mobile-menu-nav .neo-workspace__nav-item {
-  min-height: 2.75rem;
-  border-radius: 0.85rem;
+.neo-workspace__mobile-drawer-link {
+  display: flex;
+  width: 100%;
+  min-height: 3rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-bold);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.neo-workspace__mobile-drawer-arrow {
+  margin-left: auto;
+  font-size: 1.125rem;
+  opacity: 0.48;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.neo-workspace__mobile-drawer-link:hover .neo-workspace__mobile-drawer-arrow,
+.neo-workspace__mobile-drawer-link:focus-visible .neo-workspace__mobile-drawer-arrow {
+  opacity: 0.85;
+  transform: translateX(2px);
 }
 
 .neo-workspace__mobile-account {
   border-top: 1px solid var(--workspace-line);
   padding: 0.75rem 0.25rem 0.125rem;
+}
+
+.neo-workspace__mobile-drawer-footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
+  background: rgba(248, 250, 252, 0.32);
+}
+
+.neo-workspace__mobile-drawer-profile {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  padding: 0.25rem;
 }
 
 .neo-workspace__mobile-account form button {
@@ -2043,13 +2251,29 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
 }
 
 @media (min-width: 1024px) {
-  .neo-workspace__mobile-menu,
+  .neo-workspace__mobile-drawer-shell,
   .neo-workspace__menu-toggle {
     display: none !important;
   }
 }
 
 @media (max-width: 639px) {
+  .neo-app-shell--admin-toolbar {
+    --neo-admin-toolbar-height: 44px;
+  }
+
+  /* Keep compact controls easy to tap without adding visible padding. */
+  .neo-admin-toolbar__action::before {
+    position: absolute;
+    inset: -8px 0;
+    content: "";
+  }
+
+  .neo-admin-toolbar__inner {
+    gap: 0.6rem;
+    padding-inline: 1rem;
+  }
+
   .neo-workspace__header {
     padding-top: 0.75rem;
     padding-bottom: 0.75rem;
@@ -2057,6 +2281,10 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
 
   .neo-workspace__header-inner {
     gap: 0.75rem;
+  }
+
+  .neo-workspace__mobile-heading {
+    gap: 0.625rem;
   }
 
   .neo-workspace__header-inner > .flex:last-child {
@@ -2194,6 +2422,12 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
   }
 }
 
+@media (min-width: 640px) and (max-width: 1279px) {
+  .neo-admin-toolbar__inner {
+    padding-inline: 1.5rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .neo-workspace__project-track--carousel {
     scroll-behavior: auto;
@@ -2231,6 +2465,10 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
 @media (max-width: 639px) {
   .neo-workspace--hide-mobile-heading .neo-workspace__header .neo-workspace__eyebrow,
   .neo-workspace--hide-mobile-heading .neo-workspace__header .neo-workspace__title {
+    display: none;
+  }
+
+  .neo-workspace--hide-mobile-heading .neo-workspace__mobile-heading-divider {
     display: none;
   }
 
@@ -2315,7 +2553,7 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
   .neo-workspace__bottom-nav-label {
     max-width: 100%;
     overflow: hidden;
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     line-height: 1.05;
     text-overflow: ellipsis;
     white-space: nowrap;

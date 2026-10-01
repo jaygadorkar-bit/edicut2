@@ -1,23 +1,25 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
+import { Form, Link, redirect, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 import { findUserById } from "@edicut/db/repositories/users";
+import { workspaceProjects } from "@edicut/db/schema";
 import { getDbFromContext } from "../lib/db.server";
 import { requireUserId } from "../lib/session.server";
+import { isMissingWorkspaceSchema, isValidWorkspaceDate, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
 import {
   SUBSCRIPTION_PACKAGES,
+  formatRequestedCoverageNotes,
   getCheckoutTotal,
   getSubscriptionPackage,
   type SubscriptionPackage,
 } from "../lib/subscriptions";
 
 type CheckoutActionData = {
-  ok?: boolean;
   error?: string;
 };
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: data?.subscription ? `Checkout ${data.subscription.name} | EdiCut` : "Subscription checkout | EdiCut" },
-  { name: "description", content: "Complete an EdiCut creator editing subscription checkout." },
+  { title: data?.subscription ? `${data.subscription.name} project request | EdiCut` : "Project request | EdiCut" },
+  { name: "description", content: "Submit a creator editing project request and review its package estimate." },
 ];
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
@@ -45,18 +47,64 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   };
 }
 
-export async function action({ request, context }: ActionFunctionArgs): Promise<CheckoutActionData> {
-  await requireUserId(request, context);
+export async function action({ request, context }: ActionFunctionArgs): Promise<CheckoutActionData | Response> {
+  const userId = await requireUserId(request, context);
   const formData = await request.formData();
   const channelName = String(formData.get("channelName") || "").trim();
   const billingName = String(formData.get("billingName") || "").trim();
   const billingEmail = String(formData.get("billingEmail") || "").trim();
+  const billingCompany = String(formData.get("company") || "").trim();
+  const billingCountry = String(formData.get("country") || "").trim();
+  const packageSlug = String(formData.get("packageSlug") || "");
+  const subscription = SUBSCRIPTION_PACKAGES.find((item) => item.slug === packageSlug);
+  const category = String(formData.get("category") || "").trim();
+  const cadence = String(formData.get("cadence") || "").trim();
+  const deadline = String(formData.get("deadline") || "").trim();
+  const notes = String(formData.get("notes") || "").trim();
+  const runtime = formData.get("runtime") === "1";
+  const raw = formData.get("raw") === "1";
 
-  if (!channelName || !billingName || !billingEmail) {
+  if (!channelName || channelName.length > 120 || !billingName || billingName.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billingEmail) || billingEmail.length > 254) {
     return { error: "Add the channel, billing name, and billing email to continue." };
   }
+  if (!subscription || category.length > 80 || cadence.length > 120 || notes.length > 4000) {
+    return { error: "Check the selected package and project details, then try again." };
+  }
+  if (billingCompany.length > 120 || billingCountry.length > 120) {
+    return { error: "Company and country details can be up to 120 characters." };
+  }
+  if (!isValidWorkspaceDate(deadline)) {
+    return { error: "Enter a valid target date." };
+  }
 
-  return { ok: true };
+  const total = getCheckoutTotal(subscription, { runtime, raw });
+  const db = getDbFromContext(context);
+  let project;
+  try {
+  [project] = await db.insert(workspaceProjects).values({
+    ownerId: userId,
+    title: `${channelName} editing request`.slice(0, 120),
+    channelName,
+    packageSlug: subscription.slug,
+    category: category || null,
+    cadence: cadence || null,
+    deadline: deadline || null,
+    notes: formatRequestedCoverageNotes(subscription, notes, { runtime, raw }),
+    billingName,
+    billingEmail: billingEmail.toLowerCase(),
+    billingCompany: billingCompany || null,
+    billingCountry: billingCountry || null,
+    estimatedAmountCents: total * 100,
+    billingStatus: "quote_requested",
+  }).returning();
+  } catch (error) {
+    if (isMissingWorkspaceSchema(error)) return { error: WORKSPACE_MIGRATION_NOTICE };
+    throw error;
+  }
+
+  if (!project) return { error: "We could not save your project request. Please try again." };
+
+  return redirect(`/dashboard/billing?requested=${encodeURIComponent(project.id)}`);
 }
 
 export default function CheckoutRoute() {
@@ -79,13 +127,13 @@ export default function CheckoutRoute() {
             </span>
             <span>
               <span className="block text-lg font-black uppercase tracking-tight neo-ink">EdiCut</span>
-              <span className="block text-xs font-bold neo-muted">Secure creator checkout</span>
+              <span className="block text-xs font-bold neo-muted">Creator project request</span>
             </span>
           </Link>
           <div className="flex flex-wrap items-center gap-2 text-xs font-black">
-            <StatusChip icon="lock" label="256-Bit SSL Encrypted" />
-            <StatusChip icon="schedule" label="2-Minute Setup" />
-            <StatusChip icon="receipt_long" label="Receipt via Email" />
+            <StatusChip icon="fact_check" label="Scope confirmed first" />
+            <StatusChip icon="payments" label="No charge today" />
+            <StatusChip icon="receipt_long" label="Invoice after approval" />
           </div>
         </div>
       </header>
@@ -118,12 +166,12 @@ export default function CheckoutRoute() {
                   <h1 className="mt-2 text-2xl font-black neo-ink">{subscription.name}</h1>
                   <p className="mt-1 max-w-xl text-xs font-medium leading-5 neo-muted">{subscription.description}</p>
                 </div>
-                <p className="text-2xl font-black neo-ink">${subscription.basePrice}<span className="text-xs font-bold neo-muted">/mo</span></p>
+                <p className="text-2xl font-black neo-ink">${subscription.basePrice}<span className="text-xs font-bold neo-muted">/mo estimate</span></p>
               </div>
             </div>
 
             <div className="mt-4 space-y-2">
-              <SummaryLine label="Base creator subscription" value={`$${subscription.basePrice}`} checked />
+              <SummaryLine label="Base monthly plan estimate" value={`$${subscription.basePrice}`} checked />
               <SummaryLine
                 label="60 min podcast/runtime booster"
                 value={`+$${subscription.finishedRuntimePrice}`}
@@ -159,32 +207,10 @@ export default function CheckoutRoute() {
 
         {/* Middle Column: Payment & Billing Details */}
         <section className="grid content-start gap-6">
-          <Panel
-            title="Payment Method"
-            icon="credit_card"
-            aside={<span className="text-xs font-black neo-muted">PCI Level 1 Ready</span>}
-          >
-            <div className="grid gap-4">
-              <label className="neo-card flex cursor-pointer items-center gap-3 rounded-xl p-4 ring-2 ring-primary bg-[#fdf2f4]">
-                <input type="radio" name="paymentMethod" value="card" defaultChecked className="h-4 w-4 accent-red-600" />
-                <span className="material-symbols-outlined text-[22px] text-primary">credit_card</span>
-                <span className="flex-1">
-                  <span className="block text-sm font-black neo-ink">Credit / Debit Card</span>
-                  <span className="block text-xs font-medium neo-muted">Secure checkout via Stripe / payment gateway.</span>
-                </span>
-              </label>
-
-              <div className="neo-inset rounded-2xl p-4">
-                <div className="flex items-start gap-3">
-                  <span className="material-symbols-outlined text-[20px] text-primary">verified_user</span>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-wider neo-ink">No card details stored on EdiCut</p>
-                    <p className="mt-1 text-xs font-medium leading-5 neo-muted">
-                      Your billing token is securely handled by our PCI-compliant payment infrastructure.
-                    </p>
-                  </div>
-                </div>
-              </div>
+          <Panel title="Billing process" icon="receipt_long">
+            <div className="neo-inset rounded-2xl p-4">
+              <p className="text-sm font-black neo-ink">No payment is collected on this page.</p>
+              <p className="mt-2 text-xs font-medium leading-5 neo-muted">The EdiCut team will confirm the project scope and send an invoice before editing starts. Your estimate will appear in Billing.</p>
             </div>
           </Panel>
 
@@ -197,13 +223,13 @@ export default function CheckoutRoute() {
             </div>
           </Panel>
 
-          <Panel title="What Happens Next" icon="check_circle">
+          <Panel title="What happens next" icon="check_circle">
             <div className="space-y-2.5">
               {[
-                "Instant access to private creator dashboard",
-                "Lead editor matched within 24 hours",
-                "Async Google Drive / Frame.io sync",
-                "Direct onboarding checklist delivered via email",
+                "Your project request is saved to your workspace",
+                "The team confirms scope and turnaround",
+                "Billing details are shared before work begins",
+                "Project files and review notes stay in your workspace",
               ].map((item) => (
                 <p key={item} className="flex items-center gap-2 text-xs font-bold neo-ink">
                   <span className="material-symbols-outlined text-[16px] text-primary">check_circle</span>
@@ -218,61 +244,39 @@ export default function CheckoutRoute() {
         <aside className="lg:sticky lg:top-5 lg:self-start">
           <section className="neo-surface rounded-[2rem] p-6 shadow-xl">
             <div className="border-b neo-line pb-4">
-              <p className="yt-tag neo-section-label">Order Summary</p>
-              <h2 className="mt-1 text-2xl font-black neo-ink">Due Today</h2>
+              <p className="yt-tag neo-section-label">Package estimate</p>
+              <h2 className="mt-1 text-2xl font-black neo-ink">Estimated total</h2>
             </div>
 
             <div className="mt-5 space-y-3">
-              <PriceRow label={`${subscription.name} Base Plan`} value={subscription.basePrice} />
+                  <PriceRow label={`${subscription.name} base plan estimate`} value={subscription.basePrice} />
               {runtimeSelected ? <PriceRow label="60 min podcast runtime" value={subscription.finishedRuntimePrice} /> : null}
               {rawSelected ? <PriceRow label="600 min raw vlog footage" value={subscription.rawFootagePrice} /> : null}
 
-              {/* Promo Code Input */}
-              <div className="neo-inset flex items-center rounded-xl p-1.5 mt-4">
-                <input
-                  name="discountCode"
-                  placeholder="Discount or promo code"
-                  autoComplete="off"
-                  className="w-full bg-transparent px-3 py-1.5 text-xs font-bold outline-none neo-ink placeholder:text-gray-400"
-                />
-                <button
-                  type="button"
-                  className="neo-pill rounded-lg px-3 py-1 text-xs font-black uppercase neo-muted hover:text-foreground"
-                >
-                  Apply
-                </button>
-              </div>
-
               <div className="border-t neo-line pt-4 space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold neo-muted">
-                  <span>Monthly Subtotal</span>
-                  <span>${total}</span>
+                  <span>Package estimate</span>
+                  <span>${total}/mo estimate</span>
                 </div>
                 <div className="flex items-end justify-between">
-                  <span className="text-sm font-black neo-ink">Total Due Today</span>
-                  <span className="text-3xl font-black tracking-tight neo-ink">${total}</span>
+                  <span className="text-sm font-black neo-ink">No charge today</span>
+                  <span className="text-3xl font-black tracking-tight neo-ink">${total}<span className="ml-1 text-xs font-bold neo-muted">/mo</span></span>
                 </div>
                 <p className="text-[11px] font-medium leading-relaxed neo-muted pt-1">
-                  Renews automatically every month. Cancel or adjust footage coverage anytime before billing.
+                  This estimate is not an invoice. The team will confirm scope and final billing with you.
                 </p>
               </div>
 
               {actionData?.error ? (
                 <p className="rounded-xl bg-[#FFF5F5] p-3 text-xs font-black text-[#D90000]">{actionData.error}</p>
               ) : null}
-              {actionData?.ok ? (
-                <p className="rounded-xl bg-red-50 p-3 text-xs font-black text-primary">
-                  Order information captured. Connecting to secure gateway...
-                </p>
-              ) : null}
-
               <button
                 type="submit"
                 disabled={isSubmitting}
                 className="neo-button neo-button--primary mt-4 w-full justify-center text-sm font-black uppercase tracking-wider"
               >
-                <span className="material-symbols-outlined text-[18px]">lock</span>
-                <span>{isSubmitting ? "Processing..." : "Complete Checkout"}</span>
+                <span className="material-symbols-outlined text-[18px]">send</span>
+                <span>{isSubmitting ? "Saving request..." : "Request package"}</span>
               </button>
 
               <Link
