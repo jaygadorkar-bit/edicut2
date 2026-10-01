@@ -48,6 +48,8 @@ Docker exposes:
 
 - Web: `http://localhost:3000`
 
+Local Google OAuth uses the callback `http://localhost:3000/api/auth/callback/google` and returns to the app on the same port.
+
 The local Postgres and Node API containers are not part of the Docker workflow. The previous Postgres volume is retained but is no longer mounted or started.
 
 ## Quality

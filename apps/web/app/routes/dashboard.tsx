@@ -143,6 +143,9 @@ export default function DashboardRoute() {
         end: path === "/dashboard",
       }))}
       account={{ name: displayName, detail: normalizeRole(user.role), imageUrl: user.profileImageUrl }}
+      mobileMenu
+      hideMobileHeading
+      profileTo="/dashboard/profile"
       accountAction={(
         <Form method="post">
           <input type="hidden" name="intent" value="logout" />
@@ -159,6 +162,7 @@ export default function DashboardRoute() {
       )}
     >
       <WorkspaceProjectStrip
+        mobileCarousel
         projects={[
           { title: "UI Designers", description: "Creates intuitive and visually appealing...", tone: "purple", progress: 72, members: ["Maya Chen", "Ari Kim"], count: "2" },
           { title: "Team Projects", description: "Builds seamless digital experiences, fo...", tone: "blue", progress: 54, members: ["Ari Kim", "Noah James"], count: "8" },

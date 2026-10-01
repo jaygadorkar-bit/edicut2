@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Form } from "react-router";
-import { ADMIN_BASE_PATH } from "../lib/admin-paths";
+import { ADMIN_BASE_PATH, adminPath } from "../lib/admin-paths";
 import { WorkspaceShell } from "./WorkspaceShell";
 
 export const adminPanelNavItems = [
@@ -36,10 +36,12 @@ export function AdminPanelShell({ title, activeTab, account, headerActions, chil
       navItems={adminPanelNavItems.map(({ label, icon, tab }) => ({
         label,
         icon,
-        to: `?tab=${tab}`,
+        to: adminPath(`?tab=${tab}`),
         active: tab === activeTab,
       }))}
       account={account}
+      mobileMenu
+      profileTo={adminPath("/account")}
       accountAction={(
         <Form method="post" action={ADMIN_BASE_PATH} reloadDocument>
           <input type="hidden" name="intent" value="logout" />

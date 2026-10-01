@@ -160,6 +160,9 @@ export default function DashboardPlaceholderRoute() {
         end: path === "/dashboard",
       }))}
       account={{ name: displayName, detail: normalizeRole(user.role), imageUrl: user.profileImageUrl }}
+      mobileMenu
+      hideMobileHeading
+      profileTo="/dashboard/profile"
       accountAction={(
         <Form method="post">
           <input type="hidden" name="intent" value="logout" />

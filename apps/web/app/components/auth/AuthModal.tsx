@@ -27,13 +27,15 @@ export function AuthPage() {
   const mode: AuthMode = requestedMode === "signup" ? "signup" : "signin";
   const [showPassword, setShowPassword] = useState(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
-  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [emailChecking, setEmailChecking] = useState(false);
 
   const error = fetcher.data?.intent === mode ? fetcher.data.error : undefined;
-  const visibleError = securityError || error;
+  const googleStateError = searchParams.get("error") === "google-state"
+    ? "Google sign-in expired or could not be verified. Please try again."
+    : undefined;
+  const visibleError = securityError || error || googleStateError;
   const submitting = fetcher.state !== "idle";
-  const busy = submitting || emailChecking || googleSubmitting;
+  const busy = submitting || emailChecking;
 
   useEffect(() => {
     setSecurityError(null);
@@ -62,23 +64,6 @@ export function AuthPage() {
     }
   }
 
-  async function handleGoogleSubmit(event: FormEvent<HTMLFormElement>) {
-    const form = event.currentTarget;
-
-    event.preventDefault();
-    if (busy) return;
-    setSecurityError(null);
-    setGoogleSubmitting(true);
-
-    try {
-      await executeInvisibleRecaptcha(form, "google_signin");
-      HTMLFormElement.prototype.submit.call(form);
-    } catch (error) {
-      setGoogleSubmitting(false);
-      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
-    }
-  }
-
   return (
     <main className="auth-page neo-home">
       <div className="auth-layout">
@@ -98,14 +83,12 @@ export function AuthPage() {
             <p>{mode === "signup" ? "Your edits, feedback, and files in one place." : "Sign in to your EdiCut workspace."}</p>
           </div>
 
-          <form method="post" action="/auth/google" onSubmit={handleGoogleSubmit} className="auth-google-form" aria-busy={googleSubmitting}>
-            <input type="hidden" name="returnTo" value={redirectTo} />
-            <input type="hidden" name="g-recaptcha-response" value="" />
-            <button type="submit" disabled={busy} className="auth-button">
+          <div className="auth-google-form">
+            <a href={`/auth/google?returnTo=${encodeURIComponent(redirectTo)}`} className="auth-button auth-button--link">
               <img src="/icons/google-g.png" alt="" width="200" height="204" className="auth-google-icon" />
-              <span aria-live="polite">{googleSubmitting ? "Checking security…" : "Continue with Google"}</span>
-            </button>
-          </form>
+              <span>Continue with Google</span>
+            </a>
+          </div>
 
           <div className="auth-divider" aria-hidden="true"><span>or</span></div>
 

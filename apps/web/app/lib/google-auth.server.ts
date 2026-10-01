@@ -11,7 +11,6 @@ import {
   getAdminSession,
 } from "./session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
-import { verifyRecaptchaToken } from "./recaptcha.server";
 import type { LoaderContext } from "../types";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -101,11 +100,41 @@ function readEnv(context?: LoaderContext): EnvSource {
   };
 }
 
+function configuredAppUrl(env: EnvSource) {
+  return firstPresent(env.APP_URL, env.NEXT_PUBLIC_APP_URL, "http://localhost:3000")!;
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
+}
+
+function getCanonicalLocalOAuthRedirect(requestUrl: URL, appUrlValue: string) {
+  let appUrl: URL;
+
+  try {
+    appUrl = new URL(appUrlValue);
+  } catch {
+    return null;
+  }
+
+  if (
+    !isLoopbackHostname(requestUrl.hostname) ||
+    !isLoopbackHostname(appUrl.hostname) ||
+    requestUrl.origin === appUrl.origin
+  ) {
+    return null;
+  }
+
+  const destination = new URL(`${requestUrl.pathname}${requestUrl.search}`, appUrl);
+  return redirect(destination.toString(), { status: 307 });
+}
+
 function readRequiredGoogleEnv(context?: LoaderContext) {
   const env = readEnv(context);
   const clientId = firstPresent(env.AUTH_GOOGLE_ID, readLocalEnvFile("secrets.json").AUTH_GOOGLE_ID);
   const clientSecret = firstPresent(env.AUTH_GOOGLE_SECRET, readLocalEnvFile("secrets.json").AUTH_GOOGLE_SECRET);
-  const appUrl = firstPresent(env.APP_URL, env.NEXT_PUBLIC_APP_URL, "http://localhost:3000")!;
+  const appUrl = configuredAppUrl(env);
 
   if (!clientId || !clientSecret) {
     throw new Response("Google sign-in is not configured.", { status: 503 });
@@ -114,7 +143,11 @@ function readRequiredGoogleEnv(context?: LoaderContext) {
   return {
     clientId,
     clientSecret,
-    redirectUri: `${appUrl.replace(/\/$/, "")}${GOOGLE_CALLBACK_PATH}`,
+    appUrl,
+    redirectUri: firstPresent(
+      env.AUTH_GOOGLE_REDIRECT_URI,
+      `${appUrl.replace(/\/$/, "")}${GOOGLE_CALLBACK_PATH}`
+    )!,
   };
 }
 
@@ -169,11 +202,13 @@ async function createAdminOAuthCompletionResponse({
   context,
   userId,
   redirectTo,
+  appUrl,
 }: {
   request: Request;
   context?: LoaderContext;
   userId: string;
   redirectTo: string;
+  appUrl: string;
 }) {
   const session = await getAdminSession(request.headers.get("Cookie"), context);
   session.set("adminUserId", userId);
@@ -191,7 +226,7 @@ async function createAdminOAuthCompletionResponse({
   );
   headers.append("Set-Cookie", await oauthStateCookie.serialize("", { maxAge: 0 }));
 
-  const destination = safeAdminReturnTo(redirectTo);
+  const destination = new URL(safeAdminReturnTo(redirectTo), appUrl).toString();
 
   return new Response(
     `<!doctype html>
@@ -213,16 +248,10 @@ async function createAdminOAuthCompletionResponse({
 
 export async function startGoogleOAuth(request: Request, context?: LoaderContext) {
   const requestUrl = new URL(request.url);
+  const localRedirect = getCanonicalLocalOAuthRedirect(requestUrl, configuredAppUrl(readEnv(context)));
+  if (localRedirect) return localRedirect;
+
   const formData = request.method === "POST" ? await request.clone().formData() : null;
-  const captcha = await verifyRecaptchaToken({
-    context,
-    token: formData?.get("g-recaptcha-response") ?? requestUrl.searchParams.get("g-recaptcha-response"),
-  });
-
-  if (!captcha.success) {
-    throw new Response(captcha.error, { status: 403 });
-  }
-
   const { clientId, redirectUri } = readRequiredGoogleEnv(context);
   const mode = formData?.get("mode") === "admin" ? "admin" : getOAuthMode(requestUrl);
   const state = randomState();
@@ -256,10 +285,13 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
   const stored = await oauthStateCookie.parse(request.headers.get("Cookie"));
 
   if (!code || !state || !stored?.state || state !== stored.state) {
-    throw new Response("Invalid Google sign-in state.", { status: 400 });
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    headers.append("Set-Cookie", await oauthStateCookie.serialize("", { maxAge: 0 }));
+    const appUrl = configuredAppUrl(readEnv(context));
+    throw redirect(new URL("/signin?error=google-state", appUrl).toString(), { headers });
   }
 
-  const { clientId, clientSecret, redirectUri } = readRequiredGoogleEnv(context);
+  const { clientId, clientSecret, redirectUri, appUrl } = readRequiredGoogleEnv(context);
   const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -309,6 +341,7 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
       context,
       userId: adminUser.id,
       redirectTo: safeAdminReturnTo(typeof stored.returnTo === "string" ? stored.returnTo : null),
+      appUrl,
     });
   }
 
@@ -346,7 +379,10 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
     context,
     userId: user.id,
     remember: true,
-    redirectTo: safeUserReturnTo(typeof stored.returnTo === "string" ? stored.returnTo : null),
+    redirectTo: new URL(
+      safeUserReturnTo(typeof stored.returnTo === "string" ? stored.returnTo : null),
+      appUrl
+    ).toString(),
     adminUserId: adminUser?.active ? adminUser.id : undefined,
   });
 

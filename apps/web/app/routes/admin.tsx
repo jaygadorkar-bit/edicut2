@@ -672,6 +672,7 @@ function AdminOverview() {
 
       <div className="mt-7">
         <WorkspaceProjectStrip
+          mobileCarousel
           projects={[
             { title: "User operations", description: "Manage access, roles, and onboarding...", tone: "purple", progress: 78, members: [adminUser.name || "Admin"], count: String(stats.total) },
             { title: "Content pipeline", description: "Keep packages and portfolio content...", tone: "blue", progress: 62, members: [adminUser.name || "Admin"], count: String(pricingPackages.length) },

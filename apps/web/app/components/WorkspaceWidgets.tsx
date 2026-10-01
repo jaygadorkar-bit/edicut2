@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent, type UIEvent } from "react";
 import { Avatar } from "./WorkspaceShell";
 
 type Tone = "purple" | "blue" | "yellow" | "pink";
@@ -18,21 +19,147 @@ export type WorkspaceProject = {
   count: string;
 };
 
-export function WorkspaceProjectStrip({ projects }: { projects: WorkspaceProject[] }) {
+export function WorkspaceProjectStrip({ projects, mobileCarousel = false }: { projects: WorkspaceProject[]; mobileCarousel?: boolean }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const carouselId = useId();
+  const [activeProject, setActiveProject] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef({ pointerId: -1, startX: 0, lastX: 0, lastTime: 0, velocity: 0, dragging: false });
+  const momentumFrameRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (momentumFrameRef.current !== null) cancelAnimationFrame(momentumFrameRef.current);
+  }, []);
+
+  function handleTrackScroll(event: UIEvent<HTMLDivElement>) {
+    const track = event.currentTarget;
+    const center = track.scrollLeft + track.clientWidth / 2;
+    let nearestIndex = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    Array.from(track.children).forEach((child, index) => {
+      const slide = child as HTMLElement;
+      const slideCenter = slide.offsetLeft + slide.offsetWidth / 2;
+      const distance = Math.abs(center - slideCenter);
+      if (distance < nearestDistance) {
+        nearestIndex = index;
+        nearestDistance = distance;
+      }
+    });
+
+    setActiveProject((current) => current === nearestIndex ? current : nearestIndex);
+  }
+
+  function scrollToProject(index: number) {
+    const track = trackRef.current;
+    const slide = track?.children[index] as HTMLElement | undefined;
+    if (!track || !slide) return;
+    if (momentumFrameRef.current !== null) cancelAnimationFrame(momentumFrameRef.current);
+    momentumFrameRef.current = null;
+    setIsDragging(false);
+
+    const trackPadding = Number.parseFloat(window.getComputedStyle(track).paddingLeft) || 0;
+    const behavior: ScrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    track.scrollTo({ left: Math.max(0, slide.offsetLeft - trackPadding), behavior });
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    const track = event.currentTarget;
+    if (track.scrollWidth <= track.clientWidth) return;
+    if (momentumFrameRef.current !== null) cancelAnimationFrame(momentumFrameRef.current);
+    momentumFrameRef.current = null;
+    setIsDragging(false);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      lastX: event.clientX,
+      lastTime: performance.now(),
+      velocity: 0,
+      dragging: false,
+    };
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const track = event.currentTarget;
+    const drag = dragRef.current;
+    if (drag.pointerId !== event.pointerId) return;
+    if (!drag.dragging && Math.abs(event.clientX - drag.startX) < 6) return;
+
+    if (!drag.dragging) {
+      track.setPointerCapture(event.pointerId);
+      drag.dragging = true;
+      setIsDragging(true);
+    }
+
+    event.preventDefault();
+    const now = performance.now();
+    const elapsed = Math.max(now - drag.lastTime, 1);
+    const deltaX = event.clientX - drag.lastX;
+    track.scrollLeft -= deltaX;
+    drag.velocity = Math.max(-2.5, Math.min(2.5, -deltaX / elapsed));
+    drag.lastX = event.clientX;
+    drag.lastTime = now;
+  }
+
+  function handlePointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const track = event.currentTarget;
+    const drag = dragRef.current;
+    if (drag.pointerId !== event.pointerId) return;
+    if (track.hasPointerCapture(event.pointerId)) track.releasePointerCapture(event.pointerId);
+    drag.pointerId = -1;
+    if (!drag.dragging || event.type === "pointercancel" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setIsDragging(false);
+      return;
+    }
+
+    let velocity = drag.velocity * 16;
+    const coast = () => {
+      track.scrollLeft += velocity;
+      velocity *= 0.94;
+      if (Math.abs(velocity) < 0.15) {
+        momentumFrameRef.current = null;
+        setIsDragging(false);
+        return;
+      }
+      momentumFrameRef.current = requestAnimationFrame(coast);
+    };
+    if (Math.abs(velocity) >= 0.15) momentumFrameRef.current = requestAnimationFrame(coast);
+    else setIsDragging(false);
+  }
+
   return (
-    <section>
+    <section className={mobileCarousel ? "neo-workspace__project-section" : undefined} aria-labelledby={`${carouselId}-heading`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.17em] text-[#9699ac]">Active workspaces</p>
-          <h2 className="mt-1 text-lg font-black tracking-[-0.035em]">Your projects</h2>
+          <h2 id={`${carouselId}-heading`} className="mt-1 text-lg font-black tracking-[-0.035em]">Your projects</h2>
         </div>
         <button type="button" className="hidden text-xs font-black text-[#6d55e8] sm:block">View all projects</button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {projects.map((project) => {
+      <div
+        ref={trackRef}
+        id={mobileCarousel ? `${carouselId}-slides` : undefined}
+        className={mobileCarousel ? `neo-workspace__project-track neo-workspace__project-track--carousel ${isDragging ? "is-dragging" : ""}` : "grid gap-3 sm:grid-cols-2 xl:grid-cols-4"}
+        role={mobileCarousel ? "region" : undefined}
+        aria-label={mobileCarousel ? "Your active projects" : undefined}
+        aria-roledescription={mobileCarousel ? "carousel" : undefined}
+        onScroll={mobileCarousel ? handleTrackScroll : undefined}
+        onPointerDown={mobileCarousel ? handlePointerDown : undefined}
+        onPointerMove={mobileCarousel ? handlePointerMove : undefined}
+        onPointerUp={mobileCarousel ? handlePointerUp : undefined}
+        onPointerCancel={mobileCarousel ? handlePointerUp : undefined}
+      >
+        {projects.map((project, index) => {
           const colors = toneClasses[project.tone];
           return (
-            <article key={project.title} className={`neo-workspace__project-card relative min-h-[126px] overflow-hidden rounded-[17px] border ${colors.border} bg-gradient-to-br ${colors.gradient} p-4 text-[#17202a]`}>
+            <article
+              key={project.title}
+              className={`neo-workspace__project-card neo-workspace__project-slide relative min-h-[126px] overflow-hidden rounded-[17px] border ${colors.border} bg-gradient-to-br ${colors.gradient} p-4 text-[#17202a]`}
+              role={mobileCarousel ? "group" : undefined}
+              aria-roledescription={mobileCarousel ? "slide" : undefined}
+              aria-label={mobileCarousel ? `${index + 1} of ${projects.length}: ${project.title}` : undefined}
+            >
               <div className="absolute -right-6 -top-8 h-24 w-24 rounded-full border-[13px] border-white/45" />
               <div className="relative flex items-start justify-between gap-2">
                 <div className="flex -space-x-1.5">
@@ -50,6 +177,43 @@ export function WorkspaceProjectStrip({ projects }: { projects: WorkspaceProject
           );
         })}
       </div>
+      {mobileCarousel && projects.length > 1 ? (
+        <div className="neo-workspace__project-controls" role="group" aria-label="Project slider controls">
+          <button
+            type="button"
+            className="neo-workspace__carousel-arrow"
+            aria-label="Previous project"
+            onClick={() => scrollToProject(Math.max(0, activeProject - 1))}
+            disabled={activeProject === 0}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+          </button>
+          <div className="neo-workspace__carousel-pagination" aria-label="Choose a project">
+            {projects.map((project, index) => (
+              <button
+                key={`${project.title}-pagination`}
+                type="button"
+                className={`neo-workspace__carousel-dot ${activeProject === index ? "is-active" : ""}`}
+                aria-label={`Show project ${index + 1}: ${project.title}`}
+                aria-pressed={activeProject === index}
+                onClick={() => scrollToProject(index)}
+              />
+            ))}
+          </div>
+          <span className="neo-workspace__carousel-count" aria-live="polite">
+            {String(activeProject + 1).padStart(2, "0")} <span aria-hidden="true">/</span> {String(projects.length).padStart(2, "0")}
+          </span>
+          <button
+            type="button"
+            className="neo-workspace__carousel-arrow"
+            aria-label="Next project"
+            onClick={() => scrollToProject(Math.min(projects.length - 1, activeProject + 1))}
+            disabled={activeProject === projects.length - 1}
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
