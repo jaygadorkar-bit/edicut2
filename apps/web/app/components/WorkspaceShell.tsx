@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { Link, matchPath, NavLink, useLocation, useRouteLoaderData } from "react-router";
+import { Link, matchPath, NavLink, useLocation, useNavigation } from "react-router";
 import { useEffect, useRef, useState } from "react";
-import { ADMIN_BASE_PATH, adminAccessPath } from "../lib/admin-paths";
 
 export type WorkspaceNavItem = {
   label: string;
@@ -25,15 +24,18 @@ type WorkspaceShellProps = {
   accountAction?: ReactNode;
   headerActions?: ReactNode;
   mobileMenu?: boolean;
+  mobileBottomNav?: boolean;
+  navigationFeedback?: boolean;
+  hideHeaderTitle?: boolean;
   hideMobileHeading?: boolean;
   hideMobileSubtitle?: boolean;
   mobileBottomNavItems?: WorkspaceNavItem[];
   mobileBottomMore?: boolean;
   mobileBottomNavLabel?: string;
-  profileTo?: string;
-  settingsTo?: string;
+  profileTo?: string | null;
+  settingsTo?: string | null;
   helpTo?: string;
-  notificationsTo?: string;
+  notificationsTo?: string | null;
   notificationCount?: number;
   children: ReactNode;
 };
@@ -46,6 +48,9 @@ export function WorkspaceShell({
   accountAction,
   headerActions,
   mobileMenu = false,
+  mobileBottomNav,
+  navigationFeedback = false,
+  hideHeaderTitle = false,
   hideMobileHeading = false,
   hideMobileSubtitle = false,
   mobileBottomNavItems,
@@ -67,30 +72,33 @@ export function WorkspaceShell({
   const mobileDrawerRef = useRef<HTMLElement>(null);
   const mobileDrawerCloseRef = useRef<HTMLButtonElement>(null);
   const location = useLocation();
-  const rootData = useRouteLoaderData("root") as {
-    isAdminSignedIn?: boolean;
-    adminToolbarEnabled?: boolean;
-  } | undefined;
-  const isCustomerWorkspacePage = location.pathname.startsWith("/dashboard") && location.pathname !== "/dashboard/messages";
-  const canShowAdminLink = isCustomerWorkspacePage && rootData?.isAdminSignedIn === true && rootData.adminToolbarEnabled === true;
-  const adminNavItem: WorkspaceNavItem = {
-    label: "Admin",
-    icon: "admin_panel_settings",
-    to: adminAccessPath(ADMIN_BASE_PATH),
-  };
-  const dashboardNavIndex = navItems.findIndex((item) => item.label === "Dashboard" || item.to === "/dashboard");
-  const workspaceNavItems = canShowAdminLink
-    ? [
-        ...navItems.slice(0, dashboardNavIndex >= 0 ? dashboardNavIndex + 1 : 0),
-        adminNavItem,
-        ...navItems.slice(dashboardNavIndex >= 0 ? dashboardNavIndex + 1 : 0),
-      ]
-    : navItems;
+  const navigation = useNavigation();
+  const isNavigationPending = navigationFeedback && Boolean(navigation.location);
+  const showMobileBottomNav = mobileBottomNav ?? mobileMenu;
   const primaryMobileItems = mobileBottomNavItems ?? navItems.slice(0, 4);
   const primaryMobileTo = new Set(primaryMobileItems.map((item) => item.to));
-  const moreMobileItems = workspaceNavItems.filter((item) => !primaryMobileTo.has(item.to));
+  const moreMobileItems = navItems.filter((item) => !primaryMobileTo.has(item.to));
   const showMobileMore = mobileBottomMore ?? moreMobileItems.length > 0;
   const isProfileActive = profileTo ? Boolean(matchPath({ path: profileTo, end: true }, location.pathname)) : false;
+  const settingsTarget = settingsTo === null || profileTo === null
+    ? null
+    : settingsTo ?? profileTo ?? "/dashboard/profile";
+  const mobileMenuButton = mobileMenu ? (
+    <button
+      ref={mobileMenuTriggerRef}
+      type="button"
+      className="neo-workspace__menu-toggle neo-workspace__icon-button lg:hidden"
+      aria-label={isMobileMenuOpen ? "Close workspace menu" : "Open workspace menu"}
+      aria-controls="neo-workspace-mobile-menu"
+      aria-expanded={isMobileMenuOpen}
+      onClick={() => {
+        setIsMobileMenuOpen((open) => !open);
+        setIsMoreOpen(false);
+      }}
+    >
+      <span className="material-symbols-outlined text-[21px]">{isMobileMenuOpen ? "close" : "menu"}</span>
+    </button>
+  ) : null;
 
   useEffect(() => {
     if (!isMoreOpen) return;
@@ -160,10 +168,10 @@ export function WorkspaceShell({
   }, [location.pathname, location.search]);
 
   return (
-    <div className={`neo-workspace min-h-screen ${mobileMenu ? "neo-workspace--bottom-nav-enabled" : ""} ${hideMobileHeading ? "neo-workspace--hide-mobile-heading" : ""}`}>
+    <div className={`neo-workspace min-h-screen ${showMobileBottomNav ? "neo-workspace--bottom-nav-enabled" : ""} ${hideMobileHeading ? "neo-workspace--hide-mobile-heading" : ""}`}>
       <aside className={`neo-workspace__sidebar fixed inset-y-0 left-0 z-40 hidden transition-[width] duration-200 lg:flex lg:flex-col ${isCollapsed ? "w-[78px]" : "w-[238px]"}`}>
-        <div className={`flex h-full flex-col py-5 ${isCollapsed ? "px-3" : "px-4"}`}>
-          <div className={`flex items-center ${isCollapsed ? "justify-center" : "justify-between gap-3"}`}>
+        <div className={`flex h-full min-h-0 flex-col py-5 ${isCollapsed ? "px-3" : "px-4"}`}>
+          <div className={`flex shrink-0 items-center ${isCollapsed ? "justify-center" : "justify-between gap-3"}`}>
             <Link to="/" className="flex min-w-0 items-center justify-center px-2" aria-label="EdiCut home" title="EdiCut home">
               {isCollapsed ? (
                 <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-auto w-9 object-contain" />
@@ -183,14 +191,14 @@ export function WorkspaceShell({
             </button>
           </div>
 
-          {!isCollapsed ? <p className="neo-workspace__eyebrow mt-10 px-3">Workspace</p> : null}
-          <nav className={`${isCollapsed ? "mt-10" : "mt-3"} grid gap-1.5`} aria-label="Workspace navigation">
-            {workspaceNavItems.map((item) => (
+          {!isCollapsed ? <p className="neo-workspace__eyebrow mt-10 shrink-0 px-3">Workspace</p> : null}
+          <nav className={`neo-workspace__desktop-nav ${isCollapsed ? "mt-10" : "mt-3"} grid gap-1.5`} aria-label="Workspace navigation">
+            {navItems.map((item) => (
               <WorkspaceNavLink key={`${item.label}-${item.to}`} item={item} collapsed={isCollapsed} />
             ))}
           </nav>
 
-          <div className="neo-workspace__account mt-auto border-t pt-4">
+          <div className="neo-workspace__account mt-auto shrink-0 border-t pt-4">
             <div className={`flex items-center rounded-2xl py-2 ${isCollapsed ? "justify-center gap-2 px-0" : "gap-3 px-2"}`}>
               <Avatar name={account.name} imageUrl={account.imageUrl} />
               {!isCollapsed ? (
@@ -205,16 +213,26 @@ export function WorkspaceShell({
         </div>
       </aside>
 
-      <main className={`neo-workspace__main transition-[padding] duration-200 ${isCollapsed ? "lg:pl-[78px]" : "lg:pl-[238px]"}`}>
+      <main
+        className={`neo-workspace__main transition-[padding] duration-200 ${isCollapsed ? "lg:pl-[78px]" : "lg:pl-[238px]"}`}
+        aria-busy={isNavigationPending}
+      >
         <header ref={headerRef} className="neo-workspace__header sticky top-0 z-30 px-4 py-4 backdrop-blur-xl sm:px-7 lg:px-9">
+          {isNavigationPending ? (
+            <div className="neo-workspace__route-progress" role="status">
+              <span className="neo-workspace__route-progress-sweep" aria-hidden="true" />
+              <span className="sr-only">Loading page</span>
+            </div>
+          ) : null}
           <div className="neo-workspace__header-inner mx-auto flex max-w-[1500px] items-center justify-between gap-4">
-            {hideMobileSubtitle ? (
+            {hideHeaderTitle ? (
+              <div className="flex min-w-0 flex-1 items-center">
+                {mobileMenuButton}
+                <h1 className="sr-only">{title}</h1>
+              </div>
+            ) : hideMobileSubtitle ? (
               <>
                 <div className="neo-workspace__mobile-heading lg:hidden">
-                  <Link to="/" className="neo-workspace__mobile-logo" aria-label="Go to EdiCut home" title="EdiCut home">
-                    <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-8 w-auto object-contain" />
-                  </Link>
-                  <span className="neo-workspace__mobile-heading-divider" aria-hidden="true" />
                   <h1 className="neo-workspace__title m-0 min-w-0 truncate text-base leading-tight">{title}</h1>
                 </div>
                 <div className="hidden min-w-0 lg:block">
@@ -224,42 +242,26 @@ export function WorkspaceShell({
               </>
             ) : (
               <div className="min-w-0">
-                <div className="flex items-center gap-2 lg:hidden">
-                  <Link to="/" className="neo-workspace__mobile-logo" aria-label="Go to EdiCut home" title="EdiCut home">
-                    <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-8 w-auto object-contain" />
-                  </Link>
-                </div>
                 <p className="neo-workspace__eyebrow mt-1">{subtitle || "Your creative workspace"}</p>
                 <h1 className="neo-workspace__title mt-1 truncate">{title}</h1>
               </div>
             )}
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <Link to={settingsTo || profileTo || "/dashboard/profile"} className="neo-workspace__icon-button hidden sm:inline-flex" aria-label="Settings" title="Settings">
-                <span className="material-symbols-outlined text-[19px]">settings</span>
-              </Link>
+              {settingsTarget ? (
+                <Link to={settingsTarget} className="neo-workspace__icon-button hidden sm:inline-flex" aria-label="Settings" title="Settings">
+                  <span className="material-symbols-outlined text-[19px]">settings</span>
+                </Link>
+              ) : null}
               <Link to={helpTo} className="neo-workspace__icon-button hidden sm:inline-flex" aria-label="Help and contact" title="Help and contact">
                 <span className="material-symbols-outlined text-[19px]">help</span>
               </Link>
-              <Link to={notificationsTo} className="neo-workspace__icon-button relative" aria-label={notificationCount > 0 ? `${notificationCount} cuts waiting for review` : "Open review queue"} title={notificationCount > 0 ? `${notificationCount} cuts waiting for review` : "Open review queue"}>
-                <span className="material-symbols-outlined text-[19px]">notifications</span>
-                {notificationCount > 0 ? <span className="neo-workspace__notification-dot absolute right-2.5 top-2" aria-hidden="true" /> : null}
-              </Link>
-              {mobileMenu ? (
-                <button
-                  ref={mobileMenuTriggerRef}
-                  type="button"
-                  className="neo-workspace__menu-toggle neo-workspace__icon-button lg:hidden"
-                  aria-label={isMobileMenuOpen ? "Close workspace menu" : "Open workspace menu"}
-                  aria-controls="neo-workspace-mobile-menu"
-                  aria-expanded={isMobileMenuOpen}
-                  onClick={() => {
-                    setIsMobileMenuOpen((open) => !open);
-                    setIsMoreOpen(false);
-                  }}
-                >
-                  <span className="material-symbols-outlined text-[21px]">{isMobileMenuOpen ? "close" : "menu"}</span>
-                </button>
+              {notificationsTo ? (
+                <Link to={notificationsTo} className="neo-workspace__icon-button relative" aria-label={notificationCount > 0 ? `${notificationCount} cuts waiting for review` : "Open review queue"} title={notificationCount > 0 ? `${notificationCount} cuts waiting for review` : "Open review queue"}>
+                  <span className="material-symbols-outlined text-[19px]">notifications</span>
+                  {notificationCount > 0 ? <span className="neo-workspace__notification-dot absolute right-2.5 top-2" aria-hidden="true" /> : null}
+                </Link>
               ) : null}
+              {hideHeaderTitle ? null : mobileMenuButton}
               {headerActions}
             </div>
           </div>
@@ -272,7 +274,12 @@ export function WorkspaceShell({
           )}
         </header>
 
-        <div className="neo-workspace__content mx-auto max-w-[1500px] px-4 py-5 sm:px-7 sm:py-7 lg:px-9">{children}</div>
+        <div
+          className="neo-workspace__content mx-auto max-w-[1500px] px-4 py-5 sm:px-7 sm:py-7 lg:px-9"
+          data-navigation-pending={isNavigationPending ? "true" : undefined}
+        >
+          {children}
+        </div>
       </main>
       {mobileMenu ? (
         <div
@@ -290,30 +297,32 @@ export function WorkspaceShell({
           <aside
             ref={mobileDrawerRef}
             id="neo-workspace-mobile-menu"
-            className="neo-header-drawer neo-workspace__mobile-drawer"
+            className="neo-workspace__sidebar neo-workspace__mobile-drawer"
             role="dialog"
             aria-modal="true"
             aria-labelledby="neo-workspace-mobile-drawer-title"
           >
-            <div className="neo-header-drawer-head neo-workspace__mobile-drawer-head">
-              <button
-                ref={mobileDrawerCloseRef}
-                type="button"
-                className="neo-header-menu neo-workspace__mobile-drawer-close"
-                aria-label="Close workspace navigation"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <span className="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
-              </button>
-            </div>
             <div className="neo-workspace__mobile-drawer-content">
-              <p id="neo-workspace-mobile-drawer-title" className="neo-workspace__mobile-drawer-title">Your workspace</p>
-              <nav className="neo-workspace__mobile-drawer-nav" aria-label="Workspace navigation">
-                {workspaceNavItems.map((item) => (
+              <div className="neo-workspace__mobile-drawer-topbar">
+                <Link to="/" className="flex min-w-0 items-center justify-center px-2" aria-label="EdiCut home" title="EdiCut home">
+                  <img src="/icons/edicut-logo.svg" alt="EdiCut" className="h-10 w-auto object-contain" />
+                </Link>
+                <button
+                  ref={mobileDrawerCloseRef}
+                  type="button"
+                  className="neo-workspace__icon-button neo-workspace__mobile-drawer-close"
+                  aria-label="Close workspace navigation"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <span className="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
+                </button>
+              </div>
+              <p id="neo-workspace-mobile-drawer-title" className="neo-workspace__eyebrow mt-10 px-3">Workspace</p>
+              <nav className="neo-workspace__mobile-drawer-nav mt-3 grid gap-1" aria-label="Workspace navigation">
+                {navItems.map((item) => (
                   <WorkspaceNavLink
                     key={`drawer-${item.label}-${item.to}`}
                     item={item}
-                    drawer
                     onNavigate={() => {
                       setIsMobileMenuOpen(false);
                       setIsMoreOpen(false);
@@ -323,8 +332,8 @@ export function WorkspaceShell({
               </nav>
             </div>
             <div className="neo-workspace__mobile-account neo-workspace__mobile-drawer-footer">
-              <Link
-                to={profileTo || location.pathname}
+              {profileTo ? <Link
+                to={profileTo}
                 className="neo-workspace__mobile-drawer-profile"
                 aria-label={`Open profile settings for ${account.name}`}
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -334,13 +343,19 @@ export function WorkspaceShell({
                   <span className="neo-workspace__account-name block truncate">{account.name}</span>
                   <span className="neo-workspace__account-detail mt-0.5 block truncate">{account.detail}</span>
                 </span>
-              </Link>
+              </Link> : <div className="neo-workspace__mobile-drawer-profile">
+                <Avatar name={account.name} imageUrl={account.imageUrl} />
+                <span className="min-w-0 flex-1">
+                  <span className="neo-workspace__account-name block truncate">{account.name}</span>
+                  <span className="neo-workspace__account-detail mt-0.5 block truncate">{account.detail}</span>
+                </span>
+              </div>}
               {accountAction}
             </div>
           </aside>
         </div>
       ) : null}
-      {mobileMenu ? (
+      {showMobileBottomNav ? (
         <div ref={bottomControlsRef} className="neo-workspace__bottom-controls">
           {showMobileMore && moreMobileItems.length > 0 ? (
             <div
@@ -419,24 +434,19 @@ function WorkspaceNavLink({
   compact = false,
   collapsed = false,
   bottom = false,
-  drawer = false,
   onNavigate,
 }: {
   item: WorkspaceNavItem;
   compact?: boolean;
   collapsed?: boolean;
   bottom?: boolean;
-  drawer?: boolean;
   onNavigate?: () => void;
 }) {
-  const getClassName = (active: boolean) => drawer
-    ? `neo-header-link neo-workspace__mobile-drawer-link ${active ? "neo-header-active" : ""}`
-    : navClassName(active, compact, collapsed, bottom);
+  const getClassName = (active: boolean) => navClassName(active, compact, collapsed, bottom);
   const className = ({ isActive }: { isActive: boolean }) => getClassName(item.active ?? isActive);
   const contents = (
     <>
-      <NavIcon item={item} collapsed={collapsed} bottom={bottom} drawer={drawer} />
-      {drawer ? <span className="material-symbols-outlined neo-workspace__mobile-drawer-arrow" aria-hidden="true">arrow_forward</span> : null}
+      <NavIcon item={item} collapsed={collapsed} bottom={bottom} />
     </>
   );
 
@@ -461,12 +471,12 @@ function WorkspaceNavLink({
   );
 }
 
-function NavIcon({ item, collapsed, bottom, drawer }: { item: WorkspaceNavItem; collapsed: boolean; bottom: boolean; drawer: boolean }) {
+function NavIcon({ item, collapsed, bottom }: { item: WorkspaceNavItem; collapsed: boolean; bottom: boolean }) {
   const label = bottom ? item.bottomLabel ?? item.label : item.label;
 
   return (
     <>
-      <span aria-hidden={bottom || drawer || undefined} className={`material-symbols-outlined ${bottom ? "neo-workspace__bottom-nav-icon" : "text-[19px]"}`}>{item.icon}</span>
+      <span aria-hidden={bottom || undefined} className={`material-symbols-outlined ${bottom ? "neo-workspace__bottom-nav-icon" : "text-[19px]"}`}>{item.icon}</span>
       {collapsed ? <span className="sr-only">{label}</span> : <span className={bottom ? "neo-workspace__bottom-nav-label" : "min-w-0 flex-1 truncate"}>{label}</span>}
       {!collapsed && !bottom && item.badge ? <span className="rounded-full bg-[#5a43d5] px-1.5 py-0.5 text-[9px] font-black text-white">{item.badge}</span> : null}
     </>

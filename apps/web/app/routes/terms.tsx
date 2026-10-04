@@ -1,10 +1,11 @@
 import type { MetaFunction } from "react-router";
 import { PageShell, TrustStrip } from "../components/site/Marketing.js";
+import { createRouteMeta } from "../lib/seo";
 
-export const meta: MetaFunction = () => [
-  { title: "Terms and Conditions | EdiCut Creator Post Production" },
-  { name: "description", content: "Service scope, monthly plan estimates, project billing, and cancellation terms for EdiCut customers." },
-];
+export const meta: MetaFunction = (args) => createRouteMeta(args,
+  "Terms of Service | EdiCut",
+  "Review EdiCut service scope, video editing plans, estimates, project billing, revisions, and cancellation terms.",
+);
 
 const sections = [
   {
@@ -20,12 +21,12 @@ const sections = [
   {
     icon: "rate_review",
     title: "3. Revisions, Approvals & Turnaround",
-    copy: "First cuts are targeted for 48 hours for standard long-form uploads. Each tier includes revision rounds via timestamped feedback. Approval of a final deliverable confirms project stage completion.",
+    copy: "The first cut is delivered within 48 hours, and each package includes the listed revision rounds. Send revision feedback with timestamps; approval of a final deliverable confirms project stage completion.",
   },
   {
     icon: "credit_card",
     title: "4. Estimates, Billing & Cancellation",
-    copy: "Package prices are estimates for monthly editing plans. Submitting a project request does not start a subscription or collect payment. EdiCut confirms scope, price, billing cadence, and service terms with you before work begins. Contact support to change or cancel an active plan under its confirmed agreement.",
+    copy: "Published monthly package prices cover the listed scope. Submitting a project request does not start a subscription or collect payment. EdiCut confirms scope, price, billing cadence, and service terms with you before work begins. Contact support to change or cancel an active plan under its confirmed agreement.",
   },
   {
     icon: "verified_user",

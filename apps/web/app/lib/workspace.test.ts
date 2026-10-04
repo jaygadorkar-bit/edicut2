@@ -53,6 +53,19 @@ describe("workspace validation", () => {
     expect(isValidWorkspaceDate("10/01/2026")).toBe(false);
   });
 
+  it("recognizes Drizzle-wrapped workspace schema errors", () => {
+    expect(isMissingWorkspaceSchema({ message: 'Failed query: select from "workspace_projects"', cause: { code: "42703", message: 'column "coupon_id" does not exist' } })).toBe(true);
+    expect(isMissingWorkspaceSchema({ cause: { code: "42P01", message: 'relation "workspace_project_files" does not exist' } })).toBe(true);
+  });
+
+  it("does not hide permission, connection, or unrelated column failures", () => {
+    expect(isMissingWorkspaceSchema({ message: 'Failed query: select from "workspace_projects"', cause: { code: "42501", message: "permission denied for table workspace_projects" } })).toBe(false);
+    expect(isMissingWorkspaceSchema({ message: 'Failed query: select from "workspace_projects"', cause: { code: "42703", message: 'column "email" does not exist' } })).toBe(false);
+    const cyclic: { cause?: unknown } = {};
+    cyclic.cause = cyclic;
+    expect(isMissingWorkspaceSchema(cyclic)).toBe(false);
+  });
+
   it.each([
     ["80", 8000],
     ["120.5", 12050],
@@ -70,14 +83,14 @@ describe("workspace validation", () => {
 describe("monthly package estimates", () => {
   const creator = SUBSCRIPTION_PACKAGES[0];
 
-  it("adds selected monthly coverage to a package estimate", () => {
-    expect(getCheckoutTotal(creator, { runtime: true, raw: true })).toBe(400);
-    expect(getCheckoutTotal(creator, { runtime: true })).toBe(240);
+  it("keeps the published package price fixed when legacy coverage flags are present", () => {
+    expect(getCheckoutTotal(creator, { runtime: true, raw: true })).toBe(2149);
+    expect(getCheckoutTotal(creator, { runtime: true })).toBe(2149);
   });
 
-  it("keeps selected coverage in the team brief without overwriting customer notes", () => {
+  it("marks legacy extra coverage as separately quoted without overwriting customer notes", () => {
     expect(formatRequestedCoverageNotes(creator, "Use the reference intro", { runtime: true })).toBe(
-      "Requested monthly coverage: 60 min finished runtime (+$160/mo estimate).\n\nCustomer brief:\nUse the reference intro",
+      "Additional coverage request: 60 additional finished minutes (availability and price to be confirmed). This work is outside the package scope and will be quoted separately.\n\nCustomer brief:\nUse the reference intro",
     );
   });
 

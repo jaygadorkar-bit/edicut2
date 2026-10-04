@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, useActionData, useNavigation, useSearchParams } from "react-router";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { resolveWebEnv } from "../lib/context.server";
+import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
 type ForgotPasswordActionData = {
   error?: string;
@@ -11,14 +12,36 @@ type ForgotPasswordActionData = {
 export const meta: MetaFunction = () => [
   { title: "Reset password - EdiCut" },
   { name: "description", content: "Request a secure EdiCut password reset link." },
+  { name: "robots", content: "noindex, nofollow, noarchive" },
 ];
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return { error: "Password reset request is too large. Please try again." } satisfies ForgotPasswordActionData;
+  }
+
   const formData = await request.formData();
   const emailValue = formData.get("email");
 
-  if (typeof emailValue !== "string" || !emailValue.trim() || !emailValue.includes("@")) {
+  if (typeof emailValue !== "string" || !emailValue.trim() || emailValue.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue.trim())) {
     return { error: "Enter the email address for your EdiCut account." } satisfies ForgotPasswordActionData;
+  }
+
+  const identityKey = await hashUsageLimitKey(emailValue.trim().toLowerCase());
+  const resetLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "PASSWORD_RESET_LIMITER",
+    key: `reset:${identityKey}`,
+    localLimit: 1,
+    localPeriodSeconds: 60,
+  });
+  if (resetLimit !== "allowed") {
+    return {
+      error: resetLimit === "limited"
+        ? "A reset request was sent recently. Wait a minute before trying again."
+        : "Password reset protection is temporarily unavailable. Please try again shortly.",
+    } satisfies ForgotPasswordActionData;
   }
 
   const client = getSupabaseClient(context);

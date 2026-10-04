@@ -20,13 +20,13 @@ Install dependencies:
 pnpm install
 ```
 
-Run the frontend on the single standard local port:
+Run the frontend on EdiCut's local port (3002 avoids conflicts with other local apps):
 
 ```bash
 pnpm dev
 ```
 
-Frontend URL: `http://localhost:3000`
+Frontend URL: `http://localhost:3002`
 
 Run the Node API:
 
@@ -48,10 +48,9 @@ The Docker development profile disables the production-domain reCAPTCHA keys for
 
 Docker exposes:
 
-- Web: `http://localhost:3000`
-- Compatibility alias: `http://localhost:3002`
+- Web: `http://localhost:3002`
 
-Local Google OAuth uses the callback `http://localhost:3000/api/auth/callback/google` and returns to the app on the same port.
+Local Google OAuth uses the callback `http://localhost:3002/api/auth/callback/google` and returns to the app on the same port. Add this exact callback to the Google OAuth client's authorized redirect URIs.
 
 The local Postgres and Node API containers are not part of the Docker workflow. The previous Postgres volume is retained but is no longer mounted or started.
 

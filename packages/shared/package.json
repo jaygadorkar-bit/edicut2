@@ -21,6 +21,10 @@
     "./contracts/operations": {
       "types": "./dist/contracts/operations.d.ts",
       "default": "./dist/contracts/operations.js"
+    },
+    "./server-fetch": {
+      "types": "./dist/server-fetch.d.ts",
+      "default": "./dist/server-fetch.js"
     }
   },
   "scripts": {

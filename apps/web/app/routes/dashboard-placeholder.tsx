@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -20,8 +20,13 @@ import {
   getDashboardLandingPath,
   type DashboardFeature,
 } from "../lib/role-feature-access";
-import { SUBSCRIPTION_PACKAGES, formatRequestedCoverageNotes, getCheckoutTotal } from "../lib/subscriptions";
+import { SUBSCRIPTION_PACKAGES, formatRequestedCoverageNotes, getCheckoutTotal, type SubscriptionPackage } from "../lib/subscriptions";
+import { configuredPublicEditingPackages, getPricingPackages } from "../lib/pricing.server";
 import { isMissingWorkspaceSchema, isValidWorkspaceDate, isWorkspaceRecordId, parseWorkspaceShareUrl, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
+import { workspaceProjectColumns, type WorkspaceProjectView } from "../lib/workspace-projects.server";
+import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import { queueTelegramOrderNotice } from "../lib/telegram-notifications.server";
+import { getAffiliatePortalData, isMissingMarketingSchema, type AffiliatePortalData } from "../lib/marketing.server";
 
 const sectionConfigs = {
   projects: {
@@ -57,7 +62,7 @@ const sectionConfigs = {
     icon: "hub",
     feature: "affiliates" as DashboardFeature,
     title: "Affiliate hub",
-    description: "Referral tracking is managed by the EdiCut team. Contact support to activate your referral account.",
+    description: "Share your referral link and follow attributed orders and commissions.",
   },
   settings: {
     label: "Settings",
@@ -75,7 +80,7 @@ const userNavItems = [
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
-  { label: "Billing", icon: "receipt_long", path: "/dashboard/billing", feature: "billing" as DashboardFeature },
+  { label: "Purchases", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
   { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
 ];
@@ -90,8 +95,7 @@ function readText(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function packagePriceCents(slug: string, coverage: { runtime?: boolean; raw?: boolean }) {
-  const item = SUBSCRIPTION_PACKAGES.find((entry) => entry.slug === slug);
+function packagePriceCents(item: SubscriptionPackage | undefined, coverage: { runtime?: boolean; raw?: boolean }) {
   return item ? getCheckoutTotal(item, coverage) * 100 : null;
 }
 
@@ -100,6 +104,7 @@ function formatMoney(cents: number, currency: string) {
 }
 
 export async function loader({ params, request, context }: LoaderFunctionArgs) {
+  if (params.section === "billing") throw redirect("/dashboard/subscriptions");
   const section = params.section as PlaceholderSection | undefined;
   const config = section ? sectionConfigs[section] : undefined;
   if (!section || !config) throw redirect("/dashboard");
@@ -115,14 +120,14 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     });
   }
 
-  const roleFeatureAccess = await getRoleFeatureAccessSettings(db);
+  const roleFeatureAccess = await getRoleFeatureAccessSettings(db, context);
   const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
   if (!canAccessDashboardFeature(user.role, config.feature, roleFeatureAccess)) {
     throw redirect(getDashboardLandingPath(allowedFeatures));
   }
 
   const requirements = getWorkspaceDataRequirements(section);
-  let projects: (typeof workspaceProjects.$inferSelect)[] = [];
+  let projects: WorkspaceProjectView[] = [];
   let projectOptions: Array<Pick<typeof workspaceProjects.$inferSelect, "id" | "title">> = [];
   let files: (typeof workspaceProjectFiles.$inferSelect)[] = [];
   let reviews: (typeof workspaceProjectReviews.$inferSelect)[] = [];
@@ -131,7 +136,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     const ownerFilter = eq(workspaceProjects.ownerId, userId);
     const [projectRows, projectNameRows, fileRows, reviewRows] = await Promise.all([
       requirements.projects
-        ? db.select().from(workspaceProjects).where(ownerFilter).orderBy(desc(workspaceProjects.updatedAt))
+        ? db.select(workspaceProjectColumns).from(workspaceProjects).where(ownerFilter).orderBy(desc(workspaceProjects.updatedAt))
         : Promise.resolve([]),
       !requirements.projects && requirements.projectNames
         ? db.select({ id: workspaceProjects.id, title: workspaceProjects.title }).from(workspaceProjects).where(ownerFilter)
@@ -159,10 +164,29 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     && requestedProjectId !== null
     && projects.some((project) => project.id === requestedProjectId);
 
-  return { user, allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved };
+  let affiliateData: AffiliatePortalData | null = null;
+  let affiliateSchemaReady = true;
+  if (section === "affiliates") {
+    try {
+      affiliateData = await getAffiliatePortalData(db, userId, new URL(request.url).origin);
+    } catch (error) {
+      if (!isMissingMarketingSchema(error)) throw error;
+      affiliateSchemaReady = false;
+    }
+  }
+
+  const pricingPackages = section === "projects"
+    ? configuredPublicEditingPackages(await getPricingPackages(db, context)).filter((item): item is SubscriptionPackage => item.packageType === "monthly")
+    : [];
+
+  return { user, allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved, affiliateData, affiliateSchemaReady, pricingPackages };
 }
 
 export async function action({ params, request, context }: ActionFunctionArgs) {
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return { error: "This request is too large. Please shorten the details and try again." };
+  }
+
   const section = params.section as PlaceholderSection | undefined;
   const formData = await request.formData();
   const intent = readText(formData, "intent");
@@ -178,10 +202,26 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
   if (!section || !config) throw redirect("/dashboard");
 
   const userId = await requireUserId(request, context);
+  const actionLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "USER_ACTION_LIMITER",
+    key: `user:${userId}`,
+    localLimit: 60,
+    localPeriodSeconds: 60,
+  });
+  if (actionLimit !== "allowed") {
+    return {
+      error: actionLimit === "limited"
+        ? "You have submitted several requests. Wait a minute and try again."
+        : "Usage protection is temporarily unavailable. Please try again shortly.",
+    };
+  }
+
   const db = getDbFromContext(context);
   const user = await findUserById(db, userId);
   if (!user) throw redirect("/signin?redirectTo=/dashboard");
-  const roleFeatureAccess = await getRoleFeatureAccessSettings(db);
+  const roleFeatureAccess = await getRoleFeatureAccessSettings(db, context);
   if (!canAccessDashboardFeature(user.role, config.feature, roleFeatureAccess)) {
     throw redirect(getDashboardLandingPath(getAllowedDashboardFeatures(user.role, roleFeatureAccess)));
   }
@@ -196,8 +236,10 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
     const deadline = readText(formData, "deadline");
     const notes = readText(formData, "notes");
     const coverage = { runtime: formData.get("runtime") === "1", raw: formData.get("raw") === "1" };
-    const selectedPackage = SUBSCRIPTION_PACKAGES.find((item) => item.slug === packageSlug);
-    const estimatedAmountCents = packagePriceCents(packageSlug, coverage);
+    const configuredPackages = configuredPublicEditingPackages(await getPricingPackages(db, context));
+    const monthlyPackages = configuredPackages.filter((item): item is SubscriptionPackage => item.packageType === "monthly");
+    const selectedPackage = monthlyPackages.find((item) => item.slug === packageSlug);
+    const estimatedAmountCents = packagePriceCents(selectedPackage, coverage);
 
     if (title.length < 3 || title.length > 120) return { error: "Project name must be between 3 and 120 characters." };
     if (!channelName || channelName.length > 120) return { error: "Add a channel name (up to 120 characters)." };
@@ -207,17 +249,26 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
     }
     if (!isValidWorkspaceDate(deadline)) return { error: "Enter a valid target date." };
 
-    await db.insert(workspaceProjects).values({
-      ownerId: userId,
-      title,
-      channelName,
-      packageSlug,
-      category: category || null,
-      cadence: cadence || null,
-      deadline: deadline || null,
-      notes: selectedPackage ? formatRequestedCoverageNotes(selectedPackage, notes, coverage) : notes || null,
-      estimatedAmountCents,
-      billingStatus: "quote_requested",
+    // Drizzle's insert includes defaults for every schema column, including
+    // optional marketing columns. This core project action needs only these fields.
+    const orderId = crypto.randomUUID();
+    await db.execute(sql`
+      INSERT INTO workspace_projects (
+        id, owner_id, title, channel_name, package_slug, category, cadence, deadline,
+        notes, estimated_amount_cents, billing_status
+      ) VALUES (
+        ${orderId}, ${userId}, ${title}, ${channelName}, ${packageSlug}, ${category || null},
+        ${cadence || null}, ${deadline || null},
+        ${selectedPackage ? formatRequestedCoverageNotes(selectedPackage, notes, coverage) : notes || null},
+        ${estimatedAmountCents}, ${"quote_requested"}
+      )
+    `);
+    queueTelegramOrderNotice(context, {
+      orderId,
+      kind: "project",
+      summary: selectedPackage ? `${title} — ${selectedPackage.name}` : title,
+      amountCents: estimatedAmountCents,
+      currency: "USD",
     });
     return { success: "Project request saved. The EdiCut team will confirm scope and billing before work begins." };
   }
@@ -315,18 +366,13 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 }
 
 export default function DashboardWorkspaceSection() {
-  const { user, allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved } = useLoaderData<typeof loader>();
+  const { user, allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved, affiliateData, affiliateSchemaReady, pricingPackages } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
-  const [packageSlug, setPackageSlug] = useState("creator");
-  const [includeRuntime, setIncludeRuntime] = useState(false);
-  const [includeRaw, setIncludeRaw] = useState(false);
-  const selectedPackage = SUBSCRIPTION_PACKAGES.find((item) => item.slug === packageSlug) ?? SUBSCRIPTION_PACKAGES[0];
-  const estimatedMonthlyTotal = useMemo(
-    () => getCheckoutTotal(selectedPackage, { runtime: includeRuntime, raw: includeRaw }),
-    [includeRuntime, includeRaw, selectedPackage],
-  );
+  const [packageSlug, setPackageSlug] = useState(() => pricingPackages.find((item) => item.slug === "creator")?.slug ?? pricingPackages[0]?.slug ?? "creator");
+  const selectedPackage = pricingPackages.find((item) => item.slug === packageSlug) ?? pricingPackages[0] ?? SUBSCRIPTION_PACKAGES[0];
+  const estimatedMonthlyTotal = getCheckoutTotal(selectedPackage);
   const displayName = user.name || user.email;
   const visibleNavItems = userNavItems.filter((item) => allowedFeatures.includes(item.feature));
   const packageNames = new Map(SUBSCRIPTION_PACKAGES.map((item) => [item.slug, item.name]));
@@ -340,9 +386,11 @@ export default function DashboardWorkspaceSection() {
       navItems={visibleNavItems.map(({ label, icon, path }) => ({ label, icon, to: path, end: path === "/dashboard" }))}
       account={{ name: displayName, detail: normalizeRole(user.role), imageUrl: user.profileImageUrl }}
       mobileMenu
+      navigationFeedback
       hideMobileHeading
-      profileTo="/dashboard/profile"
-      settingsTo="/dashboard/settings"
+      profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null}
+      settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null}
+      notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null}
       notificationCount={reviewQueue.length}
       accountAction={(
         <Form method="post">
@@ -352,12 +400,12 @@ export default function DashboardWorkspaceSection() {
           </button>
         </Form>
       )}
-      headerActions={(
+      headerActions={allowedFeatures.includes("projects") ? (
         <Link to="/dashboard/projects" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
           <span className="material-symbols-outlined text-[17px]" aria-hidden="true">arrow_back</span>
           Projects
         </Link>
-      )}
+      ) : null}
     >
       <div className="grid gap-5">
         <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="workspace-section-title">
@@ -380,7 +428,7 @@ export default function DashboardWorkspaceSection() {
             ) : null}
           </div>
           <ActionFeedback error={actionData?.error} success={actionData?.success} />
-          {checkoutRequestSaved ? <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" role="status">Your project request was saved. The monthly estimate is listed below; EdiCut will confirm scope and billing with you.</p> : null}
+          {checkoutRequestSaved ? <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800" role="status">Your project request was saved. EdiCut will confirm the package scope and billing with you.</p> : null}
           {!workspaceReady ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900" role="status">{WORKSPACE_MIGRATION_NOTICE}</p> : null}
         </section>
 
@@ -421,23 +469,19 @@ export default function DashboardWorkspaceSection() {
                 <label className="grid gap-2 text-xs font-black text-[#536779]">
                   Editing package
                   <select name="packageSlug" value={packageSlug} onChange={(event) => setPackageSlug(event.currentTarget.value)} className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
-                    {SUBSCRIPTION_PACKAGES.map((item) => <option key={item.slug} value={item.slug}>{item.name} · ${item.basePrice}/mo estimate</option>)}
+                    {pricingPackages.map((item) => <option key={item.slug} value={item.slug}>{item.name} · {formatMoney(item.basePrice * 100, "USD")}/month</option>)}
                   </select>
                 </label>
-                <fieldset className="grid gap-2 sm:col-span-2">
-                  <legend className="mb-2 text-xs font-black text-[#536779]">Optional monthly coverage</legend>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <label className="neo-card flex min-h-12 cursor-pointer items-center gap-3 rounded-xl p-3 text-xs font-bold text-[#536779]">
-                      <input type="checkbox" name="runtime" value="1" checked={includeRuntime} onChange={(event) => setIncludeRuntime(event.currentTarget.checked)} disabled={isSubmitting} className="h-4 w-4 shrink-0 accent-[#6d55e8]" />
-                      <span>Add 60 min finished runtime · +${selectedPackage.finishedRuntimePrice}/mo</span>
-                    </label>
-                    <label className="neo-card flex min-h-12 cursor-pointer items-center gap-3 rounded-xl p-3 text-xs font-bold text-[#536779]">
-                      <input type="checkbox" name="raw" value="1" checked={includeRaw} onChange={(event) => setIncludeRaw(event.currentTarget.checked)} disabled={isSubmitting} className="h-4 w-4 shrink-0 accent-[#6d55e8]" />
-                      <span>Add 600 min raw footage · +${selectedPackage.rawFootagePrice}/mo</span>
-                    </label>
-                  </div>
-                  <p className="text-xs font-medium text-[#687583]" role="status" aria-live="polite" aria-atomic="true">Estimated total: {formatMoney(estimatedMonthlyTotal * 100, "USD")}/month. The team confirms scope and billing before work begins.</p>
-                </fieldset>
+                <div className="neo-card grid gap-2 rounded-xl p-4 text-xs font-medium text-[#536779] sm:col-span-2">
+                  <p className="font-black text-[#17202a]">Included scope</p>
+                  {selectedPackage.packageType === "monthly" ? <>
+                    <p>{selectedPackage.editingHoursPerMonth} editing hours per month</p>
+                    <p>{selectedPackage.editingHoursPerWorkday} {selectedPackage.editingHoursPerWorkday === 1 ? "hour" : "hours"} per workday · 22 working days per month</p>
+                    <p>Editing and revisions use the reserved monthly hours</p>
+                  </> : null}
+                  <p className="mt-1 font-black text-[#17202a]" role="status" aria-live="polite" aria-atomic="true">Monthly package price: {formatMoney(estimatedMonthlyTotal * 100, "USD")}</p>
+                  <p>Work beyond these limits is quoted separately before editing begins.</p>
+                </div>
                 <TextField label="Content category" name="category" placeholder="Tech, gaming, lifestyle" maxLength={80} />
                 <TextField label="Publishing cadence" name="cadence" placeholder="1–2 videos each week" maxLength={120} />
                 <TextField label="Target date" name="deadline" type="date" />
@@ -552,21 +596,25 @@ export default function DashboardWorkspaceSection() {
         ) : null}
 
         {section === "affiliates" ? (
-          <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="affiliate-access-title">
-            <p className="neo-workspace__eyebrow">Affiliate access</p>
-            <h2 id="affiliate-access-title" className="neo-workspace__module-title mt-1">Request an affiliate profile</h2>
-            <p className="neo-workspace__module-copy mt-2">Referral tracking is not active for this account yet. Send your channel or website to the EdiCut team; they will review your request and confirm program terms before enabling a referral profile.</p>
-            <Form method="post" className="mt-5 grid gap-4">
-              <input type="hidden" name="intent" value="request-affiliate-access" />
-              <TextField label="Channel or website link" name="channelUrl" placeholder="https://…" type="url" maxLength={2048} />
-              <label className="grid gap-2 text-xs font-black text-[#536779]">
-                Tell us about your audience
-                <textarea name="notes" rows={4} maxLength={4000} placeholder="What do you create, and who follows your work?" className="neo-workspace__profile-input rounded-xl p-3 text-sm font-medium outline-none" disabled={isSubmitting} />
-              </label>
-              <p className="text-xs font-medium text-[#687583]">No referral code or commission is activated by this request. The team will email you after review.</p>
-              <div className="sm:flex sm:justify-end"><button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-black disabled:opacity-60 sm:w-auto"><span className="material-symbols-outlined text-[18px]" aria-hidden="true">send</span>{isSubmitting ? "Sending request…" : "Request access"}</button></div>
-            </Form>
-          </section>
+          affiliateSchemaReady
+            ? affiliateData
+              ? <AffiliatePortal affiliate={affiliateData} />
+              : <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="affiliate-access-title">
+                <p className="neo-workspace__eyebrow">Affiliate access</p>
+                <h2 id="affiliate-access-title" className="neo-workspace__module-title mt-1">Request an affiliate profile</h2>
+                <p className="neo-workspace__module-copy mt-2">Send your channel or website to the EdiCut team. They will review your audience and confirm program terms before enabling a referral profile.</p>
+                <Form method="post" className="mt-5 grid gap-4">
+                  <input type="hidden" name="intent" value="request-affiliate-access" />
+                  <TextField label="Channel or website link" name="channelUrl" placeholder="https://…" type="url" maxLength={2048} />
+                  <label className="grid gap-2 text-xs font-black text-[#536779]">
+                    Tell us about your audience
+                    <textarea name="notes" rows={4} maxLength={4000} placeholder="What do you create, and who follows your work?" className="neo-workspace__profile-input rounded-xl p-3 text-sm font-medium outline-none" disabled={isSubmitting} />
+                  </label>
+                  <p className="text-xs font-medium text-[#687583]">Submitting this request does not activate a referral code or commission. The team will email you after review.</p>
+                  <div className="sm:flex sm:justify-end"><button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-black disabled:opacity-60 sm:w-auto"><span className="material-symbols-outlined text-[18px]" aria-hidden="true">send</span>{isSubmitting ? "Sending request…" : "Request access"}</button></div>
+                </Form>
+              </section>
+            : <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" role="status"><p className="neo-workspace__eyebrow">Affiliate reporting</p><h2 className="neo-workspace__module-title mt-1">Temporarily unavailable</h2><p className="neo-workspace__module-copy mt-2">Affiliate reporting is temporarily unavailable until the required database migrations are applied.</p></section>
         ) : null}
       </div>
     </WorkspaceShell>
@@ -582,6 +630,107 @@ function ActionFeedback({ error, success }: { error?: string; success?: string }
     {error ? <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700" role="alert">{error}</p> : null}
     {success ? <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700" role="status">{success}</p> : null}
   </>;
+}
+
+function AffiliatePortal({ affiliate }: { affiliate: AffiliatePortalData }) {
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
+  const rows = affiliate.orders;
+  const orderName = (label: string, kind: AffiliatePortalData["orders"][number]["kind"]) => kind !== "project"
+    ? label
+    : SUBSCRIPTION_PACKAGES.find((item) => item.slug === label)?.name ?? label;
+  const orderStatus = (status: string) => status === "paid" ? "Paid" : status === "unpaid" ? "Unpaid" : status.replaceAll("_", " ");
+
+  async function copyReferralLink() {
+    try {
+      await navigator.clipboard.writeText(affiliate.referralUrl);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("error");
+    }
+  }
+
+  return (
+    <div className="grid gap-5 sm:gap-6">
+      <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="affiliate-overview-title">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="neo-workspace__eyebrow">Partner overview</p>
+            <h2 id="affiliate-overview-title" className="neo-workspace__module-title mt-1">Your referral performance</h2>
+            <p className="neo-workspace__module-copy mt-2 max-w-2xl">Share your link to refer new customers. Commissions are recorded after EdiCut marks an attributed order as paid; payout arrangements are confirmed separately.</p>
+          </div>
+          <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-black ${affiliate.active ? "bg-emerald-100 text-emerald-900" : "bg-slate-200 text-slate-700"}`}>
+            {affiliate.active ? "Active" : "Paused"}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <label className="grid min-w-0 gap-2 text-xs font-black text-[#536779]" htmlFor="affiliate-referral-url">
+            Referral link
+            <input id="affiliate-referral-url" readOnly value={affiliate.referralUrl} className="neo-workspace__profile-input h-11 min-w-0 rounded-xl px-3 text-sm font-semibold" onFocus={(event) => event.currentTarget.select()} />
+          </label>
+          <button type="button" onClick={() => void copyReferralLink()} disabled={!affiliate.active} className="neo-workspace__profile-submit inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50">
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">content_copy</span>
+            {copyStatus === "copied" ? "Copied" : "Copy link"}
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-[#687583]">
+          <span>Referral code: <strong className="text-[#17202a]">{affiliate.code}</strong></span>
+          <span>Commission rate: <strong className="text-[#17202a]">{(affiliate.commissionRateBps / 100).toFixed(2)}%</strong></span>
+          {copyStatus === "copied" ? <span role="status" aria-live="polite" className="text-emerald-800">Referral link copied.</span> : null}
+          {copyStatus === "error" ? <span role="status" aria-live="polite">Copy failed. Select the link above and copy it.</span> : null}
+        </div>
+        {!affiliate.active ? <p className="mt-3 rounded-xl bg-slate-100 p-3 text-sm text-slate-700">This referral code is paused. Contact EdiCut support if you think this is a mistake.</p> : null}
+      </section>
+
+      <section aria-label="Affiliate order summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <AffiliateMetric label="Orders attributed" value={affiliate.orderCount.toLocaleString("en-US")} />
+        <AffiliateMetric label="Paid orders" value={affiliate.paidOrderCount.toLocaleString("en-US")} />
+        <AffiliateMetric label="Recorded commission" value={formatMoney(affiliate.commissionEarnedCents, "USD")} />
+        <AffiliateMetric label="Estimated on unpaid orders" value={formatMoney(affiliate.pendingCommissionCents, "USD")} />
+      </section>
+
+      <section className="neo-workspace__panel min-w-0 rounded-[24px] p-5 sm:p-7" aria-labelledby="affiliate-orders-title">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><p className="neo-workspace__eyebrow">Attributed activity</p><h2 id="affiliate-orders-title" className="neo-workspace__module-title mt-1">Recent orders</h2></div>
+          <p className="max-w-xl text-xs leading-5 text-[#687583]">Order totals and commission appear after an order is paid. Unpaid estimates are not earned commission.</p>
+        </div>
+        {rows.length ? (
+          <>
+            <ul className="mt-5 grid gap-3 sm:hidden">
+              {rows.map((order) => (
+                <li key={`${order.kind}-${order.id}`} className="rounded-2xl border border-[#e2e7eb] bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0"><p className="truncate text-sm font-black text-[#17202a]">{orderName(order.label, order.kind)}</p><p className="mt-1 text-xs text-[#687583]">{order.kind === "project" ? "Project request" : "Package purchase"} · {formatAffiliateDate(order.createdAt)}</p></div>
+                    <AffiliateOrderStatus status={orderStatus(order.status)} paid={order.status === "paid"} />
+                  </div>
+                  <div className="mt-3 flex justify-between border-t border-[#edf0f2] pt-3 text-xs"><span className="text-[#687583]">Commission</span><strong className="text-[#17202a]">{order.status === "paid" ? formatMoney(order.commissionCents, order.currency) : order.pendingCommissionCents ? `${formatMoney(order.pendingCommissionCents, order.currency)} estimated` : "Not earned"}</strong></div>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[650px] text-left text-sm">
+                <caption className="sr-only">Orders attributed to your referral code</caption>
+                <thead><tr className="border-b border-[#e2e7eb] text-xs font-black uppercase tracking-wide text-[#687583]"><th scope="col" className="px-3 py-3">Order</th><th scope="col" className="px-3 py-3">Type</th><th scope="col" className="px-3 py-3">Date</th><th scope="col" className="px-3 py-3">Status</th><th scope="col" className="px-3 py-3 text-right">Commission</th></tr></thead>
+                <tbody>{rows.map((order) => <tr key={`${order.kind}-${order.id}`} className="border-b border-[#f0f2f4]"><th scope="row" className="px-3 py-3 font-bold text-[#17202a]">{orderName(order.label, order.kind)}</th><td className="px-3 py-3 text-[#536779]">{order.kind === "project" ? "Project" : "Package purchase"}</td><td className="px-3 py-3 text-[#536779]">{formatAffiliateDate(order.createdAt)}</td><td className="px-3 py-3"><AffiliateOrderStatus status={orderStatus(order.status)} paid={order.status === "paid"} /></td><td className="px-3 py-3 text-right font-bold text-[#17202a]">{order.status === "paid" ? formatMoney(order.commissionCents, order.currency) : order.pendingCommissionCents ? `${formatMoney(order.pendingCommissionCents, order.currency)} estimated` : "Not earned"}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </>
+        ) : <p className="mt-5 rounded-2xl bg-[#f5f6fa] p-5 text-sm text-[#536779]">No orders are linked to your code yet. Share your referral link to get started.</p>}
+      </section>
+    </div>
+  );
+}
+
+function AffiliateMetric({ label, value }: { label: string; value: string }) {
+  return <div className="neo-workspace__panel rounded-2xl p-4 sm:p-5"><p className="text-xs font-bold text-[#687583]">{label}</p><p className="mt-2 break-words text-xl font-black tracking-tight text-[#17202a]">{value}</p></div>;
+}
+
+function AffiliateOrderStatus({ status, paid }: { status: string; paid: boolean }) {
+  return <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${paid ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950"}`}><span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${paid ? "bg-emerald-700" : "bg-amber-700"}`} />{status}</span>;
+}
+
+function formatAffiliateDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value));
 }
 
 function EmptyCard({ title, copy }: { title: string; copy: string }) {

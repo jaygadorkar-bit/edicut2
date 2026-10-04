@@ -9,6 +9,7 @@ export type AdminDataRequirements = {
   imageUsage: boolean;
   videos: boolean;
   videoUsage: boolean;
+  marketingData: boolean;
 };
 
 /** Keep the admin loader's database and Cloudinary work scoped to the active view. */
@@ -17,6 +18,7 @@ export function getAdminDataRequirements(tab: string): AdminDataRequirements {
   const isUsers = tab === "users";
   const isImages = tab === "images";
   const isVideos = tab === "videos";
+  const marketingData = tab === "marketing" || tab === "affiliates";
 
   return {
     userDirectory: isUsers,
@@ -29,6 +31,7 @@ export function getAdminDataRequirements(tab: string): AdminDataRequirements {
     imageUsage: isImages,
     videos: isVideos,
     videoUsage: isVideos,
+    marketingData,
   };
 }
 

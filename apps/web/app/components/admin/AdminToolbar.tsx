@@ -22,7 +22,7 @@ export function AdminToolbar() {
           <ShieldCheck size={16} strokeWidth={1.75} aria-hidden="true" />
           <span>{toolbarLink.label}</span>
         </Link>
-        <Form method="post" action="/signout" reloadDocument className="neo-admin-toolbar__signout">
+        <Form method="post" action="/signout" className="neo-admin-toolbar__signout">
           <button type="submit" className="neo-admin-toolbar__action">
             <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
             <span>Sign out</span>

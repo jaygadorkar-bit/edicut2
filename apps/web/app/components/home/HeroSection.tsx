@@ -37,8 +37,8 @@ export function HeroSection() {
 
           <div className="mt-10 grid max-w-xl grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] divide-x divide-gray-200 overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
             <div className="min-w-0 px-2 sm:px-3">
-              <p className="text-2xl font-black">48h</p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:text-xs">First cuts</p>
+              <p className="text-2xl font-black">48 hours</p>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground sm:text-xs">First-cut target</p>
             </div>
             <div className="min-w-0 px-2 sm:px-3">
               <p className="text-2xl font-black">500+</p>

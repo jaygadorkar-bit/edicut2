@@ -19,6 +19,7 @@ const ROLE_FEATURE_ACCESS_KEY = "role_feature_access";
 const SEARCH_CRAWLING_ENABLED_KEY = "search_crawling_enabled";
 const MAINTENANCE_MODE_ENABLED_KEY = "maintenance_mode_enabled";
 const DEFAULT_PROMO_BAR_MESSAGE = "Welcome to EdiCut! Black Friday Special: 20% off all packages.";
+type SiteSettingsReadOptions = { failOnError?: boolean };
 
 export type SiteSettingsSnapshot = {
   adminToolbarEnabled: boolean;
@@ -31,19 +32,29 @@ export async function getSiteSettings(
   db: DatabaseClient | null | undefined,
   keys: string[],
   context?: SupabaseRuntimeContext,
+  options: SiteSettingsReadOptions = {},
 ): Promise<Record<string, string | undefined>> {
   const uniqueKeys = [...new Set(keys)];
   if (uniqueKeys.length === 0) return {};
 
   const supabase = getSupabaseClient(context);
   if (supabase) {
-    const { data, error } = await supabase
+    let admin;
+    try {
+      admin = getSupabaseAdmin(context);
+    } catch (error) {
+      console.error("Supabase site settings read failed: server-side credentials are unavailable.", error);
+      if (options.failOnError) throw error;
+      return {};
+    }
+    const { data, error } = await admin
       .from("site_settings")
       .select("key, value")
       .in("key", uniqueKeys);
 
     if (!error) return Object.fromEntries((data ?? []).map((row) => [row.key, row.value ?? undefined]));
     console.error(`Supabase site settings read failed for ${uniqueKeys.join(", ")}:`, error.message);
+    if (options.failOnError) throw error;
     return {};
   }
 
@@ -85,8 +96,9 @@ export async function getSiteSetting(
   db: DatabaseClient | null | undefined,
   key: string,
   context?: SupabaseRuntimeContext,
+  options: SiteSettingsReadOptions = {},
 ) {
-  const values = await getSiteSettings(db, [key], context);
+  const values = await getSiteSettings(db, [key], context, options);
   return values[key];
 }
 

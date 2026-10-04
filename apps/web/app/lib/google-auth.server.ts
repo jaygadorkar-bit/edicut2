@@ -5,10 +5,12 @@ import { dirname, join } from "node:path";
 import { users } from "@edicut/db/schema";
 import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
 import type { DatabaseClient } from "@edicut/db/client";
+import { fetchWithTimeout } from "@edicut/shared/server-fetch";
 import {
   commitAdminSession,
   createUserSession,
   getAdminSession,
+  isAdminRole,
 } from "./session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
 import type { LoaderContext } from "../types";
@@ -44,7 +46,8 @@ function parseEnvText(text: string): EnvSource {
     const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
     if (!match) continue;
 
-    env[match[1]] = match[2].replace(/^["']|["']$/g, "");
+    const value = match[2].replace(/^["']|["']$/g, "").trim();
+    if (value) env[match[1]] = value;
   }
 
   return env;
@@ -87,8 +90,8 @@ function readEnv(context?: LoaderContext): EnvSource {
   const nodeEnv = globalThis.process?.env ?? {};
   const viteEnv = typeof import.meta !== "undefined" ? (import.meta.env as EnvSource) : {};
   const localEnv = {
-    ...readLocalEnvFile(".env.local"),
     ...readLocalEnvFile(".env"),
+    ...readLocalEnvFile(".env.local"),
     ...readLocalEnvFile("secrets.json"),
   };
 
@@ -101,7 +104,7 @@ function readEnv(context?: LoaderContext): EnvSource {
 }
 
 function configuredAppUrl(env: EnvSource) {
-  return firstPresent(env.APP_URL, env.NEXT_PUBLIC_APP_URL, "http://localhost:3000")!;
+  return firstPresent(env.APP_URL, env.NEXT_PUBLIC_APP_URL, "http://localhost:3002")!;
 }
 
 function isLoopbackHostname(hostname: string) {
@@ -292,7 +295,7 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
   }
 
   const { clientId, clientSecret, redirectUri, appUrl } = readRequiredGoogleEnv(context);
-  const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
+  const tokenResponse = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -314,7 +317,7 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
     throw new Response("Google sign-in did not return an access token.", { status: 502 });
   }
 
-  const profileResponse = await fetch(GOOGLE_USERINFO_URL, {
+  const profileResponse = await fetchWithTimeout(GOOGLE_USERINFO_URL, {
     headers: { Authorization: `Bearer ${tokenPayload.access_token}` },
   });
 
@@ -332,7 +335,7 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
   if (stored.mode === "admin") {
     const adminUser = await findAdminUserByEmail(db, email);
 
-    if (!adminUser || !adminUser.active) {
+    if (!adminUser || !adminUser.active || !isAdminRole(adminUser.role) || profile.email_verified !== true) {
       throw new Response("Admin access is not available for this Google account.", { status: 403 });
     }
 
@@ -374,6 +377,11 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
         .returning();
 
   const adminUser = await findAdminUserByEmail(db, email);
+  const verifiedAdminIdentity = Boolean(
+    profile.email_verified === true &&
+    adminUser?.active &&
+    isAdminRole(adminUser.role),
+  );
   const response = await createUserSession({
     request,
     context,
@@ -383,7 +391,8 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
       safeUserReturnTo(typeof stored.returnTo === "string" ? stored.returnTo : null),
       appUrl
     ).toString(),
-    adminUserId: adminUser?.active ? adminUser.id : undefined,
+    adminUserId: verifiedAdminIdentity ? adminUser?.id : undefined,
+    adminAccessVerified: verifiedAdminIdentity,
   });
 
   response.headers.append("Set-Cookie", await oauthStateCookie.serialize("", { maxAge: 0 }));

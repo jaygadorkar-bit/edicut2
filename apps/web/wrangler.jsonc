@@ -16,12 +16,71 @@
       "zone_name": "edicut.com"
     }
   ],
+  "ratelimits": [
+    {
+      "name": "APP_REQUEST_LIMITER",
+      "namespace_id": "870021",
+      "simple": { "limit": 300, "period": 60 }
+    },
+    {
+      "name": "APP_MUTATION_LIMITER",
+      "namespace_id": "870022",
+      "simple": { "limit": 60, "period": 60 }
+    },
+    {
+      "name": "AUTH_REQUEST_LIMITER",
+      "namespace_id": "870023",
+      "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      "name": "PUBLIC_FORM_LIMITER",
+      "namespace_id": "870024",
+      "simple": { "limit": 5, "period": 60 }
+    },
+    {
+      "name": "USER_ACTION_LIMITER",
+      "namespace_id": "870025",
+      "simple": { "limit": 60, "period": 60 }
+    },
+    {
+      "name": "AUTH_IDENTITY_LIMITER",
+      "namespace_id": "870026",
+      "simple": { "limit": 5, "period": 60 }
+    },
+    {
+      "name": "PASSWORD_RESET_LIMITER",
+      "namespace_id": "870029",
+      "simple": { "limit": 1, "period": 60 }
+    },
+    {
+      "name": "EMAIL_SEND_LIMITER",
+      "namespace_id": "870027",
+      "simple": { "limit": 2, "period": 60 }
+    },
+    {
+      "name": "CLOUDINARY_UPLOAD_LIMITER",
+      "namespace_id": "870028",
+      "simple": { "limit": 2, "period": 60 }
+    },
+    {
+      "name": "ADMIN_MULTIPART_LIMITER",
+      "namespace_id": "870030",
+      "simple": { "limit": 5, "period": 60 }
+    }
+  ],
   // Configure these at deploy time with `wrangler secret put`:
   // SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SERVICE_ROLE_KEY,
+  // Optional dashboard analytics: SUPABASE_ACCESS_TOKEN (scoped to analytics_usage_read),
+  // CLOUDFLARE_API_TOKEN (Zone:Read, Zone Analytics:Read, Account Analytics:Read),
+  // CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_ZONE_ID,
+  // Telegram order notifications: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID,
+  // both configured with `wrangler secret put`.
   // CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET,
   // CLOUDINARY_VIDEO_CLOUD_NAME, CLOUDINARY_VIDEO_API_KEY, CLOUDINARY_VIDEO_API_SECRET,
   // AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET.
   "vars": {
+    "CLOUDFLARE_ACCOUNT_ID": "f2c46bb116722bcb7dc4be44e500154b",
+    "CLOUDFLARE_ZONE_NAME": "edicut.com",
     "CLOUDFLARE_WORKER_NAME": "edicut-web",
     "APP_URL": "https://edicut.com",
     "DEBUG_MODE": "false"

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useActionData, useSearchParams, useNavigation } from "react-router";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
+import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
 type UpdatePasswordActionData = {
   error?: string;
@@ -15,9 +16,14 @@ type RecoveryTokens = {
 export const meta: MetaFunction = () => [
   { title: "Choose a new password - EdiCut" },
   { name: "description", content: "Choose a new password for your EdiCut account." },
+  { name: "robots", content: "noindex, nofollow, noarchive" },
 ];
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return { error: "Password update request is too large. Please try again." } satisfies UpdatePasswordActionData;
+  }
+
   const formData = await request.formData();
   const password = formData.get("password");
   const confirmPassword = formData.get("confirmPassword");
@@ -25,12 +31,34 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const refreshToken = formData.get("refreshToken");
   const code = formData.get("code");
 
-  if (typeof password !== "string" || password.length < 6) {
-    return { error: "Your new password must be at least 6 characters long." } satisfies UpdatePasswordActionData;
+  if (typeof password !== "string" || password.length < 8 || password.length > 120) {
+    return { error: "Your new password must be between 8 and 120 characters long." } satisfies UpdatePasswordActionData;
   }
 
   if (password !== confirmPassword) {
     return { error: "The passwords do not match." } satisfies UpdatePasswordActionData;
+  }
+
+  const recoveryCredential = typeof code === "string" && code
+    ? code
+    : typeof accessToken === "string" && accessToken
+      ? accessToken
+      : "missing-recovery-credential";
+  const recoveryKey = await hashUsageLimitKey(recoveryCredential);
+  const recoveryLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "AUTH_IDENTITY_LIMITER",
+    key: `password-update:${recoveryKey}`,
+    localLimit: 3,
+    localPeriodSeconds: 60,
+  });
+  if (recoveryLimit !== "allowed") {
+    return {
+      error: recoveryLimit === "limited"
+        ? "Too many password update attempts. Wait a minute and try again."
+        : "Password update protection is temporarily unavailable. Please try again shortly.",
+    } satisfies UpdatePasswordActionData;
   }
 
   const client = getSupabaseClient(context);
@@ -142,7 +170,8 @@ export default function UpdatePasswordPage() {
                   name="password"
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
+                  maxLength={120}
                   placeholder="••••••••"
                   autoComplete="new-password"
                   className="neo-inset h-12 rounded-xl px-3.5 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"
@@ -155,7 +184,8 @@ export default function UpdatePasswordPage() {
                   name="confirmPassword"
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
+                  maxLength={120}
                   placeholder="••••••••"
                   autoComplete="new-password"
                   className="neo-inset h-12 rounded-xl px-3.5 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"

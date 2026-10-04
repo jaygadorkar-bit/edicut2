@@ -55,7 +55,20 @@ pnpm build
 pnpm audit --prod
 ```
 
-`pnpm dev` serves the web app at `http://localhost:3000`. The Docker web profile also exposes `http://localhost:3002` as an alias; it bind-mounts the repository and reads local runtime configuration from `.env.cloudflare`. Keep that file and other local environment files private.
+`pnpm dev` and the Docker web profile serve EdiCut at `http://localhost:3002` to avoid conflicts with other local apps. Docker bind-mounts the repository and reads local runtime configuration from `.env.cloudflare`. Local Google OAuth redirects to `http://localhost:3002/api/auth/callback/google`; register that URI with the OAuth client. Keep `.env.cloudflare` and other local environment files private.
+
+## Telegram order notifications
+
+The checkout and project actions send an order summary after saving an unpaid subscription request or new project request. It includes the order ID, plan/project title, amount or estimate, and status, but no customer phone number or email. Telegram delivery runs in the Worker background and does not block the customer action.
+
+Create a bot with `@BotFather`, open its private chat and send `/start` (or add it to the destination group), then configure these secrets for the production Worker. Wrangler prompts for each value; do not paste the bot token into source files or chat:
+
+```powershell
+pnpm --filter @edicut/web exec wrangler secret put TELEGRAM_BOT_TOKEN
+pnpm --filter @edicut/web exec wrangler secret put TELEGRAM_CHAT_ID
+```
+
+Use the bot's private or group chat ID; a public channel username such as `@edicut_orders` is also accepted. For local development, set the same names in an ignored local environment file. Notifications remain disabled until both values are set.
 
 Vitest is configured at the repository root in `vitest.config.ts`; tests live beside the pure helpers they cover and use `*.test.ts` or `*.spec.ts`. `pnpm typecheck` checks the shared, database, web, and Node API packages. `pnpm build` builds all deployable apps; use `pnpm --filter @edicut/web build` when validating a frontend-only change.
 

@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { users as usersTable } from "@edicut/db/schema";
 import { getDbFromContext } from "../lib/db.server";
 import { isAdminRole, requireAdminUser } from "../lib/session.server";
@@ -10,6 +10,7 @@ import { toPublicAdminUser } from "../lib/admin-public";
 import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES } from "../lib/admin-user-roles";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
 import { AdminPanelShell } from "../components/AdminPanelShell";
+import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -88,6 +89,10 @@ export async function loader({ request, context, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context, params }: ActionFunctionArgs) {
+  if (requestBodyExceedsLimit(request, 2 * 1024 * 1024)) {
+    return { error: "This admin account request is too large. Profile images are limited to 1 MB." };
+  }
+
   const db = getDbFromContext(context);
   const adminUser = await requireAdminUser(request, db, context);
   const userId = getUserId(params);
@@ -96,6 +101,22 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 
   if (!isAdminRole(adminUser.role)) {
     return { error: "Permission denied." };
+  }
+
+  const actionLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "USER_ACTION_LIMITER",
+    key: `admin:${adminUser.id}`,
+    localLimit: 60,
+    localPeriodSeconds: 60,
+  });
+  if (actionLimit !== "allowed") {
+    return {
+      error: actionLimit === "limited"
+        ? "Several admin actions were submitted. Wait a minute and try again."
+        : "Usage protection is temporarily unavailable. Please try again shortly.",
+    };
   }
 
   const formData = await request.formData();
@@ -111,8 +132,15 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
     const role = String(formData.get("role") ?? "");
     const active = formData.get("active") === "on";
 
-    if (!email || !isEmail(email)) {
+    if (!email || email.length > 254 || !isEmail(email)) {
       return { error: "Enter a valid email address." };
+    }
+    if (name && name.length > 120) return { error: "Names are limited to 120 characters." };
+    if (phone && phone.length > 32) return { error: "Phone numbers are limited to 32 characters." };
+    if (country && country.length > 120) return { error: "Country names are limited to 120 characters." };
+    const maxProfileImageLength = profileImageUrl?.startsWith("data:image/") ? 1_400_000 : 2_048;
+    if (profileImageUrl && profileImageUrl.length > maxProfileImageLength) {
+      return { error: "Profile image data is too large. Upload an image no larger than 1 MB." };
     }
 
     if (!isUserRole(role)) {
@@ -161,8 +189,8 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
     const password = String(formData.get("password") ?? "");
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
-    if (password.length < 8) {
-      return { error: "Password must be at least 8 characters." };
+    if (password.length < 8 || password.length > 128) {
+      return { error: "Password must be between 8 and 128 characters." };
     }
 
     if (password !== confirmPassword) {
@@ -196,6 +224,19 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
       .where(eq(usersTable.id, userId));
 
     return { success: "Account restored." };
+  }
+
+  if (intent === "permanent-delete") {
+    try {
+      const [deletedUser] = await db.delete(usersTable)
+        .where(and(eq(usersTable.id, userId), isNotNull(usersTable.deletedAt)))
+        .returning();
+      if (!deletedUser) return { error: "Only accounts in trash can be permanently deleted." };
+      return redirect(returnTo);
+    } catch (error) {
+      console.error("Admin account permanent delete error:", error);
+      return { error: "Failed to permanently delete account." };
+    }
   }
 
   return { error: "Unknown action." };
@@ -261,6 +302,7 @@ export default function AdminUserRoute() {
                 name="password"
                 type="password"
                 minLength={8}
+                maxLength={128}
                 placeholder="New password"
                 disabled={!canEdit || isSubmitting}
                 className="h-11 w-full rounded-lg border border-slate-200 px-3 text-sm font-bold outline-none focus:border-black disabled:bg-slate-50"
@@ -269,6 +311,7 @@ export default function AdminUserRoute() {
                 name="confirmPassword"
                 type="password"
                 minLength={8}
+                maxLength={128}
                 placeholder="Confirm password"
                 disabled={!canEdit || isSubmitting}
                 className="h-11 w-full rounded-lg border border-slate-200 px-3 text-sm font-bold outline-none focus:border-black disabled:bg-slate-50"
@@ -344,13 +387,22 @@ export default function AdminUserRoute() {
             <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Account lifecycle</h2>
             <div className="mt-4">
               {user.deletedAt ? (
-                <Form method="post">
-                  <input type="hidden" name="intent" value="restore" />
-                  <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg border border-emerald-200 px-4 text-sm font-black text-emerald-700 disabled:opacity-50">
-                    <span className="material-symbols-outlined text-[18px]">restore_from_trash</span>
-                    Restore account
-                  </button>
-                </Form>
+                <div className="flex flex-wrap gap-3">
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="restore" />
+                    <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg border border-emerald-200 px-4 text-sm font-black text-emerald-700 disabled:opacity-50">
+                      <span className="material-symbols-outlined text-[18px]">restore_from_trash</span>
+                      Restore account
+                    </button>
+                  </Form>
+                  <Form method="post" onSubmit={(event) => !confirm("Permanently delete this account? This cannot be undone.") && event.preventDefault()}>
+                    <input type="hidden" name="intent" value="permanent-delete" />
+                    <button disabled={!canEdit || isSubmitting} className="flex h-11 items-center gap-2 rounded-lg border border-red-200 px-4 text-sm font-black text-red-600 disabled:opacity-50">
+                      <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+                      Delete permanently
+                    </button>
+                  </Form>
+                </div>
               ) : (
                 <Form method="post" onSubmit={(event) => !confirm("Move this account to trash?") && event.preventDefault()}>
                   <input type="hidden" name="intent" value="move-to-trash" />

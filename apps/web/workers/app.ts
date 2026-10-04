@@ -1,12 +1,24 @@
 import { createRequestHandler } from "@react-router/cloudflare";
 import * as build from "../build/server/index.js";
 import { createWebLoadContext } from "../app/lib/context.server";
+import {
+  enforceEdgeRequestLimits,
+  getMaximumBodyBytes,
+  limitRequestBody,
+  normalizePathname,
+  requestBodyExceedsLimit,
+  requestTooLargeResponse,
+} from "../app/lib/usage-protection.server";
+
+type WorkerEnvironment = Record<string, unknown> & {
+  ASSETS?: Fetcher;
+};
 
 const handleRequest = createRequestHandler({
-  build,
-  getLoadContext({ context }) {
-    return createWebLoadContext({
-      env: context.cloudflare.env,
+    build,
+    getLoadContext({ context }) {
+      return createWebLoadContext({
+      env: context.cloudflare.env as unknown as Record<string, string | undefined>,
       ctx: context.cloudflare.ctx as ExecutionContext,
     });
   },
@@ -83,10 +95,11 @@ function withSecurityHeaders(response: Response, request: Request) {
 export default {
   async fetch(
     request: Request,
-    env: Record<string, string | undefined> & { ASSETS?: Fetcher },
+    env: WorkerEnvironment,
     ctx: ExecutionContext
   ) {
     const url = new URL(request.url);
+    const pathname = normalizePathname(url.pathname).toLowerCase();
 
     if (url.hostname === "www.edicut.com") {
       url.hostname = "edicut.com";
@@ -95,7 +108,7 @@ export default {
 
     const isStaticAssetRequest =
       request.method === "GET" || request.method === "HEAD"
-        ? IMMUTABLE_ASSET_PATH.test(url.pathname) || PUBLIC_ASSET_PATH.test(url.pathname)
+        ? IMMUTABLE_ASSET_PATH.test(pathname) || PUBLIC_ASSET_PATH.test(pathname)
         : false;
 
     if (isStaticAssetRequest && env.ASSETS) {
@@ -103,16 +116,40 @@ export default {
       return withSecurityHeaders(withStaticCacheHeaders(assetResponse, url.pathname), request);
     }
 
-    const response = await handleRequest({
-      request,
-      env,
-      waitUntil: ctx.waitUntil.bind(ctx),
-      passThroughOnException: "passThroughOnException" in ctx && typeof ctx.passThroughOnException === "function"
-        ? ctx.passThroughOnException.bind(ctx)
-        : () => {},
-      data: {},
-      params: {},
-    });
+    const edgeLimit = await enforceEdgeRequestLimits(request, env);
+    if (edgeLimit) return withSecurityHeaders(edgeLimit, request);
+
+    const maximumBodyBytes = getMaximumBodyBytes(pathname, request.method, request);
+    if (maximumBodyBytes !== null) {
+      if (requestBodyExceedsLimit(request, maximumBodyBytes)) {
+        return withSecurityHeaders(requestTooLargeResponse(), request);
+      }
+    }
+
+    const boundedRequest = maximumBodyBytes === null
+      ? { request, exceeded: () => false }
+      : limitRequestBody(request, maximumBodyBytes);
+
+    let response: Response;
+    try {
+      response = await handleRequest({
+        request: boundedRequest.request,
+        env,
+        waitUntil: ctx.waitUntil.bind(ctx),
+        passThroughOnException: "passThroughOnException" in ctx && typeof ctx.passThroughOnException === "function"
+          ? ctx.passThroughOnException.bind(ctx)
+          : () => {},
+        data: {},
+        params: {},
+      });
+    } catch (error) {
+      if (!boundedRequest.exceeded()) throw error;
+      return withSecurityHeaders(requestTooLargeResponse(), request);
+    }
+
+    if (boundedRequest.exceeded()) {
+      return withSecurityHeaders(requestTooLargeResponse(), request);
+    }
 
     return withSecurityHeaders(response, request);
   },

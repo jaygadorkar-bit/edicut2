@@ -3,7 +3,7 @@ import { action, loader } from "./signout";
 import { commitAdminSession, commitSession, getAdminSession, getSession } from "../lib/session.server";
 
 const context = { cloudflare: { env: { SESSION_SECRET: "signout-test-only-secret" } } };
-const url = "http://localhost:3000/signout";
+const url = "http://localhost:3002/signout";
 const routeArgs = { context, params: {}, url: new URL(url), pattern: "/signout" };
 
 describe("toolbar sign out", () => {
@@ -23,7 +23,7 @@ describe("toolbar sign out", () => {
       ...routeArgs,
     });
     expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/");
+    expect(response.headers.get("Location")).toBe("/signin?mode=signin");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     const cookies = response.headers.getSetCookie();
     expect(cookies).toHaveLength(2);
@@ -33,7 +33,7 @@ describe("toolbar sign out", () => {
 
   it("does not sign out on GET", () => {
     const response = loader();
-    expect(response.headers.get("Location")).toBe("/");
+    expect(response.headers.get("Location")).toBe("/signin?mode=signin");
     expect(response.headers.has("Set-Cookie")).toBe(false);
   });
 

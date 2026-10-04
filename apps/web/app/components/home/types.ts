@@ -34,6 +34,7 @@ export interface Testimonial {
 
 export interface PricingPlan {
   name: string;
+  href?: string;
   price: string;
   description: string;
   features: string[];

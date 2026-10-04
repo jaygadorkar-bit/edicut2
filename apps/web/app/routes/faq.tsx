@@ -1,11 +1,12 @@
 import type { MetaFunction } from "react-router";
 import { useState } from "react";
 import { ButtonLink, PageShell, TrustStrip } from "../components/site/Marketing.js";
+import { createRouteMeta } from "../lib/seo";
 
-export const meta: MetaFunction = () => [
-  { title: "FAQ — EdiCut | Frequently Asked Questions" },
-  { name: "description", content: "Everything you need to know about EdiCut editing packages, turnaround times, review workflows, and raw footage handoffs." },
-];
+export const meta: MetaFunction = (args) => createRouteMeta(args,
+  "YouTube Video Editing FAQs: Pricing, Process, and Delivery | EdiCut",
+  "Answers about EdiCut video editing plans, project setup, footage handoff, revisions, turnaround, thumbnails, and account security.",
+);
 
 const categories = ["All", "Workflow", "Pricing", "Footage", "Thumbnails", "Security"];
 
@@ -18,7 +19,7 @@ const allFaqs = [
   {
     category: "Workflow",
     question: "What is your turnaround time for first cuts and revisions?",
-    answer: "First cuts are typically delivered within 48 business hours for standard YouTube videos (10-20 minutes). Revisions submitted via timestamped comments are turnaround within 24 hours.",
+    answer: "The first cut is delivered within 48 hours. Included revision rounds are submitted as timestamped notes; revision timing is agreed during the project.",
   },
   {
     category: "Pricing",
@@ -28,7 +29,7 @@ const allFaqs = [
   {
     category: "Pricing",
     question: "What happens if my video is longer than the included package limit?",
-    answer: "The monthly plan estimates include up to 60 minutes of finished runtime and up to 600 minutes of raw footage. You can select additional coverage with your project request, then the team will confirm what is available and the final price before work begins.",
+    answer: "Each package lists a monthly video count, maximum finished runtime and raw-footage limit per video, included Shorts and thumbnails, and revision rounds. Requests outside those limits are reviewed and quoted separately before editing begins.",
   },
   {
     category: "Footage",
@@ -38,7 +39,7 @@ const allFaqs = [
   {
     category: "Thumbnails",
     question: "Are custom YouTube thumbnails included in the packages?",
-    answer: "Yes! All Creator, Creator Plus, and Creator Pro packages include custom designed YouTube thumbnails with title hook alignment, high-contrast subjects, expressive facial lighting, and optional A/B testing variants.",
+    answer: "Each package includes one custom thumbnail for every included long-form video. Additional concepts or A/B thumbnail sets can be quoted separately.",
   },
   {
     category: "Security",

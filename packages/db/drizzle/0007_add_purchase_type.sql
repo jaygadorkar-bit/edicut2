@@ -1,0 +1,2 @@
+ALTER TABLE "customer_subscriptions" ADD COLUMN "purchase_type" varchar(16) DEFAULT 'monthly' NOT NULL;--> statement-breakpoint
+ALTER TABLE "customer_subscriptions" ADD CONSTRAINT "customer_subscriptions_purchase_type_check" CHECK ("customer_subscriptions"."purchase_type" IN ('single', 'monthly'));

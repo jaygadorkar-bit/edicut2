@@ -1,4 +1,5 @@
 import type { NavItem, WorkflowStep, Differentiator, PortfolioItem, Testimonial, PricingPlan, FAQItem } from "./types";
+import { formatPackagePrice, SUBSCRIPTION_PACKAGES } from "../../lib/subscriptions";
 
 export const navItems: NavItem[] = [
   { label: "Portfolio", href: "#portfolio" },
@@ -50,7 +51,7 @@ export const differentiators: Differentiator[] = [
   {
     title: "Reliable turnaround",
     description:
-      "A predictable 24-48 hour editing lane keeps your upload calendar moving.",
+      "First cuts are delivered within 48 hours.",
     icon: "timer",
   },
   {
@@ -115,27 +116,14 @@ export const testimonials: Testimonial[] = [
   },
 ];
 
-export const pricingPlans: PricingPlan[] = [
-  {
-    name: "Creator",
-    price: "$80",
-    description: "Core creator editing with subtitles, color, sound, stock assets, proofing, reels, and thumbnail support.",
-    features: ["60 min podcast: $160", "600 min raw vlog footage: $160", "Subtitles", "Color grading"],
-  },
-  {
-    name: "Creator Plus",
-    price: "$120",
-    description: "Core creator editing with stronger coverage for longer podcast or vlog inputs.",
-    features: ["60 min podcast: $240", "600 min raw vlog footage: $200", "Subtitles", "Thumbnail"],
-    popular: true,
-  },
-  {
-    name: "Creator Pro",
-    price: "$300",
-    description: "Full-stack creator editing with project files, motion graphics, VFX, and AI voice over.",
-    features: ["60 min podcast: $600", "600 min raw vlog footage: $380", "Motion graphics", "AI voice over"],
-  },
-];
+export const pricingPlans: PricingPlan[] = SUBSCRIPTION_PACKAGES.map((plan) => ({
+  name: plan.name,
+  href: `/pricing/${plan.slug}`,
+  price: formatPackagePrice(plan.basePrice),
+  description: plan.description,
+  features: plan.features,
+  popular: plan.slug === "creator-plus",
+}));
 
 export const faqs: FAQItem[] = [
   {

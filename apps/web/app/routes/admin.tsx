@@ -1,8 +1,9 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, data, redirect, useActionData, useLoaderData, useLocation, useNavigation, useSearchParams } from "react-router";
+import { Form, Link, data, redirect, useActionData, useLoaderData, useLocation, useNavigate, useNavigation, useSearchParams } from "react-router";
 import bcrypt from "bcryptjs";
 import { updateUserRole } from "@edicut/db/repositories/users";
-import { adminUsers as adminUsersTable, users as usersTable, workspaceProjectFiles, workspaceProjects } from "@edicut/db/schema";
+import { findAdminUserById } from "@edicut/db/repositories/admin-users";
+import { adminUsers as adminUsersTable, customerSubscriptions, marketingAffiliates, marketingCoupons, users as usersTable, workspaceProjectFiles, workspaceProjects } from "@edicut/db/schema";
 import { getDbFromContext, hasReturnedRows } from "../lib/db.server";
 import {
   destroyAdminSession,
@@ -21,6 +22,7 @@ import {
   savePricingPackages,
   type PricingPackage,
 } from "../lib/pricing.server";
+import { formatPackagePrice, getCatalogPackage, parsePackagePrice } from "../lib/subscriptions";
 import { cloudinaryVideoThumbnailUrl, optimizeCloudinaryUrl } from "../lib/cloudinary";
 import {
   deleteCloudinaryVideos,
@@ -52,16 +54,45 @@ import {
   getRoleFeatureAccessSettings,
   saveRoleFeatureAccessSettings,
 } from "../lib/site-settings.server";
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, count as drizzleCount } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, count as drizzleCount } from "drizzle-orm";
 import { useState, useEffect, type ReactNode } from "react";
-import { DASHBOARD_FEATURES, DEFAULT_ROLE_FEATURE_ACCESS, type RoleFeatureAccess } from "../lib/role-feature-access";
+import {
+  DASHBOARD_FEATURES,
+  DEFAULT_ROLE_FEATURE_ACCESS,
+  roleFeatureAccessFromFormData,
+  type RoleFeatureAccess,
+} from "../lib/role-feature-access";
 import { getAdminDataRequirements, getPageWithinRange, getPositivePage } from "../lib/admin-data-requirements";
 import { AdminPanelShell } from "../components/AdminPanelShell";
 import { WorkspaceBoard, WorkspaceProjectStrip, WorkspaceSchedule } from "../components/WorkspaceWidgets";
 import { isMissingWorkspaceSchema, parseBillingAmountToCents, parseWorkspaceShareUrl, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
+import { consumeUsageLimit, requestBodyExceedsLimit, type UsageLimitResult } from "../lib/usage-protection.server";
+import {
+  getAdminMarketingData,
+  isMissingMarketingSchema,
+  MARKETING_MIGRATION_NOTICE,
+  normalizeMarketingCode,
+  parseCommissionRateBps,
+  parseCouponDate,
+  type AdminMarketingData,
+} from "../lib/marketing.server";
+import { MarketingPanel } from "../components/admin/MarketingPanel";
+import { AffiliateAdminPanel } from "../components/admin/AffiliateAdminPanel";
+import { isMissingCustomerSubscriptionSchema } from "../lib/customer-subscriptions.server";
 
 const PAGE_SIZE = 10;
 const WORKSPACE_PROJECT_PAGE_SIZE = 20;
+const MAX_ADMIN_ACTION_BODY_BYTES = 56 * 1024 * 1024;
+const MAX_BULK_RECORDS = 100;
+const MAX_IMAGE_UPLOAD_COUNT = 8;
+const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_BATCH_BYTES = 40 * 1024 * 1024;
+
+type AdminUserActivity = {
+  paidPurchases: number | null;
+  activeProjects: number | null;
+};
+const MAX_VIDEO_FILE_BYTES = 50 * 1024 * 1024;
 
 const adminPlaceholderConfigs = {
   projects: {
@@ -100,6 +131,12 @@ function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function usageLimitMessage(result: UsageLimitResult, limitedMessage: string) {
+  return result === "limited"
+    ? limitedMessage
+    : "Usage protection is temporarily unavailable. Please try again shortly.";
+}
+
 function linesToList(value: FormDataEntryValue | null) {
   return String(value || "")
     .split(/\r?\n/)
@@ -112,33 +149,121 @@ function packageFromForm(formData: FormData, existing?: PricingPackage): Pricing
   const price = String(formData.get("price") || "").trim();
   const description = String(formData.get("description") || "").trim();
   const slug = packageSlug(String(formData.get("slug") || ""), name);
-  const features = linesToList(formData.get("features"));
-  const deliverables = linesToList(formData.get("deliverables"));
-  const galleryImages = linesToList(formData.get("galleryImages"));
+  const catalogPackage = getCatalogPackage(slug);
+  const rawFeatures = String(formData.get("features") || "");
+  const rawDeliverables = String(formData.get("deliverables") || "");
+  const rawGalleryImages = String(formData.get("galleryImages") || "");
+  const bestFor = String(formData.get("bestFor") || "").trim();
+  const turnaround = String(formData.get("turnaround") || "").trim();
+  const revisions = String(formData.get("revisions") || "").trim();
+  const badge = String(formData.get("badge") || "").trim();
+  const rawSortOrder = String(formData.get("sortOrder") ?? "").trim();
+  const sortOrder = rawSortOrder ? Number(rawSortOrder) : existing?.sortOrder ?? 0;
+  const priceAmount = parsePackagePrice(price);
+
+  if (!catalogPackage) return { error: "Pricing is managed through the six configured packages." };
+  if (existing && existing.slug !== slug) return { error: "Package links are fixed so saved checkouts and referrals keep working." };
+  if (priceAmount === null) return { error: "Enter a whole-dollar USD price between $1 and $999,999." };
+  if (!Number.isSafeInteger(sortOrder) || sortOrder < 0 || sortOrder > 999_999) {
+    return { error: "Sort order must be a whole number from 0 to 999,999." };
+  }
+
+  if (rawFeatures.length > 12_000 || rawDeliverables.length > 12_000 || rawGalleryImages.length > 50_000) {
+    return { error: "Package lists are too long. Shorten them before saving." };
+  }
+
+  const features = linesToList(rawFeatures);
+  const deliverables = linesToList(rawDeliverables);
+  const galleryImages = linesToList(rawGalleryImages);
 
   if (!name) return { error: "Package name is required." };
   if (!price) return { error: "Package price is required." };
   if (!description) return { error: "Package description is required." };
   if (!features.length) return { error: "Add at least one package feature." };
+  if (name.length > 120 || description.length > 3_000 || slug.length > 120) {
+    return { error: "Keep the name, description, and slug within their size limits." };
+  }
+  if (
+    features.length > 50 || deliverables.length > 50 || galleryImages.length > 50 ||
+    features.some((item) => item.length > 250) ||
+    deliverables.some((item) => item.length > 250) ||
+    galleryImages.some((item) => item.length > 2_048)
+  ) {
+    return { error: "Packages are limited to 50 list items, with shorter text and image URLs." };
+  }
+  if (bestFor.length > 1_000 || turnaround.length > 120 || revisions.length > 120 || badge.length > 80) {
+    return { error: "Shorten the package summary, turnaround, revisions, or badge text." };
+  }
 
   return {
     id: existing?.id || createPackageId(),
     name,
     slug,
-    price,
-    interval: String(formData.get("interval") || "/mo").trim() || "/mo",
+    packageType: catalogPackage.packageType,
+    editingHoursPerMonth: catalogPackage.packageType === "monthly" ? catalogPackage.editingHoursPerMonth : null,
+    editingHoursPerWorkday: catalogPackage.packageType === "monthly" ? catalogPackage.editingHoursPerWorkday : null,
+    price: formatPackagePrice(priceAmount),
+    interval: catalogPackage.packageType === "monthly" ? "/month" : "one-time",
     description,
     features,
     deliverables,
     galleryImages,
-    bestFor: String(formData.get("bestFor") || "").trim(),
-    turnaround: String(formData.get("turnaround") || "").trim(),
-    revisions: String(formData.get("revisions") || "").trim(),
-    badge: String(formData.get("badge") || "").trim(),
+    bestFor,
+    turnaround,
+    revisions,
+    badge,
     popular: formData.get("popular") === "on",
     active: formData.get("active") === "on",
-    sortOrder: Number(formData.get("sortOrder") || existing?.sortOrder || 0),
+    sortOrder,
   };
+}
+
+function marketingCouponInput(formData: FormData) {
+  const code = normalizeMarketingCode(String(formData.get("code") || ""));
+  const discountType = String(formData.get("discountType") || "");
+  const rawDiscountValue = String(formData.get("discountValue") || "").trim();
+  const rawMinimum = String(formData.get("minimumSubtotal") || "").trim();
+  const rawMaximum = String(formData.get("maxRedemptions") || "").trim();
+  const startsAt = parseCouponDate(String(formData.get("startsOn") || ""));
+  const expiresAt = parseCouponDate(String(formData.get("expiresOn") || ""), true);
+
+  if (!code) return { error: "Use 3–32 letters, numbers, hyphens, or underscores for the coupon code." } as const;
+  if (discountType !== "percent" && discountType !== "fixed") return { error: "Choose a valid discount type." } as const;
+  if (startsAt === undefined || expiresAt === undefined) return { error: "Enter valid start and expiry dates." } as const;
+  if (startsAt && expiresAt && startsAt >= expiresAt) return { error: "The expiry date must be after the start date." } as const;
+
+  let discountValue: number;
+  if (discountType === "percent") {
+    discountValue = Number(rawDiscountValue);
+    if (!/^\d{1,3}$/.test(rawDiscountValue) || !Number.isInteger(discountValue) || discountValue < 1 || discountValue > 100) {
+      return { error: "Percentage discounts must be a whole number from 1 to 100." } as const;
+    }
+  } else {
+    const cents = parseBillingAmountToCents(rawDiscountValue);
+    if (cents === null) return { error: "Enter a fixed discount from $0.01 to $9,999,999.99." } as const;
+    discountValue = cents;
+  }
+
+  const minimumSubtotalCents = rawMinimum ? parseBillingAmountToCents(rawMinimum) : null;
+  if (rawMinimum && minimumSubtotalCents === null) return { error: "Enter a minimum package price from $0.01 to $9,999,999.99." } as const;
+
+  let maxRedemptions: number | null = null;
+  if (rawMaximum) {
+    maxRedemptions = Number(rawMaximum);
+    if (!/^[1-9]\d{0,6}$/.test(rawMaximum) || !Number.isSafeInteger(maxRedemptions) || maxRedemptions > 1_000_000) {
+      return { error: "Maximum uses must be a whole number from 1 to 1,000,000." } as const;
+    }
+  }
+
+  return { code, discountType, discountValue, minimumSubtotalCents, maxRedemptions, startsAt, expiresAt } as const;
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "23505");
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
 }
 
 export const meta: MetaFunction = () => {
@@ -168,6 +293,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const sort = url.searchParams.get("sort") || "createdAt";
   const order = url.searchParams.get("order") || "desc";
   const view = url.searchParams.get("view") || "active"; // active or trash
+  if (tab === "marketing" && view === "affiliates") {
+    throw redirect(adminPath("?tab=affiliates"));
+  }
   const adminDirectory = view === "admins";
   const requirements = getAdminDataRequirements(tab);
 
@@ -216,6 +344,47 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   const totalUsersCount = adminDirectory ? adminTotalResult[0]?.count ?? 0 : totalResult[0]?.count ?? 0;
   const totalPages = Math.ceil(totalUsersCount / PAGE_SIZE);
+  const userActivity: Record<string, AdminUserActivity> = {};
+  if (requirements.userDirectory && !adminDirectory && users.length > 0) {
+    const userIds = users.map((user) => user.id);
+    const [subscriptionCounts, projectCounts] = await Promise.all([
+      db.select({ ownerId: customerSubscriptions.ownerId, count: drizzleCount() })
+        .from(customerSubscriptions)
+        .where(and(
+          inArray(customerSubscriptions.ownerId, userIds),
+          eq(customerSubscriptions.status, "paid"),
+          isNull(customerSubscriptions.deletedAt),
+        ))
+        .groupBy(customerSubscriptions.ownerId)
+        .catch((error) => {
+          if (!isMissingCustomerSubscriptionSchema(error)) throw error;
+          return null;
+        }),
+      db.select({ ownerId: workspaceProjects.ownerId, count: drizzleCount() })
+        .from(workspaceProjects)
+        .where(and(
+          inArray(workspaceProjects.ownerId, userIds),
+          ne(workspaceProjects.status, "delivered"),
+        ))
+        .groupBy(workspaceProjects.ownerId)
+        .catch((error) => {
+          if (!isMissingWorkspaceSchema(error)) throw error;
+          return null;
+        }),
+    ]);
+    const subscriptionsByUser = subscriptionCounts === null
+      ? null
+      : new Map(subscriptionCounts.map(({ ownerId, count }) => [ownerId, count]));
+    const projectsByUser = projectCounts === null
+      ? null
+      : new Map(projectCounts.map(({ ownerId, count }) => [ownerId, count]));
+    for (const userId of userIds) {
+      userActivity[userId] = {
+        paidPurchases: subscriptionsByUser?.get(userId) ?? (subscriptionsByUser === null ? null : 0),
+        activeProjects: projectsByUser?.get(userId) ?? (projectsByUser === null ? null : 0),
+      };
+    }
+  }
   let workspaceProjectRows: Array<{
     project: Pick<
       typeof workspaceProjects.$inferSelect,
@@ -341,9 +510,24 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     Promise.resolve(null as string | null),
   ]);
 
+  let marketingData: AdminMarketingData = {
+    schemaReady: false,
+    coupons: [],
+    affiliates: [],
+    affiliateCandidates: [],
+  };
+  if (requirements.marketingData) {
+    try {
+      marketingData = await getAdminMarketingData(db, url.origin);
+    } catch (error) {
+      if (!isMissingMarketingSchema(error)) throw error;
+    }
+  }
+
   const payload = {
     adminUser: toPublicAdminUser(adminUser),
     users,
+    userActivity,
     adminUsers,
     totalUsersCount,
     totalPages,
@@ -372,6 +556,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     cloudinaryVideos,
     cloudinaryVideoUsage,
     cloudinaryVideoError,
+    marketingData,
     stats: {
       total: Number(userStatsResult[0]?.total || 0),
       admins: Number(adminCount[0].count || 0),
@@ -394,13 +579,68 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 type AdminActionData = { error?: string; success?: string };
 
+function adminSettingsSaveError(setting: string, error: unknown): AdminActionData {
+  const errorCode =
+    error && typeof error === "object" && "code" in error && typeof error.code === "string"
+      ? error.code.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32)
+      : "";
+  console.error(`Admin settings save failed for ${setting}${errorCode ? ` (${errorCode})` : ""}.`);
+  return { error: `${setting} could not be saved. Check the database permissions and try again.` };
+}
+
 export async function action({ request, context }: ActionFunctionArgs): Promise<AdminActionData | Response> {
+  const isMultipart = request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data") ?? false;
+  const maximumBodyBytes = isMultipart ? MAX_ADMIN_ACTION_BODY_BYTES : 1024 * 1024;
+  if (requestBodyExceedsLimit(request, maximumBodyBytes)) {
+    return { error: "This admin request is too large. Media uploads are limited to 50 MB per video." };
+  }
+
   const db = getDbFromContext(context);
+  const session = await getAdminSession(request.headers.get("Cookie"), context);
+  const sessionAdminId = session.get("adminUserId");
+  if (typeof sessionAdminId !== "string" || !sessionAdminId) {
+    throw redirect(ADMIN_LOGIN_PATH);
+  }
+
+  const activeSessionAdmin = await findAdminUserById(db, sessionAdminId);
+  if (!activeSessionAdmin?.active || !isAdminRole(activeSessionAdmin.role)) {
+    throw redirect(ADMIN_LOGIN_PATH);
+  }
+
+  const adminLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "USER_ACTION_LIMITER",
+    key: `admin:${activeSessionAdmin.id}`,
+    localLimit: 60,
+    localPeriodSeconds: 60,
+  });
+  if (adminLimit !== "allowed") {
+    return {
+      error: adminLimit === "limited"
+        ? "Several admin actions were submitted. Wait a minute and try again."
+        : "Usage protection is temporarily unavailable. Please try again shortly.",
+    };
+  }
+
+  if (isMultipart) {
+    const multipartLimit = await consumeUsageLimit({
+      context,
+      request,
+      bindingName: "ADMIN_MULTIPART_LIMITER",
+      key: `admin:${activeSessionAdmin.id}`,
+      localLimit: 5,
+      localPeriodSeconds: 60,
+    });
+    if (multipartLimit !== "allowed") {
+      return { error: usageLimitMessage(multipartLimit, "Multipart admin requests are limited to five per minute.") };
+    }
+  }
+
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "logout") {
-    const session = await getAdminSession(request.headers.get("Cookie"), context);
     return redirect(ADMIN_LOGIN_PATH, {
       headers: {
         "Set-Cookie": await destroyAdminSession(session, context),
@@ -412,6 +652,118 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
 
   if (!isAdminRole(adminUser.role)) {
     return { error: "Permission denied." };
+  }
+
+  const marketingIntents = new Set([
+    "create-marketing-coupon",
+    "update-marketing-coupon",
+    "set-marketing-coupon-active",
+    "create-marketing-affiliate",
+    "update-marketing-affiliate",
+    "set-marketing-affiliate-active",
+  ]);
+  if (marketingIntents.has(intent)) {
+    try {
+      if (intent === "create-marketing-coupon" || intent === "update-marketing-coupon") {
+        const coupon = marketingCouponInput(formData);
+        if ("error" in coupon) return coupon;
+        const couponId = String(formData.get("couponId") || "");
+        if (intent === "update-marketing-coupon") {
+          if (!isUuid(couponId)) return { error: "Choose a valid coupon to update." };
+          const [updated] = await db.update(marketingCoupons)
+            .set({ ...coupon, updatedAt: new Date() })
+            .where(eq(marketingCoupons.id, couponId))
+            .returning();
+          if (!updated) return { error: "Coupon not found." };
+          return { success: "Coupon updated." };
+        }
+        await db.insert(marketingCoupons).values(coupon);
+        return { success: "Coupon created." };
+      }
+
+      if (intent === "set-marketing-coupon-active") {
+        const couponId = String(formData.get("couponId") || "");
+        const activeValue = String(formData.get("active") || "");
+        if (!isUuid(couponId) || (activeValue !== "true" && activeValue !== "false")) {
+          return { error: "Choose a valid coupon status." };
+        }
+        const [updated] = await db.update(marketingCoupons)
+          .set({ active: activeValue === "true", updatedAt: new Date() })
+          .where(eq(marketingCoupons.id, couponId))
+          .returning();
+        if (!updated) return { error: "Coupon not found." };
+        return { success: activeValue === "true" ? "Coupon activated." : "Coupon paused." };
+      }
+
+      if (intent === "create-marketing-affiliate") {
+        const userId = String(formData.get("userId") || "");
+        const code = normalizeMarketingCode(String(formData.get("code") || ""));
+        const commissionRateBps = parseCommissionRateBps(String(formData.get("commissionRate") || ""));
+        if (!isUuid(userId)) return { error: "Select an eligible affiliate account." };
+        if (!code) return { error: "Use 3–32 letters, numbers, hyphens, or underscores for the referral code." };
+        if (commissionRateBps === null) return { error: "Enter a commission rate from 0 to 100, with up to two decimal places." };
+        const [candidate] = await db.select({ id: usersTable.id }).from(usersTable).where(and(
+          eq(usersTable.id, userId),
+          eq(usersTable.role, "affiliate"),
+          eq(usersTable.active, true),
+          isNull(usersTable.deletedAt),
+        )).limit(1);
+        if (!candidate) return { error: "That user is not an active affiliate. Update their role first." };
+        await db.insert(marketingAffiliates).values({ userId, code, commissionRateBps });
+        return { success: "Affiliate partner added." };
+      }
+
+      if (intent === "update-marketing-affiliate") {
+        const affiliateId = String(formData.get("affiliateId") || "");
+        const code = normalizeMarketingCode(String(formData.get("code") || ""));
+        const commissionRateBps = parseCommissionRateBps(String(formData.get("commissionRate") || ""));
+        if (!isUuid(affiliateId)) return { error: "Choose a valid affiliate partner to update." };
+        if (!code) return { error: "Use 3–32 letters, numbers, hyphens, or underscores for the referral code." };
+        if (commissionRateBps === null) return { error: "Enter a commission rate from 0 to 100, with up to two decimal places." };
+        const [updated] = await db.update(marketingAffiliates)
+          .set({ code, commissionRateBps, updatedAt: new Date() })
+          .where(eq(marketingAffiliates.id, affiliateId))
+          .returning();
+        if (!updated) return { error: "Affiliate partner not found." };
+        return { success: "Affiliate partner updated." };
+      }
+
+      if (intent === "set-marketing-affiliate-active") {
+        const affiliateId = String(formData.get("affiliateId") || "");
+        const activeValue = String(formData.get("active") || "");
+        if (!isUuid(affiliateId) || (activeValue !== "true" && activeValue !== "false")) {
+          return { error: "Choose a valid affiliate status." };
+        }
+        const [updated] = await db.update(marketingAffiliates)
+          .set({ active: activeValue === "true", updatedAt: new Date() })
+          .where(eq(marketingAffiliates.id, affiliateId))
+          .returning();
+        if (!updated) return { error: "Affiliate partner not found." };
+        return { success: activeValue === "true" ? "Affiliate partner activated." : "Affiliate partner paused." };
+      }
+    } catch (error) {
+      if (isMissingMarketingSchema(error)) return { error: MARKETING_MIGRATION_NOTICE };
+      if (isUniqueConstraintError(error)) return { error: "That coupon or referral code is already in use." };
+      console.error("Admin marketing update failed:", error);
+      return { error: "The marketing change could not be saved. Please try again." };
+    }
+  }
+
+  const hasUploadFiles = ["galleryImageFiles", "imageFiles", "videoFile"].some((field) =>
+    formData.getAll(field).some((value) => value instanceof File && value.size > 0),
+  );
+  if (hasUploadFiles) {
+    const uploadLimit = await consumeUsageLimit({
+      context,
+      request,
+      bindingName: "CLOUDINARY_UPLOAD_LIMITER",
+      key: `admin:${adminUser.id}`,
+      localLimit: 2,
+      localPeriodSeconds: 60,
+    });
+    if (uploadLimit !== "allowed") {
+      return { error: usageLimitMessage(uploadLimit, "Media uploads are limited to two requests per minute.") };
+    }
   }
 
   if (intent === "workspace-project-status") {
@@ -499,7 +851,8 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     const email = String(formData.get("email") || "").trim().toLowerCase();
     const role = String(formData.get("role") || "customer");
 
-    if (!email || !isEmail(email)) return { error: "Enter a valid email address." };
+    if (!email || email.length > 254 || !isEmail(email)) return { error: "Enter a valid email address." };
+    if (name.length > 120) return { error: "Names must be 120 characters or fewer." };
     if (!isUserRole(role)) return { error: "Choose a valid user role." };
 
     try {
@@ -525,10 +878,11 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     const password = String(formData.get("password") || "");
     const confirmPassword = String(formData.get("confirmPassword") || "");
 
-    if (!email || !isEmail(email)) return { error: "Enter a valid admin email address." };
+    if (!email || email.length > 254 || !isEmail(email)) return { error: "Enter a valid admin email address." };
+    if (name.length > 120) return { error: "Names must be 120 characters or fewer." };
 
-    if (password.length < 12) {
-      return { error: "Admin password must be at least 12 characters." };
+    if (password.length < 12 || password.length > 128) {
+      return { error: "Admin password must be between 12 and 128 characters." };
     }
 
     if (password !== confirmPassword) {
@@ -569,42 +923,49 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   }
 
   if (intent === "bulk-update-role") {
-    const userIds = formData.getAll("userIds") as string[];
+    const userIds = Array.from(new Set(formData.getAll("userIds").map(String).filter(Boolean)));
     const role = String(formData.get("role") ?? "");
 
     if (!userIds.length || !isUserRole(role)) {
       return { error: "Invalid input." };
     }
+    if (userIds.length > MAX_BULK_RECORDS) return { error: `Update at most ${MAX_BULK_RECORDS} users at a time.` };
 
     await db.update(usersTable).set({ role }).where(inArray(usersTable.id, userIds));
     return { success: `Updated ${userIds.length} users.` };
   }
 
   if (intent === "bulk-delete") {
-    const userIds = formData.getAll("userIds") as string[];
+    const userIds = Array.from(new Set(formData.getAll("userIds").map(String).filter(Boolean)));
     if (!userIds.length) return { error: "No users selected." };
+    if (userIds.length > MAX_BULK_RECORDS) return { error: `Delete at most ${MAX_BULK_RECORDS} users at a time.` };
 
     await db.update(usersTable).set({ deletedAt: new Date(), updatedAt: new Date() }).where(inArray(usersTable.id, userIds));
     return { success: `Moved ${userIds.length} users to trash.` };
   }
 
   if (intent === "bulk-restore") {
-    const userIds = formData.getAll("userIds") as string[];
+    const userIds = Array.from(new Set(formData.getAll("userIds").map(String).filter(Boolean)));
     if (!userIds.length) return { error: "No users selected." };
+    if (userIds.length > MAX_BULK_RECORDS) return { error: `Restore at most ${MAX_BULK_RECORDS} users at a time.` };
 
     await db.update(usersTable).set({ deletedAt: null }).where(inArray(usersTable.id, userIds));
     return { success: `Restored ${userIds.length} users.` };
   }
 
   if (intent === "bulk-permanent-delete") {
-    const userIds = formData.getAll("userIds") as string[];
+    const userIds = Array.from(new Set(formData.getAll("userIds").map(String).filter(Boolean)));
     if (!userIds.length) return { error: "No users selected." };
+    if (userIds.length > MAX_BULK_RECORDS) return { error: `Delete at most ${MAX_BULK_RECORDS} users at a time.` };
 
     await db.delete(usersTable).where(and(inArray(usersTable.id, userIds), isNotNull(usersTable.deletedAt)));
     return { success: `Permanently deleted ${userIds.length} users.` };
   }
 
   if (intent === "create-package" || intent === "update-package") {
+    if (intent === "create-package") {
+      return { error: "The public pricing catalog contains six fixed packages. Edit one of those packages instead." };
+    }
     const packages = await getPricingPackages(db);
     const packageId = String(formData.get("packageId") || "");
     const existing = packages.find((pkg) => pkg.id === packageId);
@@ -621,6 +982,12 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       .filter((value): value is File => value instanceof File && value.size > 0);
 
     if (imageFiles.length) {
+      if (imageFiles.length > MAX_IMAGE_UPLOAD_COUNT) {
+        return { error: `Upload at most ${MAX_IMAGE_UPLOAD_COUNT} gallery images at a time.` };
+      }
+      if (imageFiles.some((file) => file.size > MAX_IMAGE_FILE_BYTES) || imageFiles.reduce((total, file) => total + file.size, 0) > MAX_IMAGE_BATCH_BYTES) {
+        return { error: "Each image must be 10 MB or smaller, with at most 40 MB total per upload." };
+      }
       try {
         const uploadedImages = await Promise.all(imageFiles.map((file) => uploadPackageImageToCloudinary(file, context)));
         nextPackage.galleryImages = Array.from(new Set([...nextPackage.galleryImages, ...uploadedImages]));
@@ -635,25 +1002,22 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       return { error: "Another package already uses this slug." };
     }
 
-    const nextPackages = intent === "create-package"
-      ? [...packages, nextPackage]
-      : packages.map((pkg) => (pkg.id === nextPackage.id ? nextPackage : pkg));
+    const nextPackages = packages.map((pkg) => (pkg.id === nextPackage.id ? nextPackage : pkg));
 
     await savePricingPackages(db, nextPackages);
-    return { success: intent === "create-package" ? "Package created." : "Package updated." };
+    return { success: "Package updated." };
   }
 
   if (intent === "delete-package") {
     const packageId = String(formData.get("packageId") || "");
     const packages = await getPricingPackages(db);
-    const nextPackages = packages.filter((pkg) => pkg.id !== packageId);
-
-    if (nextPackages.length === packages.length) {
+    if (!packages.some((pkg) => pkg.id === packageId)) {
       return { error: "Package not found." };
     }
 
+    const nextPackages = packages.map((pkg) => pkg.id === packageId ? { ...pkg, active: false } : pkg);
     await savePricingPackages(db, nextPackages);
-    return { success: "Package deleted." };
+    return { success: "Package hidden from the pricing page." };
   }
 
   if (intent === "upload-portfolio-video") {
@@ -661,8 +1025,15 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     const sectionSlug = String(formData.get("sectionSlug") || "featured").trim();
     const videoFile = formData.get("videoFile");
 
-    if (!title) return { error: "Video title is required." };
+    if (!title || title.length > 160) return { error: "Video title must be between 1 and 160 characters." };
+    if (sectionSlug.length > 120) return { error: "Choose a valid portfolio section." };
     if (!(videoFile instanceof File) || videoFile.size === 0) return { error: "Choose a video to upload." };
+    if (videoFile.size > MAX_VIDEO_FILE_BYTES) return { error: "Portfolio videos are limited to 50 MB." };
+    if (
+      String(formData.get("creatorName") || "").length > 160 ||
+      String(formData.get("tag") || "").length > 100 ||
+      String(formData.get("uniqueSellingPoint") || "").length > 240
+    ) return { error: "Shorten the portfolio creator, tag, or outcome label." };
 
     const sections = await getPortfolioSections(db, context);
     const targetSection = sections.find((section) => section.slug === sectionSlug) || sections[0];
@@ -695,10 +1066,13 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   }
 
   if (intent === "delete-portfolio-videos") {
-    const publicIds = formData.getAll("publicIds").map(String).filter(Boolean);
-    const videoUrls = formData.getAll("videoUrls").map(String).filter(Boolean);
+    const publicIds = Array.from(new Set(formData.getAll("publicIds").map(String).filter(Boolean)));
+    const videoUrls = Array.from(new Set(formData.getAll("videoUrls").map(String).filter(Boolean)));
 
     if (!publicIds.length) return { error: "Choose at least one portfolio video to delete." };
+    if (publicIds.length > MAX_BULK_RECORDS || videoUrls.length > MAX_BULK_RECORDS) {
+      return { error: `Delete at most ${MAX_BULK_RECORDS} portfolio videos at a time.` };
+    }
 
     try {
       await deleteCloudinaryVideos(publicIds, context);
@@ -712,38 +1086,52 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   }
 
   if (intent === "update-admin-toolbar") {
-    await saveAdminToolbarEnabled(db, formData.get("adminToolbarEnabled") === "on", context);
-    return { success: "Settings updated." };
+    try {
+      await saveAdminToolbarEnabled(db, formData.get("adminToolbarEnabled") === "on", context);
+      return { success: "Admin toolbar settings saved." };
+    } catch (error) {
+      return adminSettingsSaveError("Admin toolbar", error);
+    }
   }
 
   if (intent === "update-search-crawling") {
-    await saveSearchCrawlingEnabled(db, formData.get("searchCrawlingEnabled") === "on", context);
-    return { success: "Search visibility settings updated." };
+    try {
+      await saveSearchCrawlingEnabled(db, formData.get("searchCrawlingEnabled") === "on", context);
+      return { success: "Search visibility settings saved." };
+    } catch (error) {
+      return adminSettingsSaveError("Search visibility", error);
+    }
   }
 
   if (intent === "update-maintenance-mode") {
-    await saveMaintenanceModeEnabled(db, formData.get("maintenanceModeEnabled") === "on", context);
-    return { success: "Maintenance mode settings updated." };
+    try {
+      await saveMaintenanceModeEnabled(db, formData.get("maintenanceModeEnabled") === "on", context);
+      return { success: "Maintenance mode settings saved." };
+    } catch (error) {
+      return adminSettingsSaveError("Maintenance mode", error);
+    }
   }
 
   if (intent === "update-promo-bar") {
     const enabled = formData.get("promoBarEnabled") === "on";
     const message = String(formData.get("promoBarMessage") || "");
-    await savePromoBarSettings(db, enabled, message, context);
-    return { success: "Promo bar settings updated." };
+    if (message.length > 500) return { error: "Promo bar messages are limited to 500 characters." };
+    try {
+      await savePromoBarSettings(db, enabled, message, context);
+      return { success: "Promo bar settings saved." };
+    } catch (error) {
+      return adminSettingsSaveError("Promo bar", error);
+    }
   }
 
   if (intent === "update-role-access") {
-    const nextAccess = USER_ROLES.reduce<RoleFeatureAccess>((accumulator, role) => {
-      accumulator[role] = DASHBOARD_FEATURES
-        .filter((feature) => formData.get(`access__${role}__${feature.key}`) === "on")
-        .map((feature) => feature.key);
-
-      return accumulator;
-    }, {} as RoleFeatureAccess);
-
-    await saveRoleFeatureAccessSettings(db, nextAccess);
-    return { success: "Role access settings updated." };
+    try {
+      const nextAccess = roleFeatureAccessFromFormData(formData);
+      await saveRoleFeatureAccessSettings(db, nextAccess, context);
+      return { success: "Role access settings saved." };
+    } catch (error) {
+      return adminSettingsSaveError("Role access", error);
+    }
   }
 
   if (intent === "upload-images") {
@@ -753,6 +1141,12 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
 
     if (!imageFiles.length) {
       return { error: "Choose at least one image to upload." };
+    }
+    if (imageFiles.length > MAX_IMAGE_UPLOAD_COUNT) {
+      return { error: `Upload at most ${MAX_IMAGE_UPLOAD_COUNT} images at a time.` };
+    }
+    if (imageFiles.some((file) => file.size > MAX_IMAGE_FILE_BYTES) || imageFiles.reduce((total, file) => total + file.size, 0) > MAX_IMAGE_BATCH_BYTES) {
+      return { error: "Each image must be 10 MB or smaller, with at most 40 MB total per upload." };
     }
 
     try {
@@ -765,11 +1159,14 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   }
 
   if (intent === "delete-images") {
-    const publicIds = formData.getAll("publicIds").map(String).filter(Boolean);
-    const imageUrls = formData.getAll("imageUrls").map(String).filter(Boolean);
+    const publicIds = Array.from(new Set(formData.getAll("publicIds").map(String).filter(Boolean)));
+    const imageUrls = Array.from(new Set(formData.getAll("imageUrls").map(String).filter(Boolean)));
 
     if (!publicIds.length) {
       return { error: "Choose at least one image to delete." };
+    }
+    if (publicIds.length > MAX_BULK_RECORDS || imageUrls.length > MAX_BULK_RECORDS) {
+      return { error: `Delete at most ${MAX_BULK_RECORDS} images at a time.` };
     }
 
     try {
@@ -1020,6 +1417,7 @@ function LegacyAdminRoute() {
   const {
     adminUser,
     users,
+    userActivity,
     adminUsers,
     totalPages,
     currentPage,
@@ -1039,18 +1437,19 @@ function LegacyAdminRoute() {
     cloudinaryVideos,
     cloudinaryVideoUsage,
     cloudinaryVideoError,
+    marketingData,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const actionError = actionData && "error" in actionData ? actionData.error : null;
   const actionSuccess = actionData && "success" in actionData ? actionData.success : null;
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const navigation = useNavigation();
   
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateAdminModal, setShowCreateAdminModal] = useState(false);
-  const [showCreatePackageModal, setShowCreatePackageModal] = useState(false);
 
   const isAdminDirectory = view === "admins";
   const isAllSelected = users.length > 0 && selectedUsers.length === users.length;
@@ -1094,8 +1493,12 @@ function LegacyAdminRoute() {
         ? "Portfolio Videos"
       : tab === "roles"
         ? "Role Management"
-        : tab === "settings"
+      : tab === "settings"
           ? "Settings"
+          : tab === "marketing"
+            ? "Coupons"
+          : tab === "affiliates"
+            ? "Affiliates"
           : tab === "users"
             ? "User Management"
             : `${tab.charAt(0).toUpperCase()}${tab.slice(1)} Module`;
@@ -1108,15 +1511,6 @@ function LegacyAdminRoute() {
         account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
         headerActions={(
           <>
-            {tab === "packages" ? (
-              <button
-                onClick={() => setShowCreatePackageModal(true)}
-                className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] sm:inline-flex"
-              >
-                <span className="material-symbols-outlined text-[18px]">add_card</span>
-                Add Package
-              </button>
-            ) : null}
             {tab === "images" || tab === "videos" ? (
               <Link
                 reloadDocument
@@ -1158,12 +1552,12 @@ function LegacyAdminRoute() {
           {tab === "users" ? (
             <>
               {/* Metrics */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                <MetricCard label="All Users" value={stats.total} icon="group" color="blue" to="?tab=users&view=active" active={!isAdminDirectory && view !== "trash" && !searchParams.get("role")} />
-                <MetricCard label="Admins" value={stats.admins} icon="admin_panel_settings" color="red" to="?tab=users&view=admins" active={isAdminDirectory} />
-                <MetricCard label="Managers" value={stats.managers} icon="manage_accounts" color="indigo" to="?tab=users&view=active&role=project_manager" active={!isAdminDirectory && searchParams.get("role") === "project_manager"} />
-                <MetricCard label="Support" value={stats.support} icon="support_agent" color="slate" to="?tab=users&view=active&role=customer_support" active={!isAdminDirectory && searchParams.get("role") === "customer_support"} />
-                <MetricCard label="Trash" value={stats.trash} icon="delete" color="amber" to="?tab=users&view=trash" active={view === "trash"} />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <MetricCard compact label="All Users" value={stats.total} icon="group" color="blue" to="?tab=users&view=active" active={!isAdminDirectory && view !== "trash" && !searchParams.get("role")} />
+                <MetricCard compact label="Admins" value={stats.admins} icon="admin_panel_settings" color="red" to="?tab=users&view=admins" active={isAdminDirectory} />
+                <MetricCard compact label="Managers" value={stats.managers} icon="manage_accounts" color="indigo" to="?tab=users&view=active&role=project_manager" active={!isAdminDirectory && searchParams.get("role") === "project_manager"} />
+                <MetricCard compact label="Support" value={stats.support} icon="support_agent" color="slate" to="?tab=users&view=active&role=customer_support" active={!isAdminDirectory && searchParams.get("role") === "customer_support"} />
+                <MetricCard compact label="Trash" value={stats.trash} icon="delete" color="amber" to="?tab=users&view=trash" active={view === "trash"} />
               </div>
 
               {/* User List Card */}
@@ -1289,21 +1683,21 @@ function LegacyAdminRoute() {
                         <th className="cursor-pointer px-6 py-4 " onClick={() => handleSort("role")}>
                           Role {getSortIcon(searchParams, "role")}
                         </th>
-                        <th className="px-6 py-4">{searchParams.get("view") === "trash" ? "Deleted" : "Status"}</th>
-                        <th className="cursor-pointer px-6 py-4 " onClick={() => handleSort("createdAt")}>
-                          Joined {getSortIcon(searchParams, "createdAt")}
-                        </th>
-                        <th className="px-6 py-4 text-right">Actions</th>
+                        <th className="min-w-[250px] px-6 py-4">Activity</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {users.length === 0 ? (
-                        <tr><td colSpan={6} className="py-20 text-center text-slate-400">No users found in {searchParams.get("view") === "trash" ? "trash" : "active list"}.</td></tr>
+                        <tr><td colSpan={4} className="py-20 text-center text-slate-400">No users found in {searchParams.get("view") === "trash" ? "trash" : "active list"}.</td></tr>
                       ) : (
                         users.map(user => (
-                          <tr key={user.id} className="group -colors">
+                          <tr
+                            key={user.id}
+                            className="group cursor-pointer transition-colors hover:bg-slate-50 active:bg-slate-100"
+                            onClick={() => navigate(getUserEditUrl(user.id))}
+                          >
                             <td className="px-6 py-4">
-                              <input type="checkbox" checked={selectedUsers.includes(user.id)} onChange={() => toggleSelectUser(user.id)} className="h-4 w-4 rounded border-slate-300 accent-black" />
+                              <input type="checkbox" checked={selectedUsers.includes(user.id)} onClick={event => event.stopPropagation()} onChange={() => toggleSelectUser(user.id)} aria-label={`Select ${user.name || user.email}`} className="h-4 w-4 rounded border-slate-300 accent-black" />
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
@@ -1311,67 +1705,16 @@ function LegacyAdminRoute() {
                                   {user.name?.[0] || user.email[0]}
                                 </div>
                                 <div>
-                                  <Link to={getUserEditUrl(user.id)} className="text-sm font-black text-slate-900 underline-offset-4">
+                                  <Link to={getUserEditUrl(user.id)} onClick={event => event.stopPropagation()} aria-label={`Edit ${user.name || user.email}'s account`} className="text-sm font-black text-slate-900 underline-offset-4">
                                     {user.name || "User"}
                                   </Link>
-                                  <Link to={getUserEditUrl(user.id)} className="block text-xs font-medium text-slate-500 ">
-                                    {user.email}
-                                  </Link>
+                                  <p className="text-xs font-medium text-slate-500">{user.email}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-6 py-4"><RoleBadge role={user.role} /></td>
                             <td className="px-6 py-4">
-                              {user.deletedAt ? (
-                                <span className="text-[10px] font-bold text-red-500">{new Date(user.deletedAt).toLocaleDateString()}</span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700 uppercase">
-                                  <span className="h-1 w-1 rounded-full bg-emerald-500" /> Active
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-xs font-bold text-slate-500">{new Date(user.createdAt).toLocaleDateString()}</td>
-                            <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <Link to={getUserEditUrl(user.id)} className="h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 -colors" title="Edit Account">
-                                  <span className="material-symbols-outlined text-[18px]">edit</span>
-                                </Link>
-                                {user.deletedAt ? (
-                                  <>
-                                    <Form method="post" reloadDocument>
-                                      <input type="hidden" name="intent" value="bulk-restore" />
-                                      <input type="hidden" name="userIds" value={user.id} />
-                                      <button type="submit" className="h-8 w-8 flex items-center justify-center rounded-lg text-emerald-500 -colors" title="Restore User">
-                                        <span className="material-symbols-outlined text-[18px]">restore_from_trash</span>
-                                      </button>
-                                    </Form>
-                                    <Form method="post" reloadDocument onSubmit={e => !confirm("Permanently delete user?") && e.preventDefault()}>
-                                      <input type="hidden" name="intent" value="bulk-permanent-delete" />
-                                      <input type="hidden" name="userIds" value={user.id} />
-                                      <button type="submit" className="h-8 w-8 flex items-center justify-center rounded-lg text-red-500 -colors" title="Delete Permanently">
-                                        <span className="material-symbols-outlined text-[18px]">delete_forever</span>
-                                      </button>
-                                    </Form>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Form method="post" reloadDocument className="flex items-center gap-1">
-                                      <input type="hidden" name="intent" value="update-role" />
-                                      <input type="hidden" name="userId" value={user.id} />
-                                      <select name="role" defaultValue={normalizeUserRole(user.role)} onChange={e => e.currentTarget.form?.requestSubmit()} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-black outline-none focus:border-black">
-                                        {USER_ROLES.map(r => <option key={r} value={r}>{formatUserRole(r)}</option>)}
-                                      </select>
-                                    </Form>
-                                    <Form method="post" reloadDocument onSubmit={e => !confirm("Move user to trash?") && e.preventDefault()}>
-                                      <input type="hidden" name="intent" value="bulk-delete" />
-                                      <input type="hidden" name="userIds" value={user.id} />
-                                      <button type="submit" className="h-8 w-8 flex items-center justify-center rounded-lg text-slate-400 -colors" title="Move to Trash">
-                                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                                      </button>
-                                    </Form>
-                                  </>
-                                )}
-                              </div>
+                              <UserActivitySummary activity={userActivity[user.id] ?? { paidPurchases: null, activeProjects: null }} />
                             </td>
                           </tr>
                         ))
@@ -1406,7 +1749,7 @@ function LegacyAdminRoute() {
               navigationState={navigation.state}
             />
           ) : tab === "roles" ? (
-            <RoleManagementPanel roleFeatureAccess={roleFeatureAccess} navigationState={navigation.state} />
+            <RoleManagementPanel roleFeatureAccess={roleFeatureAccess} actionData={actionData} navigationState={navigation.state} />
           ) : tab === "settings" ? (
             <SettingsPanel
               adminToolbarEnabled={adminToolbarEnabled}
@@ -1416,6 +1759,10 @@ function LegacyAdminRoute() {
               actionData={actionData}
               navigationState={navigation.state}
             />
+          ) : tab === "marketing" ? (
+            <MarketingPanel data={marketingData} actionData={actionData} isSubmitting={navigation.state !== "idle"} />
+          ) : tab === "affiliates" ? (
+            <AffiliateAdminPanel data={marketingData} actionData={actionData} isSubmitting={navigation.state !== "idle"} />
           ) : (
             <div className="flex flex-col items-center justify-center py-32 rounded-3xl border-2 border-dashed border-slate-200 text-slate-400">
               <span className="material-symbols-outlined text-[64px] mb-4">construction</span>
@@ -1504,19 +1851,6 @@ function LegacyAdminRoute() {
         </div>
       )}
 
-      {showCreatePackageModal && (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-900/60 p-4 pt-10 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-3xl bg-white p-8 shadow-2xl">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="text-2xl font-black text-slate-900">Create Package</h3>
-              <button onClick={() => setShowCreatePackageModal(false)} className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 ">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <PackageForm intent="create-package" navigationState={navigation.state} onCancel={() => setShowCreatePackageModal(false)} />
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -1598,12 +1932,12 @@ function PricingPackagesPanel({
                 <span className="material-symbols-outlined text-[18px]">open_in_new</span>
                 Preview
               </Link>
-              <Form method="post" reloadDocument onSubmit={(event) => !confirm("Delete this package?") && event.preventDefault()}>
+              <Form method="post" reloadDocument onSubmit={(event) => !confirm("Hide this package from customers?") && event.preventDefault()}>
                 <input type="hidden" name="intent" value="delete-package" />
                 <input type="hidden" name="packageId" value={editingPackage.id} />
                 <button type="submit" className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-100 px-4 text-sm font-black text-red-600 ">
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                  Delete
+                  <span className="material-symbols-outlined text-[18px]">visibility_off</span>
+                  Hide package
                 </button>
               </Form>
             </div>
@@ -1874,12 +2208,16 @@ function formatUsage(value: { usage?: number; limit?: number; used_percent?: num
 
 function RoleManagementPanel({
   roleFeatureAccess,
+  actionData,
   navigationState,
 }: {
   roleFeatureAccess: RoleFeatureAccess;
+  actionData: { error?: string; success?: string } | undefined;
   navigationState: "idle" | "submitting" | "loading";
 }) {
   const isSubmitting = navigationState === "submitting";
+  const actionError = actionData && "error" in actionData ? actionData.error : null;
+  const actionSuccess = actionData && "success" in actionData ? actionData.success : null;
   const roleLabels: Record<Exclude<UserRole, "user">, string> = {
     customer: "Customer",
     customer_support: "Customer Support",
@@ -1887,65 +2225,106 @@ function RoleManagementPanel({
     editor: "Editor",
     project_manager: "Project Manager",
   };
-  const matrixRoles = USER_ROLES.filter((role): role is Exclude<UserRole, "user"> => role !== "user");
+  const matrixRoles = USER_ROLES.filter(
+    (role): role is Exclude<UserRole, "user"> => role !== "user",
+  );
 
   return (
-    <div className="max-w-6xl space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
-              <span className="material-symbols-outlined text-[22px]">shield_person</span>
+    <div className="neo-role-access-page max-w-6xl">
+      <section className="neo-role-access-card">
+        <header className="neo-role-access-header">
+          <div className="neo-role-access-heading">
+            <span className="neo-icon-badge neo-role-access-icon" aria-hidden="true">
+              <span className="material-symbols-outlined">shield_person</span>
+            </span>
+            <div className="min-w-0">
+              <p className="neo-workspace__eyebrow">Access control</p>
+              <h2 className="neo-role-access-title">Role permissions</h2>
+              <p className="neo-role-access-description">
+                Choose which customer dashboard pages each role can open. Customer accounts use a separate session and cannot open the admin panel.
+              </p>
             </div>
-            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">Access control</p>
-            <h3 className="mt-2 text-2xl font-black text-slate-900">Permission matrix</h3>
-            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
-              Choose which dashboard features each role can access. This controls navigation visibility and route-level access checks.
-            </p>
+          </div>
+          <div className="neo-role-access-summary" aria-label={`${matrixRoles.length} roles and ${DASHBOARD_FEATURES.length} dashboard pages`}>
+            <div className="neo-role-access-summary-item">
+              <span className="neo-role-access-summary-value">{matrixRoles.length}</span>
+              <span className="neo-role-access-summary-label">Roles</span>
+            </div>
+            <div className="neo-role-access-summary-item">
+              <span className="neo-role-access-summary-value">{DASHBOARD_FEATURES.length}</span>
+              <span className="neo-role-access-summary-label">Pages</span>
+            </div>
+          </div>
+        </header>
+
+        {actionError ? <p className="neo-role-access-feedback neo-role-access-feedback--error" role="alert">{actionError}</p> : null}
+        {actionSuccess ? <p className="neo-role-access-feedback neo-role-access-feedback--success" role="status" aria-live="polite">{actionSuccess}</p> : null}
+
+        <Form method="post" className="neo-role-access-form" aria-busy={isSubmitting}>
+          <input type="hidden" name="intent" value="update-role-access" />
+          <div className="neo-role-access-table-heading">
+            <div>
+              <h3>Customer dashboard pages</h3>
+              <p>Select the pages available to each role.</p>
+            </div>
+            <span className="neo-role-access-hint">
+              On smaller screens, permissions are shown as role-by-role checklists.
+            </span>
           </div>
 
-          <Form method="post" reloadDocument className="w-full md:w-[720px]">
-            <input type="hidden" name="intent" value="update-role-access" />
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="w-full min-w-[680px] text-left">
-                <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3">Access role</th>
-                    {DASHBOARD_FEATURES.map((feature) => (
-                      <th key={feature.key} className="px-3 py-3 text-center">{feature.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
+          <div className="neo-role-access-matrix" role="table" aria-label="Dashboard page access by role">
+            <div className="neo-role-access-table-head" role="rowgroup">
+              <div className="neo-role-access-grid-row neo-role-access-grid-row--heading" role="row">
+                <span className="neo-role-access-column-heading neo-role-access-row-heading" role="columnheader">Page</span>
+                {matrixRoles.map((role) => (
+                  <span key={role} className="neo-role-access-column-heading" role="columnheader">{roleLabels[role]}</span>
+                ))}
+              </div>
+            </div>
+            <div className="neo-role-access-table-body" role="rowgroup">
+              {DASHBOARD_FEATURES.map((feature) => (
+                <div key={feature.key} className="neo-role-access-grid-row neo-role-access-grid-row--page" role="row">
+                  <div className="neo-role-access-row-heading" role="rowheader">{feature.label}</div>
                   {matrixRoles.map((role) => {
-                    const access = new Set(roleFeatureAccess[role] || []);
+                    const access = roleFeatureAccess[role] || [];
+                    const staffOnly = role === "customer" && feature.key === "support";
 
                     return (
-                      <tr key={role}>
-                        <td className="px-4 py-3 text-sm font-black text-slate-900">{roleLabels[role]}</td>
-                        {DASHBOARD_FEATURES.map((feature) => (
-                          <td key={`${role}-${feature.key}`} className="px-3 py-3 text-center">
+                      <div key={`${feature.key}-${role}`} className="neo-role-access-cell" role="cell">
+                        {staffOnly ? (
+                          <span className="neo-role-access-restricted" aria-label="Contact Inbox is staff-only for Customer accounts">
+                            <span className="material-symbols-outlined" aria-hidden="true">lock</span>
+                            <span>Staff only</span>
+                          </span>
+                        ) : (
+                          <label className="neo-role-access-option">
+                            <span className="neo-role-access-option-label">{roleLabels[role]}</span>
                             <input
                               type="checkbox"
                               name={`access__${role}__${feature.key}`}
-                              defaultChecked={access.has(feature.key)}
-                              className="h-4 w-4 accent-black"
+                              value="on"
+                              defaultChecked={access.includes(feature.key)}
+                              aria-label={`${roleLabels[role]} access to ${feature.label}`}
+                              className="neo-role-access-checkbox"
                             />
-                          </td>
-                        ))}
-                      </tr>
+                          </label>
+                        )}
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              ))}
             </div>
+          </div>
 
-            <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-black px-5 text-sm font-black text-white disabled:opacity-50">
-              <span className="material-symbols-outlined text-[18px]">save</span>
-              {isSubmitting ? "Saving..." : "Save Role Access"}
+          <footer className="neo-role-access-footer">
+            <p>Changes take effect after you save them.</p>
+            <button type="submit" disabled={isSubmitting} className="neo-role-access-save">
+              <span className="material-symbols-outlined" aria-hidden="true">{isSubmitting ? "progress_activity" : "save"}</span>
+              {isSubmitting ? "Saving permissions…" : "Save permissions"}
             </button>
-          </Form>
-        </div>
+          </footer>
+        </Form>
       </section>
     </div>
   );
@@ -1972,8 +2351,8 @@ function SettingsPanel({
 
   return (
     <div className="max-w-4xl space-y-6">
-      {actionError ? <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-600">{actionError}</div> : null}
-      {actionSuccess ? <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{actionSuccess}</div> : null}
+      {actionError ? <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-600" role="alert">{actionError}</div> : null}
+      {actionSuccess ? <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-700" role="status" aria-live="polite">{actionSuccess}</div> : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
@@ -1988,7 +2367,7 @@ function SettingsPanel({
             </p>
           </div>
 
-          <Form method="post" reloadDocument className="w-full rounded-2xl bg-slate-50 p-5 md:w-72">
+          <Form method="post" className="w-full rounded-2xl bg-slate-50 p-5 md:w-72">
             <input type="hidden" name="intent" value="update-admin-toolbar" />
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <span>
@@ -2018,7 +2397,7 @@ function SettingsPanel({
             </p>
           </div>
 
-          <Form method="post" reloadDocument className="w-full rounded-2xl bg-slate-50 p-5 md:w-80">
+          <Form method="post" className="w-full rounded-2xl bg-slate-50 p-5 md:w-80">
             <input type="hidden" name="intent" value="update-search-crawling" />
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <span>
@@ -2048,7 +2427,7 @@ function SettingsPanel({
             </p>
           </div>
 
-          <Form method="post" reloadDocument className="w-full rounded-2xl bg-amber-50 p-5 md:w-80">
+          <Form method="post" className="w-full rounded-2xl bg-amber-50 p-5 md:w-80">
             <input type="hidden" name="intent" value="update-maintenance-mode" />
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <span>
@@ -2078,7 +2457,7 @@ function SettingsPanel({
             </p>
           </div>
 
-          <Form method="post" reloadDocument className="w-full rounded-2xl bg-slate-50 p-5 md:w-96">
+          <Form method="post" className="w-full rounded-2xl bg-slate-50 p-5 md:w-96">
             <input type="hidden" name="intent" value="update-promo-bar" />
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <span>
@@ -2159,7 +2538,6 @@ function AdminUsersTable({
               Role {getSortIcon(searchParams, "role")}
             </Link>
           </th>
-          <th className="px-6 py-4">Status</th>
           <th className="px-6 py-4">
             <Link to={sortLink("createdAt")} reloadDocument className="inline-flex items-center gap-1 ">
               Created {getSortIcon(searchParams, "createdAt")}
@@ -2170,7 +2548,7 @@ function AdminUsersTable({
       </thead>
       <tbody className="divide-y divide-slate-50">
         {adminUsers.length === 0 ? (
-          <tr><td colSpan={5} className="py-20 text-center text-slate-400">No admin accounts found.</td></tr>
+          <tr><td colSpan={4} className="py-20 text-center text-slate-400">No admin accounts found.</td></tr>
         ) : (
           adminUsers.map((admin) => (
             <tr key={admin.id} className="-colors">
@@ -2188,12 +2566,6 @@ function AdminUsersTable({
               <td className="px-6 py-4">
                 <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-red-700 ring-1 ring-inset ring-red-600/10">
                   {admin.role}
-                </span>
-              </td>
-              <td className="px-6 py-4">
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${admin.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                  <span className={`h-1 w-1 rounded-full ${admin.active ? "bg-emerald-500" : "bg-slate-400"}`} />
-                  {admin.active ? "Active" : "Disabled"}
                 </span>
               </td>
               <td className="px-6 py-4 text-xs font-bold text-slate-500">{new Date(admin.createdAt).toLocaleDateString()}</td>
@@ -2231,22 +2603,27 @@ function PackageForm({
           <input name="name" required defaultValue={pkg?.name || ""} className={inputClass} placeholder="Medium" />
         </Field>
         <Field label="Slug">
-          <input name="slug" defaultValue={pkg?.slug || ""} className={inputClass} placeholder="medium" />
+          <input name="slug" defaultValue={pkg?.slug || ""} readOnly className={inputClass} placeholder="medium" />
         </Field>
         <Field label="Price">
-          <input name="price" required defaultValue={pkg?.price || ""} className={inputClass} placeholder="$999" />
+          <input name="price" required inputMode="numeric" defaultValue={pkg?.price || ""} className={inputClass} placeholder="$999" aria-describedby="package-price-help" />
+          <span id="package-price-help" className="mt-1 block text-xs font-medium text-slate-500">Whole-dollar USD price. This is the price used at checkout.</span>
         </Field>
-        <Field label="Interval">
-          <input name="interval" defaultValue={pkg?.interval || "/mo"} className={inputClass} placeholder="/mo" />
+        <Field label="Purchase type">
+          <input value={pkg?.packageType === "single" ? "Single video · one-time" : "Monthly editing hours"} readOnly className={inputClass} />
         </Field>
+        {pkg?.packageType === "monthly" ? <>
+          <Field label="Editing hours per month"><input value={`${pkg.editingHoursPerMonth} hours`} readOnly className={inputClass} /></Field>
+          <Field label="Editing hours per workday"><input value={`${pkg.editingHoursPerWorkday} ${pkg.editingHoursPerWorkday === 1 ? "hour" : "hours"}`} readOnly className={inputClass} /></Field>
+        </> : null}
         <Field label="Sort order">
-          <input name="sortOrder" type="number" defaultValue={pkg?.sortOrder || 10} className={inputClass} />
+          <input name="sortOrder" type="number" min={0} max={999999} step={1} defaultValue={pkg?.sortOrder ?? 10} className={inputClass} />
         </Field>
         <Field label="Badge">
           <input name="badge" defaultValue={pkg?.badge || ""} className={inputClass} placeholder="Most popular" />
         </Field>
         <Field label="Turnaround">
-          <input name="turnaround" defaultValue={pkg?.turnaround || ""} className={inputClass} placeholder="24-36h" />
+          <input name="turnaround" defaultValue={pkg?.turnaround || ""} className={inputClass} placeholder="48 hours" />
         </Field>
         <Field label="Revisions">
           <input name="revisions" defaultValue={pkg?.revisions || ""} className={inputClass} placeholder="2 revision rounds" />
@@ -2263,7 +2640,7 @@ function PackageForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Features">
-          <textarea name="features" required defaultValue={(pkg?.features || []).join("\n")} className={`${inputClass} min-h-40`} placeholder={"8 videos monthly\n24-36h turnaround\nMotion graphics"} />
+          <textarea name="features" required defaultValue={(pkg?.features || []).join("\n")} className={`${inputClass} min-h-40`} placeholder={pkg?.packageType === "monthly" ? "Editing hours per month\nHours available per workday\nRevision allowance" : "Finished video length\nFirst-cut turnaround\nIncluded revision rounds"} />
         </Field>
         <Field label="Deliverables">
           <textarea name="deliverables" defaultValue={(pkg?.deliverables || []).join("\n")} className={`${inputClass} min-h-40`} placeholder={"Long-form edits\nShorts repurposing\nUpload-ready exports"} />
@@ -2338,20 +2715,20 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function MetricCard({ label, value, icon, color, to, active = false }: { label: string; value: number; icon: string; color: string; to?: string; active?: boolean }) {
+function MetricCard({ label, value, icon, color, to, active = false, compact = false }: { label: string; value: number; icon: string; color: string; to?: string; active?: boolean; compact?: boolean }) {
   const content = (
     <>
-      <div className="flex items-center justify-between">
-        <div className="neo-icon-badge neo-workspace__metric-icon flex h-10 w-10 items-center justify-center rounded-xl"><span className="material-symbols-outlined text-[20px]">{icon}</span></div>
-        <span className={`neo-workspace__metric-state text-[10px] font-black uppercase tracking-widest ${active ? "is-active" : ""}`}>{active ? "Selected" : "Realtime"}</span>
+      <div className="flex items-center justify-between gap-1">
+        <div className={`neo-icon-badge neo-workspace__metric-icon flex shrink-0 items-center justify-center ${compact ? "h-8 w-8 rounded-lg" : "h-10 w-10 rounded-xl"}`}><span className={`material-symbols-outlined ${compact ? "text-[17px]" : "text-[20px]"}`}>{icon}</span></div>
+        <span className={`neo-workspace__metric-state whitespace-nowrap text-[10px] font-black uppercase tracking-widest ${compact ? "text-[9px] tracking-[0.12em]" : ""} ${active ? "is-active" : ""}`}>{active ? "Selected" : "Realtime"}</span>
       </div>
-      <div className="mt-4"><p className="neo-workspace__metric-value">{value}</p><p className="neo-workspace__metric-label">{label}</p></div>
+      <div className={compact ? "mt-2 min-w-0" : "mt-4"}><p className={`neo-workspace__metric-value ${compact ? "text-2xl leading-tight" : ""}`}>{value}</p><p className={`neo-workspace__metric-label ${compact ? "truncate text-xs" : ""}`}>{label}</p></div>
     </>
   );
 
   if (to) {
     return (
-      <Link reloadDocument to={to} data-tone={color} className={`neo-workspace__metric-card rounded-2xl p-5 text-left ${active ? "is-active" : ""}`}>
+      <Link reloadDocument to={to} data-tone={color} className={`neo-workspace__metric-card rounded-2xl ${compact ? "p-3 sm:p-4" : "p-5"} text-left ${active ? "is-active" : ""}`}>
         {content}
       </Link>
     );
@@ -2380,6 +2757,36 @@ function RoleBadge({ role }: { role: string }) {
   };
 
   return <span className={`inline-flex items-center rounded-md px-2 py-1 text-[10px] font-black uppercase tracking-wider ring-1 ring-inset ${styles[normalizedRole]}`}>{formatUserRole(normalizedRole)}</span>;
+}
+
+function UserActivitySummary({ activity }: { activity: AdminUserActivity }) {
+  const purchaseCount = activity.paidPurchases;
+  const projectCount = activity.activeProjects;
+  const hasPurchases = purchaseCount !== null && purchaseCount > 0;
+  const projectActive = projectCount !== null && projectCount > 0;
+  const unavailable = "bg-amber-50 text-amber-700";
+  const inactive = "bg-slate-100 text-slate-600";
+
+  return (
+    <div className="neo-user-activity flex min-w-[230px] flex-col items-start gap-1.5 text-[11px] font-bold">
+      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${purchaseCount === null ? unavailable : hasPurchases ? "bg-emerald-50 text-emerald-700" : inactive}`}>
+        <span aria-hidden="true" className="material-symbols-outlined">{purchaseCount === null ? "help" : hasPurchases ? "check_circle" : "remove_circle"}</span>
+        {purchaseCount === null
+          ? "Purchase data unavailable"
+          : hasPurchases
+            ? `${purchaseCount} paid purchase${purchaseCount === 1 ? "" : "s"}`
+            : "No paid purchases"}
+      </span>
+      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 ${projectCount === null ? unavailable : projectActive ? "bg-indigo-50 text-indigo-700" : inactive}`}>
+        <span aria-hidden="true" className="material-symbols-outlined">{projectCount === null ? "help" : projectActive ? "folder_open" : "folder_off"}</span>
+        {projectCount === null
+          ? "Project data unavailable"
+          : projectActive
+            ? `${projectCount} active project${projectCount === 1 ? "" : "s"}`
+            : "No active projects"}
+      </span>
+    </div>
+  );
 }
 
 function PaginationButton({ icon, disabled, onClick }: { icon: string, disabled: boolean, onClick: () => void }) {

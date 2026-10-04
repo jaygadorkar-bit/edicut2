@@ -14,8 +14,8 @@ export default defineConfig(({ isSsrBuild }) => ({
     },
     hmr: {
       host: "localhost",
-      // Docker exposes the development server on host port 3000.
-      clientPort: 3000,
+      // Docker exposes the development server on host port 3002.
+      clientPort: 3002,
       overlay: true,
     },
   },

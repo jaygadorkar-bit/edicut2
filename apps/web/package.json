@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @edicut/shared build && pnpm --filter @edicut/db build && react-router dev --port 3000",
+    "dev": "pnpm --filter @edicut/shared build && pnpm --filter @edicut/db build && react-router dev --port 3002",
     "build": "pnpm --filter @edicut/shared build && pnpm --filter @edicut/db build && react-router build",
     "typecheck": "pnpm --filter @edicut/shared build && pnpm --filter @edicut/db build && react-router typegen && pnpm exec tsc --noEmit",
     "deploy": "wrangler deploy",

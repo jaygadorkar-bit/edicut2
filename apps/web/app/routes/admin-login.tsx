@@ -7,6 +7,7 @@ import { getDbFromContext } from "../lib/db.server";
 import {
   createAdminSession,
   getAdminSession,
+  isAdminRole,
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 import { verifyPassword } from "../lib/password.server";
@@ -16,9 +17,11 @@ import {
   signInWithSupabase,
   supabaseAuthEnabled,
 } from "../integrations/supabase/auth.server";
+import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
+const MAX_ATTEMPT_KEYS = 10_000;
 
 type LoginAttempt = {
   count: number;
@@ -72,6 +75,8 @@ function hasTrustedOrigin(request: Request) {
     new URL(request.url).origin,
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
     "https://edicut.com",
     "https://www.edicut.com",
   ]);
@@ -101,7 +106,13 @@ function getAttemptKey(request: Request, email: string) {
 
 function isRateLimited(key: string) {
   const now = Date.now();
-  const attempt = getAttemptStore().get(key);
+  const store = getAttemptStore();
+  const attempt = store.get(key);
+
+  if (!attempt && store.size >= MAX_ATTEMPT_KEYS) {
+    pruneExpiredAttempts(store, now);
+    if (store.size >= MAX_ATTEMPT_KEYS) return true;
+  }
 
   if (!attempt) {
     return false;
@@ -121,6 +132,8 @@ function recordFailedAttempt(key: string) {
   const attempt = store.get(key);
 
   if (!attempt || attempt.resetAt <= now) {
+    pruneExpiredAttempts(store, now);
+    if (!store.has(key) && store.size >= MAX_ATTEMPT_KEYS) return;
     store.set(key, { count: 1, resetAt: now + WINDOW_MS });
     return;
   }
@@ -130,6 +143,12 @@ function recordFailedAttempt(key: string) {
 
 function clearFailedAttempts(key: string) {
   getAttemptStore().delete(key);
+}
+
+function pruneExpiredAttempts(store: Map<string, LoginAttempt>, now: number) {
+  for (const [key, attempt] of store) {
+    if (attempt.resetAt <= now) store.delete(key);
+  }
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -147,6 +166,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return { error: "Admin request origin was rejected." };
   }
 
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return { error: "Admin sign-in request is too large. Please try again." };
+  }
+
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
@@ -154,6 +177,23 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (!email || !password || password.length < 6) {
     return { error: "Use your admin email and password." };
+  }
+
+  const identityKey = await hashUsageLimitKey(email);
+  const authLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "AUTH_IDENTITY_LIMITER",
+    key: identityKey,
+    localLimit: 5,
+    localPeriodSeconds: 60,
+  });
+  if (authLimit !== "allowed") {
+    return {
+      error: authLimit === "limited"
+        ? "Too many attempts for this account. Wait a minute and try again."
+        : "Sign-in protection is temporarily unavailable. Please try again shortly.",
+    };
   }
 
   const captcha = await verifyRecaptchaToken({
@@ -175,7 +215,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const user = await findAdminUserByEmail(db, email);
 
   if (supabaseAuthEnabled(context)) {
-    if (!user || !user.active) {
+    if (!user || !user.active || !isAdminRole(user.role)) {
       recordFailedAttempt(attemptKey);
       return { error: "Admin access is not available for this account." };
     }
@@ -202,7 +242,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return { error: "Admin access is not available for this account." };
   }
 
-  if (!user || !user.active || !user.passwordHash) {
+  if (!user || !user.active || !isAdminRole(user.role) || !user.passwordHash) {
     recordFailedAttempt(attemptKey);
     return { error: "Admin access is not available for this account." };
   }

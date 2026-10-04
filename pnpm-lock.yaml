@@ -190,6 +190,9 @@ importers:
       '@auth/drizzle-adapter':
         specifier: ^1.11.3
         version: 1.11.3
+      '@edicut/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@neondatabase/serverless':
         specifier: ^0.10.4
         version: 0.10.4

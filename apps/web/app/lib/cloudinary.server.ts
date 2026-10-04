@@ -1,5 +1,6 @@
 import type { PricingPackage } from "./pricing.server";
 import type { PortfolioSection } from "./portfolio.server";
+import { fetchWithTimeout, UPLOAD_FETCH_TIMEOUT_MS } from "@edicut/shared/server-fetch";
 
 type CloudinaryEnv = {
   cf?: { env?: Record<string, string | undefined> };
@@ -9,6 +10,9 @@ type CloudinaryEnv = {
 type CloudinaryAccount = "image" | "video";
 
 const CLOUDINARY_CACHE_MS = 60_000;
+const MAX_CLOUDINARY_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_CLOUDINARY_VIDEO_BYTES = 50 * 1024 * 1024;
+const MAX_CLOUDINARY_DELETE_IDS = 100;
 
 let imageListCache: { expiresAt: number; data: CloudinaryImageResource[] } | null = null;
 let imageListPromise: Promise<CloudinaryImageResource[]> | null = null;
@@ -81,6 +85,7 @@ export type CloudinaryVideoResource = {
 };
 
 export type CloudinaryUsage = {
+  plan?: string;
   credits?: {
     usage?: number;
     limit?: number;
@@ -152,7 +157,7 @@ async function cloudinaryAdminRequest<T>(
   account: CloudinaryAccount = "image",
 ) {
   const env = await requireCloudinaryEnv(context, account);
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudName}${path}`, {
+  const response = await fetchWithTimeout(`https://api.cloudinary.com/v1_1/${env.cloudName}${path}`, {
     ...init,
     headers: {
       Authorization: authHeader(env.apiKey, env.apiSecret),
@@ -191,6 +196,9 @@ export async function uploadPackageImageToCloudinary(file: File, context?: Cloud
   if (!file.type.startsWith("image/")) {
     throw new Error("Only image files can be uploaded.");
   }
+  if (file.size > MAX_CLOUDINARY_IMAGE_BYTES) {
+    throw new Error("Each image upload is limited to 10 MB.");
+  }
 
   const timestamp = Math.round(Date.now() / 1000);
   const uploadParams = {
@@ -206,10 +214,10 @@ export async function uploadPackageImageToCloudinary(file: File, context?: Cloud
   formData.set("timestamp", String(timestamp));
   formData.set("signature", signature);
 
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudName}/image/upload`, {
+  const response = await fetchWithTimeout(`https://api.cloudinary.com/v1_1/${env.cloudName}/image/upload`, {
     method: "POST",
     body: formData,
-  });
+  }, UPLOAD_FETCH_TIMEOUT_MS);
 
   const result = await response.json() as { secure_url?: string; error?: { message?: string } };
 
@@ -279,6 +287,9 @@ export async function uploadPortfolioVideoToCloudinary(file: File, context?: Clo
   if (!file.type.startsWith("video/")) {
     throw new Error("Only video files can be uploaded.");
   }
+  if (file.size > MAX_CLOUDINARY_VIDEO_BYTES) {
+    throw new Error("Portfolio video uploads are limited to 50 MB.");
+  }
 
   const timestamp = Math.round(Date.now() / 1000);
   const uploadParams = {
@@ -294,10 +305,10 @@ export async function uploadPortfolioVideoToCloudinary(file: File, context?: Clo
   formData.set("timestamp", String(timestamp));
   formData.set("signature", signature);
 
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudName}/video/upload`, {
+  const response = await fetchWithTimeout(`https://api.cloudinary.com/v1_1/${env.cloudName}/video/upload`, {
     method: "POST",
     body: formData,
-  });
+  }, UPLOAD_FETCH_TIMEOUT_MS);
   const result = await response.json() as Partial<CloudinaryVideoResource> & { error?: { message?: string } };
 
   if (!response.ok || !result.secure_url || !result.public_id) {
@@ -372,6 +383,9 @@ export async function deleteCloudinaryImages(publicIds: string[], context?: Clou
   if (!publicIds.length) {
     return;
   }
+  if (publicIds.length > MAX_CLOUDINARY_DELETE_IDS) {
+    throw new Error(`Cloudinary deletes are limited to ${MAX_CLOUDINARY_DELETE_IDS} images per request.`);
+  }
 
   const params = new URLSearchParams();
   for (const publicId of publicIds) {
@@ -393,6 +407,9 @@ export async function deleteCloudinaryImages(publicIds: string[], context?: Clou
 
 export async function deleteCloudinaryVideos(publicIds: string[], context?: CloudinaryEnv) {
   if (!publicIds.length) return;
+  if (publicIds.length > MAX_CLOUDINARY_DELETE_IDS) {
+    throw new Error(`Cloudinary deletes are limited to ${MAX_CLOUDINARY_DELETE_IDS} videos per request.`);
+  }
 
   const params = new URLSearchParams();
   for (const publicId of publicIds) {

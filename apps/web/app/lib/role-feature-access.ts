@@ -1,14 +1,14 @@
 import { USER_ROLES, normalizeUserRole, type UserRole } from "./admin-user-roles";
 
 export const DASHBOARD_FEATURES = [
-  { key: "overview", label: "Overview", path: "/dashboard" },
-  { key: "projects", label: "Projects", path: "/dashboard" },
-  { key: "reviews", label: "Reviews", path: "/dashboard" },
-  { key: "uploads", label: "Uploads", path: "/dashboard" },
+  { key: "overview", label: "Dashboard", path: "/dashboard" },
+  { key: "projects", label: "Projects", path: "/dashboard/projects" },
+  { key: "reviews", label: "Reviews", path: "/dashboard/reviews" },
+  { key: "uploads", label: "Uploads", path: "/dashboard/uploads" },
   { key: "support", label: "Contact Inbox", path: "/dashboard/messages" },
-  { key: "billing", label: "Billing", path: "/dashboard" },
-  { key: "affiliates", label: "Affiliates", path: "/dashboard" },
-  { key: "settings", label: "Settings", path: "/dashboard" },
+  { key: "billing", label: "Purchases", path: "/dashboard/subscriptions" },
+  { key: "affiliates", label: "Affiliates", path: "/dashboard/affiliates" },
+  { key: "settings", label: "Settings", path: "/dashboard/settings" },
 ] as const;
 
 export type DashboardFeature = (typeof DASHBOARD_FEATURES)[number]["key"];
@@ -17,8 +17,8 @@ export type RoleFeatureAccess = Record<UserRole, DashboardFeature[]>;
 const featureSet = new Set<DashboardFeature>(DASHBOARD_FEATURES.map((feature) => feature.key));
 
 export const DEFAULT_ROLE_FEATURE_ACCESS: RoleFeatureAccess = {
-  user: ["overview", "projects", "reviews", "uploads", "support", "billing", "settings"],
-  customer: ["overview", "projects", "reviews", "uploads", "support", "billing", "settings"],
+  user: ["overview", "projects", "reviews", "uploads", "billing", "settings"],
+  customer: ["overview", "projects", "reviews", "uploads", "billing", "settings"],
   customer_support: ["overview", "support", "settings"],
   affiliate: ["overview", "affiliates", "billing", "settings"],
   editor: ["overview", "projects", "reviews", "uploads", "settings"],
@@ -43,9 +43,35 @@ export function sanitizeRoleFeatureAccess(value: unknown): RoleFeatureAccess {
   }, {} as RoleFeatureAccess);
 }
 
+export function roleFeatureAccessFromFormData(formData: FormData): RoleFeatureAccess {
+  const access = USER_ROLES.reduce<RoleFeatureAccess>((accumulator, role) => {
+    if (role === "user") return accumulator;
+
+    accumulator[role] = DASHBOARD_FEATURES
+      .filter((feature) =>
+        formData.get(`access__${role}__${feature.key}`) === "on" &&
+        !(role === "customer" && feature.key === "support"),
+      )
+      .map((feature) => feature.key);
+
+    return accumulator;
+  }, {} as RoleFeatureAccess);
+
+  // "user" is the legacy role for customer accounts. The matrix exposes one
+  // Customer column, so keep both stored role names in sync.
+  access.user = [...access.customer];
+  return access;
+}
+
 export function getAllowedDashboardFeatures(role: string, access: RoleFeatureAccess): DashboardFeature[] {
   const normalizedRole = normalizeUserRole(role);
-  return access[normalizedRole] ?? DEFAULT_ROLE_FEATURE_ACCESS[normalizedRole];
+  const accessRole = normalizedRole === "user" ? "customer" : normalizedRole;
+  const features = access[accessRole] ?? DEFAULT_ROLE_FEATURE_ACCESS[accessRole];
+  if (normalizedRole === "user" || normalizedRole === "customer") {
+    return features.filter((feature) => feature !== "support");
+  }
+
+  return features;
 }
 
 export function canAccessDashboardFeature(role: string, feature: DashboardFeature, access: RoleFeatureAccess): boolean {

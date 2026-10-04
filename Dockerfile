@@ -1,7 +1,7 @@
 FROM node:22-alpine AS workspace
 
 RUN apk add --no-cache libc6-compat
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10.29.2
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -20,6 +20,6 @@ RUN pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 COPY . .
 
-EXPOSE 3000
+EXPOSE 3002
 
 CMD ["pnpm", "dev"]

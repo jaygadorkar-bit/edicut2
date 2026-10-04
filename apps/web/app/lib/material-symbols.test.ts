@@ -10,6 +10,6 @@ describe("Material Symbols stylesheet", () => {
     expect(stylesheet.searchParams.get("display")).toBe("block");
     expect(icons).toEqual([...materialSymbolNames].sort());
     expect(new Set(icons).size).toBe(icons.length);
-    expect(icons).toHaveLength(112);
+    expect(icons).toHaveLength(119);
   });
 });

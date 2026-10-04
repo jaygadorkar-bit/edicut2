@@ -5,11 +5,13 @@ import { contactMessages } from "@edicut/db/schema";
 import { ContactSection, PageShell } from "../components/site/Marketing.js";
 import { getDbFromContext } from "../lib/db.server";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
+import { createRouteMeta } from "../lib/seo";
+import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
-export const meta: MetaFunction = () => [
-  { title: "Contact EdiCut | Creator Post-Production" },
-  { name: "description", content: "Tell EdiCut about your next video and get matched with the right editing lane." },
-];
+export const meta: MetaFunction = (args) => createRouteMeta(args,
+  "Contact EdiCut | Video Editing for YouTube Creators",
+  "Tell EdiCut about your YouTube, podcast, or short-form video project and get matched with an editing plan for your workflow.",
+);
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -20,6 +22,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return redirect("/contact?error=invalid#contact");
+  }
+
   const formData = await request.formData();
   const parsed = contactIntakeSchema.safeParse({
     name: formData.get("name"),
@@ -29,8 +35,21 @@ export async function action({ request, context }: ActionFunctionArgs) {
     brief: formData.get("brief"),
   });
 
-  if (!parsed.success) {
+  if (!parsed.success || parsed.data.email.length > 254) {
     return redirect("/contact?error=invalid#contact");
+  }
+
+  const identityKey = await hashUsageLimitKey(parsed.data.email.trim().toLowerCase());
+  const contactLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "AUTH_IDENTITY_LIMITER",
+    key: `contact:${identityKey}`,
+    localLimit: 3,
+    localPeriodSeconds: 60,
+  });
+  if (contactLimit !== "allowed") {
+    return redirect("/contact?error=security#contact");
   }
 
   const captcha = await verifyRecaptchaToken({

@@ -1,13 +1,17 @@
 import type { FormEvent, PointerEvent as ReactPointerEvent } from "react";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useMatches } from "react-router";
+import { Award, Film, Star, Trophy } from "lucide-react";
 import { authHref } from "../auth/AuthModal";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
-import { faqs, legalLinks, navLinks, plans as defaultPlans, testimonials, workflow } from "./data";
+import { formatPackagePrice, parsePackagePrice, SUBSCRIPTION_PACKAGES } from "../../lib/subscriptions";
+import { faqs, legalLinks, navLinks, testimonials, workflow } from "./data";
 import { defaultPortfolioSections } from "../../lib/portfolio-demo";
 import { wrapLoopPosition } from "../../lib/portfolio-loop";
 import { CookieConsent } from "./CookieConsent.js";
 import type { PortfolioSection as PortfolioSectionView, PortfolioVideo } from "../../lib/portfolio.server";
+
+export { WhyHireUsSection } from "./WhyHireUsSection";
 
 type PricingPlanView = {
   name: string;
@@ -19,6 +23,14 @@ type PricingPlanView = {
   popular?: boolean;
   badge?: string;
 };
+
+function sortByConfiguredPricingOrder<T extends { slug: string }>(items: T[], plans?: PricingPlanView[]) {
+  if (!plans) return items;
+  const configuredOrder = new Map(plans.map((plan, index) => [plan.slug, index]));
+  return [...items].sort((a, b) =>
+    (configuredOrder.get(a.slug) ?? Number.MAX_SAFE_INTEGER) - (configuredOrder.get(b.slug) ?? Number.MAX_SAFE_INTEGER),
+  );
+}
 
 const PortfolioCopyContext = createContext(false);
 
@@ -691,7 +703,7 @@ export function WorkflowSection() {
             {workflow.map(([step, title, copy, icon], index) => (
               <article key={step} className="neo-card relative z-10 rounded-2xl p-5 sm:p-6">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="neo-icon-badge neo-red-glow flex h-12 w-12 items-center justify-center rounded-2xl">
+                  <span className="neo-icon-badge flex h-12 w-12 items-center justify-center rounded-2xl">
                     <span className="material-symbols-outlined text-[24px]">{icon}</span>
                   </span>
                   <span className="yt-tag font-black uppercase tracking-[0.16em] neo-muted">Step {Number(step)}</span>
@@ -724,6 +736,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   const [playingItem, setPlayingItem] = useState<PortfolioVideo | null>(null);
   const [isPlayerLoading, setIsPlayerLoading] = useState(false);
   const [playerLoadFailed, setPlayerLoadFailed] = useState(false);
+  const playerDialogRef = useRef<HTMLDialogElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const tabDragRef = useRef<{ pointerId: number; startX: number; lastX: number; moved: boolean } | null>(null);
@@ -864,17 +877,30 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
 
   useEffect(() => {
     if (!playingItem) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPlayingItem(null);
+    const dialog = playerDialogRef.current;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    dialog?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      dialog?.close();
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
   }, [playingItem]);
 
   return (
     <section id="portfolio" className={`border-b neo-line px-5 py-14 sm:px-6 sm:py-20 ${className}`}>
       <div className="mx-auto max-w-7xl">
-        <SectionIntro eyebrow="Selected work" title="Edits built to keep viewers watching." />
+        {full ? (
+          <div className="portfolio-gallery-intro">
+            <div>
+              <h2>Find your kind of edit.</h2>
+              <p>Pick a format, then press play to explore the details.</p>
+            </div>
+            <span className="portfolio-gallery-note"><Film size={17} aria-hidden="true" /> Watch the full videos</span>
+          </div>
+        ) : <SectionIntro eyebrow="Selected work" title="Edits built to keep viewers watching." />}
 
         <div
           ref={tabListRef}
@@ -936,12 +962,25 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
         </div>
 
         <p className="neo-portfolio-swipe-hint mt-1 flex items-center justify-end gap-1 px-2 text-[0.6875rem] font-bold neo-muted sm:hidden">
-          Drag or swipe for more
+          {full ? "Swipe for more formats" : "Drag or swipe for more"}
           <span className="material-symbols-outlined text-[14px]" aria-hidden="true">chevron_right</span>
         </p>
 
         <div key={displayedTab} id={`${portfolioId}-panel`} className={`neo-portfolio-panel mt-8 ${isSwitching ? "is-switching" : ""}`} role="tabpanel" aria-labelledby={`${portfolioId}-tab-${activeSection?.slug || firstTabSlug}`} aria-busy={isSwitching} tabIndex={0} inert={isSwitching}>
-          {displayPortfolio.length ? (
+          {displayPortfolio.length && full ? (
+            <div className="portfolio-video-grid">
+              {displayPortfolio.map((item) => (
+                <article className={`portfolio-video ${item.orientation === "vertical" ? "portfolio-video-vertical" : ""}`} key={item.id}>
+                  <PortfolioCard item={item} variant="wide" onPlay={playPortfolioItem} showCaption={false} />
+                  <div className="portfolio-video-caption">
+                    <p>{item.creatorName}</p>
+                    <h3>{item.title}</h3>
+                    <span>{item.uniqueSellingPoint === "YouTube sample" ? "YouTube sample" : item.tag || activeSection?.name}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : displayPortfolio.length ? (
             <PortfolioScroller ariaLabel={`${activeSection?.name || "Selected"} video reel`}>
               {displayPortfolio.map((item, index) => (
                 <div key={item.id} style={{ animationDelay: `${Math.min(index, 3) * 55}ms` }} className={`neo-portfolio-slide neo-portfolio-slide--enter ${item.orientation === "horizontal" ? "neo-portfolio-slide--landscape" : ""} ${index === 0 ? "neo-portfolio-slide--featured" : ""}`}>
@@ -956,32 +995,32 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
             </div>
           ) : null}
         </div>
-        <div className="neo-portfolio-view-all mt-6 hidden justify-center">
+        {!full ? <div className="neo-portfolio-view-all mt-6 hidden justify-center">
           <ButtonLink to="/portfolio">
             View more
             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
           </ButtonLink>
-        </div>
+        </div> : null}
       </div>
 
       {playingItem ? (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 px-4 py-6 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
+        <dialog
+          ref={playerDialogRef}
+          className="fixed inset-0 m-0 flex h-dvh max-h-none w-screen max-w-none items-center justify-center border-0 bg-black/85 px-4 py-16 backdrop-blur-sm"
           aria-label={`${playingItem.title} video player`}
+          onCancel={closePlayer}
           onClick={closePlayer}
         >
           <div className="relative w-full max-w-5xl" onClick={(event) => event.stopPropagation()}>
             <button
               type="button"
               onClick={closePlayer}
-              className="absolute -right-2 -top-12 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black shadow-lg transition hover:bg-primary hover:text-white"
+              className="absolute right-0 -top-12 flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shadow-lg transition hover:bg-primary hover:text-white"
               aria-label="Close video player"
             >
               <span className="material-symbols-outlined text-[22px]">close</span>
             </button>
-            <div className={`relative overflow-hidden rounded-[28px] bg-black shadow-2xl ${playingItem.orientation === "vertical" ? "mx-auto aspect-[9/16] max-h-[82vh] max-w-[460px]" : "aspect-video"}`}>
+            <div className={`relative overflow-hidden rounded-[28px] bg-black shadow-2xl ${playingItem.orientation === "vertical" ? "mx-auto aspect-[9/16] max-h-[calc(100dvh-8rem)] max-w-[460px]" : "mx-auto aspect-video max-h-[calc(100dvh-8rem)]"}`}>
               {playingItem.videoProvider === "cloudinary" ? (
                 <video
                   className="h-full w-full object-contain"
@@ -1030,7 +1069,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
               ) : null}
             </div>
           </div>
-        </div>
+        </dialog>
       ) : null}
     </section>
   );
@@ -1326,11 +1365,13 @@ function PortfolioCard({
   variant,
   featured = false,
   onPlay,
+  showCaption = true,
 }: {
   item: PortfolioVideo;
   variant: "hero" | "slider" | "wide" | "reel";
   featured?: boolean;
   onPlay: (item: PortfolioVideo) => void;
+  showCaption?: boolean;
 }) {
   const isCopy = useContext(PortfolioCopyContext);
   const sizeClass = {
@@ -1350,7 +1391,7 @@ function PortfolioCard({
     >
       <img
         src={item.thumbnailUrl}
-        alt={`${item.title} ${item.creatorName} video`}
+        alt={showCaption ? `${item.title} ${item.creatorName} video` : ""}
         loading="lazy"
         decoding="async"
         onError={(event) => {
@@ -1369,91 +1410,51 @@ function PortfolioCard({
         </svg>
       </span>
 
-      <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
+      {showCaption ? <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
         <p className="yt-tag font-black uppercase text-white/70">{item.creatorName}</p>
         <h3 className="type-card-title mt-1 text-white">{item.title}</h3>
-      </div>
+      </div> : <span className="portfolio-video-play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M8 5v14l11-7z" /></svg></span>}
     </button>
   );
 }
 
-export function DifferentiatorsSection() {
-  const items = [
-    ["groups", "Creator-aware team", "Editors who understand hooks, pacing, chapters, intros, and retention curves."],
-    ["timer", "Reliable turnaround", "A predictable 24-48 hour editing lane keeps your upload calendar moving."],
-    ["monitoring", "Retention polish", "Pattern interrupts, captions, audio cleanup, and motion accents where they matter."],
-    ["auto_awesome_mosaic", "Repurposing ready", "Turn long-form episodes into Shorts, TikToks, and Reels without starting over."],
-  ];
-  return (
-    <section className="neo-benefits border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-7xl">
-        <SectionIntro eyebrow="Why EdiCut" title="A production partner, not just an editing queue." />
-        <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {items.map(([icon, title, copy], index) => (
-            <article key={title} className={`neo-benefit-card neo-card rounded-2xl p-6 ${index === 3 ? "neo-benefit-mobile-hidden" : ""}`}>
-              <span className="neo-icon-badge flex h-11 w-11 items-center justify-center rounded-xl">
-                <span className="material-symbols-outlined">{icon}</span>
-              </span>
-              <h3 className="neo-differentiator-title mt-5 font-black neo-ink">{title}</h3>
-              <p className="mt-3 yt-small leading-6 neo-muted">{copy}</p>
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-export function PricingSection({ comparison = false, plans = defaultPlans }: { comparison?: boolean; plans?: PricingPlanView[] }) {
-  const editingPlans = [
-    {
-      name: "Creator",
-      slug: "creator",
-      price: "$80",
-      description: "A lean creator package for clean edits with subtitles, sound, color, stock assets, proofing, reels, and thumbnail support.",
-      badge: "Essentials",
-      icon: "smart_display",
-      features: ["Subtitles", "Color grading", "Sound design & mixing", "Reels repurposing", "Thumbnail"],
-    },
-    {
-      name: "Creator Plus",
-      slug: "creator-plus",
-      price: "$120",
-      description: "For creators who need the core editing stack plus a stronger package price for podcast-length work and vlog footage.",
-      badge: "Most popular",
-      icon: "trending_up",
-      popular: true,
-      features: ["Subtitles", "Color grading", "Sound design & mixing", "Reels repurposing", "Thumbnail"],
-    },
-    {
-      name: "Creator Pro",
-      slug: "creator-pro",
-      price: "$300",
-      description: "The full creator package with project files, motion graphics, VFX, and AI voice over for more advanced edits.",
-      badge: "Advanced",
-      icon: "movie_filter",
-      features: ["Everything in Creator Plus", "After Effects / Premiere Pro files", "Motion graphics", "VFX", "AI voice over"],
-    },
-  ];
+export function PricingSection({ comparison = false, plans }: { comparison?: boolean; plans?: PricingPlanView[] }) {
+  const planIcons = [Star, Award, Trophy];
+  const editingPlans = sortByConfiguredPricingOrder(SUBSCRIPTION_PACKAGES.flatMap((plan, index) => {
+    const configured = plans?.find((item) => item.slug === plan.slug);
+    if (plans && !configured) return [];
+    const configuredPrice = configured ? parsePackagePrice(configured.price) : null;
+    return [{
+      ...plan,
+      name: configured?.name || plan.name,
+      description: configured?.description || plan.description,
+      features: configured?.features.length ? configured.features : plan.features,
+      price: formatPackagePrice(configuredPrice ?? plan.basePrice),
+      icon: planIcons[index],
+      badge: configured?.badge || plan.badge,
+      popular: configured?.popular ?? plan.slug === "creator-plus",
+    }];
+  }), plans);
 
   return (
     <section id="pricing" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
-        <div className="neo-pricing-intro">
-          <p className="yt-tag neo-section-label">Choose your editing plan</p>
-          <h2 className="mt-3 max-w-3xl yt-title neo-ink">
-            <span className="hidden sm:inline">Simple plans for a steadier publishing rhythm.</span>
-            <span className="sm:hidden">Simple editing plans.</span>
+        <div className="neo-pricing-intro text-center">
+          <p className="yt-tag neo-section-label">Choose a monthly package</p>
+          <h2 className="mx-auto mt-3 max-w-3xl yt-title neo-ink">
+            <span className="hidden sm:inline">Monthly editing time for a steadier publishing rhythm.</span>
+            <span className="sm:hidden">Monthly editing hours.</span>
           </h2>
         </div>
 
         <div className="mt-10 grid gap-4 lg:grid-cols-3">
           {editingPlans.map((plan) => {
+            const PlanIcon = plan.icon;
             return (
-              <article key={plan.name} className={`neo-pricing-card neo-card relative rounded-2xl p-5 ${plan.popular ? "ring-2 ring-primary/60" : ""}`}>
+              <article key={plan.name} className={`neo-pricing-card neo-card group relative rounded-2xl p-5 ${plan.popular ? "ring-2 ring-primary/60" : ""}`}>
                 <div className="flex items-start justify-between gap-4">
                   <span className="neo-icon-badge flex h-10 w-10 items-center justify-center rounded-xl">
-                    <span className="material-symbols-outlined text-[21px]">{plan.icon}</span>
+                    <PlanIcon aria-hidden="true" size={21} strokeWidth={1.8} />
                   </span>
                   <span className={`rounded-full px-2.5 py-1 yt-tag font-black uppercase ${plan.popular ? "bg-primary text-white" : "neo-inset neo-muted"}`}>
                     {plan.badge}
@@ -1464,8 +1465,7 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
                 <p className="neo-pricing-description mt-3 min-h-20 yt-small font-medium leading-6 neo-muted">{plan.description}</p>
 
                 <div className="neo-pricing-amount mt-5 border-y neo-line py-4">
-                  <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Monthly plan estimate</p>
-                  <p className="mt-2 yt-small font-bold neo-muted">Starting from</p>
+                  <p className="yt-tag font-black uppercase tracking-[0.14em] neo-muted">Monthly package price</p>
                   <div className="mt-1 flex items-baseline gap-2">
                     <span className="type-price neo-ink">{plan.price}</span>
                     <span className="yt-small font-bold neo-muted">/month</span>
@@ -1490,69 +1490,70 @@ export function PricingSection({ comparison = false, plans = defaultPlans }: { c
           })}
         </div>
 
-        <p className="mt-5 max-w-3xl text-sm font-medium leading-6 neo-muted">
-          Prices are monthly plan estimates. Choosing a plan sends a project request; it does not start recurring billing or collect payment. EdiCut confirms the scope and billing with you before work begins.
+        <p className="mx-auto mt-5 max-w-3xl text-center text-sm font-medium leading-6 neo-muted">
+          Each monthly price reserves the stated editing time across 22 working days. Editing and revisions use those hours; work beyond the monthly capacity is quoted separately. Card payments are currently unavailable.
         </p>
 
-        {comparison ? <ComparisonTable /> : null}
+        {comparison ? <ComparisonTable plans={plans} /> : null}
       </div>
     </section>
   );
 }
 
-export function ComparisonTable() {
+export function ComparisonTable({ plans }: { plans?: PricingPlanView[] } = {}) {
   const [featureMode, setFeatureMode] = useState<"key" | "all">("key");
-  const packages = [
-    ["Creator", "$80", "Core editing for creators who need clean delivery and essential channel assets."],
-    ["Creator Plus", "$120", "A stronger lane for longer podcast runtime and larger vlog footage inputs."],
-    ["Creator Pro", "$300", "Full-stack post-production with project files, motion graphics, VFX, and AI voice over."],
-  ];
+  const comparisonPlans = sortByConfiguredPricingOrder(SUBSCRIPTION_PACKAGES.flatMap((plan) => {
+    const configured = plans?.find((item) => item.slug === plan.slug);
+    if (plans && !configured) return [];
+    return [{
+      ...plan,
+      name: configured?.name || plan.name,
+      description: configured?.description || plan.description,
+      basePrice: parsePackagePrice(configured?.price || "") ?? plan.basePrice,
+      features: configured?.features.length ? configured.features : plan.features,
+    }];
+  }), plans);
+  const packages = comparisonPlans.map((plan) => [plan.name, formatPackagePrice(plan.basePrice), plan.description]);
   const keyRows = [
-    ["Base package", "$80", "$120", "$300"],
-    ["60 min podcast/run time", "$160", "$240", "$600"],
-    ["600 min raw vlog footage", "$160", "$200", "$380"],
-    ["Subtitles", "Yes", "Yes", "Yes"],
-    ["Color grading", "Yes", "Yes", "Yes"],
-    ["Sound design & mixing", "Yes", "Yes", "Yes"],
-    ["Content repurposing reels", "Yes", "Yes", "Yes"],
-    ["Thumbnail", "Yes", "Yes", "Yes"],
-    ["Advanced project files", "No", "No", "Yes"],
+    ["Monthly price", ...comparisonPlans.map((plan) => formatPackagePrice(plan.basePrice))],
+    ["Editing hours / month", ...comparisonPlans.map((plan) => String(plan.editingHoursPerMonth))],
+    ["Editing hours / workday", ...comparisonPlans.map((plan) => String(plan.editingHoursPerWorkday))],
+    ["Working days / month", ...comparisonPlans.map((plan) => String(plan.workingDaysPerMonth))],
+    ["Editing and revisions", ...comparisonPlans.map(() => "Use reserved hours")],
+    ["Unused hours", ...comparisonPlans.map(() => "Do not roll over")],
   ];
   const allRows = [
-    ...keyRows.slice(0, 6),
-    ["Royalty-free stock video", "Yes", "Yes", "Yes"],
-    ["Royalty-free stock music", "Yes", "Yes", "Yes"],
-    ["Video proofing tool", "Yes", "Yes", "Yes"],
-    ...keyRows.slice(6, 8),
-    ["After Effects / Premiere Pro files", "No", "No", "Yes"],
-    ["Motion graphics", "No", "No", "Yes"],
-    ["VFX", "No", "No", "Yes"],
-    ["AI voice over", "No", "No", "Yes"],
+    ...keyRows,
+    ["Captions", ...comparisonPlans.map(() => "Included")],
+    ["Color and audio finishing", ...comparisonPlans.map((plan) => plan.slug === "creator" ? "Basic cleanup" : "Included")],
+    ["Licensed stock / B-roll", ...comparisonPlans.map((plan) => plan.slug === "creator" ? "Quoted separately" : "Included asset library")],
+    ["Template-based motion graphics", ...comparisonPlans.map((plan) => plan.slug === "creator-pro" ? "Light branded motion" : "-")],
+    ["Custom VFX, project files, and AI voice-over", ...comparisonPlans.map(() => "Quoted separately")],
   ];
   const rows = featureMode === "key" ? keyRows : allRows;
 
   return (
-    <section className="mt-8 rounded-lg bg-[#F7FAFB] p-3 sm:p-4">
-      <div className="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside>
-          <h2 className="max-w-[230px] yt-title text-foreground">Compare packages</h2>
-          <p className="mt-4 max-w-[250px] text-base font-medium leading-7 text-muted-foreground">
-            Compare monthly editing plan estimates by footage volume, runtime, and deliverables. EdiCut confirms final scope and billing before work begins.
+    <section aria-labelledby="package-comparison-title" className="neo-surface mt-8 rounded-[2rem] p-4 sm:p-6 lg:p-8">
+      <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+        <aside className="min-w-0">
+          <h2 id="package-comparison-title" className="max-w-[230px] yt-title neo-ink">Compare packages</h2>
+          <p className="mt-4 max-w-[280px] yt-small font-medium leading-6 text-slate-700">
+            Compare reserved editing time, monthly planning basis, and finishing options across all three plans.
           </p>
-          <div className="mt-6 inline-flex rounded-full bg-gray-200 p-1 yt-tag font-black" role="tablist" aria-label="Compare feature mode">
+          <div className="neo-inset mt-6 inline-flex max-w-full flex-wrap rounded-full p-1.5" role="group" aria-label="Package comparison detail level">
             <button
               type="button"
               onClick={() => setFeatureMode("key")}
-              aria-selected={featureMode === "key"}
-              className={`rounded-full px-4 py-2 ${featureMode === "key" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"}`}
+              aria-pressed={featureMode === "key"}
+              className={`min-h-11 rounded-full px-4 py-2.5 yt-tag font-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${featureMode === "key" ? "neo-card neo-ink" : "neo-ink hover:text-primary"}`}
             >
               Key features
             </button>
             <button
               type="button"
               onClick={() => setFeatureMode("all")}
-              aria-selected={featureMode === "all"}
-              className={`rounded-full px-4 py-2 ${featureMode === "all" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground"}`}
+              aria-pressed={featureMode === "all"}
+              className={`min-h-11 rounded-full px-4 py-2.5 yt-tag font-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${featureMode === "all" ? "neo-card neo-ink" : "neo-ink hover:text-primary"}`}
             >
               All features
             </button>
@@ -1560,18 +1561,18 @@ export function ComparisonTable() {
         </aside>
 
         <div className="self-start lg:col-start-2">
-          <div className="grid md:grid-cols-3">
-            {packages.map(([name, price, copy], index) => (
-              <article key={name} className={`h-fit border-r border-gray-100 bg-white p-5 last:border-r-0 ${index === 1 ? "relative z-10 ring-1 ring-primary" : ""}`}>
-                <h3 className="type-card-title">{name}</h3>
-                <p className="mt-3 type-price">{price}<span className="yt-tag font-bold text-muted-foreground"> base</span></p>
-                <p className="mt-3 yt-small font-medium leading-6 text-muted-foreground">{copy}</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            {packages.map(([name, price, copy]) => (
+              <article key={name} className="neo-card flex h-full flex-col rounded-2xl p-4 sm:p-5">
+                <h3 className="type-card-title neo-ink">{name}</h3>
+                <p className="mt-3 type-price neo-ink">{price}<span className="yt-tag font-bold text-slate-700"> / month</span></p>
+                <p className="mt-3 yt-small font-medium leading-6 text-slate-700">{copy}</p>
               </article>
             ))}
           </div>
 
-          <div className="mt-3 flex flex-col gap-3 rounded-lg bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="yt-subtitle font-black">Need a custom editing solution bigger than these packages?</p>
+          <div className="neo-inset mt-4 flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="yt-subtitle font-black neo-ink">Need a custom editing solution bigger than these packages?</p>
             <Link to="/contact#contact" className="neo-button neo-button--secondary">
               Book call
             </Link>
@@ -1579,24 +1580,33 @@ export function ComparisonTable() {
         </div>
 
         <div className="min-w-0 lg:col-span-2">
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <div className="min-w-[860px]">
-              <div className="grid grid-cols-[230px_repeat(3,minmax(150px,1fr))] border-b border-gray-200 bg-[#FBFCFD]">
-                <div className="px-4 py-3 yt-tag font-black uppercase tracking-[0.14em] text-muted-foreground">Package features</div>
-                {packages.map(([name]) => (
-                  <div key={name} className="border-l border-gray-200 px-4 py-3 text-center yt-small font-black">{name}</div>
-                ))}
-              </div>
-              {rows.map(([label, creator, plus, pro]) => (
-                <div key={label} className="grid grid-cols-[230px_repeat(3,minmax(150px,1fr))] border-b border-gray-100 last:border-b-0">
-                  <div className="flex min-h-[46px] items-center px-4 yt-small font-black text-foreground">{label}</div>
-                  {[creator, plus, pro].map((value, index) => (
-                    <div key={`${label}-${index}`} className="flex min-h-[46px] items-center justify-center border-l border-gray-100 px-4 text-center yt-small font-bold text-foreground">
-                      <FeatureValue value={value} />
-                    </div>
+          <div
+            role="region"
+            aria-label="Scrollable package feature comparison"
+            tabIndex={0}
+            className="neo-inset overflow-x-auto rounded-2xl p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 sm:p-3"
+          >
+            <div role="table" aria-label="Package features by plan" aria-colcount={4} aria-rowcount={rows.length + 1} className="min-w-[860px] overflow-hidden rounded-xl">
+              <div role="rowgroup">
+                <div role="row" className="grid grid-cols-[230px_repeat(3,minmax(150px,1fr))] border-b neo-line bg-white/40">
+                  <div role="columnheader" className="px-4 py-3 yt-tag font-black uppercase tracking-[0.12em] text-slate-700">Package features</div>
+                  {packages.map(([name]) => (
+                    <div key={name} role="columnheader" className="border-l neo-line px-4 py-3 text-center yt-small font-black neo-ink">{name}</div>
                   ))}
                 </div>
-              ))}
+              </div>
+              <div role="rowgroup">
+                {rows.map(([label, creator, plus, pro]) => (
+                  <div key={label} role="row" className="grid grid-cols-[230px_repeat(3,minmax(150px,1fr))] border-b neo-line last:border-b-0 hover:bg-white/25">
+                    <div role="rowheader" className="flex min-h-[46px] items-center px-4 yt-small font-black neo-ink">{label}</div>
+                    {[creator, plus, pro].map((value, index) => (
+                      <div key={`${label}-${index}`} role="cell" className="flex min-h-[46px] items-center justify-center border-l neo-line px-4 text-center yt-small font-bold neo-ink">
+                        <FeatureValue value={value} />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

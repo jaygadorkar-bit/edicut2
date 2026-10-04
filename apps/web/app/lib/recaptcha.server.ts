@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "@edicut/shared/server-fetch";
+
 type EnvSource = Record<string, string | undefined>;
 
 type RecaptchaContext = {
@@ -57,17 +59,27 @@ export async function verifyRecaptchaToken({
     response: token,
   });
 
-  const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString(),
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+  } catch {
+    return { success: false as const, error: "Security check is unavailable. Please try again." };
+  }
 
   if (!response.ok) {
     return { success: false as const, error: "Security check is unavailable. Please try again." };
   }
 
-  const data = (await response.json()) as RecaptchaVerifyResponse;
+  let data: RecaptchaVerifyResponse;
+  try {
+    data = (await response.json()) as RecaptchaVerifyResponse;
+  } catch {
+    return { success: false as const, error: "Security check is unavailable. Please try again." };
+  }
 
   if (!data.success) {
     return { success: false as const, error: "Security check failed. Please try again." };

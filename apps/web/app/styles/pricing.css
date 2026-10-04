@@ -1,0 +1,197 @@
+/* Pricing layout uses the home's shared neo surfaces, buttons, and typography. */
+.pack-pricing {
+  color: var(--neo-ink);
+  overflow-wrap: anywhere;
+  --pack-accent: #b01d29;
+  --pack-copy: #526171;
+  --pack-shadow-inset: inset 4px 4px 10px rgb(132 148 163 / 22%), inset -4px -4px 10px var(--neo-shadow-light);
+}
+
+.pack-container { width: min(100% - 3rem, 76rem); margin-inline: auto; }
+.pack-pricing--home { border-bottom: 1px solid var(--neo-line); }
+.pack-pricing--home .pack-options { padding-block: 5rem; }
+.pack-pricing h1, .pack-pricing h2, .pack-pricing h3 { font-family: var(--font-family-heading); }
+.pack-pricing h2 { font-size: clamp(1.65rem, 2.8vw, 2.5rem); font-weight: 700; line-height: 1.18; letter-spacing: -.035em; text-wrap: balance; }
+.pack-pricing p { line-height: 1.6; }
+.pack-pricing a, .pack-pricing button, .pack-pricing summary { -webkit-tap-highlight-color: transparent; }
+.pack-pricing :is(a, button, summary, [tabindex]):focus-visible { outline: 3px solid var(--neo-ink); outline-offset: 5px; }
+.pack-pricing :is(a, button, summary, [tabindex]) { scroll-margin-block: calc(7rem + var(--neo-admin-toolbar-height, 0px)); }
+.pack-pricing svg { flex-shrink: 0; }
+.pack-hero { position: relative; isolation: isolate; overflow: hidden; padding-block: 4rem 3.25rem; text-align: center; border-bottom: 1px solid var(--neo-line); background: radial-gradient(ellipse at 8% 30%, rgb(203 219 232 / 45%), transparent 42%), radial-gradient(ellipse at 92% 24%, rgb(226 201 206 / 30%), transparent 38%), radial-gradient(ellipse at 50% 0%, rgb(255 255 255 / 65%), transparent 60%); }
+.pack-hero-content { position: relative; }
+.pack-hero-objects { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.pack-hero-object { position: absolute; width: 4.5rem; height: 4.5rem; color: white; filter: drop-shadow(6px 10px 14px rgb(132 148 163 / 30%)) drop-shadow(-4px -4px 10px rgb(255 255 255 / 95%)); }
+.pack-hero-object--clapper { top: 18%; left: max(5%, calc((100% - 74rem) / 2)); transform: rotate(-14deg); }
+.pack-hero-object--scissors { bottom: 14%; left: max(11%, calc((100% - 62rem) / 2)); transform: rotate(-12deg); }
+.pack-hero-object--play { top: 19%; right: max(7%, calc((100% - 70rem) / 2)); width: 4.75rem; height: 4.75rem; border: 3px solid white; border-radius: 50%; padding: .95rem; transform: rotate(12deg); }
+.pack-hero-object--film { bottom: 15%; right: max(10%, calc((100% - 66rem) / 2)); transform: rotate(12deg); }
+.pack-hero-label { display: inline-flex; align-items: center; gap: .6rem; padding: .55rem .9rem; border: 1px solid rgb(255 255 255 / 90%); border-radius: 2rem; background: linear-gradient(145deg, var(--neo-surface-strong), var(--neo-inset)); box-shadow: 5px 5px 12px rgb(132 148 163 / 20%), -5px -5px 12px var(--neo-shadow-light); font-size: .8125rem; font-weight: 650; color: var(--pack-accent); }
+.pack-hero-label svg { color: var(--pack-accent); }
+.pack-hero h1 { margin-top: 1.5rem; font-size: clamp(2.75rem, 6vw, 4.5rem); font-weight: 700; line-height: 1.05; letter-spacing: -.035em; }
+.pack-hero-copy { margin: 1.4rem auto 0; max-width: 42rem; color: var(--pack-copy); font-size: 1.0625rem; }
+.pack-hero-actions { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 2rem; }
+.pack-pricing .pack-button { min-height: 3.25rem; padding: .85rem 1.35rem; font-size: .875rem; font-weight: 700; line-height: 1.4; transition: background-color 180ms ease, box-shadow 180ms ease, color 180ms ease; }
+.pack-pricing .pack-button:hover { color: var(--pack-copy); }
+.pack-text-link { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; gap: .5rem; font-size: .875rem; font-weight: 650; text-decoration: none; }
+.pack-text-link:hover { color: var(--pack-accent); text-decoration: underline; text-underline-offset: 4px; }
+.pack-value-strip { display: flex; flex-wrap: wrap; justify-content: center; gap: .8rem 1.75rem; margin-top: 2rem; font-size: .8125rem; color: var(--pack-copy); }
+.pack-value-strip span { display: inline-flex; align-items: center; gap: .45rem; }
+.pack-value-strip svg { color: var(--pack-copy); }
+.pack-options { padding-top: 3rem; padding-bottom: 3.5rem; scroll-margin-top: calc(7rem + var(--neo-admin-toolbar-height, 0px)); }
+.pack-options-intro { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
+.pack-options-intro p, .pack-section-heading p { color: var(--pack-copy); margin-top: .6rem; font-size: .9375rem; }
+.pack-finder { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 1rem; padding: 1.25rem 1.5rem; margin: 2rem 0 2rem; border-radius: 1.25rem; }
+.pack-type-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; width: min(100%, 28rem); padding: .4rem; margin: 2rem auto 1.25rem; border-radius: 1rem; box-shadow: var(--pack-shadow-inset); }
+.pack-type-switch button { min-height: 3rem; padding: .65rem 1rem; border: 1px solid transparent; border-radius: .75rem; color: var(--pack-copy); font-size: .875rem; font-weight: 700; cursor: pointer; transition: background-color 180ms ease, box-shadow 180ms ease, color 180ms ease; }
+.pack-type-switch button:hover { color: var(--neo-ink); }
+.pack-type-switch button[aria-pressed="true"] { border-color: white; background: linear-gradient(145deg, var(--neo-surface-strong), var(--neo-surface)); color: var(--neo-ink); box-shadow: 3px 3px 8px rgb(132 148 163 / 20%), -3px -3px 8px var(--neo-shadow-light); }
+.pack-capacity-note { max-width: 58rem; margin: 0 auto 1.5rem; color: var(--pack-copy); font-size: .8125rem; line-height: 1.6; text-align: center; }
+.pack-finder > p:first-child { font-size: .875rem; font-weight: 650; }
+.pack-schedules { display: inline-flex; flex-wrap: wrap; gap: .5rem; padding: .4rem; border-radius: 1rem; background: var(--neo-inset); box-shadow: var(--pack-shadow-inset); }
+.pack-schedules button { display: flex; flex-direction: column; justify-content: center; gap: .15rem; min-height: 3.5rem; padding: .5rem 1rem; border-radius: .75rem; font-size: .8125rem; font-weight: 650; cursor: pointer; border: 1px solid transparent; color: var(--pack-copy); transition: background-color 180ms ease, box-shadow 180ms ease, color 180ms ease; }
+.pack-schedules button:hover { background: var(--neo-surface); color: var(--neo-ink); }
+.pack-schedules button[aria-pressed="true"] { background: linear-gradient(145deg, var(--neo-surface-strong), var(--neo-surface)); color: var(--neo-ink); border-color: white; box-shadow: 3px 3px 8px rgb(132 148 163 / 24%), -3px -3px 8px var(--neo-shadow-light); }
+.pack-schedules button:active { box-shadow: var(--pack-shadow-inset); }
+.pack-schedule-count { font-size: .6875rem; font-weight: 500; color: var(--pack-copy); }
+.pack-recommendation { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; font-size: .8125rem; color: var(--pack-copy); }
+.pack-recommendation strong { color: var(--neo-ink); }
+.pack-recommendation a { display: inline-flex; align-items: center; gap: .3rem; min-height: 2.75rem; text-decoration: underline; text-underline-offset: 3px; }
+.pack-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; align-items: stretch; }
+.pack-grid--1 { grid-template-columns: minmax(0, 1fr); max-width: 28rem; margin-inline: auto; }
+.pack-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pack-card { display: flex; flex-direction: column; min-width: 0; border-radius: 1.5rem; padding: 1.75rem; position: relative; scroll-margin-top: calc(7rem + var(--neo-admin-toolbar-height, 0px)); }
+.pack-card-topline { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 2.75rem; color: var(--pack-copy); }
+.pack-card-icon { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; flex-shrink: 0; border-radius: .85rem; }
+.pack-card-badge { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; font-size: .6875rem; font-weight: 650; line-height: 1.5; text-align: center; }
+.pack-card--recommended .pack-card-badge { color: var(--pack-accent); background: var(--neo-surface-strong); border: 1px solid rgb(255 255 255 / 90%); border-radius: 2rem; padding: .45rem .6rem; box-shadow: 3px 3px 8px rgb(132 148 163 / 16%), -3px -3px 8px var(--neo-shadow-light); }
+.pack-card h3 { font-size: 1.75rem; font-weight: 700; letter-spacing: -.035em; margin-top: 1.25rem; }
+.pack-card-description { color: var(--pack-copy); font-size: .875rem; margin-top: .35rem; min-height: 2.8rem; max-width: 18rem; }
+.pack-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: .5rem; margin: 1.4rem 0 1.5rem; }
+.pack-price strong { font-size: clamp(2.6rem, 3.5vw, 3.15rem); font-weight: 700; letter-spacing: -.045em; line-height: 1.1; }
+.pack-price span { color: var(--pack-copy); font-size: .75rem; }
+.pack-output { display: grid; gap: .65rem; padding: 1rem; border-radius: 1rem; margin-bottom: 1.5rem; font-size: .8125rem; }
+.pack-output p { display: flex; align-items: center; gap: .6rem; }
+.pack-output svg { color: var(--pack-copy); }
+.pack-output-muted { color: var(--pack-copy); }
+.pack-details-link { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; font-size: .8125rem; font-weight: 600; margin-top: .25rem; color: var(--pack-copy); }
+.pack-details-link:hover { color: var(--pack-accent); text-decoration: underline; text-underline-offset: 3px; }
+.pack-features { display: grid; gap: .7rem; padding-top: .9rem; padding-bottom: 1.4rem; font-size: .8125rem; line-height: 1.6; }
+.pack-features li { display: flex; align-items: flex-start; gap: .6rem; }
+.pack-features svg { margin-top: .17rem; padding: 2px; border-radius: 50%; background: var(--neo-inset); color: var(--pack-copy); box-shadow: inset 1px 1px 3px rgb(132 148 163 / 20%); }
+.pack-delivery { display: flex; gap: .5rem; align-items: center; border-top: 1px solid var(--neo-line); padding-top: .9rem; margin-top: auto; color: var(--pack-copy); font-size: .8125rem; }
+.pack-delivery strong { color: var(--neo-ink); }
+.pack-audience { color: var(--pack-copy); font-size: .75rem; margin-top: .5rem; }
+.pack-workflow { padding: 2.5rem; border-radius: 1.75rem; }
+.pack-workflow-layout { display: grid; grid-template-columns: 1fr 2.25fr; gap: 2.5rem; }
+.pack-workflow-heading p { margin-top: 1rem; color: var(--pack-copy); font-size: .875rem; }
+.pack-workflow-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+.pack-step-icon { display: flex; align-items: center; justify-content: center; width: 3.25rem; height: 3.25rem; border-radius: 1rem; color: var(--pack-copy); }
+.pack-workflow-steps h3 { font-size: .9375rem; font-weight: 750; margin-top: 1.1rem; }
+.pack-workflow-steps p { margin-top: .5rem; font-size: .8125rem; color: var(--pack-copy); }
+.pack-comparison { padding-block: 4rem; scroll-margin-top: calc(7rem + var(--neo-admin-toolbar-height, 0px)); }
+.pack-section-heading { margin-bottom: 1.75rem; }
+.pack-table-hint { color: var(--pack-copy); font-size: .75rem; margin-bottom: .75rem; display: none; }
+.pack-table-scroll { overflow-x: auto; border-radius: 1.25rem; }
+.pack-table-scroll table { width: 100%; min-width: 46rem; border-collapse: collapse; font-size: .8125rem; text-align: left; }
+.pack-table-scroll :is(th, td) { padding: 1rem 1.35rem; border-bottom: 1px solid var(--neo-line); line-height: 1.5; }
+.pack-table-scroll thead th { background: var(--neo-inset); box-shadow: inset 0 3px 5px rgb(132 148 163 / 8%); font-weight: 700; }
+.pack-table-scroll thead th:not(:first-child) { font-size: 1rem; }
+.pack-table-scroll th { width: 28%; font-weight: 600; }
+.pack-table-scroll td { width: 24%; color: var(--pack-copy); }
+.pack-table-scroll small { display: block; font-size: .75rem; color: var(--pack-copy); font-weight: 500; margin-top: .3rem; }
+.pack-table-scroll tbody tr:hover { background: var(--neo-surface); }
+.pack-table-scroll tfoot :is(th, td) { border-bottom: 0; padding-block: .75rem; }
+.pack-table-scroll tfoot a { font-size: .8125rem; color: var(--neo-ink); }
+.pack-custom { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-top: 1.75rem; padding: 1.5rem .25rem 0; border-top: 1px solid var(--neo-line); }
+.pack-custom strong, .pack-custom span { display: block; }
+.pack-custom strong { font-size: .9375rem; }
+.pack-custom span { font-size: .8125rem; color: var(--pack-copy); margin-top: .2rem; }
+.pack-custom .pack-button { flex-shrink: 0; }
+.pack-faq { display: grid; grid-template-columns: 1fr 1.65fr; gap: 4rem; padding-top: 1rem; padding-bottom: 4rem; }
+.pack-faq-intro p { color: var(--pack-copy); font-size: .875rem; margin-top: 1rem; }
+.pack-faq-intro .pack-text-link { margin-top: .5rem; }
+.pack-questions { display: grid; align-content: start; gap: 1rem; }
+.pack-questions details { border-radius: 1rem; }
+.pack-questions summary { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.2rem 1.25rem; min-height: 3rem; list-style: none; cursor: pointer; font-size: .9375rem; font-weight: 650; border-radius: 1rem; }
+.pack-questions summary::-webkit-details-marker { display: none; }
+.pack-questions summary:hover { color: var(--pack-accent); }
+.pack-questions summary svg { width: 1.75rem; height: 1.75rem; padding: .3rem; border-radius: 50%; background: var(--neo-inset); color: var(--pack-copy); box-shadow: var(--pack-shadow-inset); transition: transform 180ms ease; }
+.pack-questions details[open] summary svg { transform: rotate(180deg); }
+.pack-questions details > p { padding: 0 1.25rem 1.25rem; color: var(--pack-copy); font-size: .875rem; max-width: 42rem; }
+.pack-final { display: flex; flex-direction: column; align-items: center; gap: 1.25rem; text-align: center; padding: 3.5rem 2rem; margin-bottom: 4rem; border-radius: 1.75rem; }
+.pack-final-icon { display: flex; align-items: center; justify-content: center; width: 4rem; height: 4rem; border-radius: 1.25rem; color: var(--pack-copy); }
+.pack-final h2 { font-size: clamp(2rem, 4vw, 3.5rem); letter-spacing: -.055em; }
+.pack-final p { font-size: .9375rem; max-width: 30rem; color: var(--pack-copy); }
+.pack-final .pack-text-link { margin-top: -.75rem; }
+.pack-empty { padding: 2rem; margin-top: 1.5rem; border-radius: 1.25rem; }
+.pack-empty .pack-button { margin-top: 1rem; }
+
+@media (max-width: 1023px) {
+  .pack-card { padding: 1.25rem; }
+  .pack-grid { gap: 1rem; }
+  .pack-card-topline { flex-wrap: wrap; align-content: start; min-height: 5.5rem; }
+  .pack-output { min-height: 9rem; align-content: start; }
+  .pack-hero-objects { display: none; }
+  .pack-finder { justify-content: flex-start; }
+  .pack-recommendation { margin-left: auto; }
+  .pack-workflow-layout { grid-template-columns: 1fr; gap: 2rem; }
+  .pack-workflow-heading { display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
+  .pack-faq { gap: 2rem; }
+}
+
+@media (max-width: 900px) {
+  .pack-container { width: min(100% - 40px, 36rem); }
+  .pack-hero { padding-block: 2.75rem 2.25rem; }
+  .pack-hero h1 { font-size: clamp(2.25rem, 9vw + .25rem, 4.25rem); }
+  .pack-hero-copy { font-size: 1rem; }
+  .pack-desktop-break { display: none; }
+  .pack-hero-actions { gap: 1rem; flex-wrap: wrap; }
+  .pack-value-strip { gap: .6rem 1rem; font-size: .75rem; }
+  .pack-options { padding-top: 2rem; padding-bottom: 2.5rem; }
+  .pack-options-intro { flex-direction: column; align-items: flex-start; gap: .4rem; }
+  .pack-finder { padding: 1rem; gap: 1rem; margin-bottom: 1.75rem; }
+  .pack-type-switch { margin-top: 1.5rem; }
+  .pack-type-switch button { padding-inline: .5rem; font-size: .8125rem; }
+  .pack-finder > p:first-child { width: 100%; }
+  .pack-schedules { width: 100%; }
+  .pack-schedules { gap: .5rem; }
+  .pack-schedules button { flex: 1 1 4rem; min-width: 0; padding-inline: .3rem; font-size: .75rem; }
+  .pack-schedule-count { font-size: .75rem; }
+  .pack-schedule-period { display: none; }
+  .pack-recommendation { margin-left: 0; }
+  .pack-grid { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .pack-card { padding: 24px; }
+  .pack-card-topline { flex-wrap: nowrap; min-height: 2.75rem; }
+  .pack-output { min-height: 0; }
+  .pack-card-description { min-height: 0; max-width: none; }
+  .pack-price strong { font-size: clamp(2rem, 9vw + 1rem, 3rem); }
+  .pack-card .pack-features { font-size: .875rem; }
+  .pack-workflow { padding: 1.5rem; }
+  .pack-workflow-heading { display: block; }
+  .pack-workflow-steps { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
+  .pack-workflow-steps li { display: grid; grid-template-columns: 3.25rem 1fr; column-gap: 1rem; }
+  .pack-step-icon { grid-row: span 2; }
+  .pack-workflow-steps h3 { margin-top: 0; }
+  .pack-workflow-steps p { font-size: .875rem; }
+  .pack-comparison { padding-block: 2.5rem; }
+  .pack-table-hint { display: block; }
+  .pack-table-scroll :is(th, td) { padding: .9rem 1rem; }
+  .pack-custom { flex-direction: column; align-items: flex-start; gap: 1rem; }
+  .pack-faq { grid-template-columns: minmax(0, 1fr); padding-bottom: 2.5rem; }
+  .pack-questions summary { font-size: .875rem; }
+  .pack-final { padding: 2.5rem 1.25rem; margin-bottom: 2.5rem; }
+}
+
+@media (max-width: 639px) {
+  .pack-pricing--home .pack-options { padding-block: 2.5rem; }
+}
+
+@media (max-width: 374px) {
+  .pack-schedules { flex-direction: column; }
+  .pack-schedules button { flex: auto; flex-direction: row; justify-content: space-between; gap: .5rem; min-height: 2.75rem; padding-inline: .75rem; }
+  .pack-hero-actions .pack-button { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack-pricing *, .pack-pricing *::before, .pack-pricing *::after { transition: none; }
+}

@@ -1,24 +1,29 @@
 import { useEffect, useRef } from "react";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData } from "react-router";
 import { contactIntakeSchema } from "@edicut/shared/contracts/operations";
 import { contactMessages } from "@edicut/db/schema";
 import {
   ButtonLink,
   ContactSection,
-  DifferentiatorsSection,
   FAQSection,
   PageShell,
   PortfolioSection,
-  PricingSection,
   TestimonialsSection,
   TrustStrip,
+  WhyHireUsSection,
 } from "../components/site/Marketing.js";
+import { HomePricingSection } from "../components/site/PricingPacks";
 import { getDbFromContext } from "../lib/db.server";
 import { getPortfolioSections, publicPortfolioSections } from "../lib/portfolio.server";
-import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
+import { configuredPublicEditingPackages, getPricingPackages } from "../lib/pricing.server";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
+import { createRouteMeta } from "../lib/seo";
+import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import pricingStyles from "../styles/pricing.css?url";
+
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: pricingStyles }];
 
 // Clean, Beautiful Modern Classic Lucide SVG Icons in Solid White
 function ClapperboardIcon({ size = 72 }: { size?: number }) {
@@ -138,14 +143,19 @@ const heroParallax = {
   sparkles: { x: -0.08, y: -0.4, rotation: 10, rotationPerPixel: -0.03 },
 } as const;
 
-export const meta: MetaFunction = () => {
-  return [
-    { title: "EdiCut — Editing built for YouTubers" },
-    { name: "description", content: "Clean editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables." },
-  ];
+export const meta: MetaFunction = (args) => {
+  return createRouteMeta(
+    args,
+    "YouTube Video Editing Services for Creators | EdiCut",
+    "EdiCut edits YouTube videos, Shorts, podcasts, and thumbnails for creators, with a clear workflow for footage, reviews, and delivery.",
+  );
 };
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return redirect("/?error=invalid#contact");
+  }
+
   const formData = await request.formData();
   const parsed = contactIntakeSchema.safeParse({
     name: formData.get("name"),
@@ -155,8 +165,21 @@ export async function action({ request, context }: ActionFunctionArgs) {
     brief: formData.get("brief"),
   });
 
-  if (!parsed.success) {
+  if (!parsed.success || parsed.data.email.length > 254) {
     return redirect("/?error=invalid#contact");
+  }
+
+  const identityKey = await hashUsageLimitKey(parsed.data.email.trim().toLowerCase());
+  const contactLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "AUTH_IDENTITY_LIMITER",
+    key: `contact:${identityKey}`,
+    localLimit: 3,
+    localPeriodSeconds: 60,
+  });
+  if (contactLimit !== "allowed") {
+    return redirect("/?error=security#contact");
   }
 
   const captcha = await verifyRecaptchaToken({
@@ -184,7 +207,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const db = getSupabaseClient(context) ? null : getDbFromContext(context);
   const [packages, portfolioSections] = await Promise.all([
-    getPricingPackages(db, context).then(publicPricingPackages),
+    getPricingPackages(db, context).then(configuredPublicEditingPackages),
     getPortfolioSections(db, context).then(publicPortfolioSections),
   ]);
 
@@ -441,7 +464,7 @@ export default function HomePage() {
             </div>
 
             <p className="neo-hero-proof mx-auto mt-4 flex items-center justify-center gap-2 text-xs font-semibold neo-muted sm:hidden">
-              <span><strong>48h</strong> first cuts</span>
+              <span><strong>48 hours</strong> first-cut target</span>
               <span aria-hidden="true" className="neo-hero-proof__separator">·</span>
               <span><strong>500+</strong> videos published</span>
             </p>
@@ -449,7 +472,7 @@ export default function HomePage() {
             {/* Key Metrics Neomorphic Badges */}
             <div className="neo-hero-metrics mt-10 grid w-full max-w-md grid-cols-3 items-stretch gap-2 sm:mt-12 sm:flex sm:w-auto sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
               {[
-                ["48h", "first cuts turnaround"],
+                ["48 hours", "first-cut target"],
                 ["500+", "videos published"],
                 ["4.9 / 5", "creator satisfaction"],
               ].map(([value, label]) => (
@@ -522,9 +545,9 @@ export default function HomePage() {
         </section>
 
         <TrustStrip />
-        <PricingSection plans={packages} />
+        <WhyHireUsSection />
+        <HomePricingSection packages={packages} />
         <PortfolioSection sections={portfolioSections} />
-        <DifferentiatorsSection />
         <TestimonialsSection />
         <FAQSection />
         <ContactSection compact status={contactStatus} />

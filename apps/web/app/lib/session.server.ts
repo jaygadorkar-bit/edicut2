@@ -177,6 +177,7 @@ export async function createUserSession({
   accessToken,
   refreshToken,
   adminUserId,
+  adminAccessVerified,
 }: {
   request: Request;
   context?: SessionContext;
@@ -186,12 +187,19 @@ export async function createUserSession({
   accessToken?: string;
   refreshToken?: string;
   adminUserId?: string;
+  adminAccessVerified?: boolean;
 }) {
   const session = await getSession(request.headers.get("Cookie"), context);
   session.set("userId", userId);
   if (accessToken) session.set("supabaseAccessToken", accessToken);
   if (refreshToken) session.set("supabaseRefreshToken", refreshToken);
-  if (adminUserId) session.set("adminUserId", adminUserId);
+  if (adminUserId && adminAccessVerified) {
+    session.set("adminUserId", adminUserId);
+    session.set("adminAccessVerified", true);
+  } else {
+    session.unset("adminUserId");
+    session.unset("adminAccessVerified");
+  }
   return redirect(redirectTo, {
     headers: {
       "Set-Cookie": await commitSession(session, {
@@ -238,7 +246,7 @@ export async function requireAdminUser(
     }
 
     const supabaseAdmin = await findAdminUserByEmail(db, authUser.email);
-    if (supabaseAdmin?.active) {
+    if (supabaseAdmin?.active && isAdminRole(supabaseAdmin.role)) {
       return supabaseAdmin;
     }
 
@@ -252,7 +260,7 @@ export async function requireAdminUser(
 
   const user = await findAdminUserById(db, adminUserId);
 
-  if (!user || !user.active) {
+  if (!user || !user.active || !isAdminRole(user.role)) {
     throw redirect(ADMIN_LOGIN_PATH);
   }
 

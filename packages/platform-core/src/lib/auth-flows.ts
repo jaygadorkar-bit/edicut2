@@ -88,7 +88,7 @@ function generateOtp() {
 }
 
 async function sendSignupOtpEmail(email: string, name: string, otp: string) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3002";
 
   await sendMailViaGmail({
     to: email,
@@ -106,7 +106,7 @@ async function sendSignupOtpEmail(email: string, name: string, otp: string) {
 }
 
 async function sendResetPasswordEmail(email: string, name: string, token: string) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3002";
   const resetUrl = `${appUrl}/reset-password?token=${token}`;
 
   await sendMailViaGmail({

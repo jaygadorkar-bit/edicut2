@@ -2,6 +2,7 @@ import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { fetchWithTimeout } from "@edicut/shared/server-fetch";
 import * as schema from "./schema.js";
 import { parseDatabaseEnv } from "./env.js";
 
@@ -24,8 +25,8 @@ function isNeonUrl(url: string) {
 }
 
 function createDatabase(url: string, fetchImpl?: typeof fetch): DatabaseClient {
-  if (isNeonUrl(url) && fetchImpl) {
-    neonConfig.fetchFunction = fetchImpl;
+  if (isNeonUrl(url)) {
+    neonConfig.fetchFunction = fetchImpl ?? fetchWithTimeout;
   }
 
   if (isNeonUrl(url)) {
@@ -34,13 +35,19 @@ function createDatabase(url: string, fetchImpl?: typeof fetch): DatabaseClient {
     return drizzle(sql, { schema });
   }
 
-  return drizzlePostgres(postgres(url), { schema });
+  return drizzlePostgres(postgres(url, {
+    connect_timeout: 10,
+    connection: {
+      statement_timeout: 20_000,
+      lock_timeout: 10_000,
+    },
+  }), { schema });
 }
 
 export function createCloudflareDb(envSource: Record<string, string | undefined>) {
   const { DATABASE_URL } = parseDatabaseEnv(envSource);
 
-  return createDatabase(DATABASE_URL, fetch);
+  return createDatabase(DATABASE_URL, fetchWithTimeout);
 }
 
 export function createNodeDb(envSource: Record<string, string | undefined>) {

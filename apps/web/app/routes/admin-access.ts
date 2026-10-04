@@ -1,12 +1,14 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
-import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
+import { findAdminUserById } from "@edicut/db/repositories/admin-users";
 import { findUserById } from "@edicut/db/repositories/users";
 import { getDbFromContext } from "../lib/db.server";
 import {
   commitAdminSession,
   getAdminSession,
+  getSession,
   requireUserId,
+  isAdminRole,
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 
@@ -28,11 +30,28 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   }
 
   const userId = await requireUserId(request, context, ADMIN_BASE_PATH);
-  const db = getDbFromContext(context);
-  const user = await findUserById(db, userId);
-  const adminUser = user?.email ? await findAdminUserByEmail(db, user.email) : null;
+  const userSession = await getSession(request.headers.get("Cookie"), context);
+  const adminUserId = userSession.get("adminUserId");
+  if (
+    userSession.get("adminAccessVerified") !== true ||
+    typeof adminUserId !== "string" ||
+    !adminUserId
+  ) {
+    return redirect("/dashboard");
+  }
 
-  if (!adminUser?.active) {
+  const db = getDbFromContext(context);
+  const [user, adminUser] = await Promise.all([
+    findUserById(db, userId),
+    findAdminUserById(db, adminUserId),
+  ]);
+
+  if (
+    !user ||
+    !adminUser?.active ||
+    !isAdminRole(adminUser.role) ||
+    user.email?.trim().toLowerCase() !== adminUser.email.toLowerCase()
+  ) {
     return redirect("/dashboard");
   }
 

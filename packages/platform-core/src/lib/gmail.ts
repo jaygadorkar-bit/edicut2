@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "@edicut/shared/server-fetch";
+
 const GMAIL_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
@@ -8,7 +10,7 @@ export function configureGmailRuntimeEnv(env: Record<string, string | undefined>
 }
 
 function requireEnv(name: string) {
-  const processEnv = typeof process === "undefined" ? {} : process.env;
+  const processEnv: Record<string, string | undefined> = typeof process === "undefined" ? {} : process.env;
   const value = runtimeEnv[name] ?? processEnv[name];
   if (!value) {
     throw new Error(`Missing required Gmail configuration: ${name}`);
@@ -22,7 +24,7 @@ async function getGoogleAccessToken() {
   const clientSecret = requireEnv("GMAIL_CLIENT_SECRET");
   const refreshToken = requireEnv("GMAIL_REFRESH_TOKEN");
 
-  const response = await fetch(GMAIL_TOKEN_URL, {
+  const response = await fetchWithTimeout(GMAIL_TOKEN_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -81,7 +83,7 @@ export async function sendMailViaGmail({
       html,
     ].join("\r\n");
 
-    const response = await fetch(GMAIL_SEND_URL, {
+    const response = await fetchWithTimeout(GMAIL_SEND_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -112,29 +114,9 @@ export async function sendMailViaGmail({
  */
 export async function testGmailConnection() {
   try {
-    const accessToken = await getGoogleAccessToken();
-    const processEnv = typeof process === "undefined" ? {} : process.env;
-    const senderEmail = runtimeEnv.GMAIL_SENDER_EMAIL ?? processEnv.GMAIL_SENDER_EMAIL;
-    
-    // Check if we can get user info (basic verification)
-    const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, error: errorText };
-    }
-
-    const profile = (await response.json()) as { emailAddress?: string };
-    return { 
-      success: true, 
-      email: profile.emailAddress,
-      configuredSender: senderEmail,
-      match: profile.emailAddress === senderEmail
-    };
+    requireEnv("GMAIL_SENDER_EMAIL");
+    await getGoogleAccessToken();
+    return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }

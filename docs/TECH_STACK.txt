@@ -26,7 +26,7 @@ Current repository shape
 
 Standard local ports
 --------------------
-- Web: http://localhost:3000
+- Web: http://localhost:3002
 - Node API: http://localhost:8787/api/node
 - Supabase local API: http://127.0.0.1:54321
 - Supabase local Postgres: localhost:54322

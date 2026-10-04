@@ -6,15 +6,21 @@ import { WorkspaceShell, Avatar } from "../components/WorkspaceShell";
 import { destroySession, getSession, requireUserId } from "../lib/session.server";
 import { getDbFromContext } from "../lib/db.server";
 import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
-import { getAllowedDashboardFeatures, type DashboardFeature } from "../lib/role-feature-access";
+import {
+  canAccessDashboardFeature,
+  getAllowedDashboardFeatures,
+  getDashboardLandingPath,
+  type DashboardFeature,
+} from "../lib/role-feature-access";
 import { findUserById } from "@edicut/db/repositories/users";
+import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
 const userNavItems = [
   { label: "Dashboard", icon: "dashboard_customize", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
-  { label: "Billing", icon: "receipt_long", path: "/dashboard/billing", feature: "billing" as DashboardFeature },
+  { label: "Purchases", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
   { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
 ];
@@ -41,12 +47,19 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     });
   }
 
-  const roleFeatureAccess = await getRoleFeatureAccessSettings(db);
+  const roleFeatureAccess = await getRoleFeatureAccessSettings(db, context);
   const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
+  if (!canAccessDashboardFeature(user.role, "settings", roleFeatureAccess)) {
+    throw redirect(getDashboardLandingPath(allowedFeatures));
+  }
   return { user, allowedFeatures };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return { error: "This profile request is too large." };
+  }
+
   const formData = await request.formData();
   const intent = readText(formData, "intent");
 
@@ -60,6 +73,32 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (intent !== "save-profile") return { error: "Choose a profile action." };
 
   const userId = await requireUserId(request, context);
+  const db = getDbFromContext(context);
+  const user = await findUserById(db, userId);
+  if (!user) throw redirect("/signin?redirectTo=/dashboard/profile");
+
+  const roleFeatureAccess = await getRoleFeatureAccessSettings(db, context);
+  const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
+  if (!canAccessDashboardFeature(user.role, "settings", roleFeatureAccess)) {
+    throw redirect(getDashboardLandingPath(allowedFeatures));
+  }
+
+  const actionLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "USER_ACTION_LIMITER",
+    key: `user:${userId}`,
+    localLimit: 60,
+    localPeriodSeconds: 60,
+  });
+  if (actionLimit !== "allowed") {
+    return {
+      error: actionLimit === "limited"
+        ? "You have submitted several requests. Wait a minute and try again."
+        : "Usage protection is temporarily unavailable. Please try again shortly.",
+    };
+  }
+
   const name = readText(formData, "name");
   const phone = readText(formData, "phone");
 
@@ -70,7 +109,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return { error: "Phone numbers can be up to 32 characters." };
   }
 
-  const db = getDbFromContext(context);
   const [updatedUser] = await db
     .update(users)
     .set({ name, phone: phone || null, updatedAt: new Date() })
@@ -96,9 +134,11 @@ export default function DashboardProfileRoute() {
       navItems={visibleNavItems.map(({ label, icon, path }) => ({ label, icon, to: path, end: path === "/dashboard" }))}
       account={{ name: displayName, detail: normalizeRole(user.role), imageUrl: user.profileImageUrl }}
       mobileMenu
+      navigationFeedback
       hideMobileHeading
-      profileTo="/dashboard/profile"
+      profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null}
       settingsTo="/dashboard/settings"
+      notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null}
       accountAction={(
         <Form method="post">
           <input type="hidden" name="intent" value="logout" />

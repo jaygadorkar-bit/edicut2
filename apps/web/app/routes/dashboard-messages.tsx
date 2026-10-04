@@ -13,15 +13,21 @@ import {
   getDashboardLandingPath,
   type DashboardFeature,
 } from "../lib/role-feature-access";
+import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
 const PAGE_SIZE = 10;
+const MAX_IMPORT_BYTES = 1024 * 1024;
+const MAX_IMPORT_ROWS = 250;
+const MAX_IMPORT_COLUMNS = 32;
+const MAX_BULK_MESSAGE_IDS = 100;
+const MAX_CSV_EXPORT_ROWS = 1_000;
 
 const navItems = [
   { label: "Overview", icon: "space_dashboard", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
-  { label: "Billing", icon: "receipt_long", path: "/dashboard/billing", feature: "billing" as DashboardFeature },
+  { label: "Purchases", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
   { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
 ];
@@ -42,7 +48,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const whereClause = getFilterClause(filter);
 
   if (url.searchParams.get("export") === "csv") {
-    const rows = await db.select().from(contactMessages).where(whereClause).orderBy(desc(contactMessages.createdAt));
+    const rows = await db.select().from(contactMessages).where(whereClause).orderBy(desc(contactMessages.createdAt)).limit(MAX_CSV_EXPORT_ROWS + 1);
+    if (rows.length > MAX_CSV_EXPORT_ROWS) {
+      return new Response(`CSV exports are limited to the newest ${MAX_CSV_EXPORT_ROWS} messages. Apply a narrower filter and export again.`, {
+        status: 413,
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
+
     return new Response(toCsv(rows), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
@@ -84,7 +97,29 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const { db } = await requireDashboardUser(request, context);
+  if (requestBodyExceedsLimit(request, MAX_IMPORT_BYTES)) {
+    return redirect(withFlash("/dashboard/messages", "error", "The request is too large. Imports are limited to 1 MB."));
+  }
+
+  const { db, user } = await requireDashboardUser(request, context);
+  const actionLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "USER_ACTION_LIMITER",
+    key: `user:${user.id}`,
+    localLimit: 60,
+    localPeriodSeconds: 60,
+  });
+  if (actionLimit !== "allowed") {
+    return redirect(withFlash(
+      "/dashboard/messages",
+      "error",
+      actionLimit === "limited"
+        ? "You have submitted several requests. Wait a minute and try again."
+        : "Usage protection is temporarily unavailable. Please try again shortly.",
+    ));
+  }
+
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "");
   const returnTo = safeReturnTo(String(formData.get("returnTo") || "/dashboard/messages"));
@@ -94,8 +129,26 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const subject = String(formData.get("subject") || "").trim();
     const reply = String(formData.get("reply") || "").trim();
 
-    if (!messageId || !subject || reply.length < 2) {
+    if (!messageId || !subject || subject.length > 160 || reply.length < 2 || reply.length > 10_000) {
       return redirect(withFlash(returnTo, "error", "Reply subject and message are required."));
+    }
+
+    const emailLimit = await consumeUsageLimit({
+      context,
+      request,
+      bindingName: "EMAIL_SEND_LIMITER",
+      key: `staff:${user.id}`,
+      localLimit: 2,
+      localPeriodSeconds: 60,
+    });
+    if (emailLimit !== "allowed") {
+      return redirect(withFlash(
+        returnTo,
+        "error",
+        emailLimit === "limited"
+          ? "Email replies are limited to two per minute. Wait a minute and try again."
+          : "Email usage protection is temporarily unavailable. Please try again shortly.",
+      ));
     }
 
     const [message] = await db.select().from(contactMessages).where(eq(contactMessages.id, messageId)).limit(1);
@@ -130,9 +183,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   if (intent === "bulk-delete") {
-    const ids = formData.getAll("messageIds").map(String).filter(Boolean);
+    const ids = Array.from(new Set(formData.getAll("messageIds").map(String).filter(Boolean)));
     if (!ids.length) {
       return redirect(withFlash(returnTo, "error", "Select at least one message to delete."));
+    }
+    if (ids.length > MAX_BULK_MESSAGE_IDS) {
+      return redirect(withFlash(returnTo, "error", `Delete at most ${MAX_BULK_MESSAGE_IDS} messages at a time.`));
     }
 
     await db.delete(contactMessages).where(inArray(contactMessages.id, ids));
@@ -141,7 +197,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (intent === "import") {
     const csvText = await getImportCsvText(formData);
+    if (csvText === null) {
+      return redirect(withFlash(returnTo, "error", "Imports are limited to 1 MB."));
+    }
     const rows = parseCsv(csvText);
+    if (rows === null) {
+      return redirect(withFlash(returnTo, "error", `Imports are limited to ${MAX_IMPORT_ROWS} rows per upload.`));
+    }
     const imported = rows
       .map(rowToMessageInsert)
       .filter((row): row is NonNullable<ReturnType<typeof rowToMessageInsert>> => Boolean(row));
@@ -409,7 +471,7 @@ async function requireDashboardUser(request: Request, context: any) {
     });
   }
 
-  const roleFeatureAccess = await getRoleFeatureAccessSettings(db);
+  const roleFeatureAccess = await getRoleFeatureAccessSettings(db, context);
   const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
 
   if (!canAccessDashboardFeature(user.role, "support", roleFeatureAccess)) {
@@ -521,7 +583,7 @@ function MetricCard({ label, value, icon }: { label: string; value: string | num
           <p className="text-xs font-black uppercase text-muted-foreground">{label}</p>
           <p className="mt-1 text-2xl font-black tracking-tight">{value}</p>
         </div>
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFF0F0] text-primary">
+        <span className="neo-icon-badge flex h-8 w-8 items-center justify-center rounded-lg">
           <span className="material-symbols-outlined text-[20px]">{icon}</span>
         </span>
       </div>
@@ -594,10 +656,12 @@ function SourcePill({ label }: { label: string }) {
 async function getImportCsvText(formData: FormData) {
   const file = formData.get("importFile");
   if (file instanceof File && file.size > 0) {
+    if (file.size > MAX_IMPORT_BYTES) return null;
     return file.text();
   }
 
-  return String(formData.get("importCsv") || "");
+  const text = String(formData.get("importCsv") || "");
+  return new TextEncoder().encode(text).byteLength <= MAX_IMPORT_BYTES ? text : null;
 }
 
 function rowToMessageInsert(row: Record<string, string>) {
@@ -605,7 +669,14 @@ function rowToMessageInsert(row: Record<string, string>) {
   const email = (row.email || "").trim().toLowerCase();
   const message = (row.message || row.brief || "").trim();
 
-  if (!name || !email || !message || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (
+    !name || name.length > 120 ||
+    !email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !message || message.length > 4_000 ||
+    (row.projectType || row.project_type || "").length > 120 ||
+    (row.monthlyVolume || row.monthly_volume || "").length > 120 ||
+    (row.lastReply || row.last_reply || "").length > 10_000
+  ) {
     return null;
   }
 
@@ -646,7 +717,7 @@ function csvCell(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function parseCsv(input: string) {
+function parseCsv(input: string): Array<Record<string, string>> | null {
   const rows: string[][] = [];
   let current = "";
   let row: string[] = [];
@@ -663,11 +734,16 @@ function parseCsv(input: string) {
       quoted = !quoted;
     } else if (char === "," && !quoted) {
       row.push(current);
+      if (row.length > MAX_IMPORT_COLUMNS) return null;
       current = "";
     } else if ((char === "\n" || char === "\r") && !quoted) {
       if (char === "\r" && next === "\n") index += 1;
       row.push(current);
-      if (row.some((cell) => cell.trim())) rows.push(row);
+      if (row.length > MAX_IMPORT_COLUMNS) return null;
+      if (row.some((cell) => cell.trim())) {
+        rows.push(row);
+        if (rows.length > MAX_IMPORT_ROWS + 1) return null;
+      }
       row = [];
       current = "";
     } else {
@@ -676,7 +752,11 @@ function parseCsv(input: string) {
   }
 
   row.push(current);
-  if (row.some((cell) => cell.trim())) rows.push(row);
+  if (row.length > MAX_IMPORT_COLUMNS) return null;
+  if (row.some((cell) => cell.trim())) {
+    rows.push(row);
+    if (rows.length > MAX_IMPORT_ROWS + 1) return null;
+  }
 
   const [headers, ...body] = rows;
   if (!headers) return [];

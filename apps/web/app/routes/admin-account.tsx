@@ -9,6 +9,7 @@ import { getDbFromContext } from "../lib/db.server";
 import { requireAdminUser } from "../lib/session.server";
 import { verifyPassword } from "../lib/password.server";
 import { AdminPanelShell } from "../components/AdminPanelShell";
+import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -52,8 +53,28 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return { error: "This admin account request is too large." };
+  }
+
   const db = getDbFromContext(context);
   const adminUser = await requireAdminUser(request, db, context);
+  const actionLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "USER_ACTION_LIMITER",
+    key: `admin:${adminUser.id}`,
+    localLimit: 60,
+    localPeriodSeconds: 60,
+  });
+  if (actionLimit !== "allowed") {
+    return {
+      error: actionLimit === "limited"
+        ? "Several admin actions were submitted. Wait a minute and try again."
+        : "Usage protection is temporarily unavailable. Please try again shortly.",
+    };
+  }
+
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   const returnTo = safeAdminReturnTo(String(formData.get("returnTo") ?? ""));
@@ -63,8 +84,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     const phone = readOptionalText(formData, "phone");
 
-    if (!email || !isEmail(email)) {
+    if (!email || email.length > 254 || !isEmail(email)) {
       return { error: "Enter a valid email address." };
+    }
+    if ((name?.length ?? 0) > 120 || (phone?.length ?? 0) > 32) {
+      return { error: "Name and phone details are too long." };
     }
 
     try {
@@ -98,8 +122,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return { error: "Current password is incorrect." };
     }
 
-    if (password.length < 12) {
-      return { error: "New admin password must be at least 12 characters." };
+    if (password.length < 12 || password.length > 128) {
+      return { error: "New admin password must be between 12 and 128 characters." };
     }
 
     if (password !== confirmPassword) {
@@ -189,8 +213,8 @@ export default function AdminAccountRoute() {
           <Form method="post" className="grid gap-4 p-5">
             <input type="hidden" name="intent" value="change-password" />
             <Field label="Current password" name="currentPassword" type="password" required defaultValue="" disabled={isSubmitting} />
-            <Field label="New password" name="password" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} />
-            <Field label="Confirm new password" name="confirmPassword" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} />
+            <Field label="New password" name="password" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} maxLength={128} />
+            <Field label="Confirm new password" name="confirmPassword" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} maxLength={128} />
             <button disabled={isSubmitting} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-900 text-sm font-black text-white disabled:opacity-50">
               <span className="material-symbols-outlined text-[18px]">lock_reset</span>
               {isSubmitting ? "Updating..." : "Update password"}
@@ -211,6 +235,7 @@ function Field({
   required,
   disabled,
   minLength,
+  maxLength,
 }: {
   label: string;
   name: string;
@@ -219,6 +244,7 @@ function Field({
   required?: boolean;
   disabled?: boolean;
   minLength?: number;
+  maxLength?: number;
 }) {
   return (
     <label className="grid gap-2 text-sm font-black">
@@ -230,6 +256,7 @@ function Field({
         defaultValue={defaultValue}
         disabled={disabled}
         minLength={minLength}
+        maxLength={maxLength}
         className="h-12 rounded-lg border border-slate-200 px-3 font-bold outline-none focus:border-black disabled:bg-slate-50"
       />
     </label>

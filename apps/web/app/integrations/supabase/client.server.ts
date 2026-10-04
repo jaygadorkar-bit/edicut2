@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { fetchWithTimeout } from "@edicut/shared/server-fetch";
 import type { Database } from "./types";
 
 export type SupabaseRuntimeContext = {
@@ -51,9 +52,10 @@ export function getSupabaseClient(
   if (!config) return null;
 
   return createClient<Database>(config.url, config.publishableKey, {
-    global: accessToken
-      ? { headers: { Authorization: `Bearer ${accessToken}` } }
-      : undefined,
+    global: {
+      fetch: fetchWithTimeout,
+      ...(accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {}),
+    },
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -75,6 +77,7 @@ export function getSupabaseAdmin(context?: SupabaseRuntimeContext) {
   const key = `${config.url}:${config.serviceRoleKey}`;
   if (!adminClient || adminClientKey !== key) {
     adminClient = createClient<Database>(config.url, config.serviceRoleKey, {
+      global: { fetch: fetchWithTimeout },
       auth: {
         persistSession: false,
         autoRefreshToken: false,

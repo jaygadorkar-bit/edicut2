@@ -3,7 +3,7 @@ import { destroyAdminSession, destroySession, getAdminSession, getSession } from
 
 // Visiting a link must never sign someone out; only the submitted form does.
 export function loader() {
-  return redirect("/");
+  return redirect("/signin?mode=signin");
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -31,5 +31,5 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const headers = new Headers({ "Cache-Control": "no-store" });
   headers.append("Set-Cookie", userCookie);
   headers.append("Set-Cookie", adminCookie);
-  return redirect("/", { headers });
+  return redirect("/signin?mode=signin", { headers });
 }

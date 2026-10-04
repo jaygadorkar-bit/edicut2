@@ -4,7 +4,6 @@ import {
   Meta,
   Outlet,
   Scripts,
-  isRouteErrorResponse,
   data,
   redirect,
   type HeadersFunction,
@@ -13,6 +12,7 @@ import {
   useLocation,
   useNavigate,
   useNavigation,
+  useFetchers,
   useRouteLoaderData,
   useRouteError,
 } from "react-router";
@@ -28,12 +28,23 @@ import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 import { getSupabaseClient } from "./integrations/supabase/client.server";
 import { SmoothScroll } from "./components/site/SmoothScroll.js";
 import { shouldEnableSiteMotion } from "./lib/site-motion";
-import { shouldLoadPromoBarSettings, shouldLoadRootSiteSettings } from "./lib/root-data-requirements";
+import { shouldLoadPromoBarSettings, shouldLoadRootSiteSettings, shouldShowAdminToolbar } from "./lib/root-data-requirements";
+import { getRouteErrorDebugDetails, getRouteErrorPresentation } from "./lib/route-error-presentation";
 import { getMaterialSymbolsStylesheetUrl } from "./lib/material-symbols";
+import {
+  createPageMeta,
+  createSiteStructuredData,
+  DEFAULT_SEO_DESCRIPTION,
+  DEFAULT_SEO_TITLE,
+  isIndexablePublicPath,
+  serializeJsonLd,
+  shouldIndexPage,
+} from "./lib/seo";
 
 const usePageTransitionLayoutEffect = typeof document === "undefined" ? useEffect : useLayoutEffect;
 const PAGE_TRANSITION_COVER_MS = 860;
 const PAGE_TRANSITION_REVEAL_MS = 920;
+const NAVIGATION_STALL_NOTICE_MS = 15_000;
 
 export function links() {
   return [
@@ -41,7 +52,6 @@ export function links() {
     { rel: "preload", href: "/fonts/dm-sans-latin-normal.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
     { rel: "preconnect", href: "https://fonts.googleapis.com" },
     { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-    { rel: "preconnect", href: "https://www.youtube.com" },
     { rel: "icon", href: "/favicon.ico", type: "image/svg+xml" },
     { rel: "stylesheet", href: getMaterialSymbolsStylesheetUrl() }
   ];
@@ -74,7 +84,7 @@ export async function loader({
   const userAdminUserId = session.get("adminUserId");
   const isAdminSignedIn =
     (typeof adminUserId === "string" && adminUserId.length > 0) ||
-    (typeof userAdminUserId === "string" && userAdminUserId.length > 0);
+    (typeof userAdminUserId === "string" && userAdminUserId.length > 0 && session.get("adminAccessVerified") === true);
 
   const isAdminArea = url.pathname.startsWith(ADMIN_BASE_PATH);
   const isAdminLogin = url.pathname === ADMIN_LOGIN_PATH;
@@ -89,7 +99,8 @@ export async function loader({
   const isInfrastructureRoute =
     url.pathname === "/health" ||
     url.pathname === "/favicon.ico" ||
-    url.pathname === "/robots.txt";
+    url.pathname === "/robots.txt" ||
+    url.pathname === "/sitemap.xml";
 
   const siteSettings = shouldLoadRootSiteSettings(url.pathname)
     ? await getSiteSettingsSnapshot(
@@ -107,6 +118,7 @@ export async function loader({
         promoBarSettings: { enabled: false, message: "" },
       };
   const { adminToolbarEnabled, searchCrawlingEnabled, maintenanceModeEnabled, promoBarSettings } = siteSettings;
+  const appUrl = env.APP_URL ?? "http://localhost:3002";
 
   const maintenanceBlocksRequest =
     maintenanceModeEnabled &&
@@ -121,14 +133,21 @@ export async function loader({
     throw redirect(`/maintenance?redirectTo=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
   }
 
-  const robotsContent =
-    !searchCrawlingEnabled || maintenanceModeEnabled || isMaintenancePage
-      ? "noindex, nofollow, noarchive"
-      : "index, follow";
+  const isCrawlerResource = url.pathname === "/robots.txt" || url.pathname === "/sitemap.xml";
+  const robotsContent = isCrawlerResource
+    ? null
+    : shouldIndexPage({
+        pathname: url.pathname,
+        crawlingEnabled: searchCrawlingEnabled,
+        maintenanceModeEnabled: maintenanceModeEnabled || isMaintenancePage,
+        appUrl,
+      })
+      ? "index, follow"
+      : "noindex, nofollow, noarchive";
 
   return data({
     appName: "EdiCut",
-    appUrl: env.APP_URL ?? "http://localhost:3000",
+    appUrl,
     nodeApiBaseUrl: env.NODE_API_BASE_URL ?? "http://localhost:8787/api/node",
     isSignedIn: Boolean(userId),
     isAdminSignedIn,
@@ -140,19 +159,19 @@ export async function loader({
     debugEnabled: env.DEBUG_MODE === "true" && (env.APP_URL?.includes("localhost") || isAdminSignedIn),
   }, {
     headers: {
-      "X-Robots-Tag": robotsContent,
+      ...(robotsContent ? { "X-Robots-Tag": robotsContent } : {}),
     },
   });
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data: rootData }) => [
-  {
-    name: "robots",
-    content: rootData?.searchCrawlingEnabled === false || rootData?.maintenanceModeEnabled
-      ? "noindex, nofollow, noarchive"
-      : "index, follow",
-  },
-];
+export const meta: MetaFunction<typeof loader> = ({ data: rootData, location }) => {
+  return createPageMeta(DEFAULT_SEO_TITLE, DEFAULT_SEO_DESCRIPTION, {
+    appUrl: rootData?.appUrl,
+    pathname: location.pathname,
+    crawlingEnabled: rootData?.searchCrawlingEnabled !== false,
+    maintenanceModeEnabled: rootData?.maintenanceModeEnabled === true,
+  });
+};
 
 export const headers: HeadersFunction = ({ loaderHeaders, parentHeaders }) => {
   const headers = new Headers(parentHeaders);
@@ -166,8 +185,6 @@ export function Layout({ children }: { children: ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>EdiCut | Minimalist Video Editing for YouTubers</title>
-        <meta name="description" content="Clean, modern, and high-performance video editing tailored for the next generation of creators." />
         <Meta />
         <Links />
       </head>
@@ -181,10 +198,39 @@ export function Layout({ children }: { children: ReactNode }) {
 export default function AppRoot() {
   const data = useLoaderData<typeof loader>();
   const location = useLocation();
-  const isAdminArea = location.pathname.startsWith(ADMIN_BASE_PATH);
-  const isWorkspaceShellDashboard = location.pathname.startsWith("/dashboard") && location.pathname !== "/dashboard/messages";
-  const showAdminToolbar = data.isAdminSignedIn && data.adminToolbarEnabled && !isAdminArea && !isWorkspaceShellDashboard;
+  const navigation = useNavigation();
+  const fetchers = useFetchers();
+  const showAdminToolbar = shouldShowAdminToolbar(location.pathname, data.isAdminSignedIn, data.adminToolbarEnabled);
+  const includeStructuredData = shouldIndexPage({
+    pathname: location.pathname,
+    crawlingEnabled: data.searchCrawlingEnabled,
+    maintenanceModeEnabled: data.maintenanceModeEnabled,
+    appUrl: data.appUrl,
+  });
+  const structuredData = serializeJsonLd(createSiteStructuredData(data.appUrl));
   const useSiteMotion = shouldEnableSiteMotion(location.pathname);
+  const navigationKey = navigation.state === "idle"
+    ? ""
+    : `navigation:${navigation.state}:${navigation.location?.pathname ?? location.pathname}${navigation.location?.search ?? ""}`;
+  const fetcherKey = fetchers
+    .filter((fetcher) => fetcher.state !== "idle")
+    .map((fetcher) => `${fetcher.key}:${fetcher.state}`)
+    .sort()
+    .join("|");
+  const pendingOperationsKey = [navigationKey, fetcherKey].filter(Boolean).join("|");
+  const hasPendingOperations = pendingOperationsKey.length > 0;
+  const [navigationStalled, setNavigationStalled] = useState(false);
+
+  useEffect(() => {
+    if (!hasPendingOperations) {
+      setNavigationStalled(false);
+      return;
+    }
+
+    setNavigationStalled(false);
+    const timer = window.setTimeout(() => setNavigationStalled(true), NAVIGATION_STALL_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [hasPendingOperations, pendingOperationsKey]);
 
   return (
     <>
@@ -192,9 +238,13 @@ export default function AppRoot() {
       <div className={`neo-app-shell${showAdminToolbar ? " neo-app-shell--admin-toolbar" : ""}`}>
         {showAdminToolbar ? <AdminToolbar /> : null}
         <Outlet />
-        {useSiteMotion ? <PageTransition /> : null}
+        {useSiteMotion ? <PageTransition navigationStalled={navigationStalled} /> : null}
       </div>
-      {data.recaptchaSiteKey ? (
+      {includeStructuredData ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />
+      ) : null}
+      {navigationStalled ? <NavigationRecovery /> : null}
+      {data.recaptchaSiteKey && isIndexablePublicPath(location.pathname) ? (
         <script
           src="https://www.google.com/recaptcha/api.js?render=explicit"
           async
@@ -214,7 +264,7 @@ function isPageChange(
   return from.pathname !== to.pathname || from.search !== to.search;
 }
 
-function PageTransition() {
+function PageTransition({ navigationStalled }: { navigationStalled: boolean }) {
   const navigation = useNavigation();
   const location = useLocation();
   const navigate = useNavigate();
@@ -337,6 +387,10 @@ function PageTransition() {
     if (navigation.state === "idle") revealAfterCover();
   }, [location.key, location.pathname, location.search, navigation.state]);
 
+  useEffect(() => {
+    if (navigationStalled && startedAt.current !== null) revealAfterCover();
+  }, [navigationStalled]);
+
   useEffect(() => () => {
     clearTimers();
   }, []);
@@ -396,40 +450,58 @@ function PageTransition() {
   );
 }
 
+function NavigationRecovery() {
+  return (
+    <aside className="neo-navigation-recovery" role="alert" aria-live="assertive">
+      <div className="neo-navigation-recovery__card">
+        <p className="neo-navigation-recovery__title">This is taking longer than expected</p>
+        <p className="neo-navigation-recovery__message">
+          The request may still be processing. Check the result before submitting the same change again.
+        </p>
+        <div className="neo-navigation-recovery__actions">
+          <a href="/signin?mode=signin">Open sign in</a>
+          <button type="button" onClick={() => window.location.reload()}>Reload page</button>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export function ErrorBoundary() {
   const error = useRouteError();
   const rootData = useRouteLoaderData("root") as { debugEnabled?: boolean } | undefined;
-  const title = isRouteErrorResponse(error)
-    ? `${error.status} ${error.statusText}`
-    : "Application error";
-  const message = isRouteErrorResponse(error)
-    ? error.data
-    : error instanceof Error
-      ? error.message
-      : "Unexpected error in starter app.";
+  const presentation = getRouteErrorPresentation(error);
   const debugEnabled = import.meta.env.DEV || rootData?.debugEnabled === true;
-  const stack = debugEnabled && error instanceof Error ? error.stack : null;
+  const debugDetails = debugEnabled ? getRouteErrorDebugDetails(error) : null;
 
   return (
-    <main className="p-8">
-      <h1 className="text-2xl font-bold text-red-500">{title}</h1>
-      <p className="mt-4">{String(message)}</p>
-      {debugEnabled ? (
-        <section className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
-          <p className="text-xs font-black uppercase tracking-widest">Debug mode enabled</p>
-          {error instanceof Error ? (
-            <dl className="mt-3 grid gap-2 text-sm">
-              <div><dt className="inline font-bold">Error: </dt><dd className="inline">{error.name}</dd></div>
-              <div><dt className="inline font-bold">Message: </dt><dd className="inline break-words">{error.message}</dd></div>
-            </dl>
-          ) : null}
-        </section>
-      ) : null}
-      {stack ? (
-        <pre className="mt-6 overflow-auto rounded-lg bg-slate-950 p-4 text-xs leading-5 text-slate-100">
-          {stack}
-        </pre>
-      ) : null}
+    <main className="mx-auto flex min-h-[75vh] max-w-4xl items-center px-5 py-12 sm:px-8">
+      <section className="w-full rounded-3xl border border-slate-200 bg-white p-7 shadow-xl sm:p-10" role="alert">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{presentation.label}</p>
+        <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">{presentation.title}</h1>
+        <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">{presentation.message}</p>
+        <div className="mt-7 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+          >
+            Try again
+          </button>
+          <a className="rounded-full border border-slate-300 px-5 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900" href="/">
+            Go to home
+          </a>
+          <a className="rounded-full px-3 py-3 text-sm font-bold text-slate-600 underline underline-offset-4 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900" href="/signin?mode=signin">
+            Sign in
+          </a>
+        </div>
+        {debugEnabled ? (
+          <section className="mt-8 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950">
+            <p className="text-xs font-black uppercase tracking-widest">Debug details</p>
+            <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs leading-5">{debugDetails}</pre>
+          </section>
+        ) : null}
+      </section>
     </main>
   );
 }

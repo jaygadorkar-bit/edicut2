@@ -14,6 +14,7 @@ describe("getAdminDataRequirements", () => {
       imageUsage: false,
       videos: false,
       videoUsage: false,
+      marketingData: false,
     });
   });
 
@@ -27,6 +28,8 @@ describe("getAdminDataRequirements", () => {
     ["videos", { videos: true, videoUsage: true, portfolioSections: true }],
     ["roles", { roleFeatureAccess: true }],
     ["settings", { siteSettings: true }],
+    ["marketing", { marketingData: true }],
+    ["affiliates", { marketingData: true }],
   ])("loads tab data only for %s", (tab, expected) => {
     expect(getAdminDataRequirements(tab)).toMatchObject(expected);
   });

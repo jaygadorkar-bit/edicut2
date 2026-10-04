@@ -13,13 +13,22 @@ export function isWorkspaceRecordId(value: string) {
 }
 
 export function isMissingWorkspaceSchema(error: unknown) {
-  if (!error || typeof error !== "object") return false;
-  const detail = error as { code?: unknown; message?: unknown };
-  const message = typeof detail.message === "string" ? detail.message : "";
   const workspaceTables = /workspace_(projects|project_files|project_reviews)/i;
-  if (detail.code === "42P01" && workspaceTables.test(message)) return true;
-  if (/relation\s+["']?workspace_(projects|project_files|project_reviews)["']?\s+does not exist/i.test(message)) return true;
-  return detail.code === "42703" && workspaceTables.test(message);
+  const workspaceColumns = /\b(channel_name|package_slug|cadence|deadline|billing_name|billing_email|billing_company|billing_country|final_amount_cents|invoice_url|estimated_amount_cents|billing_status|coupon_id|coupon_code|discount_amount_cents|affiliate_id|affiliate_code|affiliate_commission_bps|project_id|file_name|share_url|decision|feedback)\b/i;
+  const seen = new Set<object>();
+  let workspaceContext = false;
+  let current = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const detail = current as { code?: unknown; message?: unknown; cause?: unknown };
+    const message = typeof detail.message === "string" ? detail.message : "";
+    workspaceContext ||= workspaceTables.test(message);
+    if (detail.code === "42P01" && workspaceTables.test(message)) return true;
+    if (/relation\s+["']?workspace_(projects|project_files|project_reviews)["']?\s+does not exist/i.test(message)) return true;
+    if (detail.code === "42703" && (workspaceTables.test(message) || workspaceContext && workspaceColumns.test(message))) return true;
+    current = detail.cause;
+  }
+  return false;
 }
 
 export function isValidWorkspaceDate(value: string) {

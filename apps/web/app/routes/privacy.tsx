@@ -1,10 +1,11 @@
 import type { MetaFunction } from "react-router";
 import { PageShell, TrustStrip } from "../components/site/Marketing.js";
+import { createRouteMeta } from "../lib/seo";
 
-export const meta: MetaFunction = () => [
-  { title: "Privacy Policy | EdiCut Creator Post Production" },
-  { name: "description", content: "How EdiCut handles creator raw footage, project data, credentials, and confidential materials." },
-];
+export const meta: MetaFunction = (args) => createRouteMeta(args,
+  "Privacy Policy | EdiCut",
+  "Read how EdiCut handles account details, creator project data, source-footage links, billing information, and confidential materials.",
+);
 
 const sections = [
   {

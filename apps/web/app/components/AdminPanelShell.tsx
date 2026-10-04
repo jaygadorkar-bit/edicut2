@@ -8,11 +8,15 @@ export const adminPanelNavItems = [
   { label: "Users", icon: "group", tab: "users" },
   { label: "Roles", icon: "shield_person", tab: "roles" },
   { label: "Packages", icon: "sell", tab: "packages" },
+  { label: "Marketing", icon: "campaign", tab: "marketing" },
+  { label: "Affiliates", icon: "groups", tab: "affiliates" },
   { label: "Images", icon: "image", tab: "images" },
   { label: "Videos", icon: "movie", tab: "videos" },
   { label: "Projects", icon: "video_library", tab: "projects" },
   { label: "Payments", icon: "payments", tab: "payments" },
+  { label: "Purchases", icon: "receipt_long", tab: "subscriptions" },
   { label: "Audit Logs", icon: "history", tab: "audit" },
+  { label: "Infrastructure", icon: "monitoring", tab: "infrastructure" },
   { label: "Settings", icon: "settings", tab: "settings" },
 ] as const;
 
@@ -34,25 +38,18 @@ export function AdminPanelShell({ title, activeTab, account, headerActions, noti
     label,
     bottomLabel: tab === "overview" ? "Overview" : undefined,
     icon,
-    to: adminPath(`?tab=${tab}`),
+    to: tab === "infrastructure" || tab === "subscriptions" ? adminPath(`/${tab}`) : adminPath(`?tab=${tab}`),
     active: tab === activeTab,
   }));
-  const mobileBottomNavItems = ["Dashboard", "Projects", "Users", "Payments"]
-    .map((label) => navItems.find((item) => item.label === label))
-    .filter((item) => item !== undefined);
-
   return (
     <WorkspaceShell
       title={title}
-      subtitle="EdiCut operations workspace"
       navItems={navItems}
       account={account}
       mobileMenu
-      hideMobileSubtitle
-      hideMobileHeading={activeTab === "overview"}
-      mobileBottomNavItems={mobileBottomNavItems}
-      mobileBottomMore={false}
-      mobileBottomNavLabel="Primary admin navigation"
+      mobileBottomNav={false}
+      navigationFeedback
+      hideHeaderTitle
       profileTo={adminPath("/account")}
       settingsTo={adminPath("/account")}
       notificationsTo={adminPath("?tab=projects")}

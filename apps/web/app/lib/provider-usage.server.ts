@@ -1,4 +1,8 @@
-import type { CloudinaryImageResource, CloudinaryUsage } from "./cloudinary.server";
+import type { CloudinaryUsage } from "./cloudinary.server";
+import { fetchWithTimeout } from "@edicut/shared/server-fetch";
+import type { DatabaseClient } from "@edicut/db/client";
+import { sql } from "drizzle-orm";
+import { getDatabaseUrlFromContext } from "./db.server";
 
 type ProviderEnv = {
   cf?: { env?: Record<string, string | undefined> };
@@ -16,6 +20,7 @@ export type UsageCardStat = {
   label: string;
   value: string;
   help?: string;
+  meterPercent?: number;
 };
 
 export type UsageDetail = {
@@ -107,15 +112,15 @@ type CloudflareAnalyticsGroup = {
   uniq?: { uniques?: number };
 };
 
-type CloudflareRequestGroup = {
-  count?: number;
-  dimensions?: {
-    clientCountryName?: string;
-    clientRequestHTTPHost?: string;
-    clientRequestPath?: string;
-    edgeResponseStatus?: number;
-    userAgent?: string;
-  };
+type CloudflareWorkerGroup = {
+  sum?: { requests?: number; errors?: number; subrequests?: number };
+};
+
+type SupabaseApiCount = {
+  total_auth_requests?: number;
+  total_realtime_requests?: number;
+  total_rest_requests?: number;
+  total_storage_requests?: number;
 };
 
 type VercelCharge = {
@@ -196,6 +201,8 @@ async function readEnv(context?: ProviderEnv) {
   return {
     cloudflareAccountId: value("CLOUDFLARE_ACCOUNT_ID") || value("CF_ACCOUNT_ID"),
     cloudflareZoneId: value("CLOUDFLARE_ZONE_ID") || value("CF_ZONE_ID"),
+    cloudflareZoneName: value("CLOUDFLARE_ZONE_NAME"),
+    cloudflareWorkerName: value("CLOUDFLARE_WORKER_NAME"),
     cloudflareApiToken: value("CLOUDFLARE_API_TOKEN") || value("CF_API_TOKEN"),
     cloudflareEmail: value("CLOUDFLARE_EMAIL") || value("CF_EMAIL"),
     cloudflareApiKey: value("CLOUDFLARE_API_KEY") || value("CF_API_KEY"),
@@ -203,15 +210,17 @@ async function readEnv(context?: ProviderEnv) {
     vercelTeamId: value("VERCEL_TEAM_ID") || value("VERCEL_ORG_ID"),
     neonApiKey: value("NEON_API_KEY"),
     neonProjectId: value("NEON_PROJECT_ID") || value("DATABASE_PROJECT_ID"),
-    databaseUrl: value("NEON_DATABASE_URL") || value("DATABASE_URL"),
+    databaseUrl: getDatabaseUrlFromContext(context ?? {}),
     supabaseUrl: value("SUPABASE_URL") || value("VITE_SUPABASE_URL"),
+    supabaseProjectRef: value("SUPABASE_PROJECT_REF"),
+    supabaseAccessToken: value("SUPABASE_ACCESS_TOKEN"),
     supabasePublishableKey: value("SUPABASE_PUBLISHABLE_KEY") || value("VITE_SUPABASE_PUBLISHABLE_KEY"),
     supabaseServiceRoleKey: value("SUPABASE_SERVICE_ROLE_KEY"),
   };
 }
 
 async function fetchJson<T>(url: string, init: RequestInit) {
-  const response = await fetch(url, init);
+  const response = await fetchWithTimeout(url, init);
   const result = await response.json().catch(() => ({})) as T & { error?: unknown; errors?: unknown[]; message?: string };
 
   if (!response.ok) {
@@ -219,11 +228,15 @@ async function fetchJson<T>(url: string, init: RequestInit) {
     throw new Error(message);
   }
 
+  if (result.errors?.length) {
+    throw new Error("Provider analytics query failed.");
+  }
+
   return result;
 }
 
 async function fetchText(url: string, init: RequestInit) {
-  const response = await fetch(url, init);
+  const response = await fetchWithTimeout(url, init);
   const result = await response.text();
 
   if (!response.ok) {
@@ -256,18 +269,25 @@ function notConfigured(id: ProviderUsage["id"], name: string, icon: string, envN
 }
 
 function errorProvider(id: ProviderUsage["id"], name: string, icon: string, error: unknown): ProviderUsage {
+  const isCloudflare = id === "cloudflare";
+
   return {
     id,
     name,
     icon,
     configured: true,
     status: "error",
-    statusLabel: "API error",
+    statusLabel: isCloudflare ? "Access issue" : "API error",
     error: error instanceof Error ? error.message : "Failed to load provider data.",
     cards: [
       { label: "Connection", value: "Error" },
-      { label: "Usage", value: "Unavailable" },
-      { label: "Limits", value: "Unavailable" },
+      {
+        label: "Usage",
+        value: "Unavailable",
+        help: isCloudflare
+          ? "Check connectivity and token access: Zone:Read + Zone Analytics:Read; Account Analytics:Read enables Worker metrics."
+          : "Check the server-side credentials and analytics permissions, then refresh.",
+      },
     ],
     details: [],
     resources: [],
@@ -284,6 +304,12 @@ function formatCompactNumber(value: number) {
 
 function formatPercent(value: number) {
   return Number.isFinite(value) ? `${value.toFixed(1)}%` : "0.0%";
+}
+
+function getUsagePercent(usage: number, limit: number) {
+  return Number.isFinite(usage) && Number.isFinite(limit) && limit > 0
+    ? Math.max(0, usage / limit * 100)
+    : undefined;
 }
 
 function formatHours(value: number) {
@@ -333,6 +359,121 @@ function parseNeonDatabaseUrl(databaseUrl?: string) {
   } catch {
     return null;
   }
+}
+
+type NeonDatabaseMetrics = {
+  databaseName: string;
+  databaseBytes: number;
+  activeConnections: number;
+  maxConnections: number;
+  userTables: number;
+  postgresVersion: string;
+};
+
+function firstQueryRow(result: unknown): Record<string, unknown> | null {
+  const rows = Array.isArray(result)
+    ? result
+    : result && typeof result === "object" && "rows" in result
+      ? (result as { rows?: unknown }).rows
+      : undefined;
+  if (!Array.isArray(rows) || !rows[0] || typeof rows[0] !== "object") return null;
+  return rows[0] as Record<string, unknown>;
+}
+
+function safeNonnegativeInteger(value: unknown) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : null;
+}
+
+async function getLiveNeonDatabaseMetrics(db: DatabaseClient): Promise<NeonDatabaseMetrics> {
+  const result = await db.execute(sql`
+    SELECT
+      current_database() AS database_name,
+      pg_catalog.pg_database_size(current_database())::text AS database_bytes,
+      (
+        SELECT count(*)::text
+        FROM pg_catalog.pg_stat_activity
+        WHERE datname = current_database()
+      ) AS active_connections,
+      current_setting('max_connections') AS max_connections,
+      (
+        SELECT count(*)::text
+        FROM pg_catalog.pg_tables
+        WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+      ) AS user_tables,
+      current_setting('server_version') AS postgres_version
+  `);
+  const row = firstQueryRow(result);
+  if (!row) throw new Error("The database returned no usage metrics.");
+
+  const databaseBytes = safeNonnegativeInteger(row.database_bytes);
+  const activeConnections = safeNonnegativeInteger(row.active_connections);
+  const maxConnections = safeNonnegativeInteger(row.max_connections);
+  const userTables = safeNonnegativeInteger(row.user_tables);
+  if (databaseBytes === null || activeConnections === null || maxConnections === null || userTables === null) {
+    throw new Error("The database returned invalid usage metrics.");
+  }
+
+  return {
+    databaseName: typeof row.database_name === "string" ? row.database_name : "Current database",
+    databaseBytes,
+    activeConnections,
+    maxConnections,
+    userTables,
+    postgresVersion: typeof row.postgres_version === "string" ? row.postgres_version : "Unknown",
+  };
+}
+
+const neonFreeStorageLimitBytes = 1024 * 1024 * 1024;
+
+function getNeonDatabaseUsageCards(metrics: NeonDatabaseMetrics | null): UsageCardStat[] {
+  return [
+    {
+      label: "Database storage",
+      value: metrics ? `${formatBytes(metrics.databaseBytes)} / 1 GB Free reference` : "Unavailable",
+      help: metrics
+        ? `Live pg_database_size for ${metrics.databaseName} on the active DATABASE_URL. Neon Free includes 1 GB of Postgres storage per project, but the app cannot verify your account plan from this URL. This reading covers this database on the connected branch; other branches and retained history can affect project storage separately.`
+        : "Live database metrics could not be read through the active DATABASE_URL.",
+      meterPercent: metrics ? getUsagePercent(metrics.databaseBytes, neonFreeStorageLimitBytes) : undefined,
+    },
+    {
+      label: "Active connections",
+      value: metrics ? `${formatNumber(metrics.activeConnections)} / ${formatNumber(metrics.maxConnections)}` : "Unavailable",
+      help: metrics
+        ? "Current PostgreSQL sessions for this database divided by max_connections reported by the active Neon compute. This is a live connection-capacity measure, not a monthly quota."
+        : "Live connection metrics could not be read through the active DATABASE_URL.",
+      meterPercent: metrics ? getUsagePercent(metrics.activeConnections, metrics.maxConnections) : undefined,
+    },
+    { label: "User tables", value: metrics ? formatNumber(metrics.userTables) : "Unavailable" },
+  ];
+}
+
+function getNeonConnectionUsage(database: NonNullable<ReturnType<typeof parseNeonDatabaseUrl>>, metrics: NeonDatabaseMetrics | null): ProviderUsage {
+  return {
+    id: "neon",
+    name: "Neon Database",
+    icon: "database",
+    configured: true,
+    status: metrics ? "connected" : "partial",
+    statusLabel: metrics ? "Live usage" : "Usage unavailable",
+    cards: getNeonDatabaseUsageCards(metrics),
+    details: [
+      { label: "Database", value: metrics?.databaseName || database.database },
+      { label: "Host", value: database.host },
+      { label: "Endpoint", value: database.endpoint || "Unknown" },
+      { label: "Region", value: database.region || "Unknown" },
+      { label: "Pooler", value: database.pooler ? "Enabled" : "Direct" },
+      { label: "PostgreSQL", value: metrics?.postgresVersion || "Unknown" },
+      { label: "Storage reading", value: "Current database on the connected branch; not project-wide billed usage." },
+    ],
+    resources: [
+      {
+        title: metrics?.databaseName || database.database,
+        meta: [database.endpoint, database.region, database.pooler ? "pooled connection" : "direct connection"].filter(Boolean).join(" · "),
+        status: metrics ? "connected" : "unavailable",
+      },
+    ],
+  };
 }
 
 function formatUsageValue(value: { usage?: number; limit?: number; used_percent?: number } | undefined, type: "bytes" | "number") {
@@ -472,35 +613,46 @@ async function getCloudflareZoneAnalytics(headers: Record<string, string>, zones
   };
 }
 
-async function getCloudflareRequestGroups(headers: Record<string, string>, zones: CloudflareZone[]) {
-  const zoneTag = zones.find((zone) => zone.id)?.id;
-  if (!zoneTag) return [];
-
-  const today = new Date().toISOString().slice(0, 10);
-  const start = `${today}T00:00:00Z`;
-  const end = new Date().toISOString();
+async function getCloudflareWorkerUsage(headers: Record<string, string>, accountId: string, workerName: string) {
+  const end = new Date();
+  const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
   const query = `
-    query($zoneTag: string, $start: DateTime, $end: DateTime) {
+    query($accountTag: string!, $datetimeStart: string!, $datetimeEnd: string!, $scriptName: string!) {
       viewer {
-        zones(filter: { zoneTag: $zoneTag }) {
-          httpRequestsAdaptiveGroups(limit: 20, filter: { datetime_geq: $start, datetime_leq: $end }, orderBy: [count_DESC]) {
-            count
-            dimensions { clientCountryName clientRequestHTTPHost clientRequestPath edgeResponseStatus userAgent }
+        accounts(filter: { accountTag: $accountTag }) {
+          workersInvocationsAdaptive(limit: 1000, filter: {
+            scriptName: $scriptName,
+            datetime_geq: $datetimeStart,
+            datetime_leq: $datetimeEnd
+          }) {
+            sum { requests errors subrequests }
           }
         }
       }
     }
   `;
-  const result = await fetchJson<{ data?: { viewer?: { zones?: Array<{ httpRequestsAdaptiveGroups?: CloudflareRequestGroup[] }> } } }>(
-    "https://api.cloudflare.com/client/v4/graphql",
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ query, variables: { zoneTag, start, end } }),
-    },
-  );
+  const result = await fetchJson<{
+    data?: { viewer?: { accounts?: Array<{ workersInvocationsAdaptive?: CloudflareWorkerGroup[] }> } };
+  }>("https://api.cloudflare.com/client/v4/graphql", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      query,
+      variables: {
+        accountTag: accountId,
+        datetimeStart: start.toISOString(),
+        datetimeEnd: end.toISOString(),
+        scriptName: workerName,
+      },
+    }),
+  });
+  const groups = result.data?.viewer?.accounts?.[0]?.workersInvocationsAdaptive || [];
 
-  return result.data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
+  return groups.reduce((total, group) => ({
+    requests: total.requests + (group.sum?.requests || 0),
+    errors: total.errors + (group.sum?.errors || 0),
+    subrequests: total.subrequests + (group.sum?.subrequests || 0),
+  }), { requests: 0, errors: 0, subrequests: 0 });
 }
 
 async function getCloudflareUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<ProviderUsage> {
@@ -514,76 +666,64 @@ async function getCloudflareUsage(env: Awaited<ReturnType<typeof readEnv>>): Pro
       : { "X-Auth-Email": env.cloudflareEmail || "", "X-Auth-Key": env.cloudflareApiKey || "", "Content-Type": "application/json" };
     const zoneParams = new URLSearchParams({ per_page: "50" });
     if (env.cloudflareAccountId) zoneParams.set("account.id", env.cloudflareAccountId);
+    if (env.cloudflareZoneName) zoneParams.set("name", env.cloudflareZoneName);
 
-    const [auth, account, zones] = await Promise.all([
-      env.cloudflareApiToken
-        ? fetchJson<{ result?: { status?: string; expires_on?: string } }>("https://api.cloudflare.com/client/v4/user/tokens/verify", { headers })
-        : fetchJson<{ result?: { email?: string; username?: string; first_name?: string; last_name?: string } }>("https://api.cloudflare.com/client/v4/user", { headers }),
-      env.cloudflareAccountId
-        ? fetchJson<{ result?: { name?: string; type?: string; settings?: Record<string, unknown> } }>(`https://api.cloudflare.com/client/v4/accounts/${env.cloudflareAccountId}`, { headers }).catch(() => null)
-        : Promise.resolve(null),
-      fetchJson<{ result?: CloudflareZone[] }>(`https://api.cloudflare.com/client/v4/zones?${zoneParams.toString()}`, { headers }),
-    ]);
-
-    const zoneList = zones.result || [];
-    const activeZones = zoneList.filter((zone) => zone.status === "active").length;
-    const pausedZones = zoneList.filter((zone) => zone.paused).length;
-    const planNames = Array.from(new Set(zoneList.map((zone) => zone.plan?.name).filter(Boolean)));
-    const [analytics, requestGroups] = await Promise.all([
+    const zones = await fetchJson<{ result?: CloudflareZone[] }>(`https://api.cloudflare.com/client/v4/zones?${zoneParams.toString()}`, { headers });
+    const zoneList = (zones.result || []).filter((zone) =>
+      (!env.cloudflareZoneId || zone.id === env.cloudflareZoneId) &&
+      (!env.cloudflareZoneName || zone.name === env.cloudflareZoneName),
+    );
+    const [analytics, workerUsage] = await Promise.all([
       getCloudflareZoneAnalytics(headers, zoneList).catch(() => null),
-      getCloudflareRequestGroups(headers, zoneList).catch(() => [] as CloudflareRequestGroup[]),
+      env.cloudflareAccountId && env.cloudflareWorkerName
+        ? getCloudflareWorkerUsage(headers, env.cloudflareAccountId, env.cloudflareWorkerName).catch(() => null)
+        : Promise.resolve(null),
     ]);
-    const workerFreeDailyLimit = 100_000;
-    const workerRequestsRemaining = Math.max(workerFreeDailyLimit - (analytics?.todayRequests || 0), 0);
-    const scanRequests = requestGroups.reduce((sum, group) => {
-      const path = group.dimensions?.clientRequestPath || "";
-      const status = group.dimensions?.edgeResponseStatus || 0;
-      return status === 404 || /(?:wp-|wordpress|xmlrpc|\.php|ckeditor|server\.php)/i.test(path)
-        ? sum + (group.count || 0)
-        : sum;
-    }, 0);
-    const requestLimitHelp = analytics
-      ? "Zone requests are CDN traffic; Workers free quota is 100k invocations/day if every request hits a Worker."
-      : "Workers free quota is 100k invocations/day. CDN/DNS traffic is not capped the same way.";
-
+    const hasUsageData = Boolean(analytics || workerUsage);
     return {
       id: "cloudflare",
       name: "Cloudflare",
       icon: "shield",
       configured: true,
-      status: "connected",
-      statusLabel: "Connected",
+      status: hasUsageData ? "connected" : "partial",
+      statusLabel: hasUsageData ? "Connected" : "Analytics unavailable",
       cards: [
-        { label: "Requests Today", value: analytics ? formatNumber(analytics.todayRequests) : "Unavailable", help: requestLimitHelp },
-        { label: "Page Views Today", value: analytics ? formatNumber(analytics.pageViews) : "Unavailable", help: "Closer to human page loads than raw requests" },
-        { label: "Likely Scans", value: formatNumber(scanRequests), help: "404/WordPress/PHP probes in top request groups" },
-        { label: "Worker Free Left", value: formatNumber(workerRequestsRemaining), help: "Of 100,000/day reference limit" },
-        { label: "30 Day Requests", value: analytics ? formatNumber(analytics.requests) : "Unavailable", help: analytics ? `${formatPercent(analytics.cacheHitRate)} cache hit rate` : undefined },
-        { label: "Bandwidth 30d", value: analytics ? formatBytes(analytics.bytes) : "Unavailable", help: analytics ? `${formatBytes(analytics.cachedBytes)} cached` : undefined },
-        { label: "Threats 30d", value: analytics ? formatNumber(analytics.threats) : "Unavailable" },
-        { label: "Plans", value: planNames.length ? planNames.join(", ") : "Unknown", help: `${activeZones} active zones` },
-        { label: "Auth", value: env.cloudflareApiToken ? ((auth as { result?: { status?: string } }).result?.status || "Verified") : "Global key" },
+        {
+          label: "Worker invocations (today UTC)",
+          value: workerUsage ? formatQuota(workerUsage.requests, 100_000, formatNumber) : "Unavailable",
+          help: workerUsage
+            ? "Workers Free allows 100,000 requests per account per UTC day; this count is for the configured Worker, and other Workers share the allowance."
+            : "Requires account analytics access and a configured Worker name.",
+          meterPercent: workerUsage ? getUsagePercent(workerUsage.requests, 100_000) : undefined,
+        },
+        {
+          label: "Worker subrequests (today UTC)",
+          value: workerUsage
+            ? `${formatNumber(workerUsage.subrequests)} / ${formatNumber(workerUsage.requests * 50)} maximum`
+            : "Unavailable",
+          help: "Workers Free allows up to 50 subrequests per invocation; this total maximum scales with this Worker's invocation count.",
+          meterPercent: workerUsage && workerUsage.requests > 0
+            ? getUsagePercent(workerUsage.subrequests, workerUsage.requests * 50)
+            : undefined,
+        },
+        {
+          label: "Worker errors (today UTC)",
+          value: workerUsage ? `${formatNumber(workerUsage.errors)} / ${formatNumber(workerUsage.requests)} invocations` : "Unavailable",
+          help: "Errors compared with this Worker's invocations; there is no separate error-count quota.",
+        },
+        {
+          label: "Zone requests (30d)",
+          value: analytics ? `${formatNumber(analytics.requests)} / unmetered` : "Unavailable",
+          help: analytics ? `${formatPercent(analytics.cacheHitRate)} cache hit rate · Free website traffic has no metered request allowance.` : undefined,
+        },
+        {
+          label: "Bandwidth (30d)",
+          value: analytics ? `${formatBytes(analytics.bytes)} / unmetered` : "Unavailable",
+          help: analytics ? `${formatBytes(analytics.cachedBytes)} served from cache · Free website traffic is unmetered.` : undefined,
+        },
       ],
-      details: [
-        { label: "Account", value: account?.result?.name || env.cloudflareAccountId || "Token scope" },
-        { label: "Account type", value: account?.result?.type || "Unknown" },
-        { label: "Configured zone", value: env.cloudflareZoneId || "All token-visible zones" },
-        { label: "Zones", value: `${formatNumber(zoneList.length)} total, ${formatNumber(pausedZones)} paused` },
-        { label: "Free request note", value: "Cloudflare CDN/DNS can absorb high traffic on Free; Workers Free is 100,000 requests/day." },
-        { label: "Encrypted requests", value: analytics ? `${formatNumber(analytics.encryptedRequests)} (${formatPercent(analytics.encryptedRate)})` : "Unavailable" },
-        { label: "Unique visitors 30d", value: analytics ? formatNumber(analytics.uniques) : "Unavailable" },
-        { label: "Identity", value: env.cloudflareApiToken ? "API token" : ((auth as { result?: { email?: string; username?: string } }).result?.email || (auth as { result?: { username?: string } }).result?.username || "Cloudflare user") },
-        { label: "Token expires", value: env.cloudflareApiToken ? formatDate((auth as { result?: { expires_on?: string } }).result?.expires_on) : "Global key" },
-      ],
-      resources: requestGroups.length ? requestGroups.slice(0, 8).map((group) => ({
-        title: `${group.dimensions?.clientRequestHTTPHost || "edicut.com"}${group.dimensions?.clientRequestPath || "/"}`,
-        meta: [group.dimensions?.clientCountryName, group.dimensions?.userAgent, `${formatNumber(group.count || 0)} requests`].filter(Boolean).join(" · "),
-        status: String(group.dimensions?.edgeResponseStatus || ""),
-      })) : zoneList.slice(0, 8).map((zone) => ({
-        title: zone.name || zone.id || "Unnamed zone",
-        meta: [zone.plan?.name, zone.type, zone.modified_on ? `Updated ${formatDate(zone.modified_on)}` : null].filter(Boolean).join(" · "),
-        status: zone.paused ? "paused" : zone.status,
-      })),
+      details: [],
+      resources: [],
     };
   } catch (error) {
     return errorProvider("cloudflare", "Cloudflare", "shield", error);
@@ -683,38 +823,15 @@ async function getVercelUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise
   }
 }
 
-async function getNeonUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<ProviderUsage> {
+async function getNeonUsage(env: Awaited<ReturnType<typeof readEnv>>, db: DatabaseClient): Promise<ProviderUsage> {
+  const database = parseNeonDatabaseUrl(env.databaseUrl);
+  const databaseMetrics = database
+    ? await getLiveNeonDatabaseMetrics(db).catch(() => null)
+    : null;
+
   if (!env.neonApiKey) {
-    const database = parseNeonDatabaseUrl(env.databaseUrl);
     if (database) {
-      return {
-        id: "neon",
-        name: "Neon",
-        icon: "database",
-        configured: true,
-        status: "partial",
-        statusLabel: "Database URL",
-        cards: [
-          { label: "Connection", value: "Configured", help: "Loaded from DATABASE_URL" },
-          { label: "Database", value: database.database },
-          { label: "Pooler", value: database.pooler ? "Enabled" : "Direct" },
-          { label: "Region", value: database.region || "Unknown" },
-        ],
-        details: [
-          { label: "Host", value: database.host },
-          { label: "Endpoint", value: database.endpoint || "Unknown" },
-          { label: "User", value: database.user || "Unknown" },
-          { label: "SSL mode", value: database.sslMode || "Unknown" },
-          { label: "Limits", value: "Add NEON_API_KEY to show project, branch, endpoint, compute, and plan data from Neon." },
-        ],
-        resources: [
-          {
-            title: database.database,
-            meta: [database.endpoint, database.region, database.pooler ? "pooled connection" : "direct connection"].filter(Boolean).join(" · "),
-            status: "connected",
-          },
-        ],
-      };
+      return getNeonConnectionUsage(database, databaseMetrics);
     }
 
     return notConfigured("neon", "Neon", "database", ["NEON_API_KEY"]);
@@ -742,12 +859,13 @@ async function getNeonUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<P
 
     return {
       id: "neon",
-      name: "Neon",
+      name: "Neon Database",
       icon: "database",
       configured: true,
-      status: projectStats.length ? "connected" : "partial",
-      statusLabel: projectStats.length ? "Connected" : "No projects",
+      status: databaseMetrics || projectStats.length ? "connected" : "partial",
+      statusLabel: databaseMetrics ? "Live usage" : projectStats.length ? "Connected" : "No projects",
       cards: [
+        ...(database ? getNeonDatabaseUsageCards(databaseMetrics) : []),
         { label: "Projects", value: formatNumber(projectList.length), help: env.neonProjectId ? "Filtered project configured" : "Token-visible projects" },
         { label: "Branches", value: formatNumber(branchCount), help: `Across ${selectedProjects.length || 0} checked` },
         { label: "Endpoints", value: formatNumber(endpointCount), help: `${runningEndpoints} active` },
@@ -757,6 +875,11 @@ async function getNeonUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<P
         { label: "Configured project", value: env.neonProjectId || "All token-visible projects" },
         { label: "Postgres versions", value: Array.from(new Set(projectList.map((project) => project.pg_version).filter(Boolean))).join(", ") || "Unknown" },
         { label: "Limits", value: "Compute, storage, and branch limits depend on the Neon plan." },
+        ...(database ? [
+          { label: "Connected database", value: databaseMetrics?.databaseName || database.database },
+          { label: "Connected host", value: database.host },
+          { label: "Database size scope", value: "Current database on the connected branch, not project-wide billed usage." },
+        ] : []),
         { label: "Checked projects", value: selectedProjects.map((project) => project.name || project.id).filter(Boolean).join(", ") || "None" },
       ],
       resources: projectStats.flatMap((item) => [
@@ -773,96 +896,202 @@ async function getNeonUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<P
       ]).slice(0, 8),
     };
   } catch (error) {
+    if (database) {
+      const connectionUsage = getNeonConnectionUsage(database, databaseMetrics);
+      return {
+        ...connectionUsage,
+        statusLabel: databaseMetrics ? "Live usage" : "API unavailable",
+        details: [...connectionUsage.details, { label: "Neon API", value: "Project and billing details unavailable." }],
+      };
+    }
     return errorProvider("neon", "Neon", "database", error);
   }
 }
 
 async function getSupabaseUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<ProviderUsage> {
-  if (!env.supabaseUrl || !env.supabasePublishableKey) {
-    return notConfigured("supabase", "Supabase", "database", ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"]);
+  const url = env.supabaseUrl?.replace(/\/$/, "");
+  let projectRef = env.supabaseProjectRef;
+
+  if (!projectRef && url) {
+    try {
+      const hostname = new URL(url).hostname;
+      if (hostname.endsWith(".supabase.co")) projectRef = hostname.split(".")[0];
+    } catch {
+      // A malformed URL is reported as an unavailable connection below.
+    }
   }
 
-  try {
-    const url = env.supabaseUrl.replace(/\/$/, "");
-    const settings = await fetchJson<{ external?: boolean }>(`${url}/auth/v1/settings`, {
-      headers: {
-        apikey: env.supabasePublishableKey,
-        Authorization: `Bearer ${env.supabasePublishableKey}`,
+  const hasHealthCheck = Boolean(url && env.supabasePublishableKey);
+  const hasUsageAccess = Boolean(env.supabaseAccessToken && projectRef);
+  if (!hasHealthCheck && !hasUsageAccess) {
+    return notConfigured("supabase", "Supabase APIs", "api", [
+      "SUPABASE_URL + SUPABASE_PUBLISHABLE_KEY",
+      "SUPABASE_ACCESS_TOKEN + SUPABASE_PROJECT_REF for usage counts",
+    ]);
+  }
+
+  const [health, apiCounts] = await Promise.all([
+    hasHealthCheck
+      ? fetchJson<{ external?: boolean }>(`${url}/auth/v1/settings`, {
+        headers: {
+          apikey: env.supabasePublishableKey || "",
+          Authorization: `Bearer ${env.supabasePublishableKey || ""}`,
+        },
+      }).then(() => ({ ok: true as const })).catch(() => ({ ok: false as const }))
+      : Promise.resolve({ ok: false as const }),
+    hasUsageAccess
+      ? (() => {
+        const query = new URLSearchParams({ interval: "1day" });
+        return fetchJson<{ result?: SupabaseApiCount[] }>(
+          `https://api.supabase.com/v1/projects/${encodeURIComponent(projectRef || "")}/analytics/endpoints/usage.api-counts?${query}`,
+          { headers: { Authorization: `Bearer ${env.supabaseAccessToken}` } },
+        ).then((result) => ({ ok: true as const, rows: result.result || [] }))
+          .catch(() => ({ ok: false as const, rows: [] as SupabaseApiCount[] }));
+      })()
+      : Promise.resolve({ ok: false as const, rows: [] as SupabaseApiCount[] }),
+  ]);
+
+  const requestCounts = apiCounts.rows.reduce((totals, row) => ({
+    auth: totals.auth + (row.total_auth_requests || 0),
+    realtime: totals.realtime + (row.total_realtime_requests || 0),
+    rest: totals.rest + (row.total_rest_requests || 0),
+    storage: totals.storage + (row.total_storage_requests || 0),
+  }), { auth: 0, realtime: 0, rest: 0, storage: 0 });
+  const totalRequests = requestCounts.auth + requestCounts.realtime + requestCounts.rest + requestCounts.storage;
+  const status = apiCounts.ok && (health.ok || !hasHealthCheck) ? "connected" : "partial";
+  const usageHelp = !hasUsageAccess
+    ? "Add a server-side SUPABASE_ACCESS_TOKEN scoped with analytics_usage_read."
+    : apiCounts.ok
+      ? "Daily endpoint request count. API requests have no fixed Free plan cap; this is not a billing resource meter."
+      : "Check that the token has analytics_usage_read permission and the project ref is correct.";
+  const requestHelp = apiCounts.ok
+    ? "Live daily endpoint request count. This is not a billing resource meter; Supabase's published Management API does not provide organization billing-cycle usage totals."
+    : "Request count unavailable until the analytics token and project scope are configured.";
+  return {
+    id: "supabase",
+    name: "Supabase APIs",
+    icon: "api",
+    configured: true,
+    status,
+    statusLabel: apiCounts.ok ? "Connected" : hasUsageAccess ? "Usage unavailable" : health.ok ? "API reachable" : "Token needed",
+    cards: [
+      { label: "API requests (today)", value: apiCounts.ok ? formatNumber(totalRequests) : hasUsageAccess ? "Unavailable" : "Not configured", help: usageHelp },
+      {
+        label: "Auth requests (today)",
+        value: apiCounts.ok ? formatNumber(requestCounts.auth) : "Unavailable",
+        help: requestHelp,
       },
-    });
-
-    return {
-      id: "supabase",
-      name: "Supabase",
-      icon: "database",
-      configured: true,
-      status: "connected",
-      statusLabel: "Connected",
-      cards: [
-        { label: "Auth API", value: "Reachable" },
-        { label: "Database", value: "Supabase Postgres" },
-        { label: "RLS", value: "Migration enabled" },
-        { label: "Service key", value: env.supabaseServiceRoleKey ? "Configured" : "Missing" },
-      ],
-      details: [
-        { label: "Project URL", value: url },
-        { label: "Auth settings", value: settings ? "Loaded" : "Unavailable" },
-        { label: "Client key", value: "Publishable key configured" },
-        { label: "Server key", value: env.supabaseServiceRoleKey ? "Configured as a secret" : "Missing" },
-      ],
-      resources: [],
-    };
-  } catch (error) {
-    return errorProvider("supabase", "Supabase", "database", error);
-  }
+      {
+        label: "REST requests (today)",
+        value: apiCounts.ok ? formatNumber(requestCounts.rest) : "Unavailable",
+        help: requestHelp,
+      },
+      {
+        label: "Realtime API requests (today)",
+        value: apiCounts.ok ? formatNumber(requestCounts.realtime) : "Unavailable",
+        help: requestHelp,
+      },
+      {
+        label: "Storage requests (today)",
+        value: apiCounts.ok ? formatNumber(requestCounts.storage) : "Unavailable",
+        help: requestHelp,
+      },
+      { label: "Auth API", value: health.ok ? "Reachable" : hasHealthCheck ? "Unavailable" : "Not configured", help: "Connectivity check; this is not a usage counter." },
+    ],
+    details: [
+      { label: "Project ref", value: projectRef || "Missing" },
+      { label: "Management token", value: hasUsageAccess ? "Configured as a server secret" : "Missing" },
+      {
+        label: "Usage permissions",
+        value: hasUsageAccess ? "analytics_usage_read" : "Not configured",
+      },
+    ],
+    resources: [],
+  };
 }
 
-function getCloudinaryProvider(usage: CloudinaryUsage | null, images: CloudinaryImageResource[]): ProviderUsage {
-  const totalBytes = images.reduce((sum, image) => sum + (image.bytes || 0), 0);
-  const formats = Array.from(new Set(images.map((image) => image.format).filter(Boolean)));
-  const latestImages = [...images].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+function getCloudinaryProvider(
+  usage: CloudinaryUsage | null,
+  videoUsage: CloudinaryUsage | null,
+): ProviderUsage {
+  const createUsageCard = (
+    label: string,
+    accountUsage: CloudinaryUsage | null,
+    metric: "storage" | "bandwidth" | "credits" | "transformations",
+    type: "bytes" | "number",
+    help: string,
+    freePlanFallback?: "storage" | "bandwidth" | "transformations",
+  ): UsageCardStat => {
+    const metricUsage = accountUsage?.[metric];
+    let limit = typeof metricUsage?.limit === "number" && metricUsage.limit > 0 ? metricUsage.limit : undefined;
+    const isFreePlan = Boolean(accountUsage?.plan?.toLowerCase().includes("free"));
+    const freeCreditLimit = accountUsage?.credits?.limit;
+
+    if (!limit && isFreePlan && typeof freeCreditLimit === "number" && freeCreditLimit > 0) {
+      if (freePlanFallback === "storage" || freePlanFallback === "bandwidth") {
+        limit = freeCreditLimit * 1024 ** 3;
+      } else if (freePlanFallback === "transformations") {
+        limit = freeCreditLimit * 1_000;
+      }
+    }
+
+    const usageWithLimit = metricUsage && limit ? { ...metricUsage, limit } : metricUsage;
+    const hasUsageAndLimit = typeof usageWithLimit?.usage === "number" && typeof usageWithLimit.limit === "number";
+
+    return {
+      label,
+      value: formatUsageValue(usageWithLimit, type),
+      help: accountUsage
+        ? `${help}${hasUsageAndLimit ? "" : " Provider did not return a quota for this metric."}`
+        : "Usage unavailable from the Cloudinary Admin API.",
+      meterPercent: hasUsageAndLimit
+        ? usageWithLimit.used_percent ?? getUsagePercent(usageWithLimit.usage!, usageWithLimit.limit!)
+        : undefined,
+    };
+  };
+
+  const rollingWindowHelp = (accountUsage: CloudinaryUsage | null) => {
+    const credits = accountUsage?.credits?.limit;
+    const allowance = typeof credits === "number" ? `${formatNumber(credits)} shared credits` : "25 shared credits (Free plan reference)";
+    const plan = accountUsage?.plan ? `${accountUsage.plan} plan` : "Cloudinary";
+    return `${plan} allowance: ${allowance} over a rolling 30-day window; storage, bandwidth, and transformations draw from the same pool.`;
+  };
 
   return {
     id: "cloudinary",
     name: "Cloudinary",
     icon: "cloud",
-    configured: Boolean(usage || images.length),
-    status: usage ? "connected" : images.length ? "partial" : "not-configured",
-    statusLabel: usage ? "Connected" : images.length ? "Image list only" : "Unavailable",
+    configured: Boolean(usage || videoUsage),
+    status: usage && videoUsage ? "connected" : usage || videoUsage ? "partial" : "not-configured",
+    statusLabel: usage && videoUsage ? "Connected" : usage || videoUsage ? "Partial data" : "Unavailable",
     cards: [
-      { label: "Images", value: formatNumber(images.length), help: "edicut folder" },
-      { label: "Listed Storage", value: formatBytes(totalBytes) },
-      { label: "Cloud Storage", value: formatUsageValue(usage?.storage, "bytes") },
-      { label: "Credits", value: formatUsageValue(usage?.credits, "number") },
-      { label: "Bandwidth", value: formatUsageValue(usage?.bandwidth, "bytes") },
-      { label: "Transformations", value: formatUsageValue(usage?.transformations, "number") },
+      createUsageCard("Image storage", usage, "storage", "bytes", `Current stored assets · ${rollingWindowHelp(usage)}`, "storage"),
+      createUsageCard("Image bandwidth", usage, "bandwidth", "bytes", `Rolling 30-day delivery · ${rollingWindowHelp(usage)}`, "bandwidth"),
+      createUsageCard("Image transformations", usage, "transformations", "number", `Rolling 30-day transformations · ${rollingWindowHelp(usage)}`, "transformations"),
+      createUsageCard("Image credits", usage, "credits", "number", `Total credits used by this image product environment · ${rollingWindowHelp(usage)}`),
+      createUsageCard("Video storage", videoUsage, "storage", "bytes", `Current stored assets · ${rollingWindowHelp(videoUsage)}`, "storage"),
+      createUsageCard("Video bandwidth", videoUsage, "bandwidth", "bytes", `Rolling 30-day delivery · ${rollingWindowHelp(videoUsage)}`, "bandwidth"),
+      createUsageCard("Video transformations", videoUsage, "transformations", "number", `Rolling 30-day processing · ${rollingWindowHelp(videoUsage)}`, "transformations"),
+      createUsageCard("Video credits", videoUsage, "credits", "number", `Total credits used by this video product environment · ${rollingWindowHelp(videoUsage)}`),
     ],
-    details: [
-      { label: "Folder scope", value: "edicut/" },
-      { label: "Formats", value: formats.length ? formats.join(", ") : "Unknown" },
-      { label: "Storage limit", value: formatUsageValue(usage?.storage, "bytes") },
-      { label: "Transformation limit", value: formatUsageValue(usage?.transformations, "number") },
-    ],
-    resources: latestImages.slice(0, 8).map((image) => ({
-      title: image.public_id,
-      meta: [formatBytes(image.bytes || 0), image.width && image.height ? `${image.width}x${image.height}` : null, formatDate(image.created_at)].filter(Boolean).join(" · "),
-      status: image.format,
-    })),
+    details: [],
+    resources: [],
   };
 }
 
 export async function getProviderUsageOverview(
   context: ProviderEnv | undefined,
   cloudinaryUsage: CloudinaryUsage | null,
-  cloudinaryImages: CloudinaryImageResource[],
+  cloudinaryVideoUsage: CloudinaryUsage | null,
+  db: DatabaseClient,
 ) {
+  const env = await readEnv(context);
   const now = Date.now();
   let infrastructureProviders = providerCache && providerCache.expiresAt > now ? providerCache.data : null;
 
   if (!infrastructureProviders) {
     if (!providerCachePromise) {
       providerCachePromise = (async () => {
-        const env = await readEnv(context);
         const providers = await Promise.all([
           getCloudflareUsage(env),
           getSupabaseUsage(env),
@@ -879,8 +1108,14 @@ export async function getProviderUsageOverview(
     infrastructureProviders = await providerCachePromise;
   }
 
+  const neonProvider = parseNeonDatabaseUrl(env.databaseUrl) || env.neonApiKey
+    ? await getNeonUsage(env, db)
+    : null;
+
   return [
-    ...infrastructureProviders,
-    getCloudinaryProvider(cloudinaryUsage, cloudinaryImages),
-  ];
+    ...infrastructureProviders.filter((provider) => provider.id === "cloudflare"),
+    ...(neonProvider ? [neonProvider] : []),
+    ...infrastructureProviders.filter((provider) => provider.id !== "cloudflare"),
+    getCloudinaryProvider(cloudinaryUsage, cloudinaryVideoUsage),
+  ].map(({ id, name, status, statusLabel, cards }) => ({ id, name, status, statusLabel, cards }));
 }

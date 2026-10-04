@@ -7,15 +7,22 @@ type DbContext = {
   cloudflare?: { env?: EnvSource };
 };
 
-export function getDbFromContext(context: DbContext) {
+export function getDatabaseUrlFromContext(context: DbContext) {
   const viteEnv = import.meta.env as EnvSource;
   const nodeEnv = globalThis.process?.env as EnvSource | undefined;
-  const databaseUrl =
+  return (
     context.cloudflare?.env?.DATABASE_URL ??
     context.cf?.env?.DATABASE_URL ??
     nodeEnv?.DATABASE_URL ??
     viteEnv.DATABASE_URL ??
-    "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+    "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+  );
+}
+
+export function getDbFromContext(context: DbContext) {
+  const viteEnv = import.meta.env as EnvSource;
+  const nodeEnv = globalThis.process?.env as EnvSource | undefined;
+  const databaseUrl = getDatabaseUrlFromContext(context);
 
   const env = {
     ...context.cf?.env,

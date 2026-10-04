@@ -82,6 +82,7 @@ grant select on table public.users to authenticated;
 grant update on table public.users to authenticated;
 grant select, insert, update, delete on table public.projects to authenticated;
 grant select on table public.site_settings to anon, authenticated;
+grant select, insert, update on table public.site_settings to service_role;
 grant insert on table public.contact_messages to anon, authenticated;
 
 create policy "Users can read their own profile"

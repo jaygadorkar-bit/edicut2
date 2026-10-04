@@ -1,3 +1,5 @@
+import { formatPackagePrice, SUBSCRIPTION_PACKAGES } from "../../lib/subscriptions";
+
 export const navLinks = [
   { label: "Home", to: "/" },
   { label: "Pricing", to: "/pricing" },
@@ -11,30 +13,14 @@ export const legalLinks = [
   { label: "FAQ", to: "/faq" },
 ];
 
-export const plans = [
-  {
-    name: "Creator",
-    slug: "creator",
-    price: "$80",
-    description: "Core creator editing with subtitles, color, sound, stock assets, proofing, reels, and thumbnail support.",
-    features: ["60 min podcast: $160", "600 min raw vlog footage: $160", "Subtitles", "Color grading"],
-  },
-  {
-    name: "Creator Plus",
-    slug: "creator-plus",
-    price: "$120",
-    description: "Core creator editing with stronger coverage for longer podcast or vlog inputs.",
-    features: ["60 min podcast: $240", "600 min raw vlog footage: $200", "Subtitles", "Thumbnail"],
-    popular: true,
-  },
-  {
-    name: "Creator Pro",
-    slug: "creator-pro",
-    price: "$300",
-    description: "Full-stack creator editing with project files, motion graphics, VFX, and AI voice over.",
-    features: ["60 min podcast: $600", "600 min raw vlog footage: $380", "Motion graphics", "AI voice over"],
-  },
-];
+export const plans = SUBSCRIPTION_PACKAGES.map((plan) => ({
+  name: plan.name,
+  slug: plan.slug,
+  price: formatPackagePrice(plan.basePrice),
+  description: plan.description,
+  features: plan.features,
+  popular: plan.slug === "creator-plus",
+}));
 
 export const workflow = [
   ["01", "Choose your plan", "Pick the editing lane that matches your upload rhythm and content scope.", "sell"],

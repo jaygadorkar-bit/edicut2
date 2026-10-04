@@ -10,7 +10,7 @@ The backend API is separate:
 
 ## Local Ports
 
-- Web: `http://localhost:3000`
+- Web: `http://localhost:3002`
 - Node API: `http://localhost:8787/api/node`
 - Postgres in Docker: `localhost:5432`
 
