@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useActionData, useSearchParams, useNavigation } from "react-router";
+import { ShieldCheck } from "lucide-react";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
@@ -130,7 +131,7 @@ export default function UpdatePasswordPage() {
 
           <div className="mt-8">
             <span className="neo-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-xs font-black uppercase tracking-wider neo-section-label">
-              <span className="h-2 w-2 rounded-full bg-primary" />
+              <ShieldCheck size={15} aria-hidden="true" />
               Security Update
             </span>
             <h1 className="yt-title mt-3 font-black neo-ink">Choose a new password</h1>

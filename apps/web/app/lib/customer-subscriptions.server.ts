@@ -5,20 +5,23 @@ import { hasReturnedRows } from "./db.server";
 import { isWorkspaceRecordId } from "./workspace";
 
 export type CustomerSubscription = typeof subscriptions.$inferSelect;
-export type SubscriptionInput = Pick<typeof subscriptions.$inferInsert, "ownerId" | "packageSlug" | "planName" | "country" | "phone" | "subtotalCents" | "discountCents" | "amountCents" | "couponCode" | "affiliateId" | "affiliateCode" | "affiliateCommissionBps"> & {
+export type SubscriptionInput = Pick<typeof subscriptions.$inferInsert, "ownerId" | "packageSlug" | "planName" | "addOns" | "country" | "phone" | "subtotalCents" | "discountCents" | "amountCents" | "couponCode" | "affiliateId" | "affiliateCode" | "affiliateCommissionBps"> & {
   purchaseType: "single" | "monthly";
 };
 const visible = isNull(subscriptions.deletedAt);
 
 export function isMissingCustomerSubscriptionSchema(error: unknown) {
   const seen = new Set<object>();
+  let subscriptionContext = false;
   let current = error;
   while (current && typeof current === "object" && !seen.has(current)) {
     seen.add(current);
     const detail = current as { code?: unknown; message?: unknown; cause?: unknown };
     const message = typeof detail.message === "string" ? detail.message : "";
+    subscriptionContext ||= /customer_subscriptions/i.test(message);
     if (/customer_subscriptions/i.test(message)
-      && (detail.code === "42P01" || detail.code === "42703" || /does not exist|undefined table|undefined column/i.test(message))) return true;
+      && (detail.code === "42P01" || /does not exist|undefined table|undefined column/i.test(message))) return true;
+    if (detail.code === "42703" && subscriptionContext) return true;
     current = detail.cause;
   }
   return false;

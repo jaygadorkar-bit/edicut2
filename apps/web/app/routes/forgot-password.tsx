@@ -1,8 +1,13 @@
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
+import type { FormEvent } from "react";
+import { useState } from "react";
 import { Form, Link, useActionData, useNavigation, useSearchParams } from "react-router";
+import { KeyRound } from "lucide-react";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { resolveWebEnv } from "../lib/context.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import { executeInvisibleRecaptcha } from "../lib/recaptcha.client";
+import { verifyRecaptchaToken } from "../lib/recaptcha.server";
 
 type ForgotPasswordActionData = {
   error?: string;
@@ -44,6 +49,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } satisfies ForgotPasswordActionData;
   }
 
+  const captcha = await verifyRecaptchaToken({
+    context,
+    token: formData.get("g-recaptcha-response"),
+  });
+  if (!captcha.success) {
+    return { error: captcha.error } satisfies ForgotPasswordActionData;
+  }
+
   const client = getSupabaseClient(context);
   if (!client) {
     return {
@@ -69,7 +82,25 @@ export default function ForgotPasswordPage() {
   const actionData = useActionData<ForgotPasswordActionData>();
   const navigation = useNavigation();
   const redirectTo = sanitizeRedirect(searchParams.get("redirectTo") || "/dashboard");
-  const submitting = navigation.state !== "idle";
+  const [securityError, setSecurityError] = useState<string | null>(null);
+  const [securityPending, setSecurityPending] = useState(false);
+  const submitting = navigation.state !== "idle" || securityPending;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+    event.preventDefault();
+    if (submitting) return;
+
+    setSecurityError(null);
+    setSecurityPending(true);
+    try {
+      await executeInvisibleRecaptcha(form, "password_reset");
+      HTMLFormElement.prototype.submit.call(form);
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+      setSecurityPending(false);
+    }
+  }
 
   return (
     <main className="min-h-screen neo-home flex items-center justify-center px-4 py-8 text-foreground sm:px-6">
@@ -85,7 +116,7 @@ export default function ForgotPasswordPage() {
 
           <div className="mt-8">
             <span className="neo-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-xs font-black uppercase tracking-wider neo-section-label">
-              <span className="h-2 w-2 rounded-full bg-primary" />
+              <KeyRound size={15} aria-hidden="true" />
               Account Recovery
             </span>
             <h1 className="yt-title mt-3 font-black neo-ink">Reset password</h1>
@@ -105,10 +136,11 @@ export default function ForgotPasswordPage() {
               </p>
             </div>
           ) : (
-            <Form method="post" className="mt-8 grid gap-4">
-              {actionData?.error ? (
+            <Form method="post" className="mt-8 grid gap-4" onSubmit={handleSubmit} aria-busy={submitting}>
+              <input type="hidden" name="g-recaptcha-response" value="" />
+              {securityError || actionData?.error ? (
                 <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700">
-                  {actionData.error}
+                  {securityError || actionData?.error}
                 </div>
               ) : null}
 

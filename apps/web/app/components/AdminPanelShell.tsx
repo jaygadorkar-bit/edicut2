@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { Form } from "react-router";
+import { Form, useRouteLoaderData } from "react-router";
 import { ADMIN_BASE_PATH, adminPath } from "../lib/admin-paths";
 import { WorkspaceShell } from "./WorkspaceShell";
 
 export const adminPanelNavItems = [
   { label: "Dashboard", icon: "dashboard_customize", tab: "overview" },
   { label: "Users", icon: "group", tab: "users" },
+  { label: "Enquiries", icon: "mail", tab: "messages" },
   { label: "Roles", icon: "shield_person", tab: "roles" },
   { label: "Packages", icon: "sell", tab: "packages" },
   { label: "Marketing", icon: "campaign", tab: "marketing" },
@@ -28,18 +29,22 @@ type AdminPanelShellProps = {
     detail: string;
     imageUrl?: string | null;
   };
+  unreadEnquiryCount?: number;
   headerActions?: ReactNode;
   notificationCount?: number;
   children: ReactNode;
 };
 
-export function AdminPanelShell({ title, activeTab, account, headerActions, notificationCount = 0, children }: AdminPanelShellProps) {
+export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount, headerActions, notificationCount = 0, children }: AdminPanelShellProps) {
+  const rootData = useRouteLoaderData("root") as { unreadEnquiryCount?: number } | undefined;
+  const visibleUnreadCount = unreadEnquiryCount ?? rootData?.unreadEnquiryCount ?? 0;
   const navItems = adminPanelNavItems.map(({ label, icon, tab }) => ({
     label,
     bottomLabel: tab === "overview" ? "Overview" : undefined,
     icon,
-    to: tab === "infrastructure" || tab === "subscriptions" ? adminPath(`/${tab}`) : adminPath(`?tab=${tab}`),
+    to: tab === "messages" ? "/dashboard/messages" : tab === "infrastructure" || tab === "subscriptions" ? adminPath(`/${tab}`) : adminPath(`?tab=${tab}`),
     active: tab === activeTab,
+    unreadCount: tab === "messages" ? visibleUnreadCount : undefined,
   }));
   return (
     <WorkspaceShell

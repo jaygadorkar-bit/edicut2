@@ -27,6 +27,8 @@ The route table groups public pages, authentication, customer workspace, and ope
 
 Files ending in `.server.ts` contain server-only integrations, such as database access, sessions, OAuth, Cloudinary administration, and site settings. Do not import them into browser-only components or return secret values from route loaders. `@edicut/shared` holds contracts shared with other apps; `@edicut/db` owns Drizzle schema/repositories; `@edicut/platform-core` holds cross-platform logic.
 
+The shared admin toolbar checks active server-side account records. A registered admin whose customer session lacks verified admin credentials sees an **Admin sign in** shortcut; this does not grant admin access or bypass maintenance. Verified admins can open the panel and enquiry inbox from the toolbar. The inbox accepts either a dedicated admin session or a verified matching admin identity in the workspace session, and preserves support-role access. Ordinary customers cannot read enquiries. The saved toolbar setting still controls its visibility.
+
 ## Styling and interaction
 
 Use Tailwind utilities for local layout and the existing CSS variables/classes for shared EdiCut surfaces. Theme and neomorphic tokens are defined near the top of `app/styles/global.css`. Keep responsive rules close to the component’s existing stylesheet (`home-mobile.css` for homepage-only mobile behavior) and avoid adding a second design-token system.
@@ -57,9 +59,17 @@ pnpm audit --prod
 
 `pnpm dev` and the Docker web profile serve EdiCut at `http://localhost:3002` to avoid conflicts with other local apps. Docker bind-mounts the repository and reads local runtime configuration from `.env.cloudflare`. Local Google OAuth redirects to `http://localhost:3002/api/auth/callback/google`; register that URI with the OAuth client. Keep `.env.cloudflare` and other local environment files private.
 
-## Telegram order notifications
+## Package add-ons
 
-The checkout and project actions send an order summary after saving an unpaid subscription request or new project request. It includes the order ID, plan/project title, amount or estimate, and status, but no customer phone number or email. Telegram delivery runs in the Worker background and does not block the customer action.
+Every package offers one optional custom thumbnail ($20) and one optional short-form video ($20). Both are one-time extras for the saved selection; monthly editing capacity keeps its base monthly price. Included thumbnails are removed from the catalog and legacy saved feature lists.
+
+Checkout validates add-on IDs, computes prices and coupons on the server, and saves the chosen outputs and price snapshots in `customer_subscriptions.add_ons`. Customer and admin purchase records show the extras. Apply `packages/db/drizzle/0008_package_add_ons.sql` through the existing database migration workflow before releasing these changes. Local UI verification does not apply migrations to the live database.
+
+`packages/db/tests/package-add-ons.sql` verifies the empty default, saved price snapshots, discounted totals, and invalid snapshot rejection. Run it only against a disposable PostgreSQL database with the Drizzle migrations applied; it rolls back its fixture data.
+
+## Telegram notifications
+
+The checkout and project actions send an order summary after saving an unpaid subscription request or new project request. The contact forms save each enquiry to the dashboard Mail Inbox, then send a Telegram notice with its reference and inbox link. Contact notifications do not include the visitor's name, email, or message. Telegram delivery runs in the Worker background and does not block the customer action.
 
 Create a bot with `@BotFather`, open its private chat and send `/start` (or add it to the destination group), then configure these secrets for the production Worker. Wrangler prompts for each value; do not paste the bot token into source files or chat:
 

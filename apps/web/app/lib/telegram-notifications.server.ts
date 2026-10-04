@@ -10,6 +10,10 @@ export type TelegramOrderNotice = {
   currency: string;
 };
 
+export type TelegramContactInquiryNotice = {
+  messageId: string;
+};
+
 type RuntimeContext = {
   cf?: {
     env?: Record<string, string | undefined>;
@@ -66,13 +70,32 @@ export function formatTelegramOrderNotice(order: TelegramOrderNotice) {
   ].join("\n");
 }
 
-export async function sendTelegramOrderNotice(
-  env: Record<string, string | undefined>,
-  order: TelegramOrderNotice,
+export function formatTelegramContactInquiryNotice(
+  inquiry: TelegramContactInquiryNotice,
+  appUrl = "https://edicut.com",
 ) {
+  const messageId = inquiry.messageId.trim();
+  if (!messageId || messageId.length > 64) return null;
+
+  let inboxUrl: URL;
+  try {
+    const baseUrl = new URL(appUrl);
+    if (baseUrl.protocol !== "http:" && baseUrl.protocol !== "https:") return null;
+    inboxUrl = new URL("/dashboard/messages", baseUrl);
+  } catch {
+    return null;
+  }
+
+  return [
+    "📬 <b>New EdiCut contact inquiry</b>",
+    `Reference: <code>${escapeHtml(messageId)}</code>`,
+    `<a href="${escapeHtml(inboxUrl.toString())}">Open the admin inbox</a>`,
+  ].join("\n");
+}
+
+async function sendTelegramText(env: Record<string, string | undefined>, text: string | null, failureLabel: string) {
   const token = env.TELEGRAM_BOT_TOKEN?.trim();
   const chatId = env.TELEGRAM_CHAT_ID?.trim();
-  const text = formatTelegramOrderNotice(order);
   const validChatId = chatId && (/^-?\d+$/.test(chatId) || /^@[A-Za-z0-9_]{5,32}$/.test(chatId));
   if (!token || !/^[0-9]+:[A-Za-z0-9_-]+$/.test(token) || !validChatId || !text) {
     return false;
@@ -95,20 +118,49 @@ export async function sendTelegramOrderNotice(
     );
     const result = await response.json() as { ok?: unknown };
     if (!response.ok || result?.ok !== true) {
-      console.error("Telegram order notification failed", { httpStatus: response.status });
+      console.error(`${failureLabel} failed`, { httpStatus: response.status });
       return false;
     }
     return true;
   } catch {
     // Do not log the request URL: it contains the bot token.
-    console.error("Telegram order notification failed");
+    console.error(`${failureLabel} failed`);
     return false;
   }
+}
+
+export function sendTelegramOrderNotice(
+  env: Record<string, string | undefined>,
+  order: TelegramOrderNotice,
+) {
+  return sendTelegramText(env, formatTelegramOrderNotice(order), "Telegram order notification");
+}
+
+export function sendTelegramContactInquiryNotice(
+  env: Record<string, string | undefined>,
+  inquiry: TelegramContactInquiryNotice,
+) {
+  return sendTelegramText(
+    env,
+    formatTelegramContactInquiryNotice(inquiry, env.APP_URL?.trim() || "https://edicut.com"),
+    "Telegram contact inquiry notification",
+  );
 }
 
 export function queueTelegramOrderNotice(context: RuntimeContext, order: TelegramOrderNotice) {
   const env = runtimeEnvironment(context);
   const delivery = sendTelegramOrderNotice(env, order);
+  const executionContext = context.cloudflare?.ctx ?? context.cf?.ctx;
+  if (executionContext?.waitUntil) {
+    executionContext.waitUntil(delivery);
+  } else {
+    void delivery;
+  }
+}
+
+export function queueTelegramContactInquiryNotice(context: RuntimeContext, inquiry: TelegramContactInquiryNotice) {
+  const env = runtimeEnvironment(context);
+  const delivery = sendTelegramContactInquiryNotice(env, inquiry);
   const executionContext = context.cloudflare?.ctx ?? context.cf?.ctx;
   if (executionContext?.waitUntil) {
     executionContext.waitUntil(delivery);

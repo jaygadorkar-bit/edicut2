@@ -1,3 +1,5 @@
+import { packageAddOnQuery } from "./package-addons";
+
 export type PackageBase = {
   name: string;
   slug: string;
@@ -88,8 +90,8 @@ export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
     rawFootageLimit: "Up to 60 minutes",
     revisionRounds: 1,
     firstCutHours: 48,
-    features: ["Captions, pacing, and clean cuts", "Basic color and audio finishing", "One custom thumbnail", "One revision round", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["1 edited video up to 8 minutes", "Captions", "Basic color and audio finishing", "1 custom thumbnail", "1 revision round", ...REQUIRED_PACKAGE_STAFFING],
+    features: ["Captions, pacing, and clean cuts", "Basic color and audio finishing", "One revision round", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["1 edited video up to 8 minutes", "Captions", "Basic color and audio finishing", "1 revision round", ...REQUIRED_PACKAGE_STAFFING],
     basePrice: 109,
   },
   {
@@ -103,9 +105,9 @@ export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
     finishedLength: "Up to 15 minutes",
     rawFootageLimit: "Up to 120 minutes",
     revisionRounds: 2,
-    firstCutHours: 72,
-    features: ["Captions and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "One custom thumbnail", "Light template-based branded motion", "Two revision rounds", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["1 edited video up to 15 minutes", "Captions", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "1 custom thumbnail", "Light template-based branded motion", "2 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+    firstCutHours: 48,
+    features: ["Captions and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "Two revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["1 edited video up to 15 minutes", "Captions", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "2 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
     basePrice: 179,
   },
   {
@@ -115,14 +117,14 @@ export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
     description: "A larger long-form edit with more runtime, footage, and room for thoughtful storytelling.",
     badge: "Extended edit",
     bestFor: "Feature videos, deep-dive tutorials, or creator stories that need more structure and polish.",
-    videoFormat: "One feature-length horizontal 16:9 edit",
+    videoFormat: "One feature-length edit",
     finishedLength: "Up to 30 minutes",
     rawFootageLimit: "Up to 240 minutes",
     revisionRounds: 3,
-    firstCutHours: 96,
-    features: ["Narrative structure and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "One custom thumbnail and light template-based branded motion", "Three revision rounds", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["1 edited video up to 30 minutes", "Narrative structure and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "1 custom thumbnail and light template-based branded motion", "3 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
-    basePrice: 189,
+    firstCutHours: 48,
+    features: ["Narrative structure and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "Three revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["1 edited video up to 30 minutes", "Narrative structure and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "3 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+    basePrice: 249,
   },
 ];
 
@@ -181,10 +183,11 @@ export function formatRequestedCoverageNotes(
   return brief ? `${coverage}\n\nCustomer brief:\n${brief}` : coverage;
 }
 
-export function getCheckoutUrl(editingPackage: EditingPackage, options: { runtime?: boolean; raw?: boolean; affiliateCode?: string } = {}) {
+export function getCheckoutUrl(editingPackage: EditingPackage, options: { runtime?: boolean; raw?: boolean; affiliateCode?: string; addOns?: readonly string[] } = {}) {
   const params = new URLSearchParams();
   if (options.runtime && editingPackage.packageType === "monthly") params.set("runtime", "1");
   if (options.raw && editingPackage.packageType === "monthly") params.set("raw", "1");
+  packageAddOnQuery(options.addOns ?? [], params);
   const affiliateCode = options.affiliateCode?.trim().toUpperCase();
   if (affiliateCode && /^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(affiliateCode)) params.set("ref", affiliateCode);
   const query = params.toString();

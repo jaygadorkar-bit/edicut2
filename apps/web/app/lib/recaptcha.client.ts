@@ -19,6 +19,11 @@ declare global {
 }
 
 const WIDGET_ID_KEY = "recaptchaWidgetId";
+const RECAPTCHA_API_URL = "https://www.google.com/recaptcha/api.js?render=explicit";
+const RECAPTCHA_API_TIMEOUT_MS = 12_000;
+const RECAPTCHA_CHALLENGE_TIMEOUT_MS = 120_000;
+
+let recaptchaApiPromise: Promise<void> | null = null;
 
 export function getRecaptchaSiteKey() {
   return document
@@ -53,16 +58,70 @@ function ensureWidgetContainer(form: HTMLFormElement, action: string) {
   return container;
 }
 
+function loadRecaptchaApi(siteKey: string) {
+  if (window.grecaptcha) return Promise.resolve();
+  if (recaptchaApiPromise) return recaptchaApiPromise;
+
+  const existingScript = document.querySelector<HTMLScriptElement>(
+    'script[src*="google.com/recaptcha/api.js"], script[src*="recaptcha.net/recaptcha/api.js"]',
+  );
+  const script = existingScript ?? document.createElement("script");
+
+  const promise = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let pollId = 0;
+    const timeoutId = window.setTimeout(() => {
+      finish(new Error("Security check is still loading. Please try again."));
+    }, RECAPTCHA_API_TIMEOUT_MS);
+
+    function finish(error?: Error) {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      window.clearInterval(pollId);
+      script.removeEventListener("load", checkForApi);
+      script.removeEventListener("error", handleLoadError);
+      if (error) reject(error);
+      else resolve();
+    }
+
+    function checkForApi() {
+      if (window.grecaptcha) finish();
+    }
+
+    function handleLoadError() {
+      finish(new Error("Security check is unavailable. Please try again."));
+    }
+
+    script.addEventListener("load", checkForApi);
+    script.addEventListener("error", handleLoadError, { once: true });
+    pollId = window.setInterval(checkForApi, 50);
+    checkForApi();
+
+    if (!existingScript) {
+      script.src = RECAPTCHA_API_URL;
+      script.async = true;
+      script.defer = true;
+      script.dataset.edicutRecaptchaSiteKey = siteKey;
+      document.head.appendChild(script);
+    }
+  });
+
+  recaptchaApiPromise = promise;
+  void promise.catch(() => {
+    if (recaptchaApiPromise === promise) recaptchaApiPromise = null;
+  });
+  return promise;
+}
+
 export async function executeInvisibleRecaptcha(form: HTMLFormElement, action: string) {
   const siteKey = getRecaptchaSiteKey();
 
   if (!siteKey) {
-    return "";
+    throw new Error("Security check is unavailable. Please try again.");
   }
 
-  if (!window.grecaptcha) {
-    throw new Error("Security check is still loading. Please try again.");
-  }
+  await loadRecaptchaApi(siteKey);
 
   await new Promise<void>((resolve) => window.grecaptcha?.ready(resolve));
 
@@ -71,27 +130,40 @@ export async function executeInvisibleRecaptcha(form: HTMLFormElement, action: s
   const existingWidgetId = container.dataset[WIDGET_ID_KEY];
 
   return new Promise<string>((resolve, reject) => {
-    const widgetId = existingWidgetId
-      ? Number(existingWidgetId)
-      : window.grecaptcha!.render(container, {
-          sitekey: siteKey,
-          size: "invisible",
-          callback: (token) => {
-            tokenInput.value = token;
-            resolve(token);
-          },
-          "expired-callback": () => {
-            tokenInput.value = "";
-            reject(new Error("Security check expired. Please try again."));
-          },
-          "error-callback": () => {
-            tokenInput.value = "";
-            reject(new Error("Security check failed. Please try again."));
-          },
-        });
+    const timeoutId = window.setTimeout(() => {
+      tokenInput.value = "";
+      reject(new Error("Security check timed out. Please try again."));
+    }, RECAPTCHA_CHALLENGE_TIMEOUT_MS);
 
-    container.dataset[WIDGET_ID_KEY] = String(widgetId);
-    window.grecaptcha!.reset(widgetId);
-    window.grecaptcha!.execute(widgetId);
+    try {
+      const widgetId = existingWidgetId
+        ? Number(existingWidgetId)
+        : window.grecaptcha!.render(container, {
+            sitekey: siteKey,
+            size: "invisible",
+            callback: (token) => {
+              tokenInput.value = token;
+              window.clearTimeout(timeoutId);
+              resolve(token);
+            },
+            "expired-callback": () => {
+              tokenInput.value = "";
+              window.clearTimeout(timeoutId);
+              reject(new Error("Security check expired. Please try again."));
+            },
+            "error-callback": () => {
+              tokenInput.value = "";
+              window.clearTimeout(timeoutId);
+              reject(new Error("Security check failed. Please try again."));
+            },
+          });
+
+      container.dataset[WIDGET_ID_KEY] = String(widgetId);
+      window.grecaptcha!.reset(widgetId);
+      window.grecaptcha!.execute(widgetId);
+    } catch {
+      window.clearTimeout(timeoutId);
+      reject(new Error("Security check failed. Please try again."));
+    }
   });
 }

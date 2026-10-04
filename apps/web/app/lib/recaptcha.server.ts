@@ -33,7 +33,7 @@ export function getRecaptchaSiteKey(context?: RecaptchaContext) {
 
 export function isRecaptchaConfigured(context?: RecaptchaContext) {
   const env = getRuntimeEnv(context);
-  return Boolean(env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY && env.RECAPTCHA_SECRET_KEY);
+  return Boolean(env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim() && env.RECAPTCHA_SECRET_KEY?.trim());
 }
 
 export async function verifyRecaptchaToken({
@@ -46,8 +46,8 @@ export async function verifyRecaptchaToken({
   const env = getRuntimeEnv(context);
   const secret = env.RECAPTCHA_SECRET_KEY;
 
-  if (!env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || !secret) {
-    return { success: true as const };
+  if (!env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim() || !secret?.trim()) {
+    return { success: false as const, error: "Security check is unavailable. Please try again." };
   }
 
   if (typeof token !== "string" || token.trim().length === 0) {

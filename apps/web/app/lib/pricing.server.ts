@@ -2,6 +2,7 @@ import type { DatabaseClient } from "@edicut/db/client";
 import type { SupabaseRuntimeContext } from "../integrations/supabase/client.server";
 import { ALL_EDITING_PACKAGES, formatPackagePrice, getCatalogPackage, parsePackagePrice, REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING, type EditingPackage } from "./subscriptions";
 import { getSiteSetting, saveSiteSetting } from "./site-settings.server";
+import { withoutIncludedThumbnails } from "./package-addons";
 
 const PRICING_PACKAGES_KEY = "pricing_packages";
 
@@ -75,6 +76,7 @@ function stringList(value: unknown) {
 }
 
 function includePackageRequirements(items: string[], catalogPackage: EditingPackage, list: "features" | "deliverables") {
+  items = withoutIncludedThumbnails(items);
   const isStudio = catalogPackage.slug === "creator-pro";
   const withoutSupersededEditorCount = isStudio
     ? items.filter((item) => item.toLocaleLowerCase() !== "dedicated video editor")
@@ -160,6 +162,7 @@ function replaceLegacyDefaultPricing(packages: PricingPackage[]) {
     if (!previous) return plan;
     const refreshDefaults = (plan.packageType === "monthly" && isLegacyMonthlySnapshot)
       || parsePackagePrice(previous.price) === null;
+    const refreshFeaturePrice = plan.slug === "single-feature" && parsePackagePrice(previous.price) === 189;
     return {
       ...plan,
       ...(!refreshDefaults ? previous : {}),
@@ -168,7 +171,7 @@ function replaceLegacyDefaultPricing(packages: PricingPackage[]) {
       editingHoursPerMonth: plan.editingHoursPerMonth,
       editingHoursPerWorkday: plan.editingHoursPerWorkday,
       interval: plan.interval,
-      price: refreshDefaults ? plan.price : previous.price,
+      price: refreshDefaults || refreshFeaturePrice ? plan.price : previous.price,
       description: (plan.packageType === "monthly" && isLegacyMonthlySnapshot) || hasOutdatedDefaultCapacityCopy(previous)
         ? plan.description
         : previous.description,

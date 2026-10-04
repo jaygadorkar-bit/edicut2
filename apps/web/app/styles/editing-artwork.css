@@ -1,0 +1,18 @@
+.editing-artwork { display: block; width: 100%; height: auto; overflow: visible; }
+.editing-artwork__halo { fill: #e3ebf2; }
+.editing-artwork__surface { fill: var(--neo-surface-strong, #f4f7fa); stroke: white; stroke-width: 1.5; }
+.editing-artwork__inset { fill: #dce5ed; }
+.editing-artwork__slate { fill: #8fa5b8; }
+.editing-artwork__slate-light { fill: #b7c8d5; }
+.editing-artwork__rose { fill: #e7cbd1; }
+.editing-artwork__accent { fill: #df2940; }
+.editing-artwork__scene--city, .editing-artwork__scene--audio { opacity: 0; }
+.editing-artwork__raised { filter: drop-shadow(4px 7px 6px rgb(132 148 163 / 24%)); }
+.editing-artwork__line, .editing-artwork__accent-line, .editing-artwork__white-line { stroke: #536779; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
+.editing-artwork__accent-line { stroke: #c52237; }
+.editing-artwork__white-line { stroke: white; }
+.editing-artwork__float { translate: 0 0; transition: translate 300ms ease; }
+:is(.pack-workflow-steps li, .pack-final):hover .editing-artwork__float { translate: 0 -4px; }
+@media (prefers-reduced-motion: reduce) {
+  .editing-artwork__float { transition: none; translate: none !important; }
+}

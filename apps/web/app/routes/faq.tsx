@@ -1,5 +1,6 @@
 import type { MetaFunction } from "react-router";
 import { useState } from "react";
+import { CircleHelp } from "lucide-react";
 import { ButtonLink, PageShell, TrustStrip } from "../components/site/Marketing.js";
 import { createRouteMeta } from "../lib/seo";
 
@@ -29,7 +30,7 @@ const allFaqs = [
   {
     category: "Pricing",
     question: "What happens if my video is longer than the included package limit?",
-    answer: "Each package lists a monthly video count, maximum finished runtime and raw-footage limit per video, included Shorts and thumbnails, and revision rounds. Requests outside those limits are reviewed and quoted separately before editing begins.",
+    answer: "Single-video packages list finished-length and raw-footage limits and revision rounds. Monthly packages reserve editing hours. Work outside those allowances is quoted before editing begins. A custom thumbnail or an additional short-form video is available as a $20 add-on with any package.",
   },
   {
     category: "Footage",
@@ -39,7 +40,7 @@ const allFaqs = [
   {
     category: "Thumbnails",
     question: "Are custom YouTube thumbnails included in the packages?",
-    answer: "Each package includes one custom thumbnail for every included long-form video. Additional concepts or A/B thumbnail sets can be quoted separately.",
+    answer: "Custom thumbnails are optional with every package: add one for $20 when choosing your plan. Thumbnails are not included in the base package price. Additional concepts or A/B thumbnail sets can be quoted separately.",
   },
   {
     category: "Security",
@@ -69,7 +70,7 @@ export default function FAQPage() {
 
         <div className="relative mx-auto max-w-4xl text-center">
           <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
-            <span className="h-2 w-2 rounded-full bg-primary" />
+            <CircleHelp size={16} aria-hidden="true" />
             Knowledge Base & FAQ
           </div>
 

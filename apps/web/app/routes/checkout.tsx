@@ -15,8 +15,10 @@ import { configuredEditingPackage, getPricingPackages } from "../lib/pricing.ser
 import { countryCallingCode, countryName, updatePhoneForCountryChange, validateCheckoutContact } from "../lib/checkout-contact";
 import { getOwnedSubscription, isSameSiteMutation, readSubscriptionForm, saveUnpaidSubscription } from "../lib/customer-subscriptions.server";
 import { queueTelegramOrderNotice } from "../lib/telegram-notifications.server";
+import { PackageAddOns } from "../components/site/PackageAddOns";
+import { packageAddOnQuery, packageAddOnTotal, parsePackageAddOns, savedPackageAddOns, selectedPackageAddOns } from "../lib/package-addons";
 
-type CouponPreview = { code: string; discountCents: number; discountedTotalCents: number };
+type CouponPreview = { code: string; subtotalCents: number; discountCents: number; discountedTotalCents: number };
 type CheckoutActionData = { error?: string; couponCode?: string; couponError?: string; couponPreview?: CouponPreview };
 const COUPON_UNAVAILABLE_NOTICE = "Coupons are temporarily unavailable. Remove the code to continue, or try again later.";
 const PAYMENT_UNAVAILABLE_NOTICE = "Payment gateway under construction. Card payments are not available yet.";
@@ -47,7 +49,7 @@ async function quoteCoupon(context: LoaderFunctionArgs["context"], code: string,
     const quote = await findCouponForQuote(getDbFromContext(context), normalized, subtotalCents, userId);
     if ("error" in quote) return { couponCode: normalized, couponError: quote.error };
     return { couponCode: quote.coupon.code, couponPreview: {
-      code: quote.coupon.code, discountCents: quote.discountCents, discountedTotalCents: quote.discountedTotalCents,
+      code: quote.coupon.code, subtotalCents, discountCents: quote.discountCents, discountedTotalCents: quote.discountedTotalCents,
     } };
   } catch (error) {
     if (!isMissingMarketingSchema(error)) console.error("Checkout coupon validation failed");
@@ -60,7 +62,6 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const editingPackage = await getCheckoutPackage(params.slug, context);
   if (!editingPackage) throw new Response("Package not found", { status: 404 });
   const userId = await requireUserId(request, context, `${url.pathname}${url.search}`);
-  const total = getCheckoutTotal(editingPackage);
   const paymentStep = url.searchParams.get("step") === "payment";
   const savedSubscription = paymentStep || url.searchParams.has("subscription")
     ? await getOwnedSubscription(getDbFromContext(context), userId, url.searchParams.get("subscription") || "", editingPackage.slug)
@@ -71,6 +72,11 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     throw redirect(`/checkout/${editingPackage.slug}${review.size ? `?${review}` : ""}`);
   }
   if (savedSubscription?.status === "paid") throw redirect("/dashboard/subscriptions");
+  const addOns = paymentStep ? savedPackageAddOns(savedSubscription?.addOns)
+    : parsePackageAddOns(url.searchParams.has("addon") ? url.searchParams.getAll("addon") : savedPackageAddOns(savedSubscription?.addOns).map(item => item.id));
+  if (!addOns) throw new Response("Invalid package add-ons", { status: 400 });
+  const total = paymentStep && savedSubscription?.subtotalCents != null ? savedSubscription.subtotalCents / 100
+    : getCheckoutTotal(editingPackage) + packageAddOnTotal(addOns) / 100;
   const couponCode = (url.searchParams.get("coupon") || (paymentStep ? savedSubscription?.couponCode : "") || "").trim().toUpperCase().slice(0, 32);
   let coupon: CheckoutActionData = {};
   if (couponCode && !paymentStep) {
@@ -79,7 +85,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
       : { couponCode, couponError: limit === "limited" ? "You have made several requests. Wait a minute and try again." : "Usage protection is temporarily unavailable. Please try again shortly." };
   }
   return {
-    editingPackage, total, coupon, couponCode,
+    editingPackage, total, addOns, coupon, couponCode,
     paymentStep, savedSubscription,
     affiliateCode: normalizeMarketingCode(url.searchParams.get("ref") || savedSubscription?.affiliateCode || "") || "",
   };
@@ -101,10 +107,12 @@ export async function action({ request, params, context }: ActionFunctionArgs): 
   const code = String(formData.get("couponCode") || "").trim();
   const editingPackage = await getCheckoutPackage(params.slug, context);
   if (!editingPackage || formData.get("packageSlug") !== editingPackage.slug) return { couponCode: code.toUpperCase(), couponError: "Choose a valid package before applying a coupon." };
+  const addOns = parsePackageAddOns(formData.getAll("addon"));
+  if (!addOns) return { error: "Choose valid package add-ons." };
+  const subtotalCents = getCheckoutTotal(editingPackage) * 100 + packageAddOnTotal(addOns);
   if (intent === "start-checkout") {
     const contact = validateCheckoutContact(String(formData.get("country") || ""), String(formData.get("phone") || ""));
     if ("error" in contact) return { error: contact.error };
-    const subtotalCents = getCheckoutTotal(editingPackage) * 100;
     const coupon = code ? await quoteCoupon(context, code, subtotalCents, userId) : {};
     if (code && !coupon.couponPreview) return { ...coupon, error: coupon.couponError };
     try {
@@ -112,7 +120,7 @@ export async function action({ request, params, context }: ActionFunctionArgs): 
       const requestedAffiliateCode = normalizeMarketingCode(String(formData.get("affiliateCode") || ""));
       const affiliate = requestedAffiliateCode ? await findAffiliateByCode(db, requestedAffiliateCode) : null;
       const saved = await saveUnpaidSubscription(db, {
-        ownerId: userId, packageSlug: editingPackage.slug, planName: editingPackage.name, purchaseType: editingPackage.packageType, ...contact,
+        ownerId: userId, packageSlug: editingPackage.slug, planName: editingPackage.name, purchaseType: editingPackage.packageType, addOns, ...contact,
         subtotalCents, discountCents: coupon.couponPreview?.discountCents ?? 0,
         amountCents: coupon.couponPreview?.discountedTotalCents ?? subtotalCents,
         couponCode: coupon.couponPreview?.code ?? null,
@@ -123,7 +131,7 @@ export async function action({ request, params, context }: ActionFunctionArgs): 
       queueTelegramOrderNotice(context, {
         orderId: saved.id,
         kind: editingPackage.packageType === "monthly" ? "subscription" : "single",
-        summary: `${purchaseLabel(editingPackage.packageType)}: ${saved.planName}`,
+        summary: `${purchaseLabel(editingPackage.packageType)}: ${saved.planName}${addOns.length ? ` + ${addOns.map(item => item.label).join(" + ")}` : ""}`,
         amountCents: saved.amountCents,
         currency: saved.currency,
       });
@@ -138,32 +146,36 @@ export async function action({ request, params, context }: ActionFunctionArgs): 
       return { error: "Your package selection could not be saved. Please try again shortly." };
     }
   }
-  return quoteCoupon(context, code, getCheckoutTotal(editingPackage) * 100, userId);
+  return quoteCoupon(context, code, subtotalCents, userId);
 }
 
 export default function CheckoutRoute() {
-  const { editingPackage, paymentStep, couponCode } = useLoaderData<typeof loader>();
-  return <CheckoutContent key={`${editingPackage.slug}:${paymentStep}:${couponCode}`} />;
+  const { editingPackage, paymentStep, couponCode, addOns } = useLoaderData<typeof loader>();
+  return <CheckoutContent key={`${editingPackage.slug}:${paymentStep}:${couponCode}:${addOns.map(item => item.id).join(",")}`} />;
 }
 
 function CheckoutContent() {
-  const { editingPackage, total, coupon: initialCoupon, couponCode, paymentStep, affiliateCode, savedSubscription } = useLoaderData<typeof loader>();
+  const { editingPackage, addOns: initialAddOns, coupon: initialCoupon, couponCode, paymentStep, affiliateCode, savedSubscription } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const saving = navigation.state !== "idle";
   const couponFetcher = useFetcher<typeof action>();
   const [couponInput, setCouponInput] = useState(couponCode);
   const [couponRequestCode, setCouponRequestCode] = useState("");
+  const [selectedAddOnIds, setSelectedAddOnIds] = useState(initialAddOns.map(item => item.id));
+  const addOns = paymentStep ? initialAddOns : selectedPackageAddOns(selectedAddOnIds);
+  const addOnCents = packageAddOnTotal(addOns);
+  const subtotalCents = paymentStep ? savedSubscription!.subtotalCents : editingPackage.basePrice * 100 + addOnCents;
   const [phone, setPhone] = useState(() => savedSubscription?.phone ?? (savedSubscription?.country ? `${countryCallingCode(savedSubscription.country)} ` : ""));
   const normalizedCode = couponInput.trim().toUpperCase();
   const couponResult = couponFetcher.data ?? initialCoupon;
-  const appliedCoupon = couponResult.couponPreview?.code === normalizedCode ? couponResult.couponPreview : undefined;
+  const appliedCoupon = couponResult.couponPreview?.code === normalizedCode && couponResult.couponPreview.subtotalCents === subtotalCents ? couponResult.couponPreview : undefined;
   const couponError = couponResult.couponCode === normalizedCode ? couponResult.couponError
     : couponRequestCode === normalizedCode ? couponFetcher.data?.error : undefined;
-  const amountCents = (paymentStep ? savedSubscription?.amountCents : undefined) ?? appliedCoupon?.discountedTotalCents ?? total * 100;
+  const amountCents = (paymentStep ? savedSubscription?.amountCents : undefined) ?? appliedCoupon?.discountedTotalCents ?? subtotalCents;
   const couponBusy = couponFetcher.state !== "idle";
   const canProceed = !saving && !couponBusy && (!normalizedCode || Boolean(appliedCoupon));
-  const query = new URLSearchParams();
+  const query = packageAddOnQuery(selectedAddOnIds);
   if (affiliateCode) query.set("ref", affiliateCode);
   if (appliedCoupon) query.set("coupon", appliedCoupon.code);
   if (paymentStep && savedSubscription) {
@@ -171,12 +183,17 @@ function CheckoutContent() {
     if (savedSubscription.couponCode) query.set("coupon", savedSubscription.couponCode);
   }
   const reviewHref = `/checkout/${editingPackage.slug}${query.size ? `?${query}` : ""}`;
-  const planHref = `/pricing/${editingPackage.slug}${affiliateCode ? `?ref=${encodeURIComponent(affiliateCode)}` : ""}`;
+  const planQuery = packageAddOnQuery(selectedAddOnIds);
+  if (affiliateCode) planQuery.set("ref", affiliateCode);
+  const planHref = `/pricing/${editingPackage.slug}${planQuery.size ? `?${planQuery}` : ""}`;
   const includedTeam = editingPackage.slug === "creator-pro" ? STUDIO_PACKAGE_STAFFING : REQUIRED_PACKAGE_STAFFING;
 
   function applyCoupon() {
     setCouponRequestCode(normalizedCode);
-    couponFetcher.submit({ intent: "validate-coupon", packageSlug: editingPackage.slug, couponCode: couponInput }, { method: "post" });
+    const form = new FormData();
+    form.set("intent", "validate-coupon"); form.set("packageSlug", editingPackage.slug); form.set("couponCode", couponInput);
+    selectedAddOnIds.forEach(id => form.append("addon", id));
+    couponFetcher.submit(form, { method: "post", encType: "application/x-www-form-urlencoded" });
   }
 
   function handleCountryChange(nextCountryCode: string, previousCountryCode: string) {
@@ -266,6 +283,7 @@ function CheckoutContent() {
                   <ScopeItem label="Revision rounds" value={String(editingPackage.revisionRounds)} />
                 </>}
               </dl>
+              <PackageAddOns selected={selectedAddOnIds} onChange={setSelectedAddOnIds} disabled={saving} />
             </section>
             </div>
           )}
@@ -274,8 +292,9 @@ function CheckoutContent() {
             <h2 id="summary-title" className="text-lg font-black neo-ink">Order summary</h2>
             <div className="mt-4 flex items-start justify-between gap-3 border-b neo-line pb-5">
               <div><p className="text-sm font-bold neo-ink">{paymentStep ? savedSubscription?.planName : editingPackage.name}</p><p className="mt-1 text-xs neo-muted">{purchaseLabel(editingPackage.packageType)}</p></div>
-              <span className="text-sm font-bold neo-ink">{formatUsd((paymentStep ? savedSubscription?.subtotalCents : undefined) ?? total * 100)}</span>
+              <span className="text-sm font-bold neo-ink">{formatUsd(subtotalCents - addOnCents)}</span>
             </div>
+            {addOns.length ? <ul aria-label="Selected add-ons" className="mt-4 grid gap-3 text-xs neo-muted">{addOns.map(item => <li key={item.id} className="flex justify-between gap-3"><span>{item.label} <span className="text-[10px]">· one time</span></span><strong className="neo-ink">{formatUsd(item.amountCents)}</strong></li>)}</ul> : null}
             <ul aria-label="Included team" className="mt-4 grid gap-2 text-xs font-bold neo-ink">
               {includedTeam.map((member) => <li key={member} className="flex items-start gap-2"><Check size={15} className="mt-0.5 shrink-0 text-primary" aria-hidden="true" />{member}</li>)}
             </ul>
@@ -288,18 +307,18 @@ function CheckoutContent() {
                   className="neo-inset h-11 min-w-0 flex-1 rounded-xl px-3 text-base font-semibold uppercase outline-none neo-ink placeholder:normal-case placeholder:font-medium placeholder:text-slate-500 focus:ring-2 focus:ring-primary/40 sm:text-sm" />
                 <button type="button" onClick={applyCoupon} disabled={!normalizedCode || couponBusy}
                   className="min-h-11 shrink-0 rounded-xl border border-slate-300 px-3 text-sm font-bold neo-ink hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50">
-                  {couponBusy ? "Checking…" : appliedCoupon ? "Applied" : "Apply"}
+                {couponBusy ? "Checking…" : appliedCoupon ? "Applied" : "Apply"}
                 </button>
               </div>
               <p id="coupon-result" aria-live="polite" className={`mt-2 text-xs leading-5 ${couponError ? "text-red-700" : "text-emerald-700"}`}>
-                {couponError || (appliedCoupon ? `${appliedCoupon.code} saves ${formatUsd(appliedCoupon.discountCents)}.` : "")}
+                {couponError || (appliedCoupon ? `${appliedCoupon.code} saves ${formatUsd(appliedCoupon.discountCents)}.` : normalizedCode && couponResult.couponPreview ? "Apply your coupon again after changing add-ons." : "")}
               </p>
             </div> : null}
             <div className="mt-5 grid gap-3 border-t neo-line pt-5">
               {((paymentStep ? savedSubscription?.discountCents : undefined) ?? appliedCoupon?.discountCents ?? 0) > 0 ? <div className="flex justify-between gap-3 text-xs neo-muted"><span>Coupon discount</span><span>−{formatUsd((paymentStep ? savedSubscription?.discountCents : undefined) ?? appliedCoupon!.discountCents)}</span></div> : null}
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="text-sm font-bold neo-ink">{editingPackage.packageType === "monthly" ? "Monthly total" : "One-time total"}</span>
-                <p className="text-2xl font-black tracking-tight neo-ink">{formatUsd(amountCents)}<span className="ml-1 text-xs font-medium neo-muted">{editingPackage.packageType === "monthly" ? "/month" : "one time"}</span></p>
+                <span className="text-sm font-bold neo-ink">{editingPackage.packageType === "monthly" ? addOns.length ? "First month total" : "Monthly total" : "One-time total"}</span>
+                <p aria-live="polite" aria-atomic="true" className="text-2xl font-black tracking-tight neo-ink">{formatUsd(amountCents)}<span className="ml-1 text-xs font-medium neo-muted">{editingPackage.packageType === "monthly" && !addOns.length ? "/month" : "one time"}</span></p>
               </div>
             </div>
             {paymentStep ? (

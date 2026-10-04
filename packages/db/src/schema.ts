@@ -4,6 +4,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -82,6 +83,7 @@ export const customerSubscriptions = pgTable("customer_subscriptions", {
   purchaseType: varchar("purchase_type", { length: 16 }).notNull().default("monthly"),
   packageSlug: varchar("package_slug", { length: 120 }).notNull(),
   planName: varchar("plan_name", { length: 120 }).notNull(),
+  addOns: jsonb("add_ons").$type<{ id: "thumbnail" | "short-form"; label: string; amountCents: number }[]>().notNull().default(sql`'[]'::jsonb`),
   country: varchar("country", { length: 2 }).notNull(),
   phone: varchar("phone", { length: 16 }).notNull(),
   subtotalCents: integer("subtotal_cents").notNull(),
@@ -108,6 +110,7 @@ export const customerSubscriptions = pgTable("customer_subscriptions", {
     .where(sql`${table.status} = 'paid' AND ${table.couponCode} IS NOT NULL`),
   check("customer_subscriptions_amount_check", sql`${table.subtotalCents} > 0 AND ${table.discountCents} >= 0 AND ${table.amountCents} >= 0 AND ${table.amountCents} = ${table.subtotalCents} - ${table.discountCents}`),
   check("customer_subscriptions_purchase_type_check", sql`${table.purchaseType} IN ('single', 'monthly')`),
+  check("customer_subscriptions_add_ons_check", sql`jsonb_typeof(${table.addOns}) = 'array' AND jsonb_array_length(${table.addOns}) <= 2`),
   check("customer_subscriptions_status_check", sql`(${table.status} = 'unpaid' AND ${table.paidAt} IS NULL AND ${table.paidBy} IS NULL) OR (${table.status} = 'paid' AND ${table.paidAt} IS NOT NULL AND ${table.paidBy} IS NOT NULL AND ${table.deletedAt} IS NULL)`),
 ]);
 

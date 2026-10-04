@@ -59,6 +59,39 @@ beforeEach(() => {
 });
 
 describe("payment-first checkout", () => {
+  it("loads both add-ons at server prices and quotes the full subtotal", async () => {
+    const result = await loader(args("?addon=thumbnail&addon=short-form&coupon=SAVE10&amountCents=1", undefined, "single-creator"));
+    expect(result.total).toBe(149);
+    expect(result.addOns).toHaveLength(2);
+    expect(mocks.findCouponForQuote).toHaveBeenCalledWith(expect.anything(), "SAVE10", 14900, "user-1");
+  });
+  it("saves priced add-on snapshots and includes them in the order notice", async () => {
+    mocks.saveUnpaidSubscription.mockResolvedValueOnce({ id: "saved-id", planName: "Creator Video", amountCents: 12900, currency: "USD" });
+    await action(args("", { intent: "start-checkout", packageSlug: "single-creator", country: "US", phone: "+12025550123", addon: "thumbnail", addOnPrice: "1", amountCents: "1" }, "single-creator"));
+    expect(mocks.saveUnpaidSubscription).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ subtotalCents: 12900, amountCents: 12900, addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }] }));
+    expect(mocks.queueTelegramOrderNotice).toHaveBeenCalledWith({}, expect.objectContaining({ summary: "Single video edit: Creator Video + Custom thumbnail" }));
+  });
+  it("rejects unknown add-ons before any save or coupon lookup", async () => {
+    expect(await action(args("", { intent: "start-checkout", packageSlug: "creator-pro", country: "US", phone: "+12025550123", addon: "free-upgrade" }))).toMatchObject({ error: expect.stringContaining("valid package add-ons") });
+    expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
+    expect(mocks.findCouponForQuote).not.toHaveBeenCalled();
+  });
+  it("quotes coupon previews with selected extras and returns the quoted subtotal", async () => {
+    mocks.findCouponForQuote.mockResolvedValueOnce({ coupon: { code: "SAVE10" }, discountCents: 1290, discountedTotalCents: 11610 });
+    const result = await action(args("", { intent: "validate-coupon", packageSlug: "single-creator", couponCode: "SAVE10", addon: "short-form" }, "single-creator"));
+    expect(result).toMatchObject({ couponPreview: { subtotalCents: 12900 } });
+    expect(mocks.findCouponForQuote).toHaveBeenCalledWith(expect.anything(), "SAVE10", 12900, "user-1");
+  });
+  it("loads payment totals and add-ons from the saved snapshot despite URL and catalog price changes", async () => {
+    mocks.getOwnedSubscription.mockResolvedValueOnce({ id: "saved-id", status: "unpaid", subtotalCents: 12900, amountCents: 12900, addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }] });
+    const result = await loader(args("?step=payment&subscription=saved-id&addon=short-form&amount=1", undefined, "single-creator"));
+    expect(result.total).toBe(129);
+    expect(result.addOns.map(item => item.id)).toEqual(["thumbnail"]);
+  });
+  it("restores saved add-ons on return to review", async () => {
+    mocks.getOwnedSubscription.mockResolvedValueOnce({ id: "saved-id", status: "unpaid", addOns: [{ id: "short-form", label: "Short-form video", amountCents: 2000 }] });
+    expect((await loader(args("?subscription=saved-id", undefined, "single-creator"))).total).toBe(129);
+  });
   it("loads plan review from the configured package catalog", async () => {
     const result = await loader(args());
     expect(result.editingPackage.name).toBe("Studio");
@@ -88,7 +121,7 @@ describe("payment-first checkout", () => {
   it("loads the larger one-time Feature Video offer at its catalog price", async () => {
     const result = await loader(args("", undefined, "single-feature"));
     expect(result.editingPackage).toMatchObject({ slug: "single-feature", name: "Feature Video", finishedLength: "Up to 30 minutes" });
-    expect(result.total).toBe(189);
+    expect(result.total).toBe(249);
   });
 
   it("does not serve a package hidden in admin pricing settings", async () => {
@@ -119,13 +152,13 @@ describe("payment-first checkout", () => {
   });
 
   it("saves a Feature Video checkout with its canonical one-time price", async () => {
-    mocks.saveUnpaidSubscription.mockResolvedValueOnce({ id: "saved-id", planName: "Feature Video", amountCents: 18900, currency: "USD" });
+    mocks.saveUnpaidSubscription.mockResolvedValueOnce({ id: "saved-id", planName: "Feature Video", amountCents: 24900, currency: "USD" });
     const response = await action(args("", { intent: "start-checkout", packageSlug: "single-feature", country: "US", phone: "+12025550123" }, "single-feature"));
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).headers.get("Location")).toBe("/checkout/single-feature?step=payment&subscription=saved-id");
     expect(mocks.saveUnpaidSubscription).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       packageSlug: "single-feature", planName: "Feature Video", purchaseType: "single",
-      subtotalCents: 18900, amountCents: 18900, discountCents: 0,
+      subtotalCents: 24900, amountCents: 24900, discountCents: 0,
     }));
   });
 
@@ -191,6 +224,7 @@ describe("payment-first checkout", () => {
       ownerId: "user-1", packageSlug: "creator-pro", planName: "Studio", country: "BD", phone: "+8801712345678",
       subtotalCents: 314900, amountCents: 314900, discountCents: 0, couponCode: null, purchaseType: "monthly",
       affiliateId: "affiliate-1", affiliateCode: "PARTNER-1", affiliateCommissionBps: 1250,
+      addOns: [],
     });
     expect(mocks.profileUpdateSet).toHaveBeenCalledWith(expect.objectContaining({
       phone: "+8801712345678", country: "Bangladesh", updatedAt: expect.any(Date),

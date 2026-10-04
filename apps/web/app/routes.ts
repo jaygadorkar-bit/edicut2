@@ -21,6 +21,7 @@ export default [
   route("dashboard", "routes/dashboard.tsx"),
   route("dashboard/profile", "routes/dashboard-profile.tsx"),
   route("dashboard/messages", "routes/dashboard-messages.tsx"),
+  route("dashboard/messages/export", "routes/dashboard-messages-export.ts"),
   route("dashboard/subscriptions", "routes/dashboard-subscriptions.tsx"),
   route("dashboard/:section", "routes/dashboard-placeholder.tsx"),
   route("signin", "routes/signin.tsx"),

@@ -1,0 +1,2 @@
+ALTER TABLE "customer_subscriptions" ADD COLUMN "add_ons" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "customer_subscriptions" ADD CONSTRAINT "customer_subscriptions_add_ons_check" CHECK (jsonb_typeof("customer_subscriptions"."add_ons") = 'array' AND jsonb_array_length("customer_subscriptions"."add_ons") <= 2);

@@ -1,4 +1,5 @@
 import type { MetaFunction } from "react-router";
+import { FileText } from "lucide-react";
 import { PageShell, TrustStrip } from "../components/site/Marketing.js";
 import { createRouteMeta } from "../lib/seo";
 
@@ -50,7 +51,7 @@ export default function TermsPage() {
 
         <div className="relative mx-auto max-w-4xl text-center">
           <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
-            <span className="h-2 w-2 rounded-full bg-primary" />
+            <FileText size={16} aria-hidden="true" />
             Terms of Service
           </div>
 

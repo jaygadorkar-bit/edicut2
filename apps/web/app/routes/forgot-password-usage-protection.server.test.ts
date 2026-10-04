@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const resetPasswordForEmail = vi.fn(async () => ({ error: null }));
   const getSupabaseClient = vi.fn(() => ({ auth: { resetPasswordForEmail } }));
-  return { getSupabaseClient, resetPasswordForEmail };
+  const verifyRecaptchaToken = vi.fn(async () => ({ success: true as const }));
+  return { getSupabaseClient, resetPasswordForEmail, verifyRecaptchaToken };
 });
 
 vi.mock("../integrations/supabase/client.server", () => ({ getSupabaseClient: mocks.getSupabaseClient }));
+vi.mock("../lib/recaptcha.server", () => ({ verifyRecaptchaToken: mocks.verifyRecaptchaToken }));
 
 import { action } from "./forgot-password";
 
@@ -26,6 +28,7 @@ describe("password reset usage protection", () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const form = new FormData();
       form.set("email", "Reset@Example.com");
+      form.set("g-recaptcha-response", "verified-token");
       const request = new Request("http://localhost:3002/forgot-password", { method: "POST", body: form });
       results.push(await action({ request, context, params: {} } as Parameters<typeof action>[0]) as Record<string, unknown>);
     }
@@ -35,5 +38,6 @@ describe("password reset usage protection", () => {
     expect(results[0]).toEqual({ sent: true });
     expect(results[1].error).toBe("A reset request was sent recently. Wait a minute before trying again.");
     expect(mocks.resetPasswordForEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.verifyRecaptchaToken).toHaveBeenCalledOnce();
   });
 });

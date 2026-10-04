@@ -1,0 +1,16 @@
+.package-choice-link { gap: .65rem; }
+.package-choice-link__text { display: inline-block; }
+.package-choice-link.is-noticed .package-choice-link__text { animation: package-choice-notice 1.7s ease-in-out 2; animation-delay: inherit; }
+.package-choice-link > svg { transition: transform 200ms ease; }
+.package-choice-link:is(:hover, :focus-visible) > svg { transform: translateX(3px); }
+@keyframes package-choice-notice {
+  0%, 65%, 100% { transform: translateY(0); }
+  42% { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .package-choice-link.is-noticed .package-choice-link__text { animation: none; }
+  .package-choice-link > svg { transition: none; transform: none !important; }
+}
+@media (forced-colors: active) {
+  .package-choice-link.is-noticed .package-choice-link__text { animation: none; }
+}

@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { ArrowRight, Check, ChevronDown, Clapperboard, Clock3, FileVideo, Film, Image, Play, Scissors, Upload } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, CircleHelp, Clapperboard, Clock3, FileVideo, Film, Play, Scissors, Upload, Workflow } from "lucide-react";
 import { formatPackagePrice, getCheckoutUrl, type EditingPackage, type SingleVideoPackage, type SubscriptionPackage } from "../../lib/subscriptions";
+import { PricingFaqArtwork } from "./PricingFaqArtwork";
+import { EditingArtwork } from "./EditingArtwork";
+import { PackageChoiceLink } from "./PackageChoiceLink";
 
 const questions = [
   { question: "How does monthly editing time work?", answer: "Your package reserves the listed editing hours across a standard 22-workday month. Editing, feedback rounds, and included finishing work draw from that time. We agree the scope and schedule with you before production starts." },
@@ -44,14 +47,14 @@ function PackageScope({ pack }: { pack: EditingPackage }) {
     return <div className="pack-output neo-inset" aria-label="Monthly editing capacity">
       <p><Clock3 size={19} aria-hidden="true" /><strong>{pack.editingHoursPerMonth} editing hours / month</strong></p>
       <p><Clock3 size={19} aria-hidden="true" />{pack.editingHoursPerWorkday} {pack.editingHoursPerWorkday === 1 ? "hour" : "hours"} per workday</p>
-      <p><FileVideo size={19} aria-hidden="true" />Planned across 22 working days</p>
+      <p><FileVideo size={19} aria-hidden="true" />Planned across {pack.workingDaysPerMonth} working days</p>
     </div>;
   }
 
   return <div className="pack-output neo-inset" aria-label="Single video scope">
     <p><FileVideo size={19} aria-hidden="true" /><strong>{pack.videoFormat}</strong></p>
     <p><Film size={19} aria-hidden="true" />Finished edit: {pack.finishedLength.toLowerCase()}</p>
-    <p><Upload size={19} aria-hidden="true" />Source footage: {pack.rawFootageLimit.toLowerCase()}</p>
+    <p className="pack-output-raw-footage"><Upload size={19} aria-hidden="true" />Raw footage: {pack.rawFootageLimit.toLowerCase().replace(/ minutes?$/, " min")}</p>
   </div>;
 }
 
@@ -84,33 +87,32 @@ function PricingPackageOptions({ packages, packageKind, onPackageKindChange, id 
         : <a href="#pack-comparison" className="pack-text-link">Compare every detail <ChevronDown size={16} aria-hidden="true" /></a>)}
     </div>
 
-    <div className="pack-type-switch neo-inset" role="group" aria-label="Choose a pricing option">
+    <div className="pack-type-switch neo-inset" data-kind={packageKind} role="group" aria-label="Choose a pricing option">
+      <span className="pack-type-indicator" aria-hidden="true" />
       <button type="button" aria-pressed={!isMonthly} onClick={() => onPackageKindChange("single")}>Single video</button>
       <button type="button" aria-pressed={isMonthly} onClick={() => onPackageKindChange("monthly")}>Monthly packages</button>
     </div>
 
     {packs.length ? <>
-      {isMonthly ? <p className="pack-capacity-note">Monthly capacity is based on 22 working days. Editing and revisions use the reserved hours; unused hours do not roll over.</p> : null}
       <div className={`pack-grid pack-grid--${packs.length}`}>
-        {packs.map((pack) => {
+        {packs.map((pack, index) => {
           const popular = pack.badge.toLowerCase().includes("popular");
           return <article key={pack.slug} id={`pack-${pack.slug}`} className={`pack-card neo-card ${popular ? "pack-card--recommended" : ""}`} aria-labelledby={`pack-${pack.slug}-name`}>
             <div className="pack-card-topline">
-              <span className="pack-card-icon neo-inset"><Clapperboard size={23} aria-hidden="true" /></span>
+              <span className="pack-card-icon neo-icon-badge"><Clapperboard size={23} aria-hidden="true" /></span>
               <span className="pack-card-badge">{popular ? <Check size={14} aria-hidden="true" /> : null}{pack.badge}</span>
             </div>
             <h3 id={`pack-${pack.slug}-name`}>{pack.name}</h3>
-            <p className="pack-card-description">{pack.description}</p>
             <p className="pack-price"><strong>{formatPackagePrice(pack.basePrice)}</strong><span>{isMonthly ? "USD / month" : "USD / video"}</span></p>
             <PackageScope pack={pack} />
-            <Link to={getCheckoutUrl(pack)} className="neo-button pack-button">Choose {pack.name} <ArrowRight size={17} aria-hidden="true" /></Link>
+            <PackageChoiceLink to={getCheckoutUrl(pack)} label={`Choose ${pack.name}`} className="pack-button" delay={index * 180} />
             <Link to={`/pricing/${pack.slug}`} className="pack-details-link">See {pack.name} details</Link>
             <ul className="pack-features">{pack.features.map((feature) => <li key={feature}><Check size={16} aria-hidden="true" /><span>{feature}</span></li>)}</ul>
             {pack.packageType === "single" ? <div className="pack-delivery"><Clock3 size={17} aria-hidden="true" /><span>First-cut target: <strong>{pack.firstCutHours} hours</strong></span></div> : null}
-            <p className="pack-audience">{pack.bestFor}</p>
           </article>;
         })}
       </div>
+      {isMonthly ? <p className="pack-capacity-note">Monthly capacity is based on 22 working days. Editing and revisions use the reserved hours; unused hours do not roll over.</p> : null}
       <div className="pack-custom"><div><strong>Have a larger project?</strong><span>We’ll confirm the scope and price before production starts.</span></div><Link to="/contact" className="neo-button pack-button">Request a custom quote <ArrowRight size={17} aria-hidden="true" /></Link></div>
     </> : <div className="pack-empty neo-surface"><p>We’re updating these editing packages. Tell us what you need and we’ll help you find the right scope.</p><Link to="/contact" className="neo-button pack-button">Discuss my editing needs <ArrowRight size={17} aria-hidden="true" /></Link></div>}
   </section>;
@@ -133,7 +135,7 @@ export function PricingPacks({ packages, initialKind = "single" }: { packages: E
           <Film className="pack-hero-object pack-hero-object--film" strokeWidth={1.5} />
         </div>
         <div className="pack-container pack-hero-content">
-          <p className="pack-hero-label"><Scissors size={17} aria-hidden="true" /> Your footage. Our editing team.</p>
+          <p className="pack-hero-label neo-section-label"><Scissors size={17} aria-hidden="true" /> Your footage. Our editing team.</p>
           <h1 id="pricing-title">More creating.<br />Less editing.</h1>
           <p className="pack-hero-copy">Choose one video at a time, or reserve editing hours for the month.<br className="pack-desktop-break" /> Clear scope and pricing before the first cut.</p>
           <div className="pack-hero-actions">
@@ -150,15 +152,17 @@ export function PricingPacks({ packages, initialKind = "single" }: { packages: E
 
       <PricingPackageOptions packages={packages} packageKind={packageKind} onPackageKindChange={setPackageKind} />
 
-      <section className="pack-workflow pack-container neo-surface" aria-labelledby="workflow-title">
-        <div className="pack-workflow-layout">
-          <div className="pack-workflow-heading"><h2 id="workflow-title">Your footage in.<br />Your next cut out.</h2><p>Start with a single deliverable or a block of monthly editing time.</p></div>
-          <ol className="pack-workflow-steps">
-            <li><span className="pack-step-icon neo-inset"><Upload size={24} aria-hidden="true" /></span><h3>Share your footage</h3><p>After scope and payment are confirmed, send your links, references, brand assets, and brief.</p></li>
-            <li><span className="pack-step-icon neo-inset"><Scissors size={24} aria-hidden="true" /></span><h3>We make the cut</h3><p>Your editor works to the limits of the single edit or the time reserved in your monthly package.</p></li>
-            <li><span className="pack-step-icon neo-inset"><Clapperboard size={24} aria-hidden="true" /></span><h3>Review, then publish</h3><p>Share feedback within your included revision rounds or monthly editing hours.</p></li>
-          </ol>
-        </div>
+      <section className="pack-workflow pack-container" aria-labelledby="workflow-title">
+        <header className="pack-workflow-heading">
+          <p className="neo-section-label"><Workflow size={16} aria-hidden="true" />From brief to publish</p>
+          <h2 id="workflow-title">Your footage in. Your next cut out.</h2>
+          <p>One clear process, whether you need a single edit or a month of support.</p>
+        </header>
+        <ol className="pack-workflow-steps">
+          <li className="neo-card"><div className="pack-step-art"><EditingArtwork stage="upload" /></div><div className="pack-step-copy"><span className="pack-step-number">01 / THE BRIEF</span><h3>Share your footage</h3><p>Once scope and payment are confirmed, send your footage links, references, brand assets, and brief.</p></div></li>
+          <li className="neo-card"><div className="pack-step-art"><EditingArtwork stage="edit" /></div><div className="pack-step-copy"><span className="pack-step-number">02 / THE EDIT</span><h3>We make the cut</h3><p>Your editor shapes the story within your single-video scope or reserved monthly editing hours.</p></div></li>
+          <li className="neo-card"><div className="pack-step-art"><EditingArtwork stage="review" /></div><div className="pack-step-copy"><span className="pack-step-number">03 / YOUR NEXT UPLOAD</span><h3>Review, then publish</h3><p>Share feedback within your included revision rounds or monthly hours, then receive your finished edit.</p></div></li>
+        </ol>
       </section>
 
       {packs.length > 0 && <section id="pack-comparison" className="pack-comparison pack-container" aria-labelledby="comparison-title">
@@ -173,15 +177,27 @@ export function PricingPacks({ packages, initialKind = "single" }: { packages: E
       </section>}
 
       <section className="pack-faq pack-container" aria-labelledby="faq-title">
-        <div className="pack-faq-intro"><h2 id="faq-title">A few useful details.</h2><p>See how one-off edits and monthly editing hours work before you choose.</p><Link to="/faq" className="pack-text-link">Visit all FAQs <ArrowRight size={15} aria-hidden="true" /></Link></div>
-        <div className="pack-questions">{questions.map(({ question, answer }) => <details key={question} className="neo-card"><summary>{question}<ChevronDown aria-hidden="true" /></summary><p>{answer}</p></details>)}</div>
+        <header className="pack-faq-heading">
+          <p className="pack-faq-kicker neo-section-label"><CircleHelp size={16} aria-hidden="true" />Before you choose</p>
+          <h2 id="faq-title">Know what’s included.</h2>
+          <p className="pack-faq-copy">Straight answers on editing scope, monthly hours, and what happens next.</p>
+        </header>
+        <div className="pack-faq-layout">
+          <div className="pack-faq-artwork"><PricingFaqArtwork /></div>
+          <div className="pack-questions">{questions.map(({ question, answer }) => <details key={question} className="neo-card"><summary>{question}<span className="pack-question-icon neo-icon-badge"><ChevronDown className="neo-faq-arrow" aria-hidden="true" /></span></summary><p>{answer}</p></details>)}</div>
+          <Link to="/faq" className="neo-button pack-faq-link">Explore all FAQs <ArrowRight size={16} aria-hidden="true" /></Link>
+        </div>
       </section>
 
       <section className="pack-final pack-container neo-surface" aria-labelledby="final-title">
-        <span className="pack-final-icon neo-inset"><Image size={28} aria-hidden="true" /></span>
-        <h2 id="final-title">Ready for your next edit?</h2>
-        <p>Choose a single video or reserve the monthly editing time your channel needs.</p>
-        <a href="#editing-packs" className="neo-button pack-button">Compare packages <ArrowRight size={17} aria-hidden="true" /></a>
+        <div className="pack-final-copy">
+          <p className="neo-section-label"><Clapperboard size={16} aria-hidden="true" />Make room to create</p>
+          <h2 id="final-title">Your next video.<br />Our next great cut.</h2>
+          <p>One finished video or a steady editing partner. Choose the support that fits your channel.</p>
+          <div className="pack-final-actions"><a href="#editing-packs" className="neo-button pack-button">Find my package <ArrowRight size={17} aria-hidden="true" /></a><Link to="/contact" className="pack-text-link">Let’s talk first <ArrowRight size={16} aria-hidden="true" /></Link></div>
+          <p className="pack-final-note"><Check size={15} aria-hidden="true" />Clear scope before editing starts.</p>
+        </div>
+        <div className="pack-final-art"><EditingArtwork stage="review" /></div>
       </section>
     </div>
   );

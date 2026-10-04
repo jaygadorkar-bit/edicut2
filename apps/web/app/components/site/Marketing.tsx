@@ -1,7 +1,7 @@
 import type { FormEvent, PointerEvent as ReactPointerEvent } from "react";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useMatches } from "react-router";
-import { Award, Film, Star, Trophy } from "lucide-react";
+import { Award, BadgeCheck, CalendarDays, CircleHelp, Film, MessageCircle, Star, Trophy, Workflow, type LucideIcon } from "lucide-react";
 import { authHref } from "../auth/AuthModal";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
 import { formatPackagePrice, parsePackagePrice, SUBSCRIPTION_PACKAGES } from "../../lib/subscriptions";
@@ -9,6 +9,9 @@ import { faqs, legalLinks, navLinks, testimonials, workflow } from "./data";
 import { defaultPortfolioSections } from "../../lib/portfolio-demo";
 import { wrapLoopPosition } from "../../lib/portfolio-loop";
 import { CookieConsent } from "./CookieConsent.js";
+import { ContactPageIntro } from "./ContactPageIntro";
+import { DEFAULT_CONTACT_EMAIL } from "../../lib/contact-email";
+import { CONTACT_WHATSAPP_URL } from "../../lib/contact-details";
 import type { PortfolioSection as PortfolioSectionView, PortfolioVideo } from "../../lib/portfolio.server";
 
 export { WhyHireUsSection } from "./WhyHireUsSection";
@@ -198,7 +201,6 @@ export function SiteHeader() {
 function MobileSupportMenu({ isMenuOpen }: { isMenuOpen: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const panelId = useId();
-  const whatsappUrl = "https://wa.me/8801515688142?text=Hi%20EdiCut%2C%20I%27d%20like%20to%20ask%20about%20video%20editing.";
 
   useEffect(() => {
     if (!isMenuOpen) setIsOpen(false);
@@ -218,7 +220,7 @@ function MobileSupportMenu({ isMenuOpen }: { isMenuOpen: boolean }) {
         <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{isOpen ? "expand_more" : "expand_less"}</span>
       </button>
       <div id={panelId} hidden={!isOpen} className="neo-mobile-support-card rounded-2xl p-2">
-        <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp" className="neo-button neo-button--primary neo-mobile-whatsapp-link w-full justify-center gap-2">
+        <a href={CONTACT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp" className="neo-button neo-button--primary neo-mobile-whatsapp-link w-full justify-center gap-2">
           <span className="material-symbols-outlined text-[19px]" aria-hidden="true">chat</span>
           WhatsApp
         </a>
@@ -303,13 +305,13 @@ function LegacySiteFooter() {
             <div className="space-y-6">
               <h4 className="yt-tag font-black uppercase tracking-widest text-foreground">Get in touch</h4>
               <div className="flex flex-col gap-4 lg:items-end">
-                <a href="mailto:hello@edicut.com" className="flex items-center gap-3 yt-small font-bold text-muted-foreground hover:text-primary transition-colors lg:flex-row-reverse">
+                <a href={`mailto:${DEFAULT_CONTACT_EMAIL}`} className="flex items-center gap-3 yt-small font-bold text-muted-foreground hover:text-primary transition-colors lg:flex-row-reverse">
                   <span className="neo-icon-badge flex h-8 w-8 items-center justify-center rounded-lg">
                     <span className="material-symbols-outlined text-[18px]">mail</span>
                   </span>
-                  hello@edicut.com
+                  {DEFAULT_CONTACT_EMAIL}
                 </a>
-                <a href="https://wa.me/yournumber" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 yt-small font-bold text-muted-foreground hover:text-primary transition-colors lg:flex-row-reverse">
+                <a href={CONTACT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 yt-small font-bold text-muted-foreground hover:text-primary transition-colors lg:flex-row-reverse">
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#25D366]/10 text-[#25D366]">
                     <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
                       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.414 0 .018 5.396.015 12.03c0 2.12.554 4.189 1.605 6.006L0 24l6.117-1.604a11.845 11.845 0 005.932 1.577h.005c6.632 0 12.028-5.398 12.03-12.033a11.85 11.85 0 00-3.502-8.504z"/>
@@ -382,9 +384,10 @@ export function SiteFooter() {
     {
       label: "Explore",
       links: [
-        { label: "Who it's for", to: "/#creators" },
-        { label: "Pricing", to: "/pricing" },
-        { label: "Portfolio", to: "/portfolio" },
+      { label: "Who it's for", to: "/#creators" },
+      { label: "Pricing", to: "/pricing" },
+      { label: "Portfolio", to: "/portfolio" },
+      { label: "FAQ", to: "/faq" },
       ],
     },
     {
@@ -404,7 +407,7 @@ export function SiteFooter() {
         <div className="grid gap-4 md:grid-cols-[minmax(18rem,1.45fr)_minmax(9rem,1fr)_minmax(11rem,1fr)] md:items-stretch">
         <section className="neo-footer__lead flex flex-col justify-between p-5 md:p-6">
           <div>
-            <p className="neo-footer__eyebrow yt-tag font-black tracking-[0.14em] neo-footer-muted">EdiCut / creator post-production</p>
+            <p className="neo-footer__eyebrow inline-flex items-center gap-1.5 yt-tag font-black tracking-[0.14em] neo-footer-muted"><Film size={14} aria-hidden="true" />EdiCut / creator post-production</p>
             <h2 className="mt-3 type-card-title neo-footer-ink">Keep in touch</h2>
             <p className="mt-2 max-w-md text-sm leading-5 neo-footer-muted sm:text-[15px]">
               Editing support, creator tips, and useful updates for a steadier publishing rhythm.
@@ -534,7 +537,6 @@ function HerlanSocialIcon({ name }: { name: string }) {
 
 export function MessageWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const whatsappUrl = "https://wa.me/8801515688142?text=Hi%20EdiCut%2C%20I%27d%20like%20to%20ask%20about%20video%20editing.";
 
   useEffect(() => {
     if (!isOpen) return;
@@ -580,7 +582,7 @@ export function MessageWidget() {
 
           <div className="space-y-2 p-4">
             <a
-              href={whatsappUrl}
+              href={CONTACT_WHATSAPP_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="group flex w-full items-center gap-3 rounded-2xl bg-white/5 p-3 text-left ring-1 ring-white/10 transition hover:bg-white/10 hover:ring-emerald-400/40"
@@ -633,14 +635,14 @@ export function PageShell({ children, className = "" }: { children: React.ReactN
   );
 }
 
-export function Eyebrow({ children }: { children: React.ReactNode }) {
-  return <p className="yt-tag text-primary neo-section-label">{children}</p>;
+export function Eyebrow({ children, icon: Icon }: { children: React.ReactNode; icon?: LucideIcon }) {
+  return <p className="yt-tag text-primary neo-section-label">{Icon ? <Icon size={16} strokeWidth={1.9} aria-hidden="true" /> : null}{children}</p>;
 }
 
-export function SectionIntro({ eyebrow, title, copy }: { eyebrow?: string; title: string; copy?: string }) {
+export function SectionIntro({ eyebrow, eyebrowIcon, title, copy }: { eyebrow?: string; eyebrowIcon?: LucideIcon; title: string; copy?: string }) {
   return (
     <div className="mx-auto max-w-3xl text-center">
-      {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
+      {eyebrow ? <Eyebrow icon={eyebrowIcon}>{eyebrow}</Eyebrow> : null}
       <h2 className="yt-title mt-3 text-foreground">{title}</h2>
       {copy ? <p className="yt-subtitle mt-5">{copy}</p> : null}
     </div>
@@ -659,7 +661,7 @@ export function TrustStrip() {
   return (
     <section className="neo-trust-strip border-b neo-line px-5 py-8 sm:px-6">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 sm:flex-row">
-        <p className="yt-tag font-black tracking-[0.16em] neo-muted">Trusted creative output, without the production drag</p>
+        <p className="yt-tag neo-section-label"><BadgeCheck size={16} aria-hidden="true" />Trusted creative output, without the production drag</p>
         <div className="hidden flex-wrap items-center justify-center gap-x-8 gap-y-3 yt-small font-black tracking-[0.22em] neo-muted sm:flex">
           {["TECHRIVA", "VOGUE", "APEX", "LUXE", "NEON"].map((logo) => <span key={logo}>{logo}</span>)}
         </div>
@@ -687,7 +689,7 @@ export function WorkflowSection() {
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
           <div>
-            <p className="yt-tag neo-section-label">How it works</p>
+            <p className="yt-tag neo-section-label"><Workflow size={16} aria-hidden="true" />How it works</p>
             <h2 className="mt-3 max-w-xl yt-title neo-ink">A clear path from raw footage to a finished upload.</h2>
             <p className="mt-5 max-w-xl yt-subtitle leading-8 neo-muted">
               Choose the right level of support, send us the project, and keep control through a focused review process.
@@ -711,7 +713,7 @@ export function WorkflowSection() {
                 <h3 className="mt-6 yt-title leading-tight neo-ink">{title}</h3>
                 <p className="mt-3 yt-small font-medium leading-6 neo-muted">{copy}</p>
                 <div className="mt-6 border-t neo-line pt-4">
-                  <p className="yt-tag font-black uppercase tracking-[0.14em] neo-section-label">You get</p>
+                  <p className="yt-tag font-black uppercase tracking-[0.14em] neo-section-label"><BadgeCheck size={15} aria-hidden="true" />You get</p>
                   <p className="mt-2 yt-small font-black leading-5 neo-ink">{outcomes[index]}</p>
                 </div>
               </article>
@@ -900,7 +902,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
             </div>
             <span className="portfolio-gallery-note"><Film size={17} aria-hidden="true" /> Watch the full videos</span>
           </div>
-        ) : <SectionIntro eyebrow="Selected work" title="Edits built to keep viewers watching." />}
+        ) : <SectionIntro eyebrow="Selected work" eyebrowIcon={Film} title="Edits built to keep viewers watching." />}
 
         <div
           ref={tabListRef}
@@ -1440,7 +1442,7 @@ export function PricingSection({ comparison = false, plans }: { comparison?: boo
     <section id="pricing" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
         <div className="neo-pricing-intro text-center">
-          <p className="yt-tag neo-section-label">Choose a monthly package</p>
+          <p className="yt-tag neo-section-label"><CalendarDays size={16} aria-hidden="true" />Choose a monthly package</p>
           <h2 className="mx-auto mt-3 max-w-3xl yt-title neo-ink">
             <span className="hidden sm:inline">Monthly editing time for a steadier publishing rhythm.</span>
             <span className="sm:hidden">Monthly editing hours.</span>
@@ -1472,7 +1474,7 @@ export function PricingSection({ comparison = false, plans }: { comparison?: boo
                   </div>
                 </div>
 
-                <p className="mt-5 yt-tag font-black uppercase tracking-[0.14em] neo-muted">Every plan includes</p>
+                <p className="mt-5 yt-tag font-black uppercase tracking-[0.14em] neo-muted"><BadgeCheck size={15} aria-hidden="true" />Every plan includes</p>
                 <ul className="neo-pricing-features mt-3 grid gap-3">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex gap-3 yt-small font-bold neo-ink">
@@ -1656,7 +1658,7 @@ export function FAQSection() {
   return (
     <section id="faq" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
-        <SectionIntro eyebrow="FAQ" title="What creators usually ask before starting." />
+        <SectionIntro eyebrow="FAQ" eyebrowIcon={CircleHelp} title="What creators usually ask before starting." />
         <div className="neo-surface mt-10 divide-y neo-line rounded-2xl p-2">
           {faqs.map(([q, a]) => (
             <details key={q} className="group rounded-xl p-5 transition hover:bg-transparent" open={q === faqs[0][0]}>
@@ -1679,13 +1681,29 @@ export function FAQSection() {
   );
 }
 
-export function ContactSection({ compact = false, status, action = "/#contact" }: { compact?: boolean; status?: "sent" | "security-error" | "invalid-error"; action?: string }) {
+export function ContactSection({ compact = false, page = false, status, action = "/#contact", contactEmail = DEFAULT_CONTACT_EMAIL }: { compact?: boolean; page?: boolean; status?: "sent" | "security-error" | "invalid-error" | "delivery-error"; action?: string; contactEmail?: string }) {
   const [securityError, setSecurityError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const messageHelpId = useId();
+
+  useEffect(() => {
+    function restoreForm(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+    window.addEventListener("pageshow", restoreForm);
+    return () => window.removeEventListener("pageshow", restoreForm);
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
 
     event.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     setSecurityError(null);
 
     try {
@@ -1693,14 +1711,16 @@ export function ContactSection({ compact = false, status, action = "/#contact" }
       HTMLFormElement.prototype.submit.call(form);
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   }
 
   return (
-    <section id="contact" className="px-5 py-14 sm:px-6 sm:py-20">
+    <section id="contact" className={`px-5 py-14 sm:px-6 sm:py-20 ${page ? "contact-main" : ""}`} aria-label="Contact inquiry">
       <div className="neo-contact-layout mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_0.75fr]">
-        <div className="neo-surface flex flex-col justify-center rounded-[2rem] p-7 sm:p-10">
-          <p className="yt-tag neo-section-label">Contact us</p>
+        {!page ? <div className="neo-surface flex flex-col justify-center rounded-[2rem] p-7 sm:p-10">
+          <p className="yt-tag neo-section-label"><MessageCircle size={16} aria-hidden="true" />Contact us</p>
           <p className="neo-contact-invitation hidden">Have a question? Send it below—we’re happy to help.</p>
           <h2 className="neo-contact-title mt-3 max-w-2xl yt-title neo-ink">
             Tell us what you are editing next.
@@ -1711,29 +1731,27 @@ export function ContactSection({ compact = false, status, action = "/#contact" }
           <div className="neo-contact-prompt neo-inset mt-8 flex items-center gap-3 rounded-2xl p-4">
             <p className="text-sm font-bold leading-6 neo-ink">Tell us your format, volume, and deadline. We will recommend the cleanest lane to start.</p>
           </div>
-        </div>
-        <form method="post" action={action} className="neo-card grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit}>
+        </div> : null}
+        <form method="post" action={action} className="neo-card contact-form grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit} aria-busy={submitting}>
           <input type="hidden" name="g-recaptcha-response" value="" />
+          {page ? <div className="contact-form-heading"><h2>What are you working on?</h2><p>Tell us a little about your project. We&apos;ll take it from here.</p></div> : null}
           <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-            <Input label="Name" name="name" autoComplete="name" required compact={compact} />
-            <Input label="Email" name="email" type="email" autoComplete="email" required compact={compact} />
+            <Input label={page ? "Your name" : "Name"} name="name" autoComplete="name" required compact={compact} minLength={2} maxLength={120} placeholder={page ? "Alex Morgan" : undefined} />
+            <Input label={page ? "Email address" : "Email"} name="email" type="email" autoComplete="email" required compact={compact} maxLength={254} placeholder={page ? "you@example.com" : undefined} />
           </div>
-          {!compact ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input label="Project type" name="projectType" autoComplete="off" compact={compact} />
-              <Input label="Monthly volume" name="monthlyVolume" autoComplete="off" compact={compact} />
-            </div>
-          ) : null}
           <label className={`grid gap-2 yt-small font-black ${compact ? "neo-contact-field--compact" : ""}`}>
-            <span className={compact ? "sr-only sm:not-sr-only" : undefined}>Message</span>
-            <textarea name="brief" required minLength={20} autoComplete="off" placeholder={compact ? "Message" : undefined} className="neo-inset min-h-28 rounded-xl px-4 py-3 font-medium outline-none focus:border-foreground" />
+            <span className={compact ? "sr-only sm:not-sr-only" : undefined}>{page ? "Your project" : "Message"}</span>
+            <textarea name="brief" required minLength={20} maxLength={1200} aria-describedby={page ? messageHelpId : undefined} autoComplete="off" placeholder={compact ? "Message" : page ? "Share your channel, editing style, and deadline. Links to examples are welcome." : undefined} className="neo-inset min-h-28 rounded-xl px-4 py-3 font-medium outline-none focus:border-foreground" />
+            {page ? <span id={messageHelpId} className="contact-field-help">20–1,200 characters. Include your editing needs and timeline.</span> : null}
           </label>
-          <button type="submit" className="neo-button neo-button--primary w-full">Send inquiry</button>
-          {status === "sent" ? <p className="neo-inset rounded-xl px-4 py-3 yt-small font-black text-primary">Message sent. We will reply shortly.</p> : null}
-          {securityError || status === "security-error" ? <p className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">{securityError || "Security check failed. Please try again."}</p> : null}
-          {status === "invalid-error" ? <p className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">Check the form details and try again.</p> : null}
-          <p className="neo-contact-response yt-small font-bold neo-muted">hello@edicut.com · Replies within 24 hours</p>
+          <button type="submit" disabled={submitting} className="neo-button neo-button--primary w-full">{submitting ? "Sending inquiry…" : "Send inquiry"}{page ? <span className="material-symbols-outlined text-[19px]" aria-hidden="true">arrow_forward</span> : null}</button>
+          {status === "sent" ? <p role="status" className="neo-inset rounded-xl px-4 py-3 yt-small font-black text-primary">Message sent. We will reply shortly.</p> : null}
+          {securityError || status === "security-error" ? <p role="alert" className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">{securityError || "Security check failed. Please try again."}</p> : null}
+          {status === "invalid-error" ? <p role="alert" className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">Enter a name, valid email, and a message of 20–1,200 characters, then try again.</p> : null}
+          {status === "delivery-error" ? <p role="alert" className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">We couldn&apos;t save your inquiry. Please try again or email <a className="underline underline-offset-2" href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p> : null}
+          <p className="neo-contact-response yt-small font-bold neo-muted">{page ? "Replies within 24 hours. No commitment to get in touch." : `${contactEmail} · Replies within 24 hours`}</p>
         </form>
+        {page ? <ContactPageIntro contactEmail={contactEmail} /> : null}
       </div>
     </section>
   );
@@ -1746,6 +1764,9 @@ function Input({
   required = false,
   autoComplete,
   compact = false,
+  placeholder,
+  minLength,
+  maxLength,
 }: {
   label: string;
   name: string;
@@ -1753,11 +1774,14 @@ function Input({
   required?: boolean;
   autoComplete?: string;
   compact?: boolean;
+  placeholder?: string;
+  minLength?: number;
+  maxLength?: number;
 }) {
   return (
     <label className={`neo-contact-field grid gap-2 yt-small font-black ${compact ? "neo-contact-field--compact" : ""}`}>
       <span className={compact ? "sr-only sm:not-sr-only" : undefined}>{label}</span>
-      <input name={name} type={type} required={required} autoComplete={autoComplete} placeholder={compact ? label : undefined} className="neo-inset h-12 min-w-0 w-full rounded-xl px-4 yt-body font-medium outline-none focus:border-foreground" />
+      <input name={name} type={type} required={required} minLength={minLength} maxLength={maxLength} autoComplete={autoComplete} placeholder={compact ? label : placeholder} className="neo-inset h-12 min-w-0 w-full rounded-xl px-4 yt-body font-medium outline-none focus:border-foreground" />
     </label>
   );
 }

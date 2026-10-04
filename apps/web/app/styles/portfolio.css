@@ -27,16 +27,6 @@
   justify-content: center;
 }
 
-.portfolio-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: var(--portfolio-accent);
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
 .portfolio-hero-copy {
   position: relative;
   width: 100%;
@@ -47,11 +37,6 @@
 .portfolio-hero-copy .portfolio-kicker {
   justify-content: center;
   margin-inline: auto;
-  padding: 0.5rem 0.875rem;
-  border: 1px solid rgb(255 255 255 / 90%);
-  border-radius: 2rem;
-  background: linear-gradient(145deg, var(--neo-surface-strong), var(--neo-inset));
-  box-shadow: 5px 5px 12px rgb(132 148 163 / 18%), -5px -5px 12px var(--neo-shadow-light);
 }
 
 .portfolio-hero-objects {

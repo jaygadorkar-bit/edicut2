@@ -128,7 +128,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export default function DashboardRoute() {
-  const { user, allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, firstName, greeting, workspaceReady, noDashboardAccess } = useLoaderData<typeof loader>();
+  const { user, allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, workspaceReady, noDashboardAccess } = useLoaderData<typeof loader>();
   const displayName = user.name || user.email;
   const visibleNavItems = navItems.filter((item) => allowedFeatures.includes(item.feature));
   const canViewProjects = allowedFeatures.includes("projects");
@@ -143,13 +143,12 @@ export default function DashboardRoute() {
 
   return (
     <WorkspaceShell
-      title={`${greeting}, ${firstName}`}
-      subtitle={`${normalizeRole(user.role)} workspace`}
+      title="Dashboard"
       navItems={visibleNavItems.map(({ label, icon, path }) => ({ label, icon, to: path, end: path === "/dashboard" }))}
       account={{ name: displayName, detail: normalizeRole(user.role), imageUrl: user.profileImageUrl }}
       mobileMenu
       navigationFeedback
-      hideMobileHeading
+      hideHeaderTitle
       profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null}
       settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null}
       notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null}

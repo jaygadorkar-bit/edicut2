@@ -41,7 +41,7 @@ export default function PortfolioPage() {
         </div>
         <div className="portfolio-container portfolio-hero-layout">
           <div className="portfolio-hero-copy">
-            <p className="portfolio-kicker"><Film size={18} aria-hidden="true" /> Our portfolio</p>
+            <p className="portfolio-kicker neo-section-label"><Film size={18} aria-hidden="true" /> Our portfolio</p>
             <h1 id="portfolio-title">A better cut.<br />A better story.</h1>
             <p className="portfolio-description">
               A strong hook. The right pace. A finish that feels like you.
@@ -63,14 +63,14 @@ export default function PortfolioPage() {
         <div className="portfolio-container">
           <div className="portfolio-packs-panel">
             <div className="portfolio-packs-copy">
-              <p className="portfolio-kicker"><Layers3 size={18} aria-hidden="true" /> Your next video starts here</p>
+              <p className="portfolio-kicker neo-section-label"><Layers3 size={18} aria-hidden="true" /> Your next video starts here</p>
               <h2 id="portfolio-packs-title">Your footage.<br />Our next edit.</h2>
               <p className="portfolio-description">
                 Put these ideas to work for your channel. Choose an editing pack
                 that fits your publishing schedule, and let us handle the cut.
               </p>
               <ul className="portfolio-packs-benefits">
-                {["Clear monthly scope", "Thumbnails included", "Room for your feedback"].map((benefit) => (
+                {["Clear monthly scope", "Thumbnail add-on · $20", "Room for your feedback"].map((benefit) => (
                   <li key={benefit}><Check size={17} aria-hidden="true" />{benefit}</li>
                 ))}
               </ul>

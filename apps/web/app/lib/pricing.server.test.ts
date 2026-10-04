@@ -9,6 +9,18 @@ import { REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING } from "./subscripti
 beforeEach(() => vi.clearAllMocks());
 
 describe("configured public editing catalog", () => {
+  it("removes included thumbnails from saved settings for all packages while preserving motion and custom prices", async () => {
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify(defaultPricingPackages.map(item => ({
+      ...item, price: "$399", features: ["One custom thumbnail and light template-based branded motion", "Custom sound design"], deliverables: ["1 custom thumbnail"],
+    }))));
+    const packages = configuredPublicEditingPackages(await getPricingPackages(null));
+    for (const pack of packages) {
+      expect(pack.basePrice).toBe(399);
+      expect(pack.features).toContain("Light template-based branded motion");
+      expect(pack.features).toContain("Custom sound design");
+      expect([...pack.features, ...pack.deliverables].join(" ")).not.toMatch(/thumbnail/i);
+    }
+  });
   it("publishes exactly three single-video and three monthly packages by default", () => {
     expect(defaultPricingPackages).toHaveLength(6);
     expect(configuredPublicEditingPackages(defaultPricingPackages).map((item) => item.packageType)).toEqual([
@@ -34,7 +46,7 @@ describe("configured public editing catalog", () => {
 
     expect(packages).toHaveLength(6);
     expect(packages.map((item) => item.slug)).toEqual(["creator", "creator-plus", "creator-pro", "single-creator", "single-studio", "single-feature"]);
-    expect(packages.map((item) => item.price)).toEqual(["$2,149", "$2,649", "$3,149", "$109", "$179", "$189"]);
+    expect(packages.map((item) => item.price)).toEqual(["$2,149", "$2,649", "$3,149", "$109", "$179", "$249"]);
     expect(packages[0]).toMatchObject({ packageType: "monthly", editingHoursPerMonth: 88, editingHoursPerWorkday: 4 });
     expect(packages.find((item) => item.slug === "creator-plus")?.active).toBe(false);
     expect(packages.find((item) => item.slug === "creator-plus")?.features).not.toContain("Old package feature");
@@ -101,8 +113,31 @@ describe("configured public editing catalog", () => {
 
     expect(packages.map((item) => item.slug)).not.toContain("single-short");
     expect(packages.map((item) => item.slug)).toContain("single-feature");
-    expect(feature).toMatchObject({ name: "Feature Video", basePrice: 189, finishedLength: "Up to 30 minutes" });
+    expect(feature).toMatchObject({ name: "Feature Video", basePrice: 249, finishedLength: "Up to 30 minutes" });
     expect(configuredEditingPackage("single-short", packages)).toBeNull();
+  });
+
+  it("updates the saved default Feature Video price while preserving other admin settings", async () => {
+    const saved = defaultPricingPackages.map((item) => item.slug === "single-feature"
+      ? { ...item, price: "$189", description: "Custom feature description", badge: "Editor pick" }
+      : item);
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify(saved));
+
+    const packages = await getPricingPackages(null);
+    const feature = packages.find((item) => item.slug === "single-feature");
+
+    expect(feature).toMatchObject({ price: "$249", description: "Custom feature description", badge: "Editor pick" });
+    expect(configuredEditingPackage("single-feature", packages)).toMatchObject({ basePrice: 249 });
+  });
+
+  it("preserves a custom Feature Video price", async () => {
+    const saved = defaultPricingPackages.map((item) => item.slug === "single-feature" ? { ...item, price: "$279" } : item);
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify(saved));
+
+    const packages = await getPricingPackages(null);
+
+    expect(packages.find((item) => item.slug === "single-feature")?.price).toBe("$279");
+    expect(configuredEditingPackage("single-feature", packages)).toMatchObject({ basePrice: 279 });
   });
 
   it("uses the configured whole-dollar price in both public and checkout package data", () => {

@@ -38,6 +38,20 @@ describe("subscription persistence protections", () => {
       message: "permission denied for table customer_subscriptions",
     })).toBe(false);
   });
+  it("recognizes a missing column in a wrapped subscription query", () => {
+    expect(isMissingCustomerSubscriptionSchema({
+      message: 'Failed query: select "purchase_type" from "customer_subscriptions"',
+      cause: { code: "42703", message: 'column "purchase_type" does not exist' },
+    })).toBe(true);
+    expect(isMissingCustomerSubscriptionSchema({
+      message: 'Failed query: select "name" from "users"',
+      cause: { code: "42703", message: 'column "name" does not exist' },
+    })).toBe(false);
+    expect(isMissingCustomerSubscriptionSchema({
+      message: 'Failed query: select from "customer_subscriptions"',
+      cause: { code: "42501", message: "permission denied" },
+    })).toBe(false);
+  });
   it("uses a database conflict target to reuse one unpaid selection per owner and plan", async () => {
     const { db, chain } = fakeDb([{ id }]);
     const input = { ownerId: owner, packageSlug: "creator", planName: "Starter", purchaseType: "monthly" as const, country: "US", phone: "+12025550123", subtotalCents: 54900, amountCents: 54900, discountCents: 0 };

@@ -13,13 +13,14 @@ const mocks = vi.hoisted(() => {
 
   return {
     db,
-    findUserById: vi.fn(async () => ({ id: "staff-42", email: "staff@example.com", role: "admin", name: "Staff" })),
+    findUserById: vi.fn(async () => ({ id: "staff-42", email: "staff@example.com", role: "customer_support", name: "Staff", active: true, deletedAt: null })),
     getDbFromContext: vi.fn(() => db),
     getRoleFeatureAccessSettings: vi.fn(async () => ({})),
     requireUserId: vi.fn(async () => "staff-42"),
     getAllowedDashboardFeatures: vi.fn(() => ["support"]),
     canAccessDashboardFeature: vi.fn(() => true),
     getDashboardLandingPath: vi.fn(() => "/dashboard"),
+    updateSet,
     configureGmailRuntimeEnv: vi.fn(),
     sendMailViaGmail: vi.fn(async () => undefined),
   };
@@ -31,7 +32,12 @@ vi.mock("@edicut/platform-core/lib/gmail", () => ({
 }));
 vi.mock("@edicut/db/repositories/users", () => ({ findUserById: mocks.findUserById }));
 vi.mock("../lib/db.server", () => ({ getDbFromContext: mocks.getDbFromContext }));
-vi.mock("../lib/session.server", () => ({ requireUserId: mocks.requireUserId }));
+vi.mock("../lib/session.server", () => ({
+  requireUserId: mocks.requireUserId,
+  getSession: async () => new Map(),
+  getAdminSession: async () => new Map(),
+  isAdminRole: (role: string) => role === "admin",
+}));
 vi.mock("../lib/site-settings.server", () => ({ getRoleFeatureAccessSettings: mocks.getRoleFeatureAccessSettings }));
 vi.mock("../lib/role-feature-access", () => ({
   canAccessDashboardFeature: mocks.canAccessDashboardFeature,
@@ -46,6 +52,48 @@ beforeEach(() => {
 });
 
 describe("dashboard email usage protection", () => {
+  it("marks only valid, unique enquiry IDs as read without contacting Gmail", async () => {
+    const form = new FormData();
+    form.set("intent", "mark-read");
+    form.append("messageIds", "550e8400-e29b-41d4-a716-446655440000");
+    form.append("messageIds", "550e8400-e29b-41d4-a716-446655440000");
+    form.append("messageIds", "not-a-uuid");
+    const request = new Request("http://localhost:3002/dashboard/messages", { method: "POST", body: form });
+
+    await expect(action({ request, context: {}, params: {} } as Parameters<typeof action>[0])).resolves.toEqual({ ok: true });
+    expect(mocks.db.update).toHaveBeenCalledTimes(1);
+    expect(mocks.updateSet).toHaveBeenCalledWith(expect.objectContaining({ status: "read", updatedAt: expect.any(Date) }));
+    expect(mocks.sendMailViaGmail).not.toHaveBeenCalled();
+  });
+
+  it("does not write when the read request has no valid IDs", async () => {
+    const form = new FormData();
+    form.set("intent", "mark-read");
+    form.append("messageIds", "bad-id");
+    const request = new Request("http://localhost:3002/dashboard/messages", { method: "POST", body: form });
+
+    await expect(action({ request, context: {}, params: {} } as Parameters<typeof action>[0])).resolves.toEqual({ ok: false });
+    expect(mocks.db.update).not.toHaveBeenCalled();
+  });
+
+  it.each(["mark-read", "reply", "bulk-delete", "import"])("rejects cross-site %s requests before processing them", async (intent) => {
+    const form = new FormData();
+    form.set("intent", intent);
+    const request = new Request("http://localhost:3002/dashboard/messages", {
+      method: "POST",
+      body: form,
+      headers: { Origin: "https://example.net" },
+    });
+
+    const response = await action({ request, context: {}, params: {} } as Parameters<typeof action>[0]);
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).status).toBe(403);
+    expect(mocks.requireUserId).not.toHaveBeenCalled();
+    expect(mocks.db.select).not.toHaveBeenCalled();
+    expect(mocks.db.update).not.toHaveBeenCalled();
+    expect(mocks.sendMailViaGmail).not.toHaveBeenCalled();
+  });
+
   it("stops replies before Gmail is called after two sends in a minute", async () => {
     const counters = new Map<string, number>();
     const emailLimit = vi.fn(async ({ key }: { key: string }) => {

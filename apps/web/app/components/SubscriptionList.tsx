@@ -2,8 +2,12 @@ import { useState } from "react";
 import { Form, Link, useNavigation } from "react-router";
 import { countryName } from "../lib/checkout-contact";
 import type { CustomerSubscription } from "../lib/customer-subscriptions.server";
+import { savedPackageAddOns } from "../lib/package-addons";
 
 type Row = { subscription: CustomerSubscription; name?: string | null; email?: string };
+function PurchaseAddOns({ addOns, currency }: { addOns: ReturnType<typeof savedPackageAddOns>; currency: string }) {
+  return addOns.length ? <ul aria-label="Purchased add-ons" className="mt-2 grid gap-1 text-xs text-slate-600">{addOns.map(item => <li key={item.id}>{item.label} · {new Intl.NumberFormat("en-US", { style: "currency", currency }).format(item.amountCents / 100)} one time</li>)}</ul> : null;
+}
 export type SubscriptionSummary = { total: number; paid: number; unpaid: number };
 
 export function SubscriptionList({ rows, admin = false, summary }: { rows: Row[]; admin?: boolean; summary?: SubscriptionSummary }) {
@@ -27,11 +31,12 @@ function SubscriptionCard({ row: { subscription: record, name, email }, admin }:
   const pending = navigation.state !== "idle";
   const unpaid = record.status === "unpaid";
   const isMonthly = record.purchaseType === "monthly";
+  const addOns = savedPackageAddOns(record.addOns);
   const purchaseLabel = isMonthly ? "Monthly package" : "Single video edit";
   const amount = new Intl.NumberFormat("en-US", { style: "currency", currency: record.currency }).format(record.amountCents / 100);
   return <article className="neo-workspace__panel min-w-0 rounded-3xl p-5 sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><h3 className="text-xl font-black">{record.planName}</h3><p className="mt-1 text-sm text-slate-600">{purchaseLabel} · {amount}{isMonthly ? " / month" : " one time"}</p></div>
+      <div><h3 className="text-xl font-black">{record.planName}</h3><p className="mt-1 text-sm text-slate-600">{purchaseLabel} · {amount}{isMonthly ? addOns.length ? " first month + extras" : " / month" : " one time"}</p><PurchaseAddOns addOns={addOns} currency={record.currency} /></div>
       <span className={`rounded-full px-3 py-1 text-xs font-bold ${unpaid ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>{unpaid ? "Unpaid" : "Paid"}</span>
     </div>
     {admin ? <p className="mt-4 break-words text-sm font-bold">{name || email}<span className="mt-1 block font-normal text-slate-600">{email}</span></p> : null}
@@ -134,6 +139,7 @@ function AdminSubscriptionRow({ row: { subscription: record, name, email } }: { 
   const unpaid = record.status === "unpaid";
   const amount = new Intl.NumberFormat("en-US", { style: "currency", currency: record.currency }).format(record.amountCents / 100);
   const isMonthly = record.purchaseType === "monthly";
+  const addOns = savedPackageAddOns(record.addOns);
   const purchaseLabel = isMonthly ? "monthly package" : "single video edit";
   const selectedDate = new Date(record.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" });
   const paidDate = record.paidAt?.toLocaleDateString("en-US", { timeZone: "UTC" });
@@ -142,7 +148,8 @@ function AdminSubscriptionRow({ row: { subscription: record, name, email } }: { 
     <div className="min-w-0">
       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 xl:hidden">Plan / price</p>
       <p className="mt-1 break-words text-sm font-black text-slate-900 xl:mt-0">{record.planName}</p>
-      <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-600">{amount}<span className="text-xs font-medium">{isMonthly ? " / month" : " · one time"}</span></p>
+      <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-600">{amount}<span className="text-xs font-medium">{isMonthly ? addOns.length ? " first month + extras" : " / month" : " · one time"}</span></p>
+      <PurchaseAddOns addOns={addOns} currency={record.currency} />
       {record.couponCode ? <p className="mt-1 text-[11px] font-semibold text-slate-500">Coupon {record.couponCode}</p> : null}
     </div>
 

@@ -64,7 +64,6 @@ import {
 } from "../lib/role-feature-access";
 import { getAdminDataRequirements, getPageWithinRange, getPositivePage } from "../lib/admin-data-requirements";
 import { AdminPanelShell } from "../components/AdminPanelShell";
-import { WorkspaceBoard, WorkspaceProjectStrip, WorkspaceSchedule } from "../components/WorkspaceWidgets";
 import { isMissingWorkspaceSchema, parseBillingAmountToCents, parseWorkspaceShareUrl, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
 import { consumeUsageLimit, requestBodyExceedsLimit, type UsageLimitResult } from "../lib/usage-protection.server";
 import {
@@ -1302,9 +1301,15 @@ function AdminOverview() {
         </Link>
       )}
     >
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-6" aria-labelledby="admin-overview-heading">
+        <p className="neo-workspace__eyebrow">Your workspace</p>
+        <h2 id="admin-overview-heading" className="neo-workspace__title mt-1">Admin overview</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#687583]">Review incoming work, manage your team, and keep the public site current.</p>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Admin metrics">
         {[
-          ["Total users", String(stats.total), "Active accounts", "group"],
+          ["Total users", String(stats.total), "Accounts outside trash", "group"],
           ["Admin team", String(stats.admins), "Privileged accounts", "admin_panel_settings"],
           ["Editors", String(stats.editors), "Production capacity", "movie_edit"],
           ["Media assets", String(cloudinaryImageCount), `${pricingPackageCount} packages published`, "perm_media"],
@@ -1324,32 +1329,33 @@ function AdminOverview() {
         })}
       </section>
 
-      <div className="mt-7">
-        <WorkspaceProjectStrip
-          mobileCarousel
-          projects={[
-            { title: "User operations", description: "Manage access, roles, and onboarding...", tone: "purple", progress: 78, members: [adminUser.name || "Admin"], count: String(stats.total) },
-            { title: "Content pipeline", description: "Keep packages and portfolio content...", tone: "blue", progress: 62, members: [adminUser.name || "Admin"], count: String(pricingPackageCount) },
-            { title: "Media library", description: "Cloudinary assets ready for publishing...", tone: "yellow", progress: 84, members: [adminUser.name || "Admin"], count: String(cloudinaryImageCount) },
-            { title: "Security review", description: "Role access and toolbar settings...", tone: "pink", progress: 91, members: [adminUser.name || "Admin"], count: "OK" },
-          ]}
-        />
-      </div>
-
-      <div className="mt-7">
-        <WorkspaceBoard
-          columns={[
-            { title: "Draft", tasks: [{ title: "Review pending user invites", meta: "User management", tone: "purple", members: [adminUser.name || "Admin"] }, { title: "Plan next content update", meta: "Packages", tone: "yellow", members: [adminUser.name || "Admin"] }] },
-            { title: "In Progress", tasks: [{ title: "Audit role feature access", meta: "Security", tone: "blue", members: [adminUser.name || "Admin"] }, { title: "Refresh portfolio imagery", meta: "Cloudinary", tone: "pink", members: [adminUser.name || "Admin"] }] },
-            { title: "Review", tasks: [{ title: "Approve new admin accounts", meta: "Admin team", tone: "purple", members: [adminUser.name || "Admin"] }, { title: "Check promo bar settings", meta: "Site settings", tone: "yellow", members: [adminUser.name || "Admin"] }] },
-            { title: "Done", tasks: [{ title: "Production database connected", meta: "Infrastructure", tone: "blue", members: [adminUser.name || "Admin"], done: true }, { title: "Cloudinary library synced", meta: "Media", tone: "pink", members: [adminUser.name || "Admin"], done: true }] },
-          ]}
-        />
-      </div>
-
-      <div className="mt-7">
-        <WorkspaceSchedule accent="pink" />
-      </div>
+      <section className="mt-7" aria-labelledby="admin-shortcuts-heading">
+        <div className="mb-3">
+          <p className="neo-workspace__eyebrow">Shortcuts</p>
+          <h2 id="admin-shortcuts-heading" className="mt-1 text-lg font-black tracking-[-0.035em]">Admin tools</h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {[
+            { title: "Manage users", description: "Accounts, roles, and access", icon: "group", to: adminPath("?tab=users") },
+            { title: "Review projects", description: "Production status and billing", icon: "video_library", to: adminPath("?tab=projects") },
+            { title: "Open enquiries", description: "Contact form messages and replies", icon: "mail", to: "/dashboard/messages" },
+            { title: "Pricing packages", description: "Edit published packages", icon: "sell", to: adminPath("?tab=packages") },
+            { title: "Portfolio media", description: "Manage images and videos", icon: "perm_media", to: adminPath("?tab=videos") },
+            { title: "Site settings", description: "Roles, visibility, and site controls", icon: "settings", to: adminPath("?tab=settings") },
+          ].map((shortcut) => (
+            <Link key={shortcut.title} to={shortcut.to} className="neo-workspace__panel group flex min-h-24 items-center gap-4 rounded-2xl p-4 transition-transform hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6d55e8]">
+              <span className="neo-icon-badge flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" aria-hidden="true">
+                <span className="material-symbols-outlined text-[21px]">{shortcut.icon}</span>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-black text-[#17202a]">{shortcut.title}</span>
+                <span className="mt-1 block text-xs leading-5 text-[#687583]">{shortcut.description}</span>
+              </span>
+              <span className="material-symbols-outlined shrink-0 text-[19px] text-[#687583] transition-transform group-hover:translate-x-0.5" aria-hidden="true">arrow_forward</span>
+            </Link>
+          ))}
+        </div>
+      </section>
     </AdminPanelShell>
   );
 }

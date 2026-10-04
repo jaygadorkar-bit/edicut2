@@ -7,7 +7,7 @@ import { getDbFromContext } from "../lib/db.server";
 import { requireUserId } from "../lib/session.server";
 import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
 import { getAllowedDashboardFeatures, getDashboardLandingPath, type DashboardFeature } from "../lib/role-feature-access";
-import { deleteUnpaidSubscription, isSameSiteMutation, listCustomerSubscriptions, readSubscriptionForm, subscriptionPage } from "../lib/customer-subscriptions.server";
+import { deleteUnpaidSubscription, isMissingCustomerSubscriptionSchema, isSameSiteMutation, listCustomerSubscriptions, readSubscriptionForm, subscriptionPage } from "../lib/customer-subscriptions.server";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
 export const meta: MetaFunction = () => [{ title: "Purchases | EdiCut" }, { name: "robots", content: "noindex,nofollow" }];
@@ -26,8 +26,15 @@ async function customerAccess(request: Request, context: LoaderFunctionArgs["con
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const { db, user, features } = await customerAccess(request, context);
   const page = subscriptionPage(request);
-  const records = await listCustomerSubscriptions(db, user.id, page);
-  return { user: { name: user.name, email: user.email, profileImageUrl: user.profileImageUrl }, features, records: records.slice(0, 25), page, hasNext: records.length > 25 };
+  let records: Awaited<ReturnType<typeof listCustomerSubscriptions>> = [];
+  let purchaseHistoryAvailable = true;
+  try {
+    records = await listCustomerSubscriptions(db, user.id, page);
+  } catch (error) {
+    if (!isMissingCustomerSubscriptionSchema(error)) throw error;
+    purchaseHistoryAvailable = false;
+  }
+  return { user: { name: user.name, email: user.email, profileImageUrl: user.profileImageUrl }, features, records: records.slice(0, 25), page, hasNext: records.length > 25, purchaseHistoryAvailable };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -59,7 +66,7 @@ const nav = [
 ];
 
 export default function SubscriptionsRoute() {
-  const { user, features, records, page, hasNext } = useLoaderData<typeof loader>();
+  const { user, features, records, page, hasNext, purchaseHistoryAvailable } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   return <WorkspaceShell title="Purchases" navItems={nav.filter(item => features.includes(item[3] as DashboardFeature)).map(([label, icon, to]) => ({ label, icon, to, end: to === "/dashboard" }))}
     account={{ name: user.name || user.email, detail: user.email, imageUrl: user.profileImageUrl }} mobileMenu navigationFeedback hideHeaderTitle profileTo={features.includes("settings") ? "/dashboard/profile" : null} settingsTo={features.includes("settings") ? "/dashboard/settings" : null} notificationsTo={features.includes("reviews") ? "/dashboard/reviews" : null}
@@ -69,7 +76,12 @@ export default function SubscriptionsRoute() {
       <Link to="/pricing" className="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white">Choose a package</Link>
     </div>
     {result ? <p role={result.error ? "alert" : "status"} className={`mb-5 rounded-xl p-4 text-sm ${result.error ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}>{result.error || result.success}</p> : null}
-    <SubscriptionList rows={records.map(subscription => ({ subscription }))} />
-    <SubscriptionPagination page={page} hasNext={hasNext} />
+    {purchaseHistoryAvailable ? <>
+      <SubscriptionList rows={records.map(subscription => ({ subscription }))} />
+      <SubscriptionPagination page={page} hasNext={hasNext} />
+    </> : <div className="neo-workspace__panel rounded-2xl p-5" role="status">
+      <h3 className="font-bold">Purchase history is temporarily unavailable</h3>
+      <p className="mt-2 text-sm text-slate-600">Your existing purchases have not been changed. Please try again later or <Link to="/contact" className="underline underline-offset-4">contact us for help</Link>.</p>
+    </div>}
   </WorkspaceShell>;
 }

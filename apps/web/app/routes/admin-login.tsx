@@ -264,20 +264,40 @@ export default function AdminLoginRoute() {
   const navigation = useNavigation();
   const [searchParams] = useSearchParams();
   const redirectTo = safeRedirectTo(searchParams.get("redirectTo"));
-  const isSubmitting = navigation.state === "submitting";
   const [securityError, setSecurityError] = useState<string | null>(null);
+  const [securityPending, setSecurityPending] = useState(false);
+  const isSubmitting = navigation.state === "submitting" || securityPending;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
 
     event.preventDefault();
+    if (isSubmitting) return;
     setSecurityError(null);
+    setSecurityPending(true);
 
     try {
       await executeInvisibleRecaptcha(form, "admin_login");
       HTMLFormElement.prototype.submit.call(form);
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+      setSecurityPending(false);
+    }
+  }
+
+  async function handleGoogleSubmit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+    event.preventDefault();
+    if (isSubmitting) return;
+
+    setSecurityError(null);
+    setSecurityPending(true);
+    try {
+      await executeInvisibleRecaptcha(form, "admin_google_login");
+      HTMLFormElement.prototype.submit.call(form);
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+      setSecurityPending(false);
     }
   }
 
@@ -320,19 +340,21 @@ export default function AdminLoginRoute() {
             <span className="material-symbols-outlined text-primary">lock</span>
           </div>
 
-          {securityError || actionData?.error ? (
+          {securityError || actionData?.error || searchParams.get("error") === "recaptcha" ? (
             <div className="mt-5 rounded-lg border border-red-100 bg-[#FFF5F5] p-3 text-sm font-bold text-[#D90000]">
-              {securityError || actionData?.error}
+              {securityError || actionData?.error || "Security check failed. Please try again."}
             </div>
           ) : null}
 
-          <a
-            href={`/auth/google?mode=admin&returnTo=${encodeURIComponent(redirectTo)}`}
-            className="mt-6 inline-flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white px-5 text-sm font-black text-foreground shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
-          >
-            <img src="/icons/google-g.png" alt="" className="h-5 w-auto shrink-0" aria-hidden="true" />
-            Continue with Google
-          </a>
+          <Form method="post" action="/auth/google" className="mt-6" onSubmit={handleGoogleSubmit}>
+            <input type="hidden" name="mode" value="admin" />
+            <input type="hidden" name="returnTo" value={redirectTo} />
+            <input type="hidden" name="g-recaptcha-response" value="" />
+            <button type="submit" disabled={isSubmitting} className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white px-5 text-sm font-black text-foreground shadow-sm transition hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <img src="/icons/google-g.png" alt="" className="h-5 w-auto shrink-0" aria-hidden="true" />
+              Continue with Google
+            </button>
+          </Form>
 
           <div className="my-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-gray-200" />

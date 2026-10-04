@@ -47,10 +47,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   ]);
 
   if (
-    !user ||
+    !user?.active ||
+    user.deletedAt ||
     !adminUser?.active ||
     !isAdminRole(adminUser.role) ||
-    user.email?.trim().toLowerCase() !== adminUser.email.toLowerCase()
+    user.email?.trim().toLowerCase() !== adminUser.email.trim().toLowerCase()
   ) {
     return redirect("/dashboard");
   }

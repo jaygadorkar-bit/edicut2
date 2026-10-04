@@ -10,6 +10,7 @@ export type WorkspaceNavItem = {
   active?: boolean;
   end?: boolean;
   badge?: string;
+  unreadCount?: number;
 };
 
 type WorkspaceShellProps = {
@@ -442,7 +443,7 @@ function WorkspaceNavLink({
   bottom?: boolean;
   onNavigate?: () => void;
 }) {
-  const getClassName = (active: boolean) => navClassName(active, compact, collapsed, bottom);
+  const getClassName = (active: boolean) => `${navClassName(active, compact, collapsed, bottom)}${item.unreadCount ? " neo-workspace__nav-item--has-unread" : ""}`;
   const className = ({ isActive }: { isActive: boolean }) => getClassName(item.active ?? isActive);
   const contents = (
     <>
@@ -476,8 +477,9 @@ function NavIcon({ item, collapsed, bottom }: { item: WorkspaceNavItem; collapse
 
   return (
     <>
-      <span aria-hidden={bottom || undefined} className={`material-symbols-outlined ${bottom ? "neo-workspace__bottom-nav-icon" : "text-[19px]"}`}>{item.icon}</span>
+      <span aria-hidden="true" className={`material-symbols-outlined ${bottom ? "neo-workspace__bottom-nav-icon" : "text-[19px]"}`}>{item.icon}</span>
       {collapsed ? <span className="sr-only">{label}</span> : <span className={bottom ? "neo-workspace__bottom-nav-label" : "min-w-0 flex-1 truncate"}>{label}</span>}
+      {item.unreadCount ? <span className="sr-only">{item.unreadCount} unread enquiries</span> : null}
       {!collapsed && !bottom && item.badge ? <span className="rounded-full bg-[#5a43d5] px-1.5 py-0.5 text-[9px] font-black text-white">{item.badge}</span> : null}
     </>
   );

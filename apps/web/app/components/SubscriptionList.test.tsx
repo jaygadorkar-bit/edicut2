@@ -7,6 +7,7 @@ import { SubscriptionList, type SubscriptionSummary } from "./SubscriptionList";
 const subscription: CustomerSubscription = {
   id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", ownerId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   packageSlug: "creator-plus", planName: "Growth", purchaseType: "monthly", country: "BD", phone: "+8801712345678",
+  addOns: [],
   subtotalCents: 104900, discountCents: 0, amountCents: 104900, currency: "USD", couponCode: null, affiliateId: null, affiliateCode: null, affiliateCommissionBps: 0,
   status: "unpaid", paidAt: null, paidBy: null, deletedAt: null, createdAt: new Date("2026-10-03"), updatedAt: new Date("2026-10-03"),
 };
@@ -15,6 +16,10 @@ function render(record = subscription, admin = false, summary?: SubscriptionSumm
   return renderToStaticMarkup(createElement(RouterProvider, { router }));
 }
 describe("subscription views", () => {
+  it.each([false, true])("shows saved add-ons and describes monthly extras as one-time costs (admin=%s)", admin => {
+    const html = render({ ...subscription, addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }], amountCents: 106900 }, admin);
+    expect(html).toContain("Custom thumbnail"); expect(html).toContain("$20.00 one time"); expect(html).toContain("first month + extras");
+  });
   it("shows saved contact, price, unpaid state, resume and deletion for customers", () => {
     const html = render();
     expect(html).toContain("$1,049.00"); expect(html).toContain("Monthly package"); expect(html).toContain("Bangladesh"); expect(html).toContain(subscription.phone);

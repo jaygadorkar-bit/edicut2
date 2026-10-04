@@ -210,21 +210,45 @@
   color: var(--neo-ink);
 }
 
+/* Quiet inset tabs shared by all public section labels. */
 .neo-home .neo-section-label {
-  color: #b01d29;
-}
-
-.neo-home p.neo-section-label {
   display: inline-flex;
   width: fit-content;
+  max-width: 100%;
   align-items: center;
-  padding: 0.42rem 0.78rem;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 999px;
-  background: linear-gradient(145deg, rgba(248, 250, 252, 0.94), rgba(228, 235, 241, 0.86));
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  padding: 0.4rem 0.9rem;
+  overflow-wrap: break-word;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 0.65rem;
+  background: var(--neo-inset);
   box-shadow:
-    5px 5px 12px rgba(132, 148, 163, 0.2),
-    -5px -5px 12px rgba(255, 255, 255, 0.86);
+    inset 2px 2px 5px rgba(132, 148, 163, 0.16),
+    inset -2px -2px 5px rgba(255, 255, 255, 0.82);
+  color: #536779;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  text-align: center;
+  text-transform: none;
+}
+
+.neo-home .neo-section-label svg {
+  color: currentColor;
+  flex: 0 0 auto;
+}
+
+.neo-home .neo-section-label > .bg-primary {
+  display: none;
+}
+
+.neo-trust-strip-mobile-logos {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .neo-home .neo-support-launcher {
@@ -411,6 +435,7 @@ a.neo-button:active {
 .neo-workspace__desktop-nav {
   flex: 1 1 0%;
   min-height: 0;
+  align-content: start;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-width: none;
@@ -505,6 +530,34 @@ a.neo-button:active {
   font-size: var(--type-size-label);
   font-weight: var(--font-weight-black);
   transition: color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.neo-workspace__nav-item > .material-symbols-outlined {
+  display: inline-flex;
+  flex: 0 0 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-align: center;
+}
+
+.neo-workspace__nav-item--has-unread > .material-symbols-outlined {
+  position: relative;
+  overflow: visible;
+}
+
+.neo-workspace__nav-item--has-unread > .material-symbols-outlined::after {
+  position: absolute;
+  top: -1px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #edf2f6;
+  border-radius: 50%;
+  background: #b86e78;
+  content: "";
 }
 
 .neo-workspace__nav-item:hover {
@@ -2831,6 +2884,7 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
 .neo-workspace__mobile-drawer-nav {
   flex: 1 1 auto;
   min-height: 0;
+  align-content: start;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;

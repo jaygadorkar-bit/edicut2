@@ -1,5 +1,6 @@
 import type { MetaFunction } from "react-router";
 import { Link } from "react-router";
+import { Wrench } from "lucide-react";
 import { ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 
 export const meta: MetaFunction = () => [
@@ -18,7 +19,7 @@ export default function MaintenancePage() {
 
           <div className="mt-8">
             <span className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-wider neo-section-label">
-              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              <Wrench size={15} aria-hidden="true" />
               Scheduled Maintenance
             </span>
           </div>

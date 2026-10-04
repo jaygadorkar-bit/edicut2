@@ -26,11 +26,6 @@
     padding: 2rem 1.25rem 2.5rem;
   }
 
-  .neo-homepage .neo-homepage-hero .neo-section-label {
-    padding-inline: 0.75rem;
-    font-size: var(--type-size-caption);
-  }
-
   .neo-homepage .neo-hero-title {
     margin-top: 1.5rem;
     line-height: var(--type-leading-heading);
@@ -113,16 +108,6 @@
     align-items: center;
     justify-content: center;
     margin: 0 auto;
-    padding: 0.4rem 0.85rem;
-    border: 1px solid rgba(255, 255, 255, 0.95);
-    border-radius: 999px;
-    background: rgba(248, 250, 252, 0.75);
-    box-shadow:
-      4px 4px 10px rgba(132, 148, 163, 0.14),
-      -4px -4px 10px rgba(255, 255, 255, 0.85);
-    color: #bf1e2d;
-    font-size: 0.6875rem;
-    letter-spacing: 0.12em;
   }
 
   .neo-homepage #creators h2 {

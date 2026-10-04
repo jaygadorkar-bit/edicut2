@@ -16,6 +16,8 @@ import {
   useRouteLoaderData,
   useRouteError,
 } from "react-router";
+import { and, count as drizzleCount, isNull, ne } from "drizzle-orm";
+import { contactMessages } from "@edicut/db/schema";
 import stylesheetUrl from "./styles/global.css?url";
 import { resolveWebEnv } from "./lib/context.server";
 import type { LoaderContext } from "./types";
@@ -24,6 +26,7 @@ import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./lib/admin-paths";
 import { getDbFromContext } from "./lib/db.server";
 import { getSiteSettingsSnapshot } from "./lib/site-settings.server";
 import { AdminToolbar } from "./components/admin/AdminToolbar";
+import { getAdminToolbarAccess, type AdminToolbarAccess } from "./lib/admin-toolbar-access.server";
 import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 import { getSupabaseClient } from "./integrations/supabase/client.server";
 import { SmoothScroll } from "./components/site/SmoothScroll.js";
@@ -82,9 +85,19 @@ export async function loader({
   const userId = session.get("userId");
   const adminUserId = adminSession.get("adminUserId");
   const userAdminUserId = session.get("adminUserId");
-  const isAdminSignedIn =
-    (typeof adminUserId === "string" && adminUserId.length > 0) ||
-    (typeof userAdminUserId === "string" && userAdminUserId.length > 0 && session.get("adminAccessVerified") === true);
+  const adminToolbarAccess: AdminToolbarAccess = shouldLoadRootSiteSettings(url.pathname) && (userId || adminUserId)
+    ? await getAdminToolbarAccess(getDbFromContext(context ?? {}), {
+      userId,
+      adminUserId,
+      verifiedUserAdminId: session.get("adminAccessVerified") === true ? userAdminUserId : undefined,
+    })
+    : "none";
+  const isAdminSignedIn = adminToolbarAccess === "verified";
+  const isAdminPanelPath = url.pathname === ADMIN_BASE_PATH || url.pathname.startsWith(`${ADMIN_BASE_PATH}/`);
+  const unreadEnquiryCount = isAdminSignedIn && isAdminPanelPath && url.pathname !== ADMIN_LOGIN_PATH
+    ? Number((await getDbFromContext(context ?? {}).select({ count: drizzleCount() }).from(contactMessages)
+      .where(and(isNull(contactMessages.repliedAt), ne(contactMessages.status, "read"))))[0]?.count || 0)
+    : 0;
 
   const isAdminArea = url.pathname.startsWith(ADMIN_BASE_PATH);
   const isAdminLogin = url.pathname === ADMIN_LOGIN_PATH;
@@ -151,6 +164,8 @@ export async function loader({
     nodeApiBaseUrl: env.NODE_API_BASE_URL ?? "http://localhost:8787/api/node",
     isSignedIn: Boolean(userId),
     isAdminSignedIn,
+    adminToolbarAccess,
+    unreadEnquiryCount,
     adminToolbarEnabled,
     searchCrawlingEnabled,
     maintenanceModeEnabled,
@@ -190,6 +205,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </head>
       <body className="antialiased overflow-x-hidden">
         {children}
+        <Scripts />
       </body>
     </html>
   );
@@ -244,7 +260,7 @@ export default function AppRoot() {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />
       ) : null}
       {navigationStalled ? <NavigationRecovery /> : null}
-      {data.recaptchaSiteKey && isIndexablePublicPath(location.pathname) ? (
+      {data.recaptchaSiteKey && shouldLoadRecaptcha(location.pathname) ? (
         <script
           src="https://www.google.com/recaptcha/api.js?render=explicit"
           async
@@ -252,9 +268,15 @@ export default function AppRoot() {
           data-edicut-recaptcha-site-key={data.recaptchaSiteKey}
         />
       ) : null}
-      <Scripts />
     </>
   );
+}
+
+function shouldLoadRecaptcha(pathname: string) {
+  return isIndexablePublicPath(pathname) ||
+    pathname === "/signin" ||
+    pathname === "/forgot-password" ||
+    pathname === ADMIN_LOGIN_PATH;
 }
 
 function isPageChange(

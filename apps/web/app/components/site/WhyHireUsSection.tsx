@@ -1,4 +1,4 @@
-import { RefreshCw, UsersRound, Zap } from "lucide-react";
+import { RefreshCw, Sparkles, UsersRound, Zap } from "lucide-react";
 
 const benefits = [
   { artwork: TeamArtwork, title: "Your dedicated manager", copy: "The right editor, assigned for every video." },
@@ -11,7 +11,7 @@ export function WhyHireUsSection() {
     <section id="why-hire-us" aria-labelledby="why-hire-us-title" className="why-hire border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="why-hire__inner">
         <header className="why-hire__intro">
-          <p className="why-hire__eyebrow">Why hire us</p>
+          <p className="why-hire__eyebrow neo-section-label"><Sparkles size={16} aria-hidden="true" />Why hire us</p>
           <h2 id="why-hire-us-title" className="yt-title neo-ink">You create. We handle the edit.</h2>
         </header>
 

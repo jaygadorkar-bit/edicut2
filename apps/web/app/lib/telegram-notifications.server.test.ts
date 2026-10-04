@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { formatTelegramOrderNotice, queueTelegramOrderNotice, sendTelegramOrderNotice } from "./telegram-notifications.server";
+import {
+  formatTelegramContactInquiryNotice,
+  formatTelegramOrderNotice,
+  queueTelegramContactInquiryNotice,
+  queueTelegramOrderNotice,
+  sendTelegramContactInquiryNotice,
+  sendTelegramOrderNotice,
+} from "./telegram-notifications.server";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -10,6 +17,8 @@ const order = {
   amountCents: 154900,
   currency: "USD",
 };
+
+const inquiry = { messageId: "contact-42" };
 
 describe("Telegram order notifications", () => {
   it("formats an unpaid order summary without customer contact details", () => {
@@ -92,5 +101,67 @@ describe("Telegram order notifications", () => {
 
     expect(await sendTelegramOrderNotice({ TELEGRAM_BOT_TOKEN: "12345:secret_token", TELEGRAM_CHAT_ID: "123" }, order)).toBe(false);
     expect(log).toHaveBeenCalledWith("Telegram order notification failed", { httpStatus: 200 });
+  });
+});
+
+describe("Telegram contact inquiry notifications", () => {
+  it("links the admin inbox without including the visitor's details", () => {
+    const message = formatTelegramContactInquiryNotice(inquiry, "https://edicut.com");
+
+    expect(message).toContain("New EdiCut contact inquiry");
+    expect(message).toContain("<code>contact-42</code>");
+    expect(message).toContain('href="https://edicut.com/dashboard/messages"');
+    expect(message).not.toMatch(/alex|example\.com|phone|email|brief/i);
+  });
+
+  it("sends the contact alert through the configured Telegram bot", async () => {
+    const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetch);
+
+    expect(await sendTelegramContactInquiryNotice({
+      APP_URL: "https://edicut.com",
+      TELEGRAM_BOT_TOKEN: "12345:secret_token",
+      TELEGRAM_CHAT_ID: "-1001234567890",
+    }, inquiry)).toBe(true);
+
+    expect(fetch).toHaveBeenCalledOnce();
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe("https://api.telegram.org/bot12345:secret_token/sendMessage");
+    const body = JSON.parse(String(init?.body));
+    expect(body).toMatchObject({ chat_id: "-1001234567890", parse_mode: "HTML", disable_web_page_preview: true });
+    expect(body.text).toContain("/dashboard/messages");
+    expect(body.text).not.toContain("example.com");
+  });
+
+  it("queues the alert in the Worker background context", async () => {
+    const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetch);
+    const pending: Promise<unknown>[] = [];
+
+    queueTelegramContactInquiryNotice({
+      cf: {
+        env: {
+          APP_URL: "https://edicut.com",
+          TELEGRAM_BOT_TOKEN: "12345:secret_token",
+          TELEGRAM_CHAT_ID: "123",
+        },
+        ctx: { waitUntil: promise => pending.push(promise) },
+      },
+    }, inquiry);
+
+    expect(pending).toHaveLength(1);
+    await pending[0];
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("keeps Telegram disabled until both credentials are valid", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+
+    expect(await sendTelegramContactInquiryNotice({}, inquiry)).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

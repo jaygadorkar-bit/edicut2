@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { redirect, useLoaderData } from "react-router";
-import { contactIntakeSchema } from "@edicut/shared/contracts/operations";
-import { contactMessages } from "@edicut/db/schema";
+import { useLoaderData } from "react-router";
+import { UsersRound } from "lucide-react";
 import {
   ButtonLink,
   ContactSection,
@@ -18,9 +17,8 @@ import { getDbFromContext } from "../lib/db.server";
 import { getPortfolioSections, publicPortfolioSections } from "../lib/portfolio.server";
 import { configuredPublicEditingPackages, getPricingPackages } from "../lib/pricing.server";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
-import { verifyRecaptchaToken } from "../lib/recaptcha.server";
+import { submitContactInquiry } from "../lib/contact-intake.server";
 import { createRouteMeta } from "../lib/seo";
-import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import pricingStyles from "../styles/pricing.css?url";
 
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: pricingStyles }];
@@ -152,55 +150,7 @@ export const meta: MetaFunction = (args) => {
 };
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  if (requestBodyExceedsLimit(request, 64 * 1024)) {
-    return redirect("/?error=invalid#contact");
-  }
-
-  const formData = await request.formData();
-  const parsed = contactIntakeSchema.safeParse({
-    name: formData.get("name"),
-    email: formData.get("email"),
-    projectType: formData.get("projectType") || undefined,
-    monthlyVolume: formData.get("monthlyVolume") || undefined,
-    brief: formData.get("brief"),
-  });
-
-  if (!parsed.success || parsed.data.email.length > 254) {
-    return redirect("/?error=invalid#contact");
-  }
-
-  const identityKey = await hashUsageLimitKey(parsed.data.email.trim().toLowerCase());
-  const contactLimit = await consumeUsageLimit({
-    context,
-    request,
-    bindingName: "AUTH_IDENTITY_LIMITER",
-    key: `contact:${identityKey}`,
-    localLimit: 3,
-    localPeriodSeconds: 60,
-  });
-  if (contactLimit !== "allowed") {
-    return redirect("/?error=security#contact");
-  }
-
-  const captcha = await verifyRecaptchaToken({
-    context,
-    token: formData.get("g-recaptcha-response"),
-  });
-
-  if (!captcha.success) {
-    return redirect("/?error=security#contact");
-  }
-
-  const db = getDbFromContext(context);
-  await db.insert(contactMessages).values({
-    name: parsed.data.name,
-    email: parsed.data.email,
-    projectType: parsed.data.projectType || null,
-    monthlyVolume: parsed.data.monthlyVolume || null,
-    message: parsed.data.brief,
-  });
-
-  return redirect("/?sent=1#contact");
+  return submitContactInquiry({ request, context, returnTo: "/" });
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -222,7 +172,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 export default function HomePage() {
   const { packages, portfolioSections, sent, error } = useLoaderData<typeof loader>();
   const heroRef = useRef<HTMLElement>(null);
-  const contactStatus = sent ? "sent" : error === "security" ? "security-error" : error === "invalid" ? "invalid-error" : undefined;
+  const contactStatus = sent ? "sent"
+    : error === "security" ? "security-error"
+      : error === "invalid" ? "invalid-error"
+        : error === "delivery" ? "delivery-error"
+          : undefined;
 
   useEffect(() => {
     const hero = heroRef.current;
@@ -423,9 +377,12 @@ export default function HomePage() {
           {/* Center Editorial Core (Foreground with higher z-index) */}
           <div className="relative z-10 mx-auto max-w-3xl text-center">
             {/* Section Eyebrow Pill */}
-            <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
-              <span className="hidden sm:inline">YouTube Post-Production Studio</span>
-              <span className="sm:hidden">Video editing for creators</span>
+            <div className="neo-pill inline-flex max-w-full items-center justify-center gap-2 rounded-full px-3 py-2 yt-tag neo-section-label sm:px-4">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 shrink-0 opacity-90">
+                <rect x="1.5" y="4.5" width="21" height="15" rx="4.5" fill="currentColor" />
+                <path d="M10 8.5v7l5.5-3.5L10 8.5Z" fill="white" />
+              </svg>
+              <span className="leading-tight">Video editing service for YouTubers</span>
             </div>
 
             {/* Main Hero Headline */}
@@ -491,6 +448,7 @@ export default function HomePage() {
             {/* Center Header */}
             <div className="mx-auto max-w-2xl">
               <p className="yt-tag neo-section-label">
+                <UsersRound size={16} aria-hidden="true" />
                 <span className="hidden sm:inline">Who EdiCut is for</span>
                 <span className="sm:hidden">Who we edit for</span>
               </p>
@@ -544,10 +502,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <TrustStrip />
         <WhyHireUsSection />
         <HomePricingSection packages={packages} />
         <PortfolioSection sections={portfolioSections} />
+        <TrustStrip />
         <TestimonialsSection />
         <FAQSection />
         <ContactSection compact status={contactStatus} />

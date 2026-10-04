@@ -57,6 +57,13 @@
       "when": 1791070260217,
       "tag": "0007_add_purchase_type",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791114062742,
+      "tag": "0008_package_add_ons",
+      "breakpoints": true
     }
   ]
 }

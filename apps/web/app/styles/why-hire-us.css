@@ -15,9 +15,7 @@
 
 .why-hire__eyebrow {
   margin-bottom: 14px;
-  color: var(--color-icon-hover-ink);
-  font-size: 14px;
-  font-weight: 800;
+  margin-inline: auto;
 }
 
 .why-hire__intro h2 {

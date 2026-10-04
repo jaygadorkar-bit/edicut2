@@ -8,9 +8,9 @@ describe("editing package catalog", () => {
     expect(SUBSCRIPTION_PACKAGES).toHaveLength(3);
     expect(new Set(ALL_EDITING_PACKAGES.map((item) => item.slug)).size).toBe(6);
     expect(SUBSCRIPTION_PACKAGES.map((item) => [item.editingHoursPerMonth, item.editingHoursPerWorkday])).toEqual([[88, 4], [110, 5], [110, 5]]);
-    expect(ALL_EDITING_PACKAGES.map((item) => item.basePrice)).toEqual([2149, 2649, 3149, 109, 179, 189]);
+    expect(ALL_EDITING_PACKAGES.map((item) => item.basePrice)).toEqual([2149, 2649, 3149, 109, 179, 249]);
     expect(SINGLE_VIDEO_PACKAGES.map((item) => item.slug)).toEqual(["single-creator", "single-studio", "single-feature"]);
-    expect(SINGLE_VIDEO_PACKAGES[2]).toMatchObject({ name: "Feature Video", finishedLength: "Up to 30 minutes", rawFootageLimit: "Up to 240 minutes", revisionRounds: 3, basePrice: 189 });
+    expect(SINGLE_VIDEO_PACKAGES[2]).toMatchObject({ name: "Feature Video", finishedLength: "Up to 30 minutes", rawFootageLimit: "Up to 240 minutes", revisionRounds: 3, basePrice: 249 });
   });
 
   it("includes a personal project manager and dedicated editor in every offer", () => {

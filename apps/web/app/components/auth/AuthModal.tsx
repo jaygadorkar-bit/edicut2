@@ -1,7 +1,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { Link, useFetcher, useSearchParams } from "react-router";
+import { Form, Link, useFetcher, useSearchParams } from "react-router";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
 
 type AuthMode = "signin" | "signup";
@@ -29,11 +29,16 @@ export function AuthPage() {
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [emailChecking, setEmailChecking] = useState(false);
 
-  const error = fetcher.data?.intent === mode ? fetcher.data.error : undefined;
+  const error = fetcher.data?.intent === mode || fetcher.data?.intent === "google"
+    ? fetcher.data.error
+    : undefined;
   const googleStateError = searchParams.get("error") === "google-state"
     ? "Google sign-in expired or could not be verified. Please try again."
     : undefined;
-  const visibleError = securityError || error || googleStateError;
+  const googleCaptchaError = searchParams.get("error") === "recaptcha"
+    ? "Security check failed. Please try again."
+    : undefined;
+  const visibleError = securityError || error || googleStateError || googleCaptchaError;
   const submitting = fetcher.state !== "idle";
   const busy = submitting || emailChecking;
 
@@ -64,6 +69,22 @@ export function AuthPage() {
     }
   }
 
+  async function handleGoogleSubmit(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+    event.preventDefault();
+    if (busy) return;
+
+    setSecurityError(null);
+    setEmailChecking(true);
+    try {
+      await executeInvisibleRecaptcha(form, "google_login");
+      HTMLFormElement.prototype.submit.call(form);
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+      setEmailChecking(false);
+    }
+  }
+
   return (
     <main className="auth-page neo-home">
       <div className="auth-layout">
@@ -84,10 +105,15 @@ export function AuthPage() {
           </div>
 
           <div className="auth-google-form">
-            <a href={`/auth/google?returnTo=${encodeURIComponent(redirectTo)}`} className="auth-button auth-button--link">
-              <img src="/icons/google-g.png" alt="" width="200" height="204" className="auth-google-icon" />
-              <span>Continue with Google</span>
-            </a>
+            <Form method="post" action="/auth/google" className="w-full" onSubmit={handleGoogleSubmit}>
+              <input type="hidden" name="mode" value="user" />
+              <input type="hidden" name="returnTo" value={redirectTo} />
+              <input type="hidden" name="g-recaptcha-response" value="" />
+              <button type="submit" disabled={busy} className="auth-button auth-button--link w-full">
+                <img src="/icons/google-g.png" alt="" width="200" height="204" className="auth-google-icon" />
+                <span>{emailChecking ? "Checking security…" : submitting ? "Opening Google…" : "Continue with Google"}</span>
+              </button>
+            </Form>
           </div>
 
           <div className="auth-divider" aria-hidden="true"><span>or</span></div>
