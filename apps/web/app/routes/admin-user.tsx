@@ -11,6 +11,8 @@ import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES } from "../li
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
 import { AdminPanelShell } from "../components/AdminPanelShell";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
+import { isWorkspaceRecordId } from "../lib/workspace";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -30,7 +32,7 @@ export function headers() {
 function getUserId(params: LoaderFunctionArgs["params"] | ActionFunctionArgs["params"]) {
   const userId = params.userId;
 
-  if (!userId) {
+  if (!userId || !isWorkspaceRecordId(userId)) {
     throw new Response("User not found", { status: 404 });
   }
 
@@ -84,11 +86,12 @@ export async function loader({ request, context, params }: LoaderFunctionArgs) {
     adminUser: toPublicAdminUser(adminUser),
     canEdit: isAdminRole(adminUser.role),
     returnTo,
-    user,
+    user: toPublicAdminUser(user),
   };
 }
 
 export async function action({ request, context, params }: ActionFunctionArgs) {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 2 * 1024 * 1024)) {
     return { error: "This admin account request is too large. Profile images are limited to 1 MB." };
   }
@@ -119,7 +122,8 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
     };
   }
 
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, 2 * 1024 * 1024);
+  if (!formData) return { error: "Submit a valid account form. Profile images are limited to 1 MB." };
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "save-profile") {

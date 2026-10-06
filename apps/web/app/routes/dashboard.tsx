@@ -10,15 +10,19 @@ import { canAccessDashboardFeature, getAllowedDashboardFeatures, getDashboardLan
 import { WorkspaceShell } from "../components/WorkspaceShell";
 import { isMissingWorkspaceSchema, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
 import { workspaceProjectColumns, type WorkspaceProjectView } from "../lib/workspace-projects.server";
+import { toPublicUser } from "../lib/admin-public";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
+import { ClientBalance } from "../components/ClientBalance";
+import { isMissingClientWorkspaceSchema, loadClientWorkspace } from "../lib/client-workspace.server";
 
 const navItems = [
   { label: "Dashboard", icon: "dashboard_customize", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
-  { label: "Purchases", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
+  { label: "Enquiries", icon: "mail", path: "/dashboard/messages", feature: "support" as DashboardFeature },
+  { label: "Subscriptions", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
-  { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
 ];
 
 const statusLabels: Record<string, string> = {
@@ -35,8 +39,12 @@ export const meta: MetaFunction = () => [
   { name: "robots", content: "noindex,nofollow" },
 ];
 
+export function headers() { return { "Cache-Control": "no-store", "Referrer-Policy": "same-origin" }; }
+
 export async function action({ request, context }: ActionFunctionArgs) {
-  const formData = await request.formData();
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
+  const formData = await readMutationForm(request, 4096);
+  if (!formData) return { error: "Submit a valid workspace form under 4 KB." };
   if (formData.get("intent") !== "logout") return null;
   const session = await getSession(request.headers.get("Cookie"), context);
   return redirect("/signin?redirectTo=/dashboard", {
@@ -48,30 +56,27 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const userId = await requireUserId(request, context);
   const db = getDbFromContext(context);
   const user = await findUserById(db, userId);
-  if (!user) {
+  if (!user?.active || user.deletedAt) {
     const session = await getSession(request.headers.get("Cookie"), context);
     throw redirect("/signin?redirectTo=/dashboard", { headers: { "Set-Cookie": await destroySession(session, context) } });
   }
 
   const roleFeatureAccess = await getRoleFeatureAccessSettings(db, context);
   const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
-  const firstName = (user.name || user.email).split(/[\s@]/)[0];
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   if (allowedFeatures.length === 0) {
     return {
-      user,
+      user: toPublicUser(user),
       allowedFeatures,
       projects: [] as WorkspaceProjectView[],
       projectCount: 0,
       activeCount: 0,
       reviewCount: 0,
       fileCount: 0,
-      firstName,
-      greeting,
       workspaceReady: true,
       noDashboardAccess: true,
+      clientBalance: null,
+      balanceReady: true,
     };
   }
 
@@ -124,11 +129,20 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     workspaceReady = false;
   }
 
-  return { user, allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, firstName, greeting, workspaceReady, noDashboardAccess: false };
+  let clientBalance: Awaited<ReturnType<typeof loadClientWorkspace>> | null = null;
+  let balanceReady = true;
+  if (allowedFeatures.includes("billing")) {
+    try { clientBalance = await loadClientWorkspace(db, userId); }
+    catch (error) {
+      if (!isMissingClientWorkspaceSchema(error)) throw error;
+      balanceReady = false;
+    }
+  }
+  return { user: toPublicUser(user), allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, workspaceReady, noDashboardAccess: false, clientBalance, balanceReady };
 }
 
 export default function DashboardRoute() {
-  const { user, allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, workspaceReady, noDashboardAccess } = useLoaderData<typeof loader>();
+  const { user, allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, workspaceReady, noDashboardAccess, clientBalance, balanceReady } = useLoaderData<typeof loader>();
   const displayName = user.name || user.email;
   const visibleNavItems = navItems.filter((item) => allowedFeatures.includes(item.feature));
   const canViewProjects = allowedFeatures.includes("projects");
@@ -150,7 +164,9 @@ export default function DashboardRoute() {
       navigationFeedback
       hideHeaderTitle
       profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null}
+      profileNavAtBottom
       settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null}
+      startProjectTo={canViewProjects ? "/dashboard/projects#new-project" : null}
       notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null}
       notificationCount={allowedFeatures.includes("reviews") ? reviewCount : 0}
       accountAction={(
@@ -161,12 +177,6 @@ export default function DashboardRoute() {
           </button>
         </Form>
       )}
-      headerActions={canViewProjects ? (
-        <Link to="/dashboard/projects#new-project" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
-          <span className="material-symbols-outlined text-[17px]" aria-hidden="true">add</span>
-          New project
-        </Link>
-      ) : null}
     >
       {noDashboardAccess ? (
         <section className="neo-workspace__panel mx-auto max-w-2xl rounded-[20px] p-6 sm:p-8" role="status">
@@ -176,6 +186,9 @@ export default function DashboardRoute() {
       ) : (
         <>
           {!workspaceReady ? <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900" role="status">{WORKSPACE_MIGRATION_NOTICE}</p> : null}
+          <p className="neo-workspace__eyebrow mb-7">Your creative workspace</p>
+          {!balanceReady ? <p role="status" className="neo-workspace__panel mb-7 rounded-2xl p-5 text-sm text-slate-600">Editing balances and creator profile setup are waiting for a database migration. Your existing subscription records have not changed.</p> : null}
+          {clientBalance ? <ClientBalance purchases={clientBalance.purchases} hasProfile={Boolean(clientBalance.profile)} canStartProjects={canViewProjects} /> : null}
           <section aria-labelledby="workspace-overview-title">
             <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div><p className="text-[10px] font-black uppercase tracking-[0.17em] text-[#9699ac]">Your workspace</p><h2 id="workspace-overview-title" className="mt-1 text-xl font-black tracking-[-0.035em]">Project overview</h2></div>
@@ -194,7 +207,7 @@ export default function DashboardRoute() {
             <section className="neo-workspace__panel mt-6 rounded-[20px] p-4 sm:p-6" aria-labelledby="recent-projects-title">
               <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.17em] text-[#9699ac]">Recent work</p><h2 id="recent-projects-title" className="mt-1 text-lg font-black tracking-[-0.035em]">Your projects</h2></div><Link to="/dashboard/projects" className="rounded-full border border-[#e4e7ea] px-4 py-2 text-xs font-black text-[#536779]">Projects</Link></div>
               {projects.length ? (
-                <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[540px] text-left text-sm"><thead><tr className="border-b border-[#edf0f2] text-[10px] uppercase tracking-wide text-[#89939b]"><th className="px-3 py-3">Project</th><th className="px-3 py-3">Channel</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Updated</th></tr></thead><tbody>{projects.map((project) => <tr key={project.id} className="border-b border-[#f1f3f5]"><td className="px-3 py-3 font-bold text-[#17202a]">{project.title}</td><td className="px-3 py-3 text-[#687583]">{project.channelName}</td><td className="px-3 py-3"><span className="rounded-full bg-[#f0ecfb] px-3 py-1 text-[10px] font-black text-[#6550c7]">{statusLabels[project.status] ?? project.status}</span></td><td className="px-3 py-3 text-xs text-[#687583]">{new Date(project.updatedAt).toLocaleDateString()}</td></tr>)}</tbody></table></div>
+                <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[540px] text-left text-sm"><thead><tr className="border-b border-[#edf0f2] text-[10px] uppercase tracking-wide text-[#89939b]"><th className="px-3 py-3">Project</th><th className="px-3 py-3">Creator / brand</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Updated</th></tr></thead><tbody>{projects.map((project) => <tr key={project.id} className="border-b border-[#f1f3f5]"><td className="px-3 py-3 font-bold text-[#17202a]">{project.title}</td><td className="px-3 py-3 text-[#687583]">{project.channelName}</td><td className="px-3 py-3"><span className="rounded-full bg-[#f0ecfb] px-3 py-1 text-[10px] font-black text-[#6550c7]">{statusLabels[project.status] ?? project.status}</span></td><td className="px-3 py-3 text-xs text-[#687583]">{new Date(project.updatedAt).toLocaleDateString()}</td></tr>)}</tbody></table></div>
               ) : (
                 <div className="mt-4 rounded-2xl bg-[#f5f6fa] p-5"><h3 className="text-sm font-black text-[#17202a]">No project requests yet</h3><p className="mt-1 text-sm text-[#687583]">Start a project and your brief, files, review notes, and billing estimate will stay together here.</p><Link to="/dashboard/projects#new-project" className="mt-4 inline-flex h-10 items-center justify-center rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white">Start a project</Link></div>
               )}

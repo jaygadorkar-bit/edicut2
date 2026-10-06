@@ -10,6 +10,7 @@ import { EnquiriesInbox } from "../components/EnquiriesInbox";
 import type { LoaderContext } from "../types";
 import { getPageWithinRange, getPositivePage } from "../lib/admin-data-requirements";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import { readMutationForm } from "../lib/mutation-request.server";
 
 const PAGE_SIZE = 10;
 const MAX_IMPORT_BYTES = 1024 * 1024;
@@ -25,6 +26,12 @@ export function headers() { return { "Cache-Control": "no-store", "Referrer-Poli
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const { user, db, allowedFeatures } = await requireDashboardUser(request, context);
   const url = new URL(request.url);
+  // Clear the one-time fallback alert emitted by an older inbox action. It has
+  // no actionable detail and otherwise survives every reload of the page.
+  if (url.searchParams.getAll("error").length === 1 && url.searchParams.get("error") === "Unknown messages action.") {
+    url.searchParams.delete("error");
+    return redirect(`${url.pathname}${url.search}`, { headers: { "Cache-Control": "no-store" } });
+  }
   const filter = getFilter(url.searchParams.get("filter"));
   const requestedPage = getPositivePage(url.searchParams.get("page"));
   const whereClause = getFilterClause(filter);
@@ -88,7 +95,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     ));
   }
 
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, MAX_IMPORT_BYTES);
+  if (!formData) return redirect(withFlash("/dashboard/messages", "error", "This enquiry form could not be read. Imports are limited to 1 MB."));
   const intent = String(formData.get("intent") || "");
   const returnTo = safeReturnTo(String(formData.get("returnTo") || "/dashboard/messages"));
 

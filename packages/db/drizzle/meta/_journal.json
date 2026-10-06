@@ -64,6 +64,20 @@
       "when": 1791114062742,
       "tag": "0008_package_add_ons",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791134139138,
+      "tag": "0009_custom_quotes",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791141028131,
+      "tag": "0010_client-project-intake",
+      "breakpoints": true
     }
   ]
 }

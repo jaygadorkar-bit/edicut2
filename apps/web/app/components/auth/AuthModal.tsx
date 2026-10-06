@@ -38,7 +38,10 @@ export function AuthPage() {
   const googleCaptchaError = searchParams.get("error") === "recaptcha"
     ? "Security check failed. Please try again."
     : undefined;
-  const visibleError = securityError || error || googleStateError || googleCaptchaError;
+  const accountError = searchParams.get("error") === "account-unavailable"
+    ? "This account is unavailable. Contact EdiCut support."
+    : undefined;
+  const visibleError = securityError || error || googleStateError || googleCaptchaError || accountError;
   const submitting = fetcher.state !== "idle";
   const busy = submitting || emailChecking;
 
@@ -77,8 +80,15 @@ export function AuthPage() {
     setSecurityError(null);
     setEmailChecking(true);
     try {
-      await executeInvisibleRecaptcha(form, "google_login");
-      HTMLFormElement.prototype.submit.call(form);
+      const token = await executeInvisibleRecaptcha(form, "google_login");
+      const formData = new FormData(form);
+      formData.set("g-recaptcha-response", token);
+      setEmailChecking(false);
+      fetcher.submit(formData, {
+        method: "post",
+        action: "/auth/google",
+        encType: "application/x-www-form-urlencoded",
+      });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
       setEmailChecking(false);

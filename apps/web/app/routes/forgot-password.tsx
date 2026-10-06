@@ -1,13 +1,14 @@
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { Form, Link, useActionData, useNavigation, useSearchParams } from "react-router";
+import { Form, Link, useActionData, useNavigation, useSearchParams, useSubmit } from "react-router";
 import { KeyRound } from "lucide-react";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { resolveWebEnv } from "../lib/context.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { executeInvisibleRecaptcha } from "../lib/recaptcha.client";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 
 type ForgotPasswordActionData = {
   error?: string;
@@ -21,11 +22,13 @@ export const meta: MetaFunction = () => [
 ];
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return { error: "Password reset request is too large. Please try again." } satisfies ForgotPasswordActionData;
   }
 
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, 64 * 1024);
+  if (!formData) return { error: "Password reset request could not be read. Please try again." } satisfies ForgotPasswordActionData;
   const emailValue = formData.get("email");
 
   if (typeof emailValue !== "string" || !emailValue.trim() || emailValue.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue.trim())) {
@@ -81,6 +84,7 @@ export default function ForgotPasswordPage() {
   const [searchParams] = useSearchParams();
   const actionData = useActionData<ForgotPasswordActionData>();
   const navigation = useNavigation();
+  const submit = useSubmit();
   const redirectTo = sanitizeRedirect(searchParams.get("redirectTo") || "/dashboard");
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [securityPending, setSecurityPending] = useState(false);
@@ -95,9 +99,10 @@ export default function ForgotPasswordPage() {
     setSecurityPending(true);
     try {
       await executeInvisibleRecaptcha(form, "password_reset");
-      HTMLFormElement.prototype.submit.call(form);
+      await submit(form, { method: "post", action: "/forgot-password" });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+    } finally {
       setSecurityPending(false);
     }
   }

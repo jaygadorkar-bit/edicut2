@@ -40,10 +40,9 @@ const workspaceItems = [
   { label: "Projects", icon: "video_library", to: "/dashboard/projects", feature: "projects" },
   { label: "Reviews", icon: "rate_review", to: "/dashboard/reviews", feature: "reviews" },
   { label: "Uploads", icon: "upload_file", to: "/dashboard/uploads", feature: "uploads" },
-  { label: "Purchases", icon: "receipt_long", to: "/dashboard/subscriptions", feature: "billing" },
+  { label: "Subscriptions", icon: "receipt_long", to: "/dashboard/subscriptions", feature: "billing" },
   { label: "Affiliates", icon: "hub", to: "/dashboard/affiliates", feature: "affiliates" },
   { label: "Enquiries", icon: "mail", to: "/dashboard/messages", feature: "support", active: true },
-  { label: "Settings", icon: "settings", to: "/dashboard/settings", feature: "settings" },
 ] satisfies Array<{ label: string; icon: string; to: string; feature: DashboardFeature; active?: boolean }>;
 
 function Icon({ name }: { name: string }) {
@@ -139,7 +138,7 @@ export function EnquiriesInbox({ data }: { data: EnquiriesInboxData }) {
     </div>
   );
   return user.role === "admin" ? <AdminPanelShell title="Enquiries" activeTab="messages" account={account} unreadEnquiryCount={unreadCount} headerActions={headerActions}>{content}</AdminPanelShell> : (
-    <WorkspaceShell title="Enquiries" navItems={workspaceItems.filter(item => allowedFeatures.includes(item.feature)).map(item => item.feature === "support" ? { ...item, unreadCount } : item)} account={account} mobileMenu mobileBottomNav={false} headerActions={headerActions} profileTo="/dashboard/profile" accountAction={<Form method="post" action="/signout"><button type="submit" aria-label="Sign out"><Icon name="logout" /></button></Form>}>{content}</WorkspaceShell>
+    <WorkspaceShell title="Enquiries" navItems={workspaceItems.filter(item => allowedFeatures.includes(item.feature)).map(item => item.feature === "support" ? { ...item, unreadCount } : item)} account={account} mobileMenu mobileBottomNav={false} headerActions={headerActions} profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null} profileNavAtBottom settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null} startProjectTo={allowedFeatures.includes("projects") ? "/dashboard/projects#new-project" : null} notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null} accountAction={<Form method="post" action="/signout"><button type="submit" aria-label="Sign out"><Icon name="logout" /></button></Form>}>{content}</WorkspaceShell>
   );
 }
 

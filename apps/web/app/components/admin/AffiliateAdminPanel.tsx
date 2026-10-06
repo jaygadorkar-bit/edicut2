@@ -35,7 +35,7 @@ export function AffiliateAdminPanel({
   }
 
   return (
-    <section className="grid gap-5" aria-labelledby="affiliates-title">
+    <section className="grid min-w-0 grid-cols-1 gap-5 [&_label]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0" aria-labelledby="affiliates-title">
       <header className="neo-workspace__panel flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between sm:p-6">
         <div>
           <p className="neo-workspace__eyebrow">Growth tools</p>
@@ -71,7 +71,7 @@ export function AffiliateAdminPanel({
               </div>
               {editingAffiliate ? <button type="button" onClick={() => setEditingAffiliateId("")} className="min-h-11 rounded-xl px-3 text-sm font-bold text-[#536779] underline underline-offset-4">Cancel edit</button> : null}
             </div>
-            <Form key={editingAffiliate?.id ?? "new-affiliate"} method="post" className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Form key={editingAffiliate?.id ?? "new-affiliate"} method="post" className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <input type="hidden" name="intent" value={editingAffiliate ? "update-marketing-affiliate" : "create-marketing-affiliate"} />
               {editingAffiliate ? (
                 <input type="hidden" name="affiliateId" value={editingAffiliate.id} />

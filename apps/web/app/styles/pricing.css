@@ -104,11 +104,14 @@
 .pack-table-scroll tbody tr:hover { background: var(--neo-surface); }
 .pack-table-scroll tfoot :is(th, td) { border-bottom: 0; padding-block: .75rem; }
 .pack-table-scroll tfoot a { font-size: .8125rem; color: var(--neo-ink); }
-.pack-custom { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-top: 1.75rem; padding: 1.5rem .25rem 0; border-top: 1px solid var(--neo-line); }
-.pack-custom strong, .pack-custom span { display: block; }
-.pack-custom strong { font-size: .9375rem; }
-.pack-custom span { font-size: .8125rem; color: var(--pack-copy); margin-top: .2rem; }
-.pack-custom .pack-button { flex-shrink: 0; }
+.pack-custom { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2rem; margin-top: 1.75rem; }
+.pack-custom h3 { margin-top: 0; }
+.pack-custom-copy > p { max-width: 40rem; margin-top: .75rem; font-size: .875rem; color: var(--pack-copy); line-height: 1.7; }
+.pack-custom-features { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; margin-top: 1.25rem; color: var(--pack-copy); font-size: .8125rem; }
+.pack-custom-features li { display: flex; align-items: center; gap: .5rem; }
+.pack-custom-features svg { flex-shrink: 0; }
+.pack-custom-action { min-width: 0; }
+.pack-custom-action .pack-button { width: 100%; }
 .pack-faq { padding-top: 1.5rem; padding-bottom: 4rem; }
 .pack-faq-heading { max-width: 42rem; margin: 0 auto 2.25rem; text-align: center; }
 .pack-faq-heading h2 { margin-top: .9rem; font-size: clamp(1.875rem, 3.2vw, 2.5rem); }
@@ -192,7 +195,7 @@
   .pack-comparison { padding-block: 2.5rem; }
   .pack-table-hint { display: block; }
   .pack-table-scroll :is(th, td) { padding: .9rem 1rem; }
-  .pack-custom { flex-direction: column; align-items: flex-start; gap: 1rem; }
+  .pack-custom { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
   .pack-faq { padding-bottom: 2.5rem; }
   .pack-faq-heading { margin-bottom: 1.5rem; }
   .pack-faq-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "artwork" "questions" "link"; gap: 1.5rem; }

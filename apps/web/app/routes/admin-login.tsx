@@ -1,12 +1,14 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { Form, redirect, useActionData, useNavigation, useSearchParams } from "react-router";
+import { Form, redirect, useActionData, useNavigation, useSearchParams, useSubmit } from "react-router";
 import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
 import { getDbFromContext } from "../lib/db.server";
 import {
   createAdminSession,
   getAdminSession,
+  destroyAdminSession,
+  requireAdminUser,
   isAdminRole,
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
@@ -18,6 +20,7 @@ import {
   supabaseAuthEnabled,
 } from "../integrations/supabase/auth.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import { isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -58,34 +61,6 @@ function safeRedirectTo(value: FormDataEntryValue | string | null) {
   }
 
   return value;
-}
-
-function hasTrustedOrigin(request: Request) {
-  if (globalThis.process?.env?.NODE_ENV !== "production") {
-    return true;
-  }
-
-  const origin = request.headers.get("Origin");
-
-  if (!origin || origin === "null") {
-    return true;
-  }
-
-  const trustedOrigins = new Set([
-    new URL(request.url).origin,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3002",
-    "http://127.0.0.1:3002",
-    "https://edicut.com",
-    "https://www.edicut.com",
-  ]);
-
-  try {
-    return trustedOrigins.has(new URL(origin).origin);
-  } catch {
-    return false;
-  }
 }
 
 function getAttemptStore() {
@@ -155,6 +130,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const session = await getAdminSession(request.headers.get("Cookie"), context);
 
   if (session.has("adminUserId")) {
+    try {
+      await requireAdminUser(request, getDbFromContext(context), context);
+    } catch (error) {
+      if (!(error instanceof Response) || error.status !== 302) throw error;
+      throw redirect("/signin?redirectTo=%2Fdashboard", {
+        headers: { "Set-Cookie": await destroyAdminSession(session, context) },
+      });
+    }
     throw redirect(ADMIN_BASE_PATH);
   }
 
@@ -162,7 +145,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  if (!hasTrustedOrigin(request)) {
+  if (!isSameSiteMutation(request)) {
     return { error: "Admin request origin was rejected." };
   }
 
@@ -170,12 +153,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return { error: "Admin sign-in request is too large. Please try again." };
   }
 
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, 64 * 1024);
+  if (!formData) return { error: "Admin sign-in request could not be read. Please try again." };
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const redirectTo = safeRedirectTo(formData.get("redirectTo"));
 
-  if (!email || !password || password.length < 6) {
+  if (!email || email.length > 254 || !password || password.length < 6 || password.length > 1024) {
     return { error: "Use your admin email and password." };
   }
 
@@ -262,11 +246,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
 export default function AdminLoginRoute() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const submit = useSubmit();
   const [searchParams] = useSearchParams();
   const redirectTo = safeRedirectTo(searchParams.get("redirectTo"));
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [securityPending, setSecurityPending] = useState(false);
-  const isSubmitting = navigation.state === "submitting" || securityPending;
+  const isSubmitting = navigation.state !== "idle" || securityPending;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
@@ -278,9 +263,10 @@ export default function AdminLoginRoute() {
 
     try {
       await executeInvisibleRecaptcha(form, "admin_login");
-      HTMLFormElement.prototype.submit.call(form);
+      await submit(form, { method: "post", action: ADMIN_LOGIN_PATH });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+    } finally {
       setSecurityPending(false);
     }
   }
@@ -294,9 +280,10 @@ export default function AdminLoginRoute() {
     setSecurityPending(true);
     try {
       await executeInvisibleRecaptcha(form, "admin_google_login");
-      HTMLFormElement.prototype.submit.call(form);
+      await submit(form, { method: "post", action: "/auth/google" });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
+    } finally {
       setSecurityPending(false);
     }
   }
@@ -362,7 +349,7 @@ export default function AdminLoginRoute() {
             <div className="h-px flex-1 bg-gray-200" />
           </div>
 
-          <Form method="post" action={ADMIN_LOGIN_PATH} reloadDocument className="grid gap-4" onSubmit={handleSubmit}>
+          <Form method="post" action={ADMIN_LOGIN_PATH} className="grid gap-4" onSubmit={handleSubmit}>
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <input type="hidden" name="g-recaptcha-response" value="" />
             <label className="grid gap-2 text-sm font-black">

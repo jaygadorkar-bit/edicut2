@@ -22,6 +22,10 @@
       "types": "./dist/contracts/operations.d.ts",
       "default": "./dist/contracts/operations.js"
     },
+    "./contracts/custom-quotes": {
+      "types": "./dist/contracts/custom-quotes.d.ts",
+      "default": "./dist/contracts/custom-quotes.js"
+    },
     "./server-fetch": {
       "types": "./dist/server-fetch.d.ts",
       "default": "./dist/server-fetch.js"

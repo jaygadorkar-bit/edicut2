@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => {
     email: "client@example.com",
     role: "customer",
     active: true,
-    deletedAt: null,
+    deletedAt: null as Date | null,
+    passwordHash: "server-only",
     phone: null,
     profileImageUrl: null,
   };
@@ -29,6 +30,8 @@ const mocks = vi.hoisted(() => {
     findUserById: vi.fn(async () => user),
     getRoleFeatureAccessSettings: vi.fn(async () => mocks.access),
     consumeUsageLimit: vi.fn(async () => "allowed"),
+    loadClientWorkspace: vi.fn(async () => ({ profile: null as unknown, purchases: [] as unknown[] })),
+    saveCreatorProfile: vi.fn(async () => true),
   };
 });
 
@@ -44,6 +47,11 @@ vi.mock("../lib/usage-protection.server", () => ({
   consumeUsageLimit: mocks.consumeUsageLimit,
   requestBodyExceedsLimit: () => false,
 }));
+vi.mock("../lib/client-workspace.server", () => ({
+  loadClientWorkspace: mocks.loadClientWorkspace,
+  saveCreatorProfile: mocks.saveCreatorProfile,
+  isMissingClientWorkspaceSchema: () => false,
+}));
 
 import { action, loader } from "./dashboard-profile";
 
@@ -55,8 +63,8 @@ function loaderArgs() {
   } as Parameters<typeof loader>[0];
 }
 
-function actionArgs() {
-  const body = new URLSearchParams({ intent: "save-profile", name: "Updated client", phone: "" });
+function actionArgs(values: Record<string, string> = { intent: "save-profile", name: "Updated client", phone: "" }) {
+  const body = new URLSearchParams(values);
   return {
     request: new Request("http://localhost:3002/dashboard/profile", { method: "POST", body }),
     params: {},
@@ -73,6 +81,18 @@ beforeEach(() => {
 });
 
 describe("customer profile settings access", () => {
+  it("does not serialize credentials when Settings is enabled", async () => {
+    mocks.access = DEFAULT_ROLE_FEATURE_ACCESS;
+    expect((await loader(loaderArgs())).user).not.toHaveProperty("passwordHash");
+  });
+  it.each([{ active: false }, { deletedAt: new Date() }])("blocks disabled or trashed profiles: %j", async change => {
+    mocks.findUserById.mockResolvedValueOnce({ ...mocks.user, ...change });
+    await expect(loader(loaderArgs())).rejects.toMatchObject({ status: 302 });
+    expect(mocks.getRoleFeatureAccessSettings).not.toHaveBeenCalled();
+    mocks.findUserById.mockResolvedValueOnce({ ...mocks.user, ...change });
+    await expect(action(actionArgs())).rejects.toMatchObject({ status: 302 });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
   it("redirects direct profile visits when Settings is disabled", async () => {
     await expect(loader(loaderArgs())).rejects.toMatchObject({
       status: 302,
@@ -93,5 +113,23 @@ describe("customer profile settings access", () => {
     await expect(action(actionArgs())).resolves.toMatchObject({ success: expect.any(String) });
     expect(mocks.update).toHaveBeenCalledOnce();
     expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ name: "Updated client", phone: null }));
+  });
+
+  it("loads the purchased channel profile alongside account details", async () => {
+    mocks.access = DEFAULT_ROLE_FEATURE_ACCESS;
+    const channelProfile = { channelName: "QA Channel", channelUrl: "https://www.youtube.com/@qa", brandUrl: "" };
+    mocks.loadClientWorkspace.mockResolvedValueOnce({ profile: channelProfile, purchases: [{ id: "paid" }] });
+
+    await expect(loader(loaderArgs())).resolves.toMatchObject({ channelProfile, channelSchemaReady: true, hasConfirmedPurchase: true });
+  });
+
+  it("saves channel details through the Profile page", async () => {
+    mocks.access = DEFAULT_ROLE_FEATURE_ACCESS;
+
+    await expect(action(actionArgs({ intent: "save-channel", channelName: "QA Channel", channelUrl: "https://www.youtube.com/@qa", brandUrl: "" })))
+      .resolves.toMatchObject({ channelSuccess: expect.any(String) });
+    expect(mocks.saveCreatorProfile).toHaveBeenCalledWith(mocks.db, "customer-1", {
+      channelName: "QA Channel", platform: "YouTube", channelUrl: "https://www.youtube.com/@qa", brandUrl: "",
+    });
   });
 });

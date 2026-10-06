@@ -113,7 +113,14 @@ function PricingPackageOptions({ packages, packageKind, onPackageKindChange, id 
         })}
       </div>
       {isMonthly ? <p className="pack-capacity-note">Monthly capacity is based on 22 working days. Editing and revisions use the reserved hours; unused hours do not roll over.</p> : null}
-      <div className="pack-custom"><div><strong>Have a larger project?</strong><span>We’ll confirm the scope and price before production starts.</span></div><Link to="/contact" className="neo-button pack-button">Request a custom quote <ArrowRight size={17} aria-hidden="true" /></Link></div>
+      <article className="pack-custom pack-card neo-card" aria-labelledby={`${id}-custom-title`}>
+        <div className="pack-custom-copy">
+          <h3 id={`${id}-custom-title`}>Have a larger project?</h3>
+          <p>Build a brief around your formats, editing needs, and schedule. We’ll confirm the scope and price before production starts.</p>
+          <ul className="pack-custom-features"><li><Check size={16} aria-hidden="true" />Flexible video formats</li><li><Check size={16} aria-hidden="true" />Services you choose</li><li><Check size={16} aria-hidden="true" />Timing that fits</li></ul>
+        </div>
+        <div className="pack-custom-action"><Link to="/custom-quote" className="neo-button pack-button">Request a custom quote <ArrowRight size={17} aria-hidden="true" /></Link></div>
+      </article>
     </> : <div className="pack-empty neo-surface"><p>We’re updating these editing packages. Tell us what you need and we’ll help you find the right scope.</p><Link to="/contact" className="neo-button pack-button">Discuss my editing needs <ArrowRight size={17} aria-hidden="true" /></Link></div>}
   </section>;
 }

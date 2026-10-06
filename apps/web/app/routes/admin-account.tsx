@@ -3,6 +3,7 @@ import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } fro
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { adminUsers } from "@edicut/db/schema";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 import { toPublicAdminUser } from "../lib/admin-public";
 import { getDbFromContext } from "../lib/db.server";
@@ -53,6 +54,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return { error: "This admin account request is too large." };
   }
@@ -75,7 +77,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     };
   }
 
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, 64 * 1024);
+  if (!formData) return { error: "Submit a valid account form under 64 KB." };
   const intent = String(formData.get("intent") ?? "");
   const returnTo = safeAdminReturnTo(String(formData.get("returnTo") ?? ""));
 

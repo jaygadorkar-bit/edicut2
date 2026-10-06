@@ -274,6 +274,7 @@ export default function AppRoot() {
 
 function shouldLoadRecaptcha(pathname: string) {
   return isIndexablePublicPath(pathname) ||
+    pathname === "/custom-quote" ||
     pathname === "/signin" ||
     pathname === "/forgot-password" ||
     pathname === ADMIN_LOGIN_PATH;

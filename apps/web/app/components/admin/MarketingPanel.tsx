@@ -18,7 +18,7 @@ export function MarketingPanel({
   const editingCoupon = data.coupons.find((coupon) => coupon.id === editingCouponId);
 
   return (
-    <section className="grid gap-5" aria-labelledby="marketing-title">
+    <section className="grid min-w-0 grid-cols-1 gap-5 [&_label]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0" aria-labelledby="marketing-title">
       <header className="neo-workspace__panel p-5 sm:p-6">
         <p className="neo-workspace__eyebrow">Growth tools</p>
         <h1 id="marketing-title" className="neo-workspace__module-title mt-1">Coupons</h1>
@@ -44,7 +44,7 @@ export function MarketingPanel({
               </div>
               {editingCoupon ? <button type="button" onClick={() => { setEditingCouponId(""); setDiscountType("percent"); }} className="min-h-11 rounded-xl px-3 text-sm font-bold text-[#536779] underline underline-offset-4">Cancel edit</button> : null}
             </div>
-            <Form key={editingCoupon?.id ?? "new-coupon"} method="post" className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Form key={editingCoupon?.id ?? "new-coupon"} method="post" className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <input type="hidden" name="intent" value={editingCoupon ? "update-marketing-coupon" : "create-marketing-coupon"} />
               {editingCoupon ? <input type="hidden" name="couponId" value={editingCoupon.id} /> : null}
               <label className="grid gap-1.5 text-sm font-semibold text-[#445260]">

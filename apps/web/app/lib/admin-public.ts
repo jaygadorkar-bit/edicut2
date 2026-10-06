@@ -1,5 +1,8 @@
-export function toPublicAdminUser<T extends { passwordHash?: unknown }>(adminUser: T) {
-  const { passwordHash: _passwordHash, ...publicAdminUser } = adminUser;
+/** Keep credential hashes on the server, including directory and customer rows. */
+export function toPublicUser<T extends { passwordHash?: unknown }>(user: T) {
+  const { passwordHash: _passwordHash, ...publicUser } = user;
 
-  return publicAdminUser;
+  return publicUser;
 }
+
+export const toPublicAdminUser = toPublicUser;

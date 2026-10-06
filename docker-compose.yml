@@ -17,10 +17,10 @@ services:
       AUTH_URL: http://localhost:3002/api/auth
       NEXT_PUBLIC_APP_URL: http://localhost:3002
       AUTH_GOOGLE_REDIRECT_URI: http://localhost:3002/api/auth/callback/google
-      # Production reCAPTCHA keys are domain-bound to edicut.com and reject localhost.
-      # Keep the local profile usable while production remains protected by reCAPTCHA.
-      NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ""
-      RECAPTCHA_SECRET_KEY: ""
+      # Google's public v2 test pair is for this localhost-only development profile.
+      # Production retains its domain-bound keys from the deployment environment.
+      NEXT_PUBLIC_RECAPTCHA_SITE_KEY: "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+      RECAPTCHA_SECRET_KEY: "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
       SESSION_SECRET: ${SESSION_SECRET:-stage9-local-session-secret-stage9-local-session}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}

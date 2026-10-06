@@ -6,6 +6,7 @@ import type { LoaderContext } from "../types";
 import { destroySession, getAdminSession, getSession, isAdminRole, requireAdminUser, requireUserId } from "./session.server";
 import { getRoleFeatureAccessSettings } from "./site-settings.server";
 import { getAllowedDashboardFeatures, getDashboardLandingPath, type DashboardFeature } from "./role-feature-access";
+import { toPublicUser } from "./admin-public";
 
 export async function requireContactInboxAccess(request: Request, db: DatabaseClient, context?: LoaderContext) {
   const cookie = request.headers.get("Cookie");
@@ -28,10 +29,10 @@ export async function requireContactInboxAccess(request: Request, db: DatabaseCl
   if (session.get("adminAccessVerified") === true && typeof adminId === "string" && adminId) {
     const admin = await findAdminUserById(db, adminId);
     if (admin?.active && isAdminRole(admin.role) && admin.email.trim().toLowerCase() === user.email.trim().toLowerCase()) {
-      return { db, user: { ...user, role: "admin" }, allowedFeatures: Array.from(new Set<DashboardFeature>([...allowedFeatures, "support"])) };
+      return { db, user: { ...toPublicUser(user), role: "admin" }, allowedFeatures: Array.from(new Set<DashboardFeature>([...allowedFeatures, "support"])) };
     }
   }
 
   if (!allowedFeatures.includes("support")) throw redirect(getDashboardLandingPath(allowedFeatures));
-  return { db, user, allowedFeatures };
+  return { db, user: toPublicUser(user), allowedFeatures };
 }

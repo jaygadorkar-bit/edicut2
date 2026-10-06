@@ -21,7 +21,11 @@ declare global {
 const WIDGET_ID_KEY = "recaptchaWidgetId";
 const RECAPTCHA_API_URL = "https://www.google.com/recaptcha/api.js?render=explicit";
 const RECAPTCHA_API_TIMEOUT_MS = 12_000;
+const RECAPTCHA_READY_TIMEOUT_MS = 12_000;
 const RECAPTCHA_CHALLENGE_TIMEOUT_MS = 120_000;
+type PendingChallenge = { complete: (token: string) => void; fail: (message: string) => void };
+type WidgetState = { id: number; pending?: PendingChallenge };
+const widgets = new WeakMap<HTMLElement, WidgetState>();
 
 let recaptchaApiPromise: Promise<void> | null = null;
 
@@ -114,6 +118,36 @@ function loadRecaptchaApi(siteKey: string) {
   return promise;
 }
 
+function waitForRecaptchaReady() {
+  const recaptcha = window.grecaptcha;
+  if (!recaptcha?.ready) {
+    return Promise.reject(new Error("Security check is unavailable. Please try again."));
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Security check is still loading. Please try again."));
+    }, RECAPTCHA_READY_TIMEOUT_MS);
+
+    try {
+      recaptcha.ready(() => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        resolve();
+      });
+    } catch {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      reject(new Error("Security check is unavailable. Please try again."));
+    }
+  });
+}
+
 export async function executeInvisibleRecaptcha(form: HTMLFormElement, action: string) {
   const siteKey = getRecaptchaSiteKey();
 
@@ -122,47 +156,51 @@ export async function executeInvisibleRecaptcha(form: HTMLFormElement, action: s
   }
 
   await loadRecaptchaApi(siteKey);
-
-  await new Promise<void>((resolve) => window.grecaptcha?.ready(resolve));
+  await waitForRecaptchaReady();
 
   const tokenInput = ensureTokenInput(form);
   const container = ensureWidgetContainer(form, action);
-  const existingWidgetId = container.dataset[WIDGET_ID_KEY];
+  let widget = widgets.get(container);
+  if (widget?.pending) throw new Error("A security check is already in progress.");
 
   return new Promise<string>((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
       tokenInput.value = "";
+      if (widget) widget.pending = undefined;
       reject(new Error("Security check timed out. Please try again."));
     }, RECAPTCHA_CHALLENGE_TIMEOUT_MS);
 
     try {
-      const widgetId = existingWidgetId
-        ? Number(existingWidgetId)
-        : window.grecaptcha!.render(container, {
+      if (!widget) {
+        // Google's callbacks persist with the widget. Resolve the current
+        // submission, including retries after server validation fails.
+        const state: WidgetState = { id: -1 };
+        widget = state;
+        state.id = window.grecaptcha!.render(container, {
             sitekey: siteKey,
             size: "invisible",
             callback: (token) => {
-              tokenInput.value = token;
-              window.clearTimeout(timeoutId);
-              resolve(token);
+              state.pending?.complete(token);
             },
             "expired-callback": () => {
-              tokenInput.value = "";
-              window.clearTimeout(timeoutId);
-              reject(new Error("Security check expired. Please try again."));
+              state.pending?.fail("Security check expired. Please try again.");
             },
             "error-callback": () => {
-              tokenInput.value = "";
-              window.clearTimeout(timeoutId);
-              reject(new Error("Security check failed. Please try again."));
+              state.pending?.fail("Security check failed. Please try again.");
             },
           });
-
-      container.dataset[WIDGET_ID_KEY] = String(widgetId);
-      window.grecaptcha!.reset(widgetId);
-      window.grecaptcha!.execute(widgetId);
+        widgets.set(container, state);
+        container.dataset[WIDGET_ID_KEY] = String(state.id);
+      }
+      window.grecaptcha!.reset(widget.id);
+      widget.pending = {
+        complete(token) { tokenInput.value = token; window.clearTimeout(timeoutId); widget!.pending = undefined; resolve(token); },
+        fail(message) { tokenInput.value = ""; window.clearTimeout(timeoutId); widget!.pending = undefined; reject(new Error(message)); },
+      };
+      window.grecaptcha!.execute(widget.id);
     } catch {
       window.clearTimeout(timeoutId);
+      if (widget) widget.pending = undefined;
       reject(new Error("Security check failed. Please try again."));
     }
   });

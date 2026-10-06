@@ -13,7 +13,7 @@ import { findAffiliateByCode, findCouponForQuote, isMissingMarketingSchema, norm
 import { getCheckoutTotal, REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING, type EditingPackage } from "../lib/subscriptions";
 import { configuredEditingPackage, getPricingPackages } from "../lib/pricing.server";
 import { countryCallingCode, countryName, updatePhoneForCountryChange, validateCheckoutContact } from "../lib/checkout-contact";
-import { getOwnedSubscription, isSameSiteMutation, readSubscriptionForm, saveUnpaidSubscription } from "../lib/customer-subscriptions.server";
+import { getLatestCustomerContact, getOwnedSubscription, isSameSiteMutation, readSubscriptionForm, saveUnpaidSubscription } from "../lib/customer-subscriptions.server";
 import { queueTelegramOrderNotice } from "../lib/telegram-notifications.server";
 import { PackageAddOns } from "../components/site/PackageAddOns";
 import { packageAddOnQuery, packageAddOnTotal, parsePackageAddOns, savedPackageAddOns, selectedPackageAddOns } from "../lib/package-addons";
@@ -66,12 +66,21 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const savedSubscription = paymentStep || url.searchParams.has("subscription")
     ? await getOwnedSubscription(getDbFromContext(context), userId, url.searchParams.get("subscription") || "", editingPackage.slug)
     : null;
+  let customerContact: { country: string; phone: string } | null = null;
+  if (!paymentStep && !savedSubscription) {
+    try {
+      customerContact = await getLatestCustomerContact(getDbFromContext(context), userId);
+    } catch {
+      // Contact prefill is optional; customers can still enter details manually.
+      console.error("Unable to load saved checkout contact");
+    }
+  }
   if (paymentStep && !savedSubscription) {
     const review = new URLSearchParams(url.searchParams);
     review.delete("step"); review.delete("subscription");
     throw redirect(`/checkout/${editingPackage.slug}${review.size ? `?${review}` : ""}`);
   }
-  if (savedSubscription?.status === "paid") throw redirect("/dashboard/subscriptions");
+  if (savedSubscription?.status === "paid") throw redirect("/dashboard/projects");
   const addOns = paymentStep ? savedPackageAddOns(savedSubscription?.addOns)
     : parsePackageAddOns(url.searchParams.has("addon") ? url.searchParams.getAll("addon") : savedPackageAddOns(savedSubscription?.addOns).map(item => item.id));
   if (!addOns) throw new Response("Invalid package add-ons", { status: 400 });
@@ -85,7 +94,7 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
       : { couponCode, couponError: limit === "limited" ? "You have made several requests. Wait a minute and try again." : "Usage protection is temporarily unavailable. Please try again shortly." };
   }
   return {
-    editingPackage, total, addOns, coupon, couponCode,
+    editingPackage, total, addOns, coupon, couponCode, customerContact,
     paymentStep, savedSubscription,
     affiliateCode: normalizeMarketingCode(url.searchParams.get("ref") || savedSubscription?.affiliateCode || "") || "",
   };
@@ -155,7 +164,7 @@ export default function CheckoutRoute() {
 }
 
 function CheckoutContent() {
-  const { editingPackage, addOns: initialAddOns, coupon: initialCoupon, couponCode, paymentStep, affiliateCode, savedSubscription } = useLoaderData<typeof loader>();
+  const { editingPackage, addOns: initialAddOns, coupon: initialCoupon, couponCode, customerContact, paymentStep, affiliateCode, savedSubscription } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const saving = navigation.state !== "idle";
@@ -166,7 +175,7 @@ function CheckoutContent() {
   const addOns = paymentStep ? initialAddOns : selectedPackageAddOns(selectedAddOnIds);
   const addOnCents = packageAddOnTotal(addOns);
   const subtotalCents = paymentStep ? savedSubscription!.subtotalCents : editingPackage.basePrice * 100 + addOnCents;
-  const [phone, setPhone] = useState(() => savedSubscription?.phone ?? (savedSubscription?.country ? `${countryCallingCode(savedSubscription.country)} ` : ""));
+  const [phone, setPhone] = useState(() => savedSubscription?.phone ?? customerContact?.phone ?? (savedSubscription?.country ? `${countryCallingCode(savedSubscription.country)} ` : ""));
   const normalizedCode = couponInput.trim().toUpperCase();
   const couponResult = couponFetcher.data ?? initialCoupon;
   const appliedCoupon = couponResult.couponPreview?.code === normalizedCode && couponResult.couponPreview.subtotalCents === subtotalCents ? couponResult.couponPreview : undefined;
@@ -252,16 +261,17 @@ function CheckoutContent() {
             <div className="grid min-w-0 gap-6">
               <section className="neo-surface relative z-10 order-2 min-w-0 rounded-3xl p-5 sm:p-7" aria-labelledby="contact-title">
                 <h2 id="contact-title" className="text-lg font-black neo-ink">Contact details</h2>
-                <fieldset className="mt-4 grid gap-4 sm:grid-cols-2">
+                <fieldset className="mt-4 grid gap-4 sm:grid-cols-2" aria-describedby={customerContact ? "checkout-contact-prefill" : undefined}>
                   <legend className="sr-only">Customer contact details</legend>
                   <div className="grid min-w-0 content-start gap-2 text-sm font-bold neo-ink">
                     <label htmlFor="checkout-country">Country</label>
-                    <CountrySelect defaultValue={savedSubscription?.country ?? ""} onCountryChange={handleCountryChange} />
+                    <CountrySelect defaultValue={savedSubscription?.country ?? customerContact?.country ?? ""} onCountryChange={handleCountryChange} />
                   </div>
                   <div className="grid min-w-0 content-start gap-2 text-sm font-bold neo-ink">
                     <label htmlFor="checkout-phone">Phone number</label>
                     <input id="checkout-phone" name="phone" type="tel" required autoComplete="tel" value={phone} onChange={event => setPhone(event.currentTarget.value)} maxLength={64} placeholder="Enter phone number" className="neo-inset h-12 min-w-0 rounded-xl px-3 text-base font-medium focus:outline-2 focus:outline-primary" />
                   </div>
+                  {customerContact ? <p id="checkout-contact-prefill" className="text-xs font-medium neo-muted sm:col-span-2">Filled from your most recent purchase. You can update these details before continuing.</p> : null}
                 </fieldset>
               </section>
             <section className="neo-surface order-1 min-w-0 rounded-3xl p-5 sm:p-7" aria-labelledby="plan-title">

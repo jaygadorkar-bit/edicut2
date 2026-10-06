@@ -8,6 +8,7 @@ import { createUserSession, isAdminRole } from "../lib/session.server";
 import { getDbFromContext } from "../lib/db.server";
 import { verifyPassword } from "../lib/password.server";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import {
   signInWithSupabase,
@@ -22,11 +23,13 @@ export const meta: MetaFunction = () => [
 ];
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return { error: "Sign-in request is too large. Please try again.", intent: "signin" };
   }
 
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, 64 * 1024);
+  if (!formData) return { error: "Sign-in request could not be read. Please try again.", intent: "signin" };
   const intent = String(formData.get("intent") || "");
   const rawEmail = formData.get("email");
   const rawPassword = formData.get("password");
@@ -105,7 +108,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return createUserSession({
         request,
         context,
-        userId: result.user.id,
+        userId: result.profileId ?? result.user.id,
         remember,
         redirectTo,
         accessToken: result.session.access_token,
@@ -145,7 +148,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return createUserSession({
           request,
           context,
-          userId: result.user.id,
+          userId: result.profileId ?? result.user.id,
           remember,
           redirectTo,
           accessToken: result.session.access_token,
@@ -159,7 +162,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         // Keep existing local accounts usable while they are being moved into
         // Supabase Auth. New accounts never use this fallback path.
         const legacyUser = await findUserByEmail(db, email);
-        if (legacyUser?.passwordHash && await verifyPassword(password, legacyUser.passwordHash)) {
+        if (legacyUser?.active && !legacyUser.deletedAt && legacyUser.passwordHash && await verifyPassword(password, legacyUser.passwordHash)) {
           return createUserSession({
             request,
             context,
@@ -173,6 +176,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
         if (adminUser?.active && isAdminRole(adminUser.role) && adminUser.passwordHash && await verifyPassword(password, adminUser.passwordHash)) {
           const existingProfile = await findUserByEmail(db, email);
+          if (existingProfile && (!existingProfile.active || existingProfile.deletedAt)) {
+            return { error: "Invalid credentials.", intent };
+          }
           const [profile] = existingProfile
             ? [existingProfile]
             : await db.insert(users).values({
@@ -204,6 +210,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!user || !user.passwordHash) {
       if (adminUser?.active && isAdminRole(adminUser.role) && adminUser.passwordHash && await verifyPassword(password, adminUser.passwordHash)) {
         const existingProfile = user || await findUserByEmail(db, email);
+        if (existingProfile && (!existingProfile.active || existingProfile.deletedAt)) {
+          return { error: "Invalid credentials.", intent };
+        }
         const [profile] = existingProfile
           ? [existingProfile]
           : await db.insert(users).values({
@@ -231,7 +240,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
 
     const isValid = await verifyPassword(password, user.passwordHash);
-    if (!isValid) {
+    if (!isValid || !user.active || user.deletedAt) {
       return { error: "Invalid credentials.", intent };
     }
 

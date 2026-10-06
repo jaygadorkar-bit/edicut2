@@ -2,6 +2,8 @@ import { createCookieSessionStorage, redirect } from "react-router";
 import { findAdminUserById } from "@edicut/db/repositories/admin-users";
 import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
 import type { DatabaseClient } from "@edicut/db/client";
+import { findUserById } from "@edicut/db/repositories/users";
+import { getDbFromContext } from "./db.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
 import {
   getSupabaseUserByAccessToken,
@@ -144,7 +146,7 @@ export async function requireUserId(
       if (typeof refreshToken === "string" && refreshToken.length > 0) {
         const refreshed = await refreshSupabaseSession(context, refreshToken);
         if (refreshed) {
-          session.set("userId", refreshed.user.id);
+          session.set("userId", typeof userId === "string" ? userId : refreshed.user.id);
           session.set("supabaseAccessToken", refreshed.session.access_token);
           session.set("supabaseRefreshToken", refreshed.session.refresh_token);
           throw redirect(request.url, {
@@ -156,7 +158,18 @@ export async function requireUserId(
       }
 
       const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
-      throw redirect(`/signin?${searchParams}`);
+      throw redirect(`/signin?${searchParams}`, {
+        headers: { "Set-Cookie": await destroySession(session, context) },
+      });
+    }
+    if (typeof userId === "string" && userId !== user.id) {
+      const profile = await findUserById(getDbFromContext(context ?? {}), userId);
+      if (!user.email_confirmed_at || !user.email || profile?.email.toLowerCase() !== user.email.trim().toLowerCase()) {
+        throw redirect("/signin", {
+          headers: { "Set-Cookie": await destroySession(session, context) },
+        });
+      }
+      return userId;
     }
     return user.id;
   }
@@ -191,6 +204,8 @@ export async function createUserSession({
 }) {
   const session = await getSession(request.headers.get("Cookie"), context);
   session.set("userId", userId);
+  session.unset("supabaseAccessToken");
+  session.unset("supabaseRefreshToken");
   if (accessToken) session.set("supabaseAccessToken", accessToken);
   if (refreshToken) session.set("supabaseRefreshToken", refreshToken);
   if (adminUserId && adminAccessVerified) {
@@ -227,11 +242,11 @@ export async function requireAdminUser(
   const accessToken = session.get("supabaseAccessToken");
   if (typeof accessToken === "string" && accessToken.length > 0) {
     const authUser = await getSupabaseUserByAccessToken(context, accessToken);
-    if (!authUser?.email) {
+    if (!authUser?.email || !authUser.email_confirmed_at) {
       const refreshToken = session.get("supabaseRefreshToken");
       if (typeof refreshToken === "string" && refreshToken.length > 0) {
         const refreshed = await refreshSupabaseSession(context, refreshToken);
-        if (refreshed?.user.email) {
+        if (refreshed?.user.email && refreshed.user.email_confirmed_at) {
           session.set("supabaseAccessToken", refreshed.session.access_token);
           session.set("supabaseRefreshToken", refreshed.session.refresh_token);
           throw redirect(request.url, {
@@ -284,6 +299,8 @@ export async function createAdminSession({
 }) {
   const session = await getAdminSession(request.headers.get("Cookie"), context);
   session.set("adminUserId", userId);
+  session.unset("supabaseAccessToken");
+  session.unset("supabaseRefreshToken");
   if (accessToken) session.set("supabaseAccessToken", accessToken);
   if (refreshToken) session.set("supabaseRefreshToken", refreshToken);
 

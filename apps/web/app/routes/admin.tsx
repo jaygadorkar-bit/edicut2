@@ -12,7 +12,7 @@ import {
   isAdminRole,
   requireAdminUser,
 } from "../lib/session.server";
-import { ADMIN_LOGIN_PATH, adminPath } from "../lib/admin-paths";
+import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "../lib/admin-paths";
 import { toPublicAdminUser } from "../lib/admin-public";
 import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES, type UserRole } from "../lib/admin-user-roles";
 import {
@@ -64,6 +64,7 @@ import {
 } from "../lib/role-feature-access";
 import { getAdminDataRequirements, getPageWithinRange, getPositivePage } from "../lib/admin-data-requirements";
 import { AdminPanelShell } from "../components/AdminPanelShell";
+import { AdminAccountDialog } from "../components/AdminAccountDialog";
 import { isMissingWorkspaceSchema, parseBillingAmountToCents, parseWorkspaceShareUrl, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
 import { consumeUsageLimit, requestBodyExceedsLimit, type UsageLimitResult } from "../lib/usage-protection.server";
 import {
@@ -78,6 +79,7 @@ import {
 import { MarketingPanel } from "../components/admin/MarketingPanel";
 import { AffiliateAdminPanel } from "../components/admin/AffiliateAdminPanel";
 import { isMissingCustomerSubscriptionSchema } from "../lib/customer-subscriptions.server";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 
 const PAGE_SIZE = 10;
 const WORKSPACE_PROJECT_PAGE_SIZE = 20;
@@ -285,9 +287,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const adminUser = await requireAdminUser(request, db, context, `${url.pathname}${url.search}`);
   const tab = url.searchParams.get("tab") || "overview";
+  if (tab === "payments" || tab === "subscriptions") throw redirect(adminPath("/subscriptions"));
+  if (tab === "messages") throw redirect("/dashboard/messages");
+  if (tab === "quotes" || tab === "infrastructure") throw redirect(adminPath(`/${tab}`));
+  if (!["overview", "users", "roles", "packages", "marketing", "affiliates", "images", "videos", "projects", "audit", "settings"].includes(tab)) {
+    throw redirect(ADMIN_BASE_PATH);
+  }
   const q = url.searchParams.get("q") || "";
   const roleFilter = url.searchParams.get("role") || "";
-  const page = getPositivePage(url.searchParams.get("page"));
+  const requestedPage = getPositivePage(url.searchParams.get("page"));
   const requestedWorkspaceProjectPage = getPositivePage(url.searchParams.get("projectPage"));
   const sort = url.searchParams.get("sort") || "createdAt";
   const order = url.searchParams.get("order") || "desc";
@@ -325,24 +333,26 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const adminSortColumn = sort === "name" ? adminUsersTable.name : sort === "role" ? adminUsersTable.role : adminUsersTable.createdAt;
   const adminOrderBy = order === "asc" ? asc(adminSortColumn) : desc(adminSortColumn);
 
-  // Fetch users with pagination
-  const [users, totalResult, adminUsers, adminTotalResult] = await Promise.all([
+  // Clamp before calculating offsets, including empty directories and large URLs.
+  const [totalResult, adminTotalResult] = await Promise.all([
+    !requirements.userDirectory || adminDirectory ? Promise.resolve([{ count: 0 }]) : db.select({ count: drizzleCount() }).from(usersTable).where(whereClause),
+    requirements.userDirectory && adminDirectory ? db.select({ count: drizzleCount() }).from(adminUsersTable).where(adminFilters) : Promise.resolve([{ count: 0 }]),
+  ]);
+  const totalUsersCount = Number(adminDirectory ? adminTotalResult[0]?.count ?? 0 : totalResult[0]?.count ?? 0);
+  const totalPages = Math.max(1, Math.ceil(totalUsersCount / PAGE_SIZE));
+  const page = getPageWithinRange(requestedPage, totalPages);
+  const [users, adminUsers] = await Promise.all([
     !requirements.userDirectory || adminDirectory ? Promise.resolve([]) : db.select().from(usersTable)
       .where(whereClause)
       .orderBy(orderBy)
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE),
-    !requirements.userDirectory || adminDirectory ? Promise.resolve([{ count: 0 }]) : db.select({ count: drizzleCount() }).from(usersTable).where(whereClause),
     requirements.userDirectory && adminDirectory ? db.select().from(adminUsersTable)
       .where(adminFilters)
       .orderBy(adminOrderBy)
       .limit(PAGE_SIZE)
       .offset((page - 1) * PAGE_SIZE) : Promise.resolve([]),
-    requirements.userDirectory && adminDirectory ? db.select({ count: drizzleCount() }).from(adminUsersTable).where(adminFilters) : Promise.resolve([{ count: 0 }])
   ]);
-
-  const totalUsersCount = adminDirectory ? adminTotalResult[0]?.count ?? 0 : totalResult[0]?.count ?? 0;
-  const totalPages = Math.ceil(totalUsersCount / PAGE_SIZE);
   const userActivity: Record<string, AdminUserActivity> = {};
   if (requirements.userDirectory && !adminDirectory && users.length > 0) {
     const userIds = users.map((user) => user.id);
@@ -460,12 +470,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     siteSettingsSnapshot,
     roleFeatureAccess,
     portfolioSections,
-    cloudinaryImages,
+    imageListResult,
     cloudinaryUsage,
-    cloudinaryError,
-    cloudinaryVideos,
+    videoListResult,
     cloudinaryVideoUsage,
-    cloudinaryVideoError
   ] = await Promise.all([
     requirements.stats
       ? db.select({
@@ -489,25 +497,25 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         }),
     requirements.roleFeatureAccess ? getRoleFeatureAccessSettings(db, context) : Promise.resolve(DEFAULT_ROLE_FEATURE_ACCESS),
     requirements.portfolioSections ? getPortfolioSections(db, context) : Promise.resolve([]),
-    requirements.images ? listCloudinaryImages(context).catch((error) => {
+    requirements.images ? listCloudinaryImages(context).then(resources => ({ resources, error: null as string | null })).catch((error) => {
       console.error("Cloudinary image list error:", error);
-      return [] as CloudinaryImageResource[];
-    }) : Promise.resolve([] as CloudinaryImageResource[]),
+      return { resources: [] as CloudinaryImageResource[], error: "The image library could not be loaded. Check the media connection and refresh." };
+    }) : Promise.resolve({ resources: [] as CloudinaryImageResource[], error: null as string | null }),
     requirements.imageUsage ? getCloudinaryUsage(context).catch((error) => {
       console.error("Cloudinary usage error:", error);
       return null as CloudinaryUsage | null;
     }) : Promise.resolve(null as CloudinaryUsage | null),
-    Promise.resolve(null as string | null),
-    requirements.videos ? listCloudinaryVideos(context).catch((error) => {
+    requirements.videos ? listCloudinaryVideos(context).then(resources => ({ resources, error: null as string | null })).catch((error) => {
       console.error("Cloudinary video list error:", error);
-      return [] as CloudinaryVideoResource[];
-    }) : Promise.resolve([] as CloudinaryVideoResource[]),
+      return { resources: [] as CloudinaryVideoResource[], error: "The video library could not be loaded. Check the media connection and refresh." };
+    }) : Promise.resolve({ resources: [] as CloudinaryVideoResource[], error: null as string | null }),
     requirements.videoUsage ? getCloudinaryVideoUsage(context).catch((error) => {
       console.error("Cloudinary video usage error:", error);
       return null as CloudinaryUsage | null;
     }) : Promise.resolve(null as CloudinaryUsage | null),
-    Promise.resolve(null as string | null),
   ]);
+  const { resources: cloudinaryImages, error: cloudinaryError } = imageListResult;
+  const { resources: cloudinaryVideos, error: cloudinaryVideoError } = videoListResult;
 
   let marketingData: AdminMarketingData = {
     schemaReady: false,
@@ -525,9 +533,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   const payload = {
     adminUser: toPublicAdminUser(adminUser),
-    users,
+    users: users.map(user => toPublicAdminUser(user)),
     userActivity,
-    adminUsers,
+    adminUsers: adminUsers.map(user => toPublicAdminUser(user)),
     totalUsersCount,
     totalPages,
     currentPage: page,
@@ -588,6 +596,7 @@ function adminSettingsSaveError(setting: string, error: unknown): AdminActionDat
 }
 
 export async function action({ request, context }: ActionFunctionArgs): Promise<AdminActionData | Response> {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
   const isMultipart = request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data") ?? false;
   const maximumBodyBytes = isMultipart ? MAX_ADMIN_ACTION_BODY_BYTES : 1024 * 1024;
   if (requestBodyExceedsLimit(request, maximumBodyBytes)) {
@@ -636,7 +645,8 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     }
   }
 
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, maximumBodyBytes);
+  if (!formData) return { error: "This admin form could not be read or exceeds the upload limit." };
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "logout") {
@@ -913,7 +923,7 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     const userId = String(formData.get("userId") ?? "");
     const role = String(formData.get("role") ?? "");
 
-    if (!userId || !isUserRole(role)) {
+    if (!isUuid(userId) || !isUserRole(role)) {
       return { error: "Invalid role." };
     }
 
@@ -925,7 +935,7 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     const userIds = Array.from(new Set(formData.getAll("userIds").map(String).filter(Boolean)));
     const role = String(formData.get("role") ?? "");
 
-    if (!userIds.length || !isUserRole(role)) {
+    if (!userIds.length || !userIds.every(isUuid) || !isUserRole(role)) {
       return { error: "Invalid input." };
     }
     if (userIds.length > MAX_BULK_RECORDS) return { error: `Update at most ${MAX_BULK_RECORDS} users at a time.` };
@@ -937,6 +947,7 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   if (intent === "bulk-delete") {
     const userIds = Array.from(new Set(formData.getAll("userIds").map(String).filter(Boolean)));
     if (!userIds.length) return { error: "No users selected." };
+    if (!userIds.every(isUuid)) return { error: "Select valid user accounts." };
     if (userIds.length > MAX_BULK_RECORDS) return { error: `Delete at most ${MAX_BULK_RECORDS} users at a time.` };
 
     await db.update(usersTable).set({ deletedAt: new Date(), updatedAt: new Date() }).where(inArray(usersTable.id, userIds));
@@ -946,6 +957,7 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   if (intent === "bulk-restore") {
     const userIds = Array.from(new Set(formData.getAll("userIds").map(String).filter(Boolean)));
     if (!userIds.length) return { error: "No users selected." };
+    if (!userIds.every(isUuid)) return { error: "Select valid user accounts." };
     if (userIds.length > MAX_BULK_RECORDS) return { error: `Restore at most ${MAX_BULK_RECORDS} users at a time.` };
 
     await db.update(usersTable).set({ deletedAt: null }).where(inArray(usersTable.id, userIds));
@@ -955,6 +967,7 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   if (intent === "bulk-permanent-delete") {
     const userIds = Array.from(new Set(formData.getAll("userIds").map(String).filter(Boolean)));
     if (!userIds.length) return { error: "No users selected." };
+    if (!userIds.every(isUuid)) return { error: "Select valid user accounts." };
     if (userIds.length > MAX_BULK_RECORDS) return { error: `Delete at most ${MAX_BULK_RECORDS} users at a time.` };
 
     await db.delete(usersTable).where(and(inArray(usersTable.id, userIds), isNotNull(usersTable.deletedAt)));
@@ -1250,7 +1263,7 @@ function AdminProjects() {
                     ))}
                   </ul>
                 ) : null}
-                <Form method="post" className="mt-4 grid gap-3 rounded-xl bg-[#f8f8fb] p-4 sm:grid-cols-[minmax(160px,0.7fr)_minmax(190px,1fr)_minmax(190px,1fr)_auto] sm:items-end">
+                <Form method="post" className="admin-project-billing mt-4 grid gap-3 rounded-xl bg-[#f8f8fb] p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end [&>label]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0">
                   <input type="hidden" name="intent" value="workspace-project-billing" />
                   <input type="hidden" name="projectId" value={project.id} />
                   <label className="grid gap-2 text-xs font-black text-[#536779]">Billing status<select name="billingStatus" defaultValue={project.billingStatus} className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="quote_requested">Quote requested</option><option value="quote_approved">Quote confirmed</option><option value="invoice_pending">Invoice sent</option><option value="paid">Paid</option></select></label>
@@ -1261,8 +1274,8 @@ function AdminProjects() {
                 <Form method="post" className="mt-4 flex flex-wrap items-end gap-3">
                   <input type="hidden" name="intent" value="workspace-project-status" />
                   <input type="hidden" name="projectId" value={project.id} />
-                  <label className="grid gap-2 text-xs font-black text-[#536779]">Move project to<select name="status" defaultValue={project.status} className="neo-workspace__profile-input h-11 min-w-[190px] rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="intake">Intake</option><option value="editing">Editing</option><option value="review">Customer review</option><option value="revision">Revision</option><option value="delivered">Delivered</option></select></label>
-                  <label className="grid gap-2 text-xs font-black text-[#536779]">Preview link <input type="url" name="reviewUrl" placeholder="Required for customer review" className="neo-workspace__profile-input h-11 min-w-[220px] rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
+                  <label className="grid min-w-0 flex-1 basis-48 gap-2 text-xs font-black text-[#536779]">Move project to<select name="status" defaultValue={project.status} className="neo-workspace__profile-input h-11 min-w-0 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="intake">Intake</option><option value="editing">Editing</option><option value="review">Customer review</option><option value="revision">Revision</option><option value="delivered">Delivered</option></select></label>
+                  <label className="grid min-w-0 flex-1 basis-56 gap-2 text-xs font-black text-[#536779]">Preview link <input type="url" name="reviewUrl" placeholder="Required for customer review" className="neo-workspace__profile-input h-11 min-w-0 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
                   <button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit h-11 rounded-xl px-4 text-xs font-black disabled:opacity-60">{isSubmitting ? "Saving…" : "Update status"}</button>
                 </Form>
               </article>
@@ -1287,7 +1300,7 @@ function AdminProjects() {
 }
 
 function AdminOverview() {
-  const { adminUser, stats, cloudinaryImageCount, pricingPackageCount } = useLoaderData<typeof loader>();
+  const { adminUser, stats, cloudinaryImageCount, cloudinaryError, pricingPackageCount } = useLoaderData<typeof loader>();
 
   return (
     <AdminPanelShell
@@ -1312,7 +1325,7 @@ function AdminOverview() {
           ["Total users", String(stats.total), "Accounts outside trash", "group"],
           ["Admin team", String(stats.admins), "Privileged accounts", "admin_panel_settings"],
           ["Editors", String(stats.editors), "Production capacity", "movie_edit"],
-          ["Media assets", String(cloudinaryImageCount), `${pricingPackageCount} packages published`, "perm_media"],
+          ["Media assets", cloudinaryError ? "—" : String(cloudinaryImageCount), cloudinaryError ? "Media connection unavailable" : `${pricingPackageCount} packages published`, "perm_media"],
         ].map(([label, value, hint, icon]) => {
           return (
             <article key={label} className="neo-workspace__stat-card rounded-[17px] p-4">
@@ -1530,14 +1543,14 @@ function LegacyAdminRoute() {
             {tab === "users" ? (
               <>
                 <button
-                  onClick={() => setShowCreateAdminModal(true)}
+                  onClick={event => { event.currentTarget.focus(); setShowCreateAdminModal(true); }}
                   className="hidden h-10 items-center gap-2 rounded-full border border-[#e5e7f2] bg-white px-4 text-xs font-black text-[#5f6378] transition hover:border-[#c8cbe0] sm:inline-flex"
                 >
                   <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span>
                   Add Admin
                 </button>
                 <button
-                  onClick={() => setShowCreateModal(true)}
+                  onClick={event => { event.currentTarget.focus(); setShowCreateModal(true); }}
                   className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] sm:inline-flex"
                 >
                   <span className="material-symbols-outlined text-[18px]">person_add</span>
@@ -1557,6 +1570,10 @@ function LegacyAdminRoute() {
           ) : null}
           {tab === "users" ? (
             <>
+              <div className="flex flex-wrap gap-3 sm:hidden">
+                <button type="button" onClick={event => { event.currentTarget.focus(); setShowCreateModal(true); }} className="neo-workspace__secondary-action inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold"><span className="material-symbols-outlined" aria-hidden="true">person_add</span>Add User</button>
+                <button type="button" onClick={event => { event.currentTarget.focus(); setShowCreateAdminModal(true); }} className="neo-workspace__secondary-action inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold"><span className="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>Add Admin</button>
+              </div>
               {/* Metrics */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 <MetricCard compact label="All Users" value={stats.total} icon="group" color="blue" to="?tab=users&view=active" active={!isAdminDirectory && view !== "trash" && !searchParams.get("role")} />
@@ -1601,6 +1618,7 @@ function LegacyAdminRoute() {
                       </span>
                       <input
                         name="q"
+                        aria-label="Search users by name or email"
                         type="text"
                         defaultValue={searchParams.get("q") || ""}
                         placeholder="Search users..."
@@ -1611,6 +1629,7 @@ function LegacyAdminRoute() {
                       {!isAdminDirectory ? (
                         <select
                           name="role"
+                          aria-label="Filter by account role"
                           defaultValue={searchParams.get("role") || ""}
                           className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-black"
                         >
@@ -1636,7 +1655,7 @@ function LegacyAdminRoute() {
                   {!isAdminDirectory && selectedUsers.length > 0 && (
                     <div className="mt-4 flex items-center justify-between rounded-xl bg-black p-3 text-white animate-in slide-in-from-top-2">
                       <span className="text-sm font-bold pl-2">{selectedUsers.length} selected</span>
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {searchParams.get("view") === "trash" ? (
                           <>
                             <Form method="post" reloadDocument>
@@ -1782,27 +1801,27 @@ function LegacyAdminRoute() {
 
       {/* Create User Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in ">
-          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl animate-in zoom-in-95 ">
+        <AdminAccountDialog labelledBy="create-user-title" onDismiss={() => setShowCreateModal(false)}>
+          <div className="p-6 sm:p-8">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-slate-900">Add New User</h3>
-              <button onClick={() => setShowCreateModal(false)} className="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 ">
+              <h3 id="create-user-title" className="text-2xl font-black text-slate-900">Add New User</h3>
+              <button aria-label="Close new user form" onClick={() => setShowCreateModal(false)} className="h-11 w-11 rounded-full flex items-center justify-center text-slate-500 ">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             <Form method="post" reloadDocument className="space-y-4">
               <input type="hidden" name="intent" value="create-user" />
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
-                <input name="name" type="text" placeholder="John Doe" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+                <label htmlFor="new-user-name" className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
+                <input id="new-user-name" name="name" type="text" placeholder="John Doe" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
-                <input name="email" type="email" required placeholder="john@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+                <label htmlFor="new-user-email" className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
+                <input id="new-user-email" name="email" type="email" required placeholder="john@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">System Role</label>
-                <select name="role" required defaultValue="customer" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black">
+                <label htmlFor="new-user-role" className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">System Role</label>
+                <select id="new-user-role" name="role" required defaultValue="customer" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black">
                   {USER_ROLES.map(r => <option key={r} value={r}>{formatUserRole(r)}</option>)}
                 </select>
               </div>
@@ -1815,35 +1834,35 @@ function LegacyAdminRoute() {
               </div>
             </Form>
           </div>
-        </div>
+        </AdminAccountDialog>
       )}
 
       {showCreateAdminModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in ">
-          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl animate-in zoom-in-95 ">
+        <AdminAccountDialog labelledBy="create-admin-title" onDismiss={() => setShowCreateAdminModal(false)}>
+          <div className="p-6 sm:p-8">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-black text-slate-900">Create Admin</h3>
-              <button onClick={() => setShowCreateAdminModal(false)} className="h-8 w-8 rounded-full flex items-center justify-center text-slate-400 ">
+              <h3 id="create-admin-title" className="text-2xl font-black text-slate-900">Create Admin</h3>
+              <button aria-label="Close new admin form" onClick={() => setShowCreateAdminModal(false)} className="h-11 w-11 rounded-full flex items-center justify-center text-slate-500 ">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             <Form method="post" reloadDocument className="space-y-4">
               <input type="hidden" name="intent" value="create-admin" />
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
-                <input name="name" type="text" placeholder="Jane Admin" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+                <label htmlFor="new-admin-name" className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Full Name</label>
+                <input id="new-admin-name" name="name" type="text" placeholder="Jane Admin" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Admin Email</label>
-                <input name="email" type="email" required placeholder="admin@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+                <label htmlFor="new-admin-email" className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Admin Email</label>
+                <input id="new-admin-email" name="email" type="email" required placeholder="admin@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Password</label>
-                <input name="password" type="password" required minLength={12} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+                <label htmlFor="new-admin-password" className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Password</label>
+                <input id="new-admin-password" name="password" type="password" required minLength={12} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Confirm Password</label>
-                <input name="confirmPassword" type="password" required minLength={12} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
+                <label htmlFor="new-admin-confirmPassword" className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">Confirm Password</label>
+                <input id="new-admin-confirmPassword" name="confirmPassword" type="password" required minLength={12} className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black focus:ring-4 focus:ring-black/5" />
               </div>
               {actionError && <div className="rounded-xl bg-red-50 p-3 text-center border border-red-100 text-xs font-bold text-red-600">{actionError}</div>}
               <div className="pt-4 flex gap-3">
@@ -1854,7 +1873,7 @@ function LegacyAdminRoute() {
               </div>
             </Form>
           </div>
-        </div>
+        </AdminAccountDialog>
       )}
 
     </>
@@ -1893,8 +1912,8 @@ function PricingPackagesPanel({
   };
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-      <div className="space-y-4">
+    <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="min-w-0 space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <MetricCard label="Packages" value={packages.length} icon="sell" color="blue" />
           <MetricCard label="Published" value={activeCount} icon="visibility" color="indigo" />
@@ -1911,8 +1930,8 @@ function PricingPackagesPanel({
                 onClick={() => selectPackage(pkg.id)}
                 className={`block w-full p-4 text-left ${editingPackage?.id === pkg.id ? "bg-slate-900 text-white" : ""}`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 break-words">
                     <p className="font-black">{pkg.name}</p>
                     <p className={`mt-1 text-xs font-bold ${editingPackage?.id === pkg.id ? "text-slate-300" : "text-slate-500"}`}>{pkg.price}{pkg.interval} · /pricing/{pkg.slug}</p>
                   </div>
@@ -1933,7 +1952,7 @@ function PricingPackagesPanel({
             <h3 className="mt-1 text-2xl font-black text-slate-900">{editingPackage?.name || "Select a package"}</h3>
           </div>
           {editingPackage ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Link to={`/pricing/${editingPackage.slug}`} target="_blank" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-black text-slate-700 ">
                 <span className="material-symbols-outlined text-[18px]">open_in_new</span>
                 Preview
@@ -2724,8 +2743,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function MetricCard({ label, value, icon, color, to, active = false, compact = false }: { label: string; value: number; icon: string; color: string; to?: string; active?: boolean; compact?: boolean }) {
   const content = (
     <>
-      <div className="flex items-center justify-between gap-1">
-        <div className={`neo-icon-badge neo-workspace__metric-icon flex shrink-0 items-center justify-center ${compact ? "h-8 w-8 rounded-lg" : "h-10 w-10 rounded-xl"}`}><span className={`material-symbols-outlined ${compact ? "text-[17px]" : "text-[20px]"}`}>{icon}</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className={`neo-icon-badge neo-workspace__metric-icon flex shrink-0 items-center justify-center ${compact ? "h-8 w-8 rounded-lg" : "h-10 w-10 rounded-xl"}`}><span aria-hidden="true" className={`material-symbols-outlined ${compact ? "text-[17px]" : "text-[20px]"}`}>{icon}</span></div>
         <span className={`neo-workspace__metric-state whitespace-nowrap text-[10px] font-black uppercase tracking-widest ${compact ? "text-[9px] tracking-[0.12em]" : ""} ${active ? "is-active" : ""}`}>{active ? "Selected" : "Realtime"}</span>
       </div>
       <div className={compact ? "mt-2 min-w-0" : "mt-4"}><p className={`neo-workspace__metric-value ${compact ? "text-2xl leading-tight" : ""}`}>{value}</p><p className={`neo-workspace__metric-label ${compact ? "truncate text-xs" : ""}`}>{label}</p></div>
@@ -2741,7 +2760,7 @@ function MetricCard({ label, value, icon, color, to, active = false, compact = f
   }
 
   return (
-    <div data-tone={color} className="neo-workspace__metric-card rounded-2xl p-5">
+    <div data-tone={color} className="neo-workspace__metric-card min-w-0 rounded-2xl p-5">
       {content}
     </div>
   );
@@ -2796,7 +2815,7 @@ function UserActivitySummary({ activity }: { activity: AdminUserActivity }) {
 }
 
 function PaginationButton({ icon, disabled, onClick }: { icon: string, disabled: boolean, onClick: () => void }) {
-  return <button disabled={disabled} onClick={onClick} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-40"><span className="material-symbols-outlined text-[18px]">{icon}</span></button>;
+  return <button aria-label={icon === "chevron_left" ? "Previous page" : "Next page"} disabled={disabled} onClick={onClick} className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 disabled:opacity-40"><span aria-hidden="true" className="material-symbols-outlined text-[18px]">{icon}</span></button>;
 }
 
 function getSortIcon(params: URLSearchParams, field: string) {

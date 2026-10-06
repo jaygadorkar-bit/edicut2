@@ -4,6 +4,7 @@ import { Form, Link, redirect, useActionData, useSearchParams, useNavigation } f
 import { ShieldCheck } from "lucide-react";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 
 type UpdatePasswordActionData = {
   error?: string;
@@ -21,11 +22,13 @@ export const meta: MetaFunction = () => [
 ];
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return { error: "Password update request is too large. Please try again." } satisfies UpdatePasswordActionData;
   }
 
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, 64 * 1024);
+  if (!formData) return { error: "Password update request could not be read. Please try again." } satisfies UpdatePasswordActionData;
   const password = formData.get("password");
   const confirmPassword = formData.get("confirmPassword");
   const accessToken = formData.get("accessToken");

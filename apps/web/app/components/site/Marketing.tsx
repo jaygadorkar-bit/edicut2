@@ -1,6 +1,6 @@
 import type { FormEvent, PointerEvent as ReactPointerEvent } from "react";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Link, NavLink, useLocation, useMatches } from "react-router";
+import { Link, NavLink, useLocation, useMatches, useNavigation, useSubmit } from "react-router";
 import { Award, BadgeCheck, CalendarDays, CircleHelp, Film, MessageCircle, Star, Trophy, Workflow, type LucideIcon } from "lucide-react";
 import { authHref } from "../auth/AuthModal";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
@@ -11,7 +11,7 @@ import { wrapLoopPosition } from "../../lib/portfolio-loop";
 import { CookieConsent } from "./CookieConsent.js";
 import { ContactPageIntro } from "./ContactPageIntro";
 import { DEFAULT_CONTACT_EMAIL } from "../../lib/contact-email";
-import { CONTACT_WHATSAPP_URL } from "../../lib/contact-details";
+import { CONTACT_WHATSAPP_DISPLAY_NUMBER, CONTACT_WHATSAPP_URL } from "../../lib/contact-details";
 import type { PortfolioSection as PortfolioSectionView, PortfolioVideo } from "../../lib/portfolio.server";
 
 export { WhyHireUsSection } from "./WhyHireUsSection";
@@ -594,7 +594,7 @@ export function MessageWidget() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold">WhatsApp</span>
-                <span className="block truncate text-xs text-white/60">+880 1515-688142</span>
+                <span className="block truncate text-xs text-white/60">{CONTACT_WHATSAPP_DISPLAY_NUMBER}</span>
               </span>
               <span className="text-xs font-semibold text-emerald-300 opacity-0 transition group-hover:opacity-100">Open →</span>
             </a>
@@ -1681,11 +1681,19 @@ export function FAQSection() {
   );
 }
 
-export function ContactSection({ compact = false, page = false, status, action = "/#contact", contactEmail = DEFAULT_CONTACT_EMAIL }: { compact?: boolean; page?: boolean; status?: "sent" | "security-error" | "invalid-error" | "delivery-error"; action?: string; contactEmail?: string }) {
+export function ContactSection({ compact = false, page = false, status, action = "/?index#contact", contactEmail = DEFAULT_CONTACT_EMAIL }: { compact?: boolean; page?: boolean; status?: "sent" | "security-error" | "invalid-error" | "delivery-error"; action?: string; contactEmail?: string }) {
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const messageHelpId = useId();
+  const navigation = useNavigation();
+  const submit = useSubmit();
+
+  useEffect(() => {
+    if (navigation.state !== "idle") return;
+    submittingRef.current = false;
+    setSubmitting(false);
+  }, [navigation.state]);
 
   useEffect(() => {
     function restoreForm(event: PageTransitionEvent) {
@@ -1708,7 +1716,7 @@ export function ContactSection({ compact = false, page = false, status, action =
 
     try {
       await executeInvisibleRecaptcha(form, "contact_inquiry");
-      HTMLFormElement.prototype.submit.call(form);
+      await submit(form, { method: "post", action });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
       submittingRef.current = false;
@@ -1732,7 +1740,7 @@ export function ContactSection({ compact = false, page = false, status, action =
             <p className="text-sm font-bold leading-6 neo-ink">Tell us your format, volume, and deadline. We will recommend the cleanest lane to start.</p>
           </div>
         </div> : null}
-        <form method="post" action={action} className="neo-card contact-form grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit} aria-busy={submitting}>
+        <form method="post" action={action} className="neo-card contact-form grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit} aria-busy={submitting || navigation.state !== "idle"}>
           <input type="hidden" name="g-recaptcha-response" value="" />
           {page ? <div className="contact-form-heading"><h2>What are you working on?</h2><p>Tell us a little about your project. We&apos;ll take it from here.</p></div> : null}
           <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -1744,7 +1752,7 @@ export function ContactSection({ compact = false, page = false, status, action =
             <textarea name="brief" required minLength={20} maxLength={1200} aria-describedby={page ? messageHelpId : undefined} autoComplete="off" placeholder={compact ? "Message" : page ? "Share your channel, editing style, and deadline. Links to examples are welcome." : undefined} className="neo-inset min-h-28 rounded-xl px-4 py-3 font-medium outline-none focus:border-foreground" />
             {page ? <span id={messageHelpId} className="contact-field-help">20–1,200 characters. Include your editing needs and timeline.</span> : null}
           </label>
-          <button type="submit" disabled={submitting} className="neo-button neo-button--primary w-full">{submitting ? "Sending inquiry…" : "Send inquiry"}{page ? <span className="material-symbols-outlined text-[19px]" aria-hidden="true">arrow_forward</span> : null}</button>
+          <button type="submit" disabled={submitting || navigation.state !== "idle"} className="neo-button neo-button--primary w-full">{submitting || navigation.state !== "idle" ? "Sending inquiry…" : "Send inquiry"}{page ? <span className="material-symbols-outlined text-[19px]" aria-hidden="true">arrow_forward</span> : null}</button>
           {status === "sent" ? <p role="status" className="neo-inset rounded-xl px-4 py-3 yt-small font-black text-primary">Message sent. We will reply shortly.</p> : null}
           {securityError || status === "security-error" ? <p role="alert" className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">{securityError || "Security check failed. Please try again."}</p> : null}
           {status === "invalid-error" ? <p role="alert" className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">Enter a name, valid email, and a message of 20–1,200 characters, then try again.</p> : null}

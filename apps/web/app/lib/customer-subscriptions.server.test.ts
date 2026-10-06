@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { DatabaseClient } from "@edicut/db/client";
 import type { SQL } from "drizzle-orm";
-import { deleteUnpaidSubscription, getOwnedSubscription, isMissingCustomerSubscriptionSchema, isSameSiteMutation, listCustomerSubscriptions, markSubscriptionPaid, readSubscriptionForm, saveUnpaidSubscription, subscriptionPage } from "./customer-subscriptions.server";
+import { adminSubscriptionsCsv, deleteAdminSubscription, deleteUnpaidSubscription, getLatestCustomerContact, getOwnedSubscription, isMissingCustomerSubscriptionSchema, isSameSiteMutation, listAdminSubscriptions, listAdminSubscriptionsForExport, listCustomerSubscriptions, markSubscriptionPaid, markSubscriptionUnpaid, readSubscriptionForm, saveUnpaidSubscription, subscriptionPage, subscriptionPaymentFilter } from "./customer-subscriptions.server";
 import { CHECKOUT_COUNTRIES, validateCheckoutContact } from "./checkout-contact";
 
 const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -12,7 +12,7 @@ const updatedAt = "2026-10-03T12:00:00.000Z";
 function fakeDb(rows: unknown[] = [], selectRows: unknown[] = []) {
   const chain = {
     values: vi.fn().mockReturnThis(), onConflictDoUpdate: vi.fn().mockReturnThis(), set: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), orderBy: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(), innerJoin: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(), orderBy: vi.fn().mockReturnThis(),
     offset: vi.fn().mockResolvedValue(rows), limit: vi.fn().mockResolvedValue(selectRows), returning: vi.fn().mockResolvedValue(rows),
   };
   const raw = { insert: vi.fn(() => chain), update: vi.fn(() => chain), select: vi.fn(() => chain), execute: vi.fn().mockResolvedValue(rows) };
@@ -70,6 +70,16 @@ describe("subscription persistence protections", () => {
     expect(compiled.params).toEqual([id, owner, "creator"]);
     expect(compiled.sql).toContain('"deleted_at" is null');
   });
+  it("loads the latest contact only from the authenticated owner's visible purchases", async () => {
+    const contact = { country: "BD", phone: "+8801712345678" };
+    const { db, chain } = fakeDb([], [contact]);
+    expect(await getLatestCustomerContact(db, owner)).toEqual(contact);
+    const compiled = query(chain.where.mock.calls[0][0]);
+    expect(compiled.params).toEqual([owner]);
+    expect(compiled.sql).toContain('"deleted_at" is null');
+    expect(chain.orderBy).toHaveBeenCalled();
+    expect(chain.limit).toHaveBeenCalledWith(1);
+  });
   it("does not query invalid record ids", async () => {
     const { db, raw } = fakeDb();
     expect(await getOwnedSubscription(db, owner, "invalid", "creator")).toBeNull();
@@ -97,7 +107,10 @@ describe("subscription persistence protections", () => {
   it("rejects invalid timestamps and already paid/deleted/stale records", async () => {
     const { db, raw } = fakeDb();
     expect(await markSubscriptionPaid(db, id, admin, "yesterday")).toBe(false);
+    expect(await markSubscriptionUnpaid(db, id, "yesterday")).toBe(false);
+    expect(await deleteAdminSubscription(db, id, "yesterday")).toBe(false);
     expect(raw.select).not.toHaveBeenCalled();
+    expect(raw.execute).not.toHaveBeenCalled();
     expect(await markSubscriptionPaid(db, id, admin, updatedAt)).toBe(false);
     expect(raw.update).not.toHaveBeenCalled();
   });
@@ -111,12 +124,78 @@ describe("subscription persistence protections", () => {
     expect(compiled.params).toEqual([id, updatedAt, admin]);
     expect(raw.update).not.toHaveBeenCalled();
   });
+  it("reverts paid purchases only when their balance and project history are unused", async () => {
+    const { db, raw } = fakeDb([{ id }]);
+    expect(await markSubscriptionUnpaid(db, id, updatedAt)).toBe(true);
+    const compiled = query(raw.execute.mock.calls[0][0]);
+    expect(compiled.params).toEqual([id, updatedAt]);
+    expect(compiled.sql).toContain("FOR UPDATE OF s");
+    expect(compiled.sql).toContain("FOR UPDATE OF e");
+    expect(compiled.sql).toContain("e.used_units > 0");
+    expect(compiled.sql).toContain("project_intakes");
+    expect(compiled.sql).toContain("redemption_count = c.redemption_count - 1");
+    expect(compiled.sql).toContain("paid_at = NULL, paid_by = NULL");
+    expect(raw.update).not.toHaveBeenCalled();
+  });
+  it("soft-deletes either payment state and releases only a safe paid coupon redemption", async () => {
+    const { db, raw } = fakeDb([{ id }]);
+    expect(await deleteAdminSubscription(db, id, updatedAt)).toBe(true);
+    const compiled = query(raw.execute.mock.calls[0][0]);
+    expect(compiled.params).toEqual([id, updatedAt]);
+    expect(compiled.sql).toContain("deleted_at = now()");
+    expect(compiled.sql).toContain("t.status = 'paid'");
+    expect(compiled.sql).toContain("t.status = 'unpaid' OR t.coupon_code IS NULL");
+    expect(compiled.sql).toContain("redemption_count = c.redemption_count - 1");
+    expect(compiled.sql).toContain("FOR UPDATE OF e");
+  });
   it("bounds list queries and scopes customer pagination to the owner", async () => {
     const { db, chain } = fakeDb();
     chain.limit.mockReturnValueOnce(chain as never);
     await listCustomerSubscriptions(db, owner, 2);
     expect(query(chain.where.mock.calls[0][0]).params).toEqual([owner]);
     expect(chain.limit).toHaveBeenCalledWith(26); expect(chain.offset).toHaveBeenCalledWith(25);
+  });
+  it("filters admin purchases by payment status before applying pagination", async () => {
+    const { db, chain } = fakeDb();
+    chain.limit.mockReturnValueOnce(chain as never);
+    await listAdminSubscriptions(db, 3, "paid");
+    const compiled = query(chain.where.mock.calls[0][0]);
+    expect(compiled.params).toEqual(["paid"]); expect(compiled.sql).toContain('"status" =');
+    expect(chain.limit).toHaveBeenCalledWith(26); expect(chain.offset).toHaveBeenCalledWith(50);
+  });
+  it("exports every nondeleted purchase for a requested payment status", async () => {
+    const { db, chain } = fakeDb();
+    await listAdminSubscriptionsForExport(db, "paid");
+    const compiled = query(chain.where.mock.calls[0][0]);
+    expect(compiled.params).toEqual(["paid"]); expect(compiled.sql).toContain('"deleted_at" is null');
+    expect(chain.orderBy).toHaveBeenCalled(); expect(chain.limit).not.toHaveBeenCalled(); expect(chain.offset).not.toHaveBeenCalled();
+  });
+  it("exports all nondeleted purchases when no status is selected", async () => {
+    const { db, chain } = fakeDb();
+    await listAdminSubscriptionsForExport(db);
+    const compiled = query(chain.where.mock.calls[0][0]);
+    expect(compiled.params).toEqual([]);
+    expect(compiled.sql).toContain('"deleted_at" is null');
+    expect(compiled.sql).not.toContain('"status" =');
+    expect(chain.orderBy).toHaveBeenCalled(); expect(chain.limit).not.toHaveBeenCalled(); expect(chain.offset).not.toHaveBeenCalled();
+  });
+  it("creates Excel-friendly CSV with escaped cells and formula-safe text", () => {
+    const csv = adminSubscriptionsCsv([{
+      subscription: {
+        id, ownerId: owner, packageSlug: "creator", planName: '=HYPERLINK("https://example.test","Open")', purchaseType: "monthly",
+        country: "BD", phone: "+8801712345678", addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }],
+        subtotalCents: 10400, discountCents: 0, amountCents: 10400, currency: "USD", couponCode: null,
+        affiliateId: null, affiliateCode: null, affiliateCommissionBps: 0, status: "paid", paidAt: new Date("2026-10-04T00:00:00.000Z"), paidBy: admin,
+        deletedAt: null, createdAt: new Date("2026-10-03T12:00:00.000Z"), updatedAt: new Date("2026-10-04T00:00:00.000Z"),
+      },
+      name: 'Ada, "Ace"\nName', email: "ada@example.test",
+    }]);
+    expect(csv.startsWith("\uFEFF\"Purchase ID\",\"Customer Name\"")).toBe(true);
+    expect(csv).toContain(`"'=HYPERLINK(""https://example.test"",""Open"")"`);
+    expect(csv).toContain(`"Ada, ""Ace""\nName"`);
+    expect(csv).toContain("\"104.00\",\"USD\",\"paid\"");
+    expect(csv).toContain("Custom thumbnail (20.00 USD)");
+    expect(csv).toContain("2026-10-03T12:00:00.000Z");
   });
 });
 
@@ -135,9 +214,12 @@ describe("mutation and pagination guards", () => {
     expect(await readSubscriptionForm(new Request("https://edicut.com/", { method: "POST", body: new FormData() }), 4096)).toBeNull();
   });
   it("rejects foreign origins and cross-site metadata", () => {
-    expect(isSameSiteMutation(new Request("https://edicut.com/checkout", { headers: { Origin: "https://evil.com" } }))).toBe(false);
-    expect(isSameSiteMutation(new Request("https://edicut.com/checkout", { headers: { "Sec-Fetch-Site": "cross-site" } }))).toBe(false);
-    expect(isSameSiteMutation(new Request("https://edicut.com/checkout", { headers: { Origin: "https://edicut.com" } }))).toBe(true);
+    expect(isSameSiteMutation(new Request("https://edicut.com/checkout", { method: "POST", headers: { Origin: "https://evil.com" } }))).toBe(false);
+    expect(isSameSiteMutation(new Request("https://edicut.com/checkout", { method: "POST", headers: { "Sec-Fetch-Site": "cross-site" } }))).toBe(false);
+    expect(isSameSiteMutation(new Request("https://edicut.com/checkout", { method: "POST", headers: { Origin: "https://edicut.com" } }))).toBe(true);
   });
   it.each(["0", "-1", "abc", "1e4", "99999999"])("defaults invalid page %s", page => expect(subscriptionPage(new Request(`https://edicut.com/?page=${page}`))).toBe(1));
+  it.each([["", "unpaid"], ["status=paid", "paid"], ["status=unpaid", "unpaid"], ["status=other", "unpaid"]])("parses payment filter query %s", (queryString, expected) => {
+    expect(subscriptionPaymentFilter(new Request(`https://edicut.com/?${queryString}`))).toBe(expected);
+  });
 });

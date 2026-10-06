@@ -17,7 +17,7 @@ describe("dashboard role access", () => {
       "Reviews",
       "Uploads",
       "Contact Inbox",
-      "Purchases",
+      "Subscriptions",
       "Affiliates",
       "Settings",
     ]);

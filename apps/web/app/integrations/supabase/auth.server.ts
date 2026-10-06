@@ -1,7 +1,8 @@
 import type { AuthResponse, Session, User } from "@supabase/supabase-js";
+import { users } from "@edicut/db/schema";
+import { findUserByEmail, findUserById } from "@edicut/db/repositories/users";
+import { getDbFromContext } from "../../lib/db.server";
 import {
-  getSupabaseAdmin,
-  getSupabaseConfig,
   getSupabaseClient,
   isSupabaseConfigured,
   type SupabaseRuntimeContext,
@@ -10,41 +11,43 @@ import {
 type AuthResult = {
   user: User | null;
   session: Session | null;
+  profileId?: string;
   error?: string;
 };
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Supabase authentication failed.";
-}
 
 async function syncUserProfile(
   context: SupabaseRuntimeContext | undefined,
   user: User,
   name?: string,
 ) {
-  const admin = getSupabaseAdmin(context);
-  const { data: existing, error: lookupError } = await admin
-    .from("users")
-    .select("id")
-    .eq("id", user.id)
-    .maybeSingle();
+  const email = user.email?.trim().toLowerCase();
+  if (!email) throw new Error("Your account must have an email address.");
+  const db = getDbFromContext(context ?? {});
+  const existing = await findUserById(db, user.id) ?? await findUserByEmail(db, email);
+  if (existing) {
+    if (!existing.active || existing.deletedAt) {
+      throw new Error("This account is unavailable. Contact EdiCut support.");
+    }
+    if (existing.email.toLowerCase() !== email || (existing.id !== user.id && !user.email_confirmed_at)) {
+      throw new Error("Confirm your email before linking this account.");
+    }
+    // Preserve local IDs, ownership, roles and account restrictions.
+    return existing.id;
+  }
 
-  if (lookupError) throw lookupError;
-  if (existing) return;
-
-  const { error } = await admin.from("users").insert({
+  await db.insert(users).values({
     id: user.id,
-    email: user.email ?? "",
+    email,
     name: name ?? (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null),
-    profile_image_url:
+    profileImageUrl:
       typeof user.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null,
+    role: "customer",
   });
-
-  if (error) throw error;
+  return user.id;
 }
 
 export function supabaseAuthEnabled(context?: SupabaseRuntimeContext) {
-  return isSupabaseConfigured(context) && Boolean(getSupabaseConfig(context)?.serviceRoleKey);
+  return isSupabaseConfigured(context);
 }
 
 export async function signUpWithSupabase({
@@ -70,13 +73,19 @@ export async function signUpWithSupabase({
   });
 
   if (response.error) return { user: null, session: null, error: response.error.message };
-  if (response.data.user) {
-    await syncUserProfile(context, response.data.user, name);
+  let profileId: string | undefined;
+  if (response.data.user && response.data.session) {
+    try {
+      profileId = await syncUserProfile(context, response.data.user, name);
+    } catch (error) {
+      return profileSyncFailure(error);
+    }
   }
 
   return {
     user: response.data.user,
     session: response.data.session,
+    profileId,
   };
 }
 
@@ -94,13 +103,34 @@ export async function signInWithSupabase({
 
   const response = await client.auth.signInWithPassword({ email, password });
   if (response.error) return { user: null, session: null, error: response.error.message };
-  if (response.data.user) {
-    await syncUserProfile(context, response.data.user);
+  let profileId: string | undefined;
+  if (response.data.user && response.data.session) {
+    try {
+      profileId = await syncUserProfile(context, response.data.user);
+    } catch (error) {
+      return profileSyncFailure(error);
+    }
   }
 
   return {
     user: response.data.user,
     session: response.data.session,
+    profileId,
+  };
+}
+
+function profileSyncFailure(error: unknown): AuthResult {
+  const knownMessages = [
+    "Your account must have an email address.",
+    "This account is unavailable. Contact EdiCut support.",
+    "Confirm your email before linking this account.",
+  ];
+  return {
+    user: null,
+    session: null,
+    error: error instanceof Error && knownMessages.includes(error.message)
+      ? error.message
+      : "Your account could not be opened. Please try again shortly.",
   };
 }
 

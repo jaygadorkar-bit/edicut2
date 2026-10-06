@@ -10,7 +10,7 @@ import { getAllowedDashboardFeatures, getDashboardLandingPath, type DashboardFea
 import { deleteUnpaidSubscription, isMissingCustomerSubscriptionSchema, isSameSiteMutation, listCustomerSubscriptions, readSubscriptionForm, subscriptionPage } from "../lib/customer-subscriptions.server";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 
-export const meta: MetaFunction = () => [{ title: "Purchases | EdiCut" }, { name: "robots", content: "noindex,nofollow" }];
+export const meta: MetaFunction = () => [{ title: "Subscriptions | EdiCut" }, { name: "robots", content: "noindex,nofollow" }];
 export function headers() { return { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" }; }
 
 async function customerAccess(request: Request, context: LoaderFunctionArgs["context"]) {
@@ -48,7 +48,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (form.get("intent") !== "delete-unpaid") return { error: "This purchase action is not available." };
   try {
     const removed = await deleteUnpaidSubscription(db, user.id, String(form.get("subscriptionId") || ""));
-    return removed ? { success: "Unpaid package selection removed." } : { error: "This unpaid package selection is no longer available. Paid purchases cannot be deleted." };
+    return removed ? { success: "Unpaid package selection removed." } : { error: "This unpaid package selection is no longer available. Paid subscriptions cannot be deleted." };
   } catch {
     console.error("Unable to delete unpaid subscription");
     return { error: "Your unpaid package selection could not be removed. Please try again." };
@@ -60,28 +60,29 @@ const nav = [
   ["Projects", "video_library", "/dashboard/projects", "projects"],
   ["Reviews", "rate_review", "/dashboard/reviews", "reviews"],
   ["Uploads", "upload_file", "/dashboard/uploads", "uploads"],
-  ["Purchases", "receipt_long", "/dashboard/subscriptions", "billing"],
+  ["Enquiries", "mail", "/dashboard/messages", "support"],
+  ["Subscriptions", "receipt_long", "/dashboard/subscriptions", "billing"],
   ["Affiliates", "hub", "/dashboard/affiliates", "affiliates"],
-  ["Settings", "settings", "/dashboard/settings", "settings"],
 ];
 
 export default function SubscriptionsRoute() {
   const { user, features, records, page, hasNext, purchaseHistoryAvailable } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
-  return <WorkspaceShell title="Purchases" navItems={nav.filter(item => features.includes(item[3] as DashboardFeature)).map(([label, icon, to]) => ({ label, icon, to, end: to === "/dashboard" }))}
-    account={{ name: user.name || user.email, detail: user.email, imageUrl: user.profileImageUrl }} mobileMenu navigationFeedback hideHeaderTitle profileTo={features.includes("settings") ? "/dashboard/profile" : null} settingsTo={features.includes("settings") ? "/dashboard/settings" : null} notificationsTo={features.includes("reviews") ? "/dashboard/reviews" : null}
+  return <WorkspaceShell title="Subscriptions" navItems={nav.filter(item => features.includes(item[3] as DashboardFeature)).map(([label, icon, to]) => ({ label, icon, to, end: to === "/dashboard" }))}
+    account={{ name: user.name || user.email, detail: user.email, imageUrl: user.profileImageUrl }} mobileMenu navigationFeedback hideHeaderTitle profileTo={features.includes("settings") ? "/dashboard/profile" : null} profileNavAtBottom settingsTo={features.includes("settings") ? "/dashboard/settings" : null} startProjectTo={features.includes("projects") ? "/dashboard/projects#new-project" : null} notificationsTo={features.includes("reviews") ? "/dashboard/reviews" : null}
     accountAction={<Form method="post" action="/signout"><button type="submit" aria-label="Sign out" className="min-h-11 px-2 text-slate-600"><span className="material-symbols-outlined" aria-hidden="true">logout</span></button></Form>}>
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div><h2 className="text-2xl font-black">Purchases</h2><p className="mt-2 max-w-xl text-sm text-slate-600">Your one-time video edits and monthly editing packages, with their payment status. Unpaid selections stay here until you pay or remove them.</p></div>
+      <div><h2 className="text-2xl font-black">Subscriptions</h2><p className="mt-2 max-w-xl text-sm text-slate-600">Review your subscriptions and package selections, including their payment status. Unpaid selections stay here until you pay or remove them.</p></div>
       <Link to="/pricing" className="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white">Choose a package</Link>
     </div>
     {result ? <p role={result.error ? "alert" : "status"} className={`mb-5 rounded-xl p-4 text-sm ${result.error ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}>{result.error || result.success}</p> : null}
     {purchaseHistoryAvailable ? <>
+      {records.some(record => record.status === "paid") && features.includes("projects") ? <Link to="/dashboard/projects" className="neo-workspace__panel mb-5 flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-2xl p-4 text-sm font-bold">Your paid package is ready. Complete your channel profile and start a project.<span aria-hidden="true">→</span></Link> : null}
       <SubscriptionList rows={records.map(subscription => ({ subscription }))} />
       <SubscriptionPagination page={page} hasNext={hasNext} />
     </> : <div className="neo-workspace__panel rounded-2xl p-5" role="status">
       <h3 className="font-bold">Purchase history is temporarily unavailable</h3>
-      <p className="mt-2 text-sm text-slate-600">Your existing purchases have not been changed. Please try again later or <Link to="/contact" className="underline underline-offset-4">contact us for help</Link>.</p>
+      <p className="mt-2 text-sm text-slate-600">Your subscription records have not been changed. Please try again later or <Link to="/contact" className="underline underline-offset-4">contact us for help</Link>.</p>
     </div>}
   </WorkspaceShell>;
 }

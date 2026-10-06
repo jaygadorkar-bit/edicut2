@@ -14,6 +14,7 @@ import {
 } from "./session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
 import type { LoaderContext } from "../types";
+import { readMutationForm } from "./mutation-request.server";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -249,12 +250,13 @@ async function createAdminOAuthCompletionResponse({
   );
 }
 
-export async function startGoogleOAuth(request: Request, context?: LoaderContext) {
+export async function startGoogleOAuth(request: Request, context?: LoaderContext, submittedForm?: FormData) {
   const requestUrl = new URL(request.url);
   const localRedirect = getCanonicalLocalOAuthRedirect(requestUrl, configuredAppUrl(readEnv(context)));
   if (localRedirect) return localRedirect;
 
-  const formData = request.method === "POST" ? await request.clone().formData() : null;
+  const formData = submittedForm ?? (request.method === "POST" ? await readMutationForm(request, 16 * 1024) : null);
+  if (request.method === "POST" && !formData) throw new Response("Sign-in form could not be read.", { status: 400 });
   const { clientId, redirectUri } = readRequiredGoogleEnv(context);
   const mode = formData?.get("mode") === "admin" ? "admin" : getOAuthMode(requestUrl);
   const state = randomState();
@@ -328,7 +330,7 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
   const profile = await profileResponse.json() as GoogleProfile;
   const email = profile.email?.trim().toLowerCase();
 
-  if (!email || profile.email_verified === false) {
+  if (!email || profile.email_verified !== true) {
     throw new Response("Google account email is not verified.", { status: 403 });
   }
 
@@ -352,13 +354,18 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
     where: eq(users.email, email),
   });
 
+  if (existing && (!existing.active || existing.deletedAt)) {
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    headers.append("Set-Cookie", await oauthStateCookie.serialize("", { maxAge: 0 }));
+    throw redirect(new URL("/signin?error=account-unavailable", appUrl).toString(), { headers });
+  }
+
   const [user] = existing
     ? await db
         .update(users)
         .set({
           name: existing.name || profile.name || null,
           profileImageUrl: existing.profileImageUrl || profile.picture || null,
-          active: true,
           updatedAt: new Date(),
         })
         .where(eq(users.id, existing.id))

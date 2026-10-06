@@ -3,8 +3,10 @@ import { customerSubscriptions as subscriptions, users } from "@edicut/db/schema
 import type { DatabaseClient } from "@edicut/db/client";
 import { hasReturnedRows } from "./db.server";
 import { isWorkspaceRecordId } from "./workspace";
+import { savedPackageAddOns } from "./package-addons";
 
 export type CustomerSubscription = typeof subscriptions.$inferSelect;
+export type SubscriptionPaymentFilter = "paid" | "unpaid";
 export type SubscriptionInput = Pick<typeof subscriptions.$inferInsert, "ownerId" | "packageSlug" | "planName" | "addOns" | "country" | "phone" | "subtotalCents" | "discountCents" | "amountCents" | "couponCode" | "affiliateId" | "affiliateCode" | "affiliateCommissionBps"> & {
   purchaseType: "single" | "monthly";
 };
@@ -49,10 +51,49 @@ export function listCustomerSubscriptions(db: DatabaseClient, ownerId: string, p
     .orderBy(desc(subscriptions.createdAt), desc(subscriptions.id)).limit(26).offset((page - 1) * 25);
 }
 
-export function listAdminSubscriptions(db: DatabaseClient, page = 1) {
+export async function getLatestCustomerContact(db: DatabaseClient, ownerId: string) {
+  const [contact] = await db.select({ country: subscriptions.country, phone: subscriptions.phone }).from(subscriptions)
+    .where(and(eq(subscriptions.ownerId, ownerId), visible))
+    .orderBy(desc(subscriptions.updatedAt), desc(subscriptions.createdAt), desc(subscriptions.id)).limit(1);
+  return contact ?? null;
+}
+
+export function listAdminSubscriptions(db: DatabaseClient, page = 1, status: SubscriptionPaymentFilter = "unpaid") {
   return db.select({ subscription: subscriptions, name: users.name, email: users.email }).from(subscriptions)
-    .innerJoin(users, eq(subscriptions.ownerId, users.id)).where(visible)
+    .innerJoin(users, eq(subscriptions.ownerId, users.id)).where(and(visible, eq(subscriptions.status, status)))
     .orderBy(desc(subscriptions.createdAt), desc(subscriptions.id)).limit(26).offset((page - 1) * 25);
+}
+
+export function listAdminSubscriptionsForExport(db: DatabaseClient, status: SubscriptionPaymentFilter | "all" = "all") {
+  return db.select({ subscription: subscriptions, name: users.name, email: users.email }).from(subscriptions)
+    .innerJoin(users, eq(subscriptions.ownerId, users.id))
+    .where(status === "all" ? visible : and(visible, eq(subscriptions.status, status)))
+    .orderBy(desc(subscriptions.createdAt), desc(subscriptions.id));
+}
+
+type AdminSubscriptionExportRow = { subscription: CustomerSubscription; name: string | null; email: string };
+
+function csvCell(value: unknown) {
+  const text = value instanceof Date ? value.toISOString() : String(value ?? "");
+  const safeText = /^[\s\u0000-\u001F]*[=+\-@]/u.test(text) ? `'${text}` : text;
+  return `"${safeText.replaceAll('"', '""')}"`;
+}
+
+export function adminSubscriptionsCsv(rows: AdminSubscriptionExportRow[]) {
+  const columns = [
+    "Purchase ID", "Customer Name", "Customer Email", "Plan", "Package", "Purchase Type",
+    "Amount", "Currency", "Payment Status", "Country Code", "Phone", "Coupon Code",
+    "Add-ons", "Selected At", "Paid At",
+  ];
+  const records = rows.map(({ subscription: record, name, email }) => {
+    const addOns = savedPackageAddOns(record.addOns).map(item => `${item.label} (${(item.amountCents / 100).toFixed(2)} ${record.currency})`).join("; ");
+    return [
+      record.id, name, email, record.planName, record.packageSlug, record.purchaseType,
+      (record.amountCents / 100).toFixed(2), record.currency, record.status, record.country,
+      record.phone, record.couponCode, addOns, record.createdAt, record.paidAt,
+    ];
+  });
+  return `\uFEFF${[columns, ...records].map(row => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
 }
 
 export async function deleteUnpaidSubscription(db: DatabaseClient, ownerId: string, id: string) {
@@ -97,12 +138,74 @@ export async function markSubscriptionPaid(db: DatabaseClient, id: string, admin
   return hasReturnedRows(result);
 }
 
+export async function markSubscriptionUnpaid(db: DatabaseClient, id: string, expectedUpdatedAt: string) {
+  const expected = new Date(expectedUpdatedAt);
+  if (!isWorkspaceRecordId(id) || Number.isNaN(expected.valueOf()) || expected.toISOString() !== expectedUpdatedAt) return false;
+  // Lock the purchase and balance before checking for project work. Project
+  // creation takes these locks in the same order, so a concurrent reservation
+  // cannot slip between the safety check and this status change.
+  const result = await db.execute(sql`
+    WITH target AS MATERIALIZED (
+      SELECT s.id, s.coupon_code FROM customer_subscriptions s
+      WHERE s.id = ${id} AND s.status = 'paid' AND s.deleted_at IS NULL
+        AND date_trunc('milliseconds', s.updated_at) = ${expected.toISOString()}::timestamptz
+      FOR UPDATE OF s
+    ), locked_entitlements AS MATERIALIZED (
+      SELECT e.subscription_id, e.used_units FROM purchase_entitlements e
+      JOIN target t ON t.id = e.subscription_id FOR UPDATE OF e
+    ), released AS (
+      UPDATE marketing_coupons c SET redemption_count = c.redemption_count - 1, updated_at = now()
+      FROM target t WHERE c.code = t.coupon_code AND t.coupon_code IS NOT NULL AND c.redemption_count > 0
+        AND NOT EXISTS (SELECT 1 FROM locked_entitlements e WHERE e.used_units > 0)
+        AND NOT EXISTS (SELECT 1 FROM project_intakes p WHERE p.subscription_id = t.id)
+      RETURNING c.code
+    ), changed AS (
+      UPDATE customer_subscriptions s SET status = 'unpaid', paid_at = NULL, paid_by = NULL, updated_at = now()
+      FROM target t WHERE s.id = t.id
+        AND NOT EXISTS (SELECT 1 FROM locked_entitlements e WHERE e.used_units > 0)
+        AND NOT EXISTS (SELECT 1 FROM project_intakes p WHERE p.subscription_id = t.id)
+        AND (t.coupon_code IS NULL OR EXISTS (SELECT 1 FROM released r WHERE r.code = t.coupon_code))
+      RETURNING s.id
+    ) SELECT id FROM changed
+  `);
+  return hasReturnedRows(result);
+}
+
+export async function deleteAdminSubscription(db: DatabaseClient, id: string, expectedUpdatedAt: string) {
+  const expected = new Date(expectedUpdatedAt);
+  if (!isWorkspaceRecordId(id) || Number.isNaN(expected.valueOf()) || expected.toISOString() !== expectedUpdatedAt) return false;
+  // Keep the record for audit and foreign-key history. Paid coupon redemptions
+  // are released only when the soft delete can safely remove customer access.
+  const result = await db.execute(sql`
+    WITH target AS MATERIALIZED (
+      SELECT s.id, s.status, s.coupon_code FROM customer_subscriptions s
+      WHERE s.id = ${id} AND s.deleted_at IS NULL
+        AND date_trunc('milliseconds', s.updated_at) = ${expected.toISOString()}::timestamptz
+      FOR UPDATE OF s
+    ), locked_entitlements AS MATERIALIZED (
+      SELECT e.subscription_id, e.used_units FROM purchase_entitlements e
+      JOIN target t ON t.id = e.subscription_id FOR UPDATE OF e
+    ), released AS (
+      UPDATE marketing_coupons c SET redemption_count = c.redemption_count - 1, updated_at = now()
+      FROM target t WHERE t.status = 'paid' AND c.code = t.coupon_code AND t.coupon_code IS NOT NULL AND c.redemption_count > 0
+        AND NOT EXISTS (SELECT 1 FROM locked_entitlements e WHERE e.used_units > 0)
+        AND NOT EXISTS (SELECT 1 FROM project_intakes p WHERE p.subscription_id = t.id)
+      RETURNING c.code
+    ), changed AS (
+      UPDATE customer_subscriptions s SET status = 'unpaid', paid_at = NULL, paid_by = NULL, deleted_at = now(), updated_at = now()
+      FROM target t WHERE s.id = t.id
+        AND NOT EXISTS (SELECT 1 FROM locked_entitlements e WHERE e.used_units > 0)
+        AND NOT EXISTS (SELECT 1 FROM project_intakes p WHERE p.subscription_id = t.id)
+        AND (t.status = 'unpaid' OR t.coupon_code IS NULL OR EXISTS (SELECT 1 FROM released r WHERE r.code = t.coupon_code))
+      RETURNING s.id
+    ) SELECT id FROM changed
+  `);
+  return hasReturnedRows(result);
+}
+
 // Mutating browser requests must originate on this site. Form submissions from
 // older clients without an Origin still honor Fetch Metadata when present.
-export function isSameSiteMutation(request: Request) {
-  const origin = request.headers.get("Origin");
-  return (!origin || origin === new URL(request.url).origin) && request.headers.get("Sec-Fetch-Site") !== "cross-site";
-}
+export { isSameSiteMutation } from "./mutation-request.server";
 
 export async function readSubscriptionForm(request: Request, maximumBytes: number): Promise<FormData | null> {
   if (request.method !== "POST" || !request.headers.get("Content-Type")?.toLowerCase().startsWith("application/x-www-form-urlencoded") || !request.body) return null;
@@ -128,4 +231,8 @@ export async function readSubscriptionForm(request: Request, maximumBytes: numbe
 export function subscriptionPage(request: Request) {
   const value = new URL(request.url).searchParams.get("page") ?? "1";
   return /^[1-9]\d{0,4}$/.test(value) ? Number(value) : 1;
+}
+
+export function subscriptionPaymentFilter(request: Request): SubscriptionPaymentFilter {
+  return new URL(request.url).searchParams.get("status") === "paid" ? "paid" : "unpaid";
 }

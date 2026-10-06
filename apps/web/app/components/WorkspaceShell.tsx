@@ -34,8 +34,9 @@ type WorkspaceShellProps = {
   mobileBottomMore?: boolean;
   mobileBottomNavLabel?: string;
   profileTo?: string | null;
+  profileNavAtBottom?: boolean;
   settingsTo?: string | null;
-  helpTo?: string;
+  startProjectTo?: string | null;
   notificationsTo?: string | null;
   notificationCount?: number;
   children: ReactNode;
@@ -58,8 +59,9 @@ export function WorkspaceShell({
   mobileBottomMore,
   mobileBottomNavLabel = "Primary workspace navigation",
   profileTo,
+  profileNavAtBottom = false,
   settingsTo,
-  helpTo = "/contact",
+  startProjectTo,
   notificationsTo = "/dashboard/reviews",
   notificationCount = 0,
   children,
@@ -76,14 +78,19 @@ export function WorkspaceShell({
   const navigation = useNavigation();
   const isNavigationPending = navigationFeedback && Boolean(navigation.location);
   const showMobileBottomNav = mobileBottomNav ?? mobileMenu;
-  const primaryMobileItems = mobileBottomNavItems ?? navItems.slice(0, 4);
-  const primaryMobileTo = new Set(primaryMobileItems.map((item) => item.to));
-  const moreMobileItems = navItems.filter((item) => !primaryMobileTo.has(item.to));
-  const showMobileMore = mobileBottomMore ?? moreMobileItems.length > 0;
   const isProfileActive = profileTo ? Boolean(matchPath({ path: profileTo, end: true }, location.pathname)) : false;
-  const settingsTarget = settingsTo === null || profileTo === null
-    ? null
-    : settingsTo ?? profileTo ?? "/dashboard/profile";
+  const bottomAccountItems: WorkspaceNavItem[] = profileNavAtBottom && profileTo
+    ? [{ label: "Profile", icon: "person", to: profileTo, end: true, active: isProfileActive }]
+    : [];
+  const pinnedAccountNavTo = new Set(bottomAccountItems.map((item) => item.to));
+  const accountNavigationPinned = Boolean(profileNavAtBottom && profileTo);
+  const defaultPrimaryMobileItems = accountNavigationPinned ? navItems.slice(0, 3) : navItems.slice(0, 4);
+  const primaryMobileItems = (mobileBottomNavItems ?? defaultPrimaryMobileItems)
+    .filter((item) => !pinnedAccountNavTo.has(item.to));
+  const primaryMobileTo = new Set(primaryMobileItems.map((item) => item.to));
+  const moreMobileItems = navItems.filter((item) => !primaryMobileTo.has(item.to) && !pinnedAccountNavTo.has(item.to));
+  const showMobileMore = mobileBottomMore ?? moreMobileItems.length > 0;
+  const settingsTarget = settingsTo === null ? null : settingsTo ?? profileTo ?? null;
   const mobileMenuButton = mobileMenu ? (
     <button
       ref={mobileMenuTriggerRef}
@@ -194,21 +201,44 @@ export function WorkspaceShell({
 
           {!isCollapsed ? <p className="neo-workspace__eyebrow mt-10 shrink-0 px-3">Workspace</p> : null}
           <nav className={`neo-workspace__desktop-nav ${isCollapsed ? "mt-10" : "mt-3"} grid gap-1.5`} aria-label="Workspace navigation">
-            {navItems.map((item) => (
+            {navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).map((item) => (
               <WorkspaceNavLink key={`${item.label}-${item.to}`} item={item} collapsed={isCollapsed} />
             ))}
           </nav>
 
-          <div className="neo-workspace__account mt-auto shrink-0 border-t pt-4">
-            <div className={`flex items-center rounded-2xl py-2 ${isCollapsed ? "justify-center gap-2 px-0" : "gap-3 px-2"}`}>
-              <Avatar name={account.name} imageUrl={account.imageUrl} />
-              {!isCollapsed ? (
-                <div className="min-w-0 flex-1">
-                  <p className="neo-workspace__account-name truncate">{account.name}</p>
-                  <p className="neo-workspace__account-detail mt-0.5 truncate">{account.detail}</p>
+          <div className="mt-auto shrink-0">
+            <div className="neo-workspace__account shrink-0 border-t pt-3">
+              {accountNavigationPinned && profileTo ? (
+                <div className={`flex items-center gap-2 ${isCollapsed ? "flex-col justify-center" : ""}`}>
+                  <Link
+                    to={profileTo}
+                    className={`neo-workspace__account-link ${isProfileActive ? "is-active" : ""} ${isCollapsed ? "neo-workspace__account-link--compact justify-center" : ""}`}
+                    aria-label={`Open profile settings for ${account.name}`}
+                    aria-current={isProfileActive ? "page" : undefined}
+                    title={isCollapsed ? `Profile settings for ${account.name}` : undefined}
+                  >
+                    <Avatar name={account.name} imageUrl={account.imageUrl} />
+                    {!isCollapsed ? (
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="neo-workspace__account-name block truncate">{account.name}</span>
+                        <span className="neo-workspace__account-detail mt-0.5 block truncate">{account.detail}</span>
+                      </span>
+                    ) : null}
+                  </Link>
+                  {accountAction}
                 </div>
-              ) : null}
-              {accountAction}
+              ) : (
+                <div className={`flex items-center rounded-2xl py-2 ${isCollapsed ? "justify-center gap-2 px-0" : "gap-3 px-2"}`}>
+                  <Avatar name={account.name} imageUrl={account.imageUrl} />
+                  {!isCollapsed ? (
+                    <div className="min-w-0 flex-1">
+                      <p className="neo-workspace__account-name truncate">{account.name}</p>
+                      <p className="neo-workspace__account-detail mt-0.5 truncate">{account.detail}</p>
+                    </div>
+                  ) : null}
+                  {accountAction}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -249,13 +279,10 @@ export function WorkspaceShell({
             )}
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               {settingsTarget ? (
-                <Link to={settingsTarget} className="neo-workspace__icon-button hidden sm:inline-flex" aria-label="Settings" title="Settings">
+                <Link to={settingsTarget} className="neo-workspace__icon-button" aria-label="Settings" title="Settings">
                   <span className="material-symbols-outlined text-[19px]">settings</span>
                 </Link>
               ) : null}
-              <Link to={helpTo} className="neo-workspace__icon-button hidden sm:inline-flex" aria-label="Help and contact" title="Help and contact">
-                <span className="material-symbols-outlined text-[19px]">help</span>
-              </Link>
               {notificationsTo ? (
                 <Link to={notificationsTo} className="neo-workspace__icon-button relative" aria-label={notificationCount > 0 ? `${notificationCount} cuts waiting for review` : "Open review queue"} title={notificationCount > 0 ? `${notificationCount} cuts waiting for review` : "Open review queue"}>
                   <span className="material-symbols-outlined text-[19px]">notifications</span>
@@ -263,12 +290,18 @@ export function WorkspaceShell({
                 </Link>
               ) : null}
               {hideHeaderTitle ? null : mobileMenuButton}
+              {startProjectTo ? (
+                <Link to={startProjectTo} className="neo-workspace__start-project text-white" aria-label="Start project" title="Start project">
+                  <span className="material-symbols-outlined text-[19px]" aria-hidden="true">add</span>
+                  <span className="neo-workspace__start-project-label">Start project</span>
+                </Link>
+              ) : null}
               {headerActions}
             </div>
           </div>
           {mobileMenu ? null : (
             <nav className="neo-workspace__mobile-nav mx-auto mt-3 flex max-w-[1500px] gap-2 overflow-x-auto pb-0.5 lg:hidden" aria-label="Mobile workspace navigation">
-              {navItems.slice(0, 5).map((item) => (
+              {navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).slice(0, 5).map((item) => (
                 <WorkspaceNavLink key={`mobile-${item.label}-${item.to}`} item={item} compact />
               ))}
             </nav>
@@ -320,7 +353,7 @@ export function WorkspaceShell({
               </div>
               <p id="neo-workspace-mobile-drawer-title" className="neo-workspace__eyebrow mt-10 px-3">Workspace</p>
               <nav className="neo-workspace__mobile-drawer-nav mt-3 grid gap-1" aria-label="Workspace navigation">
-                {navItems.map((item) => (
+                {navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).map((item) => (
                   <WorkspaceNavLink
                     key={`drawer-${item.label}-${item.to}`}
                     item={item}
@@ -334,23 +367,24 @@ export function WorkspaceShell({
             </div>
             <div className="neo-workspace__mobile-account neo-workspace__mobile-drawer-footer">
               {profileTo ? <Link
-                to={profileTo}
-                className="neo-workspace__mobile-drawer-profile"
-                aria-label={`Open profile settings for ${account.name}`}
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <Avatar name={account.name} imageUrl={account.imageUrl} />
-                <span className="min-w-0 flex-1">
-                  <span className="neo-workspace__account-name block truncate">{account.name}</span>
-                  <span className="neo-workspace__account-detail mt-0.5 block truncate">{account.detail}</span>
-                </span>
-              </Link> : <div className="neo-workspace__mobile-drawer-profile">
-                <Avatar name={account.name} imageUrl={account.imageUrl} />
-                <span className="min-w-0 flex-1">
-                  <span className="neo-workspace__account-name block truncate">{account.name}</span>
-                  <span className="neo-workspace__account-detail mt-0.5 block truncate">{account.detail}</span>
-                </span>
-              </div>}
+                  to={profileTo}
+                  className={`neo-workspace__mobile-drawer-profile neo-workspace__mobile-drawer-profile--link ${isProfileActive ? "is-active" : ""}`}
+                  aria-label={`Open profile settings for ${account.name}`}
+                  aria-current={isProfileActive ? "page" : undefined}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <Avatar name={account.name} imageUrl={account.imageUrl} />
+                  <span className="min-w-0 flex-1">
+                    <span className="neo-workspace__account-name block truncate">{account.name}</span>
+                    <span className="neo-workspace__account-detail mt-0.5 block truncate">{account.detail}</span>
+                  </span>
+                </Link> : <div className="neo-workspace__mobile-drawer-profile">
+                  <Avatar name={account.name} imageUrl={account.imageUrl} />
+                  <span className="min-w-0 flex-1">
+                    <span className="neo-workspace__account-name block truncate">{account.name}</span>
+                    <span className="neo-workspace__account-detail mt-0.5 block truncate">{account.detail}</span>
+                  </span>
+                </div>}
               {accountAction}
             </div>
           </aside>

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
   findAffiliateByCode: vi.fn(),
   findCouponForQuote: vi.fn(),
   getPricingPackages: vi.fn<() => Promise<PricingPackage[]>>(async () => []),
+  getLatestCustomerContact: vi.fn(),
   getOwnedSubscription: vi.fn(),
   saveUnpaidSubscription: vi.fn(),
   queueTelegramOrderNotice: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("../lib/usage-protection.server", () => ({ consumeUsageLimit: mocks.cons
 vi.mock("../lib/db.server", () => ({ getDbFromContext: mocks.getDbFromContext }));
 vi.mock("../lib/customer-subscriptions.server", async importOriginal => ({
   ...await importOriginal<typeof import("../lib/customer-subscriptions.server")>(),
+  getLatestCustomerContact: mocks.getLatestCustomerContact,
   getOwnedSubscription: mocks.getOwnedSubscription,
   saveUnpaidSubscription: mocks.saveUnpaidSubscription,
 }));
@@ -54,6 +56,7 @@ beforeEach(() => {
   mocks.findCouponForQuote.mockResolvedValue({ error: "Coupon not found." });
   mocks.getPricingPackages.mockResolvedValue(defaultPricingPackages);
   mocks.findAffiliateByCode.mockResolvedValue(null);
+  mocks.getLatestCustomerContact.mockResolvedValue(null);
   mocks.getOwnedSubscription.mockResolvedValue({ id: "saved-id", status: "unpaid", amountCents: 314900, country: "BD", phone: "+8801712345678" });
   mocks.saveUnpaidSubscription.mockResolvedValue({ id: "saved-id", planName: "Studio", amountCents: 314900, currency: "USD" });
 });
@@ -99,6 +102,21 @@ describe("payment-first checkout", () => {
     expect(result.paymentStep).toBe(false);
     expect(mocks.getPricingPackages).toHaveBeenCalledOnce();
     expect(mocks.requireUserId).toHaveBeenCalled();
+  });
+
+  it("prefills contact details from the authenticated customer's latest purchase", async () => {
+    mocks.getLatestCustomerContact.mockResolvedValueOnce({ country: "BD", phone: "+8801712345678" });
+    const result = await loader(args());
+    expect(result.customerContact).toEqual({ country: "BD", phone: "+8801712345678" });
+    expect(mocks.getLatestCustomerContact).toHaveBeenCalledWith(expect.anything(), "user-1");
+  });
+
+  it("uses the selected saved purchase's contact instead of loading a different default", async () => {
+    mocks.getOwnedSubscription.mockResolvedValueOnce({ id: "saved-id", status: "unpaid", amountCents: 314900, country: "US", phone: "+12025550123" });
+    const result = await loader(args("?subscription=saved-id"));
+    expect(result.savedSubscription).toMatchObject({ country: "US", phone: "+12025550123" });
+    expect(result.customerContact).toBeNull();
+    expect(mocks.getLatestCustomerContact).not.toHaveBeenCalled();
   });
 
   it("loads only an owned saved payment record and ignores client amount/status", async () => {
@@ -210,7 +228,7 @@ describe("payment-first checkout", () => {
     expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
   });
 
-  it("redirects an already paid subscription to the customer subscription page", async () => {
+  it("redirects an already paid subscription to channel setup and projects", async () => {
     mocks.getOwnedSubscription.mockResolvedValue({ status: "paid" });
     await expect(loader(args("?step=payment&subscription=saved-id"))).rejects.toMatchObject({ status: 302 });
   });

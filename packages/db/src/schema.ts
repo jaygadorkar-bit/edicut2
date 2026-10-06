@@ -1,4 +1,5 @@
 import { relations, sql } from "drizzle-orm";
+import type { CustomQuoteOptions } from "@edicut/shared/contracts/custom-quotes";
 import {
   boolean,
   check,
@@ -128,6 +129,32 @@ export const contactMessages = pgTable("contact_messages", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Quote requests have their own lifecycle and are accessible only through the
+// authenticated server routes, separate from contact enquiries and purchases.
+export const customQuotes = pgTable("custom_quotes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  requestToken: uuid("request_token").notNull(),
+  title: varchar("title", { length: 120 }).notNull(),
+  customerName: varchar("customer_name", { length: 120 }).notNull(),
+  customerEmail: varchar("customer_email", { length: 254 }).notNull(),
+  phone: varchar("phone", { length: 32 }),
+  preferredContact: varchar("preferred_contact", { length: 16 }).notNull().default("email"),
+  options: jsonb("options").$type<CustomQuoteOptions>().notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("new"),
+  internalNotes: text("internal_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("custom_quotes_owner_token_idx").on(table.ownerId, table.requestToken),
+  index("custom_quotes_owner_created_idx").on(table.ownerId, table.createdAt, table.id),
+  index("custom_quotes_status_created_idx").on(table.status, table.createdAt, table.id),
+  index("custom_quotes_created_idx").on(table.createdAt, table.id),
+  check("custom_quotes_status_check", sql`${table.status} IN ('new', 'reviewing', 'contacted', 'closed')`),
+  check("custom_quotes_contact_check", sql`${table.preferredContact} IN ('email', 'whatsapp') AND (${table.preferredContact} <> 'whatsapp' OR coalesce(length(${table.phone}), 0) > 0)`),
+  check("custom_quotes_options_check", sql`jsonb_typeof(${table.options}) = 'object'`),
+]).enableRLS();
+
 export const marketingCoupons = pgTable("marketing_coupons", {
   id: uuid("id").defaultRandom().primaryKey(),
   code: varchar("code", { length: 32 }).notNull().unique(),
@@ -153,6 +180,21 @@ export const marketingCoupons = pgTable("marketing_coupons", {
 
 // Customer work is intentionally separate from `projects`, which stores the
 // public portfolio entries shown on the marketing site.
+export const creatorProfiles = pgTable("creator_profiles", {
+  ownerId: uuid("owner_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  details: jsonb("details").$type<Record<string, string>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Balances are initialized only from a verified paid purchase. Each debit and
+// project creation share one statement, including the unique replay token.
+export const purchaseEntitlements = pgTable("purchase_entitlements", {
+  subscriptionId: uuid("subscription_id").primaryKey().references(() => customerSubscriptions.id, { onDelete: "restrict" }),
+  grantedUnits: integer("granted_units").notNull(),
+  usedUnits: integer("used_units").notNull().default(0),
+}, table => [check("purchase_entitlements_balance_check", sql`${table.grantedUnits} > 0 AND ${table.usedUnits} >= 0 AND ${table.usedUnits} <= ${table.grantedUnits}`)]);
+
 export const workspaceProjects = pgTable("workspace_projects", {
   id: uuid("id").defaultRandom().primaryKey(),
   ownerId: uuid("owner_id")
@@ -188,6 +230,20 @@ export const workspaceProjects = pgTable("workspace_projects", {
   index("workspace_projects_owner_status_idx").on(table.ownerId, table.status),
   uniqueIndex("workspace_projects_owner_coupon_unique_idx").on(table.ownerId, table.couponId).where(sql`${table.couponId} IS NOT NULL`),
   index("workspace_projects_affiliate_status_idx").on(table.affiliateId, table.billingStatus),
+]);
+
+export const projectIntakes = pgTable("project_intakes", {
+  projectId: uuid("project_id").primaryKey().references(() => workspaceProjects.id, { onDelete: "cascade" }),
+  ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  subscriptionId: uuid("subscription_id").notNull().references(() => customerSubscriptions.id, { onDelete: "restrict" }),
+  requestToken: uuid("request_token").notNull(),
+  reservedUnits: integer("reserved_units").notNull(),
+  brief: jsonb("brief").$type<Record<string, string | number>>().notNull(),
+  channelSnapshot: jsonb("channel_snapshot").$type<Record<string, string>>().notNull(),
+}, table => [
+  uniqueIndex("project_intakes_owner_token_idx").on(table.ownerId, table.requestToken),
+  index("project_intakes_subscription_idx").on(table.subscriptionId),
+  check("project_intakes_reserved_check", sql`${table.reservedUnits} > 0`),
 ]);
 
 export const workspaceProjectFiles = pgTable("workspace_project_files", {

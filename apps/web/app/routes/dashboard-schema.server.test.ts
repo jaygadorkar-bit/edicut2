@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
   allowedFeatures: ["overview", "projects", "reviews", "uploads", "billing", "settings"] as string[],
   getSiteSetting: vi.fn(async () => null),
     requireUserId: vi.fn(async () => "owner-1"),
-    findUserById: vi.fn(async () => ({ id: "owner-1", name: "Client", email: "client@example.com", role: "user" })),
+    findUserById: vi.fn(async () => ({ id: "owner-1", name: "Client", email: "client@example.com", role: "user", active: true, deletedAt: null, passwordHash: "server-only" })),
     consumeUsageLimit: vi.fn(async () => "allowed"),
     queueTelegramOrderNotice: vi.fn(),
   };
@@ -37,6 +37,7 @@ vi.mock("../lib/role-feature-access", () => ({
 }));
 vi.mock("../lib/usage-protection.server", () => ({ consumeUsageLimit: mocks.consumeUsageLimit, requestBodyExceedsLimit: () => false }));
 vi.mock("../lib/telegram-notifications.server", () => ({ queueTelegramOrderNotice: mocks.queueTelegramOrderNotice }));
+vi.mock("../lib/client-workspace.server", () => ({ loadClientWorkspace: async () => ({ profile: null, purchases: [] }), isMissingClientWorkspaceSchema: () => false }));
 import { loader as dashboardLoader } from "./dashboard";
 import { loader as sectionLoader, action as sectionAction } from "./dashboard-placeholder";
 import { workspaceProjectColumns } from "../lib/workspace-projects.server";
@@ -52,6 +53,20 @@ beforeEach(() => {
 });
 
 describe("workspace reads without the optional marketing migration", () => {
+  it("keeps credential hashes out of both dashboard and section loader data", async () => {
+    expect((await dashboardLoader(args())).user).not.toHaveProperty("passwordHash");
+    expect((await sectionLoader(args("projects"))).user).not.toHaveProperty("passwordHash");
+  });
+  it.each(["dashboard", "projects"])("blocks inactive accounts in %s before workspace reads", async section => {
+    mocks.findUserById.mockResolvedValueOnce({ id: "owner-1", name: "Client", email: "client@example.com", role: "user", active: false, deletedAt: null, passwordHash: "server-only" });
+    await expect(section === "dashboard" ? dashboardLoader(args()) : sectionLoader(args(section))).rejects.toMatchObject({ status: 302 });
+    expect(mocks.db.select).not.toHaveBeenCalled();
+  });
+  it("blocks inactive accounts from creating projects", async () => {
+    mocks.findUserById.mockResolvedValueOnce({ id: "owner-1", name: "Client", email: "client@example.com", role: "user", active: false, deletedAt: null, passwordHash: "server-only" });
+    await expect(sectionAction(args("projects", new URLSearchParams({ intent: "create-project" })))).rejects.toMatchObject({ status: 302 });
+    expect(mocks.db.execute).not.toHaveBeenCalled();
+  });
   it("loads existing dashboard projects and real summary counts", async () => {
     const result = await dashboardLoader(args());
     expect(result.workspaceReady).toBe(true);
@@ -105,19 +120,9 @@ describe("workspace reads without the optional marketing migration", () => {
     }
   });
 
-  it("creates a core project using parameterized SQL without marketing columns", async () => {
-    const body = new URLSearchParams({ intent: "create-project", title: "New edit", channelName: "Channel", packageSlug: "creator", notes: "Use this client's style" });
-    expect(await sectionAction(args("projects", body))).toMatchObject({ success: expect.any(String) });
-    const query = new PgDialect().sqlToQuery(mocks.db.execute.mock.calls[0]![0]);
-    expect(query.sql).not.toMatch(/coupon|affiliate|discount/);
-    expect(query.sql).toContain("INSERT INTO workspace_projects");
-    expect(query.sql).not.toContain("Use this client's style");
-    expect(query.params).toContain("owner-1");
-    expect(query.params).toContain("Use this client's style");
-    expect(query.params).toContain(214900);
-    expect(mocks.queueTelegramOrderNotice).toHaveBeenCalledOnce();
-    const notice = mocks.queueTelegramOrderNotice.mock.calls[0]![1];
-    expect(notice).toMatchObject({ kind: "project", summary: "New edit — Starter", amountCents: 214900, currency: "USD" });
-    expect(query.params).toContain(notice.orderId);
+  it("does not allow the legacy form to bypass the paid project workflow", async () => {
+    const body = new URLSearchParams({ intent: "create-project", title: "New edit", channelName: "Channel", packageSlug: "creator" });
+    await expect(sectionAction(args("projects", body))).rejects.toMatchObject({ status: 302 });
+    expect(mocks.db.execute).not.toHaveBeenCalled();
   });
 });

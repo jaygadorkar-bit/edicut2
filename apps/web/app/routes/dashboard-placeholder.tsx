@@ -20,13 +20,14 @@ import {
   getDashboardLandingPath,
   type DashboardFeature,
 } from "../lib/role-feature-access";
-import { SUBSCRIPTION_PACKAGES, formatRequestedCoverageNotes, getCheckoutTotal, type SubscriptionPackage } from "../lib/subscriptions";
+import { getCheckoutTotal, SUBSCRIPTION_PACKAGES, type SubscriptionPackage } from "../lib/subscriptions";
 import { configuredPublicEditingPackages, getPricingPackages } from "../lib/pricing.server";
 import { isMissingWorkspaceSchema, isValidWorkspaceDate, isWorkspaceRecordId, parseWorkspaceShareUrl, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
 import { workspaceProjectColumns, type WorkspaceProjectView } from "../lib/workspace-projects.server";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
-import { queueTelegramOrderNotice } from "../lib/telegram-notifications.server";
 import { getAffiliatePortalData, isMissingMarketingSchema, type AffiliatePortalData } from "../lib/marketing.server";
+import { toPublicUser } from "../lib/admin-public";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 
 const sectionConfigs = {
   projects: {
@@ -69,20 +70,22 @@ const sectionConfigs = {
     icon: "settings",
     feature: "settings" as DashboardFeature,
     title: "Workspace settings",
-    description: "Manage your sign-in profile and account details.",
+    description: "Manage your sign-in and account security.",
   },
 } as const;
 
 type PlaceholderSection = keyof typeof sectionConfigs;
+
+export function headers() { return { "Cache-Control": "no-store", "Referrer-Policy": "same-origin" }; }
 
 const userNavItems = [
   { label: "Dashboard", icon: "dashboard_customize", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
   { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
   { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
-  { label: "Purchases", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
+  { label: "Enquiries", icon: "mail", path: "/dashboard/messages", feature: "support" as DashboardFeature },
+  { label: "Subscriptions", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
-  { label: "Settings", icon: "settings", path: "/dashboard/settings", feature: "settings" as DashboardFeature },
 ];
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
@@ -93,10 +96,6 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
 function readText(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
-}
-
-function packagePriceCents(item: SubscriptionPackage | undefined, coverage: { runtime?: boolean; raw?: boolean }) {
-  return item ? getCheckoutTotal(item, coverage) * 100 : null;
 }
 
 function formatMoney(cents: number, currency: string) {
@@ -113,7 +112,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const db = getDbFromContext(context);
   const user = await findUserById(db, userId);
 
-  if (!user) {
+  if (!user?.active || user.deletedAt) {
     const session = await getSession(request.headers.get("Cookie"), context);
     throw redirect("/signin?redirectTo=/dashboard", {
       headers: { "Set-Cookie": await destroySession(session, context) },
@@ -179,16 +178,18 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     ? configuredPublicEditingPackages(await getPricingPackages(db, context)).filter((item): item is SubscriptionPackage => item.packageType === "monthly")
     : [];
 
-  return { user, allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved, affiliateData, affiliateSchemaReady, pricingPackages };
+  return { user: toPublicUser(user), allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved, affiliateData, affiliateSchemaReady, pricingPackages };
 }
 
 export async function action({ params, request, context }: ActionFunctionArgs) {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return { error: "This request is too large. Please shorten the details and try again." };
   }
 
   const section = params.section as PlaceholderSection | undefined;
-  const formData = await request.formData();
+  const formData = await readMutationForm(request, 64 * 1024);
+  if (!formData) return { error: "Submit a valid workspace form under 64 KB." };
   const intent = readText(formData, "intent");
 
   if (intent === "logout") {
@@ -220,58 +221,17 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 
   const db = getDbFromContext(context);
   const user = await findUserById(db, userId);
-  if (!user) throw redirect("/signin?redirectTo=/dashboard");
+  if (!user?.active || user.deletedAt) {
+    const session = await getSession(request.headers.get("Cookie"), context);
+    throw redirect("/signin?redirectTo=/dashboard", { headers: { "Set-Cookie": await destroySession(session, context) } });
+  }
   const roleFeatureAccess = await getRoleFeatureAccessSettings(db, context);
   if (!canAccessDashboardFeature(user.role, config.feature, roleFeatureAccess)) {
     throw redirect(getDashboardLandingPath(getAllowedDashboardFeatures(user.role, roleFeatureAccess)));
   }
 
   try {
-  if (section === "projects" && intent === "create-project") {
-    const title = readText(formData, "title");
-    const channelName = readText(formData, "channelName");
-    const packageSlug = readText(formData, "packageSlug");
-    const category = readText(formData, "category");
-    const cadence = readText(formData, "cadence");
-    const deadline = readText(formData, "deadline");
-    const notes = readText(formData, "notes");
-    const coverage = { runtime: formData.get("runtime") === "1", raw: formData.get("raw") === "1" };
-    const configuredPackages = configuredPublicEditingPackages(await getPricingPackages(db, context));
-    const monthlyPackages = configuredPackages.filter((item): item is SubscriptionPackage => item.packageType === "monthly");
-    const selectedPackage = monthlyPackages.find((item) => item.slug === packageSlug);
-    const estimatedAmountCents = packagePriceCents(selectedPackage, coverage);
-
-    if (title.length < 3 || title.length > 120) return { error: "Project name must be between 3 and 120 characters." };
-    if (!channelName || channelName.length > 120) return { error: "Add a channel name (up to 120 characters)." };
-    if (estimatedAmountCents === null) return { error: "Choose one of the listed editing packages." };
-    if (category.length > 80 || cadence.length > 120 || notes.length > 4000) {
-      return { error: "One of the project details is too long. Shorten it and try again." };
-    }
-    if (!isValidWorkspaceDate(deadline)) return { error: "Enter a valid target date." };
-
-    // Drizzle's insert includes defaults for every schema column, including
-    // optional marketing columns. This core project action needs only these fields.
-    const orderId = crypto.randomUUID();
-    await db.execute(sql`
-      INSERT INTO workspace_projects (
-        id, owner_id, title, channel_name, package_slug, category, cadence, deadline,
-        notes, estimated_amount_cents, billing_status
-      ) VALUES (
-        ${orderId}, ${userId}, ${title}, ${channelName}, ${packageSlug}, ${category || null},
-        ${cadence || null}, ${deadline || null},
-        ${selectedPackage ? formatRequestedCoverageNotes(selectedPackage, notes, coverage) : notes || null},
-        ${estimatedAmountCents}, ${"quote_requested"}
-      )
-    `);
-    queueTelegramOrderNotice(context, {
-      orderId,
-      kind: "project",
-      summary: selectedPackage ? `${title} — ${selectedPackage.name}` : title,
-      amountCents: estimatedAmountCents,
-      currency: "USD",
-    });
-    return { success: "Project request saved. The EdiCut team will confirm scope and billing before work begins." };
-  }
+  if (section === "projects") throw redirect("/dashboard/projects");
 
   if (section === "uploads" && intent === "add-file-link") {
     const projectId = readText(formData, "projectId");
@@ -389,7 +349,9 @@ export default function DashboardWorkspaceSection() {
       navigationFeedback
       hideMobileHeading
       profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null}
+      profileNavAtBottom
       settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null}
+      startProjectTo={allowedFeatures.includes("projects") ? "/dashboard/projects#new-project" : null}
       notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null}
       notificationCount={reviewQueue.length}
       accountAction={(
@@ -400,12 +362,6 @@ export default function DashboardWorkspaceSection() {
           </button>
         </Form>
       )}
-      headerActions={allowedFeatures.includes("projects") ? (
-        <Link to="/dashboard/projects" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
-          <span className="material-symbols-outlined text-[17px]" aria-hidden="true">arrow_back</span>
-          Projects
-        </Link>
-      ) : null}
     >
       <div className="grid gap-5">
         <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="workspace-section-title">
@@ -588,10 +544,9 @@ export default function DashboardWorkspaceSection() {
 
         {section === "settings" ? (
           <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="settings-title">
-            <p className="neo-workspace__eyebrow">Account security</p><h2 id="settings-title" className="neo-workspace__module-title mt-1">Profile and sign-in</h2>
-            <p className="neo-workspace__module-copy mt-2">Your workspace uses your account profile for contact details and sign-in identity.</p>
-            <dl className="mt-5 grid gap-4 rounded-2xl bg-[#f5f6fa] p-4 sm:grid-cols-2"><div><dt className="text-[10px] font-black uppercase tracking-wide text-[#7b8790]">Name</dt><dd className="mt-1 text-sm font-bold text-[#17202a]">{user.name || "Add your name"}</dd></div><div><dt className="text-[10px] font-black uppercase tracking-wide text-[#7b8790]">Email</dt><dd className="mt-1 break-all text-sm font-bold text-[#17202a]">{user.email}</dd></div></dl>
-            <div className="mt-5 flex flex-wrap gap-3"><Link to="/dashboard/profile" className="neo-workspace__profile-submit inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black">Edit profile</Link><Link to="/forgot-password" className="neo-workspace__secondary-action inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black">Reset password</Link></div>
+            <p className="neo-workspace__eyebrow">Account security</p><h2 id="settings-title" className="neo-workspace__module-title mt-1">Sign-in and security</h2>
+            <p className="neo-workspace__module-copy mt-2">Manage your password and keep your sign-in secure.</p>
+            <div className="mt-5 flex flex-wrap gap-3"><Link to="/dashboard/profile" className="neo-workspace__profile-submit inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black">Manage profile</Link><Link to="/forgot-password" className="neo-workspace__secondary-action inline-flex h-11 items-center justify-center rounded-xl px-4 text-sm font-black">Reset password</Link></div>
           </section>
         ) : null}
 

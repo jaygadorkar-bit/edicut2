@@ -6,6 +6,7 @@ import { verifyRecaptchaToken } from "../lib/recaptcha.server";
 import { isSameSiteMutation } from "../lib/customer-subscriptions.server";
 import { requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import type { LoaderContext } from "../types";
+import { readMutationForm } from "../lib/mutation-request.server";
 
 export async function action({ request, context }: ActionFunctionArgs) {
   if (requestBodyExceedsLimit(request, 16 * 1024)) {
@@ -16,7 +17,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return new Response("Please start sign-in from this site.", { status: 403 });
   }
 
-  const formData = await request.clone().formData();
+  const formData = await readMutationForm(request, 16 * 1024);
+  if (!formData) return new Response("Sign-in form could not be read.", { status: 400 });
   const mode = formData.get("mode") === "admin" ? "admin" : "user";
   const captcha = await verifyRecaptchaToken({ context, token: formData.get("g-recaptcha-response") });
 
@@ -30,5 +32,5 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return redirect(`${destination.pathname}${destination.search}`);
   }
 
-  return startGoogleOAuth(request, context as LoaderContext);
+  return startGoogleOAuth(request, context as LoaderContext, formData);
 }

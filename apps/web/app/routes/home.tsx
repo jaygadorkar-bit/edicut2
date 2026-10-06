@@ -453,8 +453,8 @@ export default function HomePage() {
                 <span className="sm:hidden">Who we edit for</span>
               </p>
               <h2 className="yt-title mt-3 neo-ink">
-                <span className="hidden sm:inline">Editing support for every kind of creator.</span>
-                <span className="sm:hidden">Editing for every creator.</span>
+                <span className="hidden sm:inline">Editing support for every kind of content creator.</span>
+                <span className="sm:hidden">Editing for every content creator.</span>
               </h2>
             </div>
 
