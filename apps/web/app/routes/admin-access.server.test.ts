@@ -47,10 +47,17 @@ describe("verified workspace admin panel access", () => {
   it.each([
     { ...user, active: false },
     { ...user, deletedAt: new Date() },
-    { ...user, email: "different@example.com" },
     undefined,
-  ])("denies inactive, deleted, mismatched, or missing workspace accounts: %j", async (record) => {
+  ])("clears stale sessions for inactive, deleted, or missing workspace accounts: %j", async (record) => {
     mocks.user.mockResolvedValue(record);
+    const response = await openPanel(true).catch((error) => error);
+    expect(response).toBeInstanceOf(Response);
+    expect(response.headers.get("Location")).toContain("/signin");
+    expect(response.headers.has("Set-Cookie")).toBe(true);
+  });
+
+  it("does not promote a workspace account when its email differs from the admin account", async () => {
+    mocks.user.mockResolvedValue({ ...user, email: "different@example.com" });
     const response = await openPanel(true);
     expect(response.headers.get("Location")).toBe("/dashboard");
     expect(response.headers.has("Set-Cookie")).toBe(false);

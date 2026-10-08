@@ -20,8 +20,12 @@ import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { submitContactInquiry } from "../lib/contact-intake.server";
 import { createRouteMeta } from "../lib/seo";
 import pricingStyles from "../styles/pricing.css?url";
+import filmStyles from "../styles/why-hire-us-film.css?url";
 
-export const links: LinksFunction = () => [{ rel: "stylesheet", href: pricingStyles }];
+export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: pricingStyles },
+  { rel: "stylesheet", href: filmStyles },
+];
 
 // Clean, Beautiful Modern Classic Lucide SVG Icons in Solid White
 function ClapperboardIcon({ size = 72 }: { size?: number }) {

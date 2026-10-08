@@ -1,44 +1,17 @@
-import { RefreshCw, Sparkles, UsersRound, Zap } from "lucide-react";
-
-const benefits = [
-  { artwork: TeamArtwork, title: "Your dedicated manager", copy: "The right editor, assigned for every video." },
-  { artwork: QualityArtwork, title: "Your brand. Our quality check.", copy: "Consistent style. Every detail reviewed before delivery." },
-  { artwork: DeliveryArtwork, title: "More videos. On time.", copy: "Professional edits that keep your uploads moving." },
-];
+import { WhyHireUsFilm } from "./WhyHireUsFilm";
 
 export function WhyHireUsSection() {
   return (
-    <section id="why-hire-us" aria-labelledby="why-hire-us-title" className="why-hire border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
+    <section id="why-hire-us" aria-label="Why hire the EdiCut studio" className="why-hire border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="why-hire__inner">
-        <header className="why-hire__intro">
-          <p className="why-hire__eyebrow neo-section-label"><Sparkles size={16} aria-hidden="true" />Why hire us</p>
-          <h2 id="why-hire-us-title" className="yt-title neo-ink">You create. We handle the edit.</h2>
-        </header>
-
-        <div className="why-hire__cards">
-          {benefits.map(({ artwork: Artwork, title, copy }) => (
-            <article key={title} className="why-hire__card neo-surface">
-              <div className="why-hire__artwork"><Artwork /></div>
-              <div className="why-hire__copy">
-                <h3>{title}</h3>
-                <p>{copy}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-
-        <ul className="why-hire__assurances">
-          <li><UsersRound aria-hidden="true" /><span>Expert editing team</span></li>
-          <li><RefreshCw aria-hidden="true" /><span>Replacement editor coverage</span></li>
-          <li><Zap aria-hidden="true" /><span>Urgent delivery on request</span></li>
-        </ul>
+        <WhyHireUsFilm showPlanButton={false} />
       </div>
     </section>
   );
 }
 
 // The nearby headings explain these decorative illustrations to screen readers.
-function TeamArtwork() {
+export function TeamArtwork() {
   return (
     <svg viewBox="0 0 320 220" fill="none" aria-hidden="true" focusable="false">
       <circle cx="160" cy="100" r="84" className="why-art-halo" />
@@ -77,7 +50,7 @@ function TeamArtwork() {
   );
 }
 
-function QualityArtwork() {
+export function QualityArtwork() {
   return (
     <svg viewBox="0 0 320 220" fill="none" aria-hidden="true" focusable="false">
       <circle cx="160" cy="104" r="86" className="why-art-halo" />
@@ -109,7 +82,7 @@ function QualityArtwork() {
   );
 }
 
-function DeliveryArtwork() {
+export function DeliveryArtwork() {
   return (
     <svg viewBox="0 0 320 220" fill="none" aria-hidden="true" focusable="false">
       <circle cx="160" cy="110" r="86" className="why-art-halo" />

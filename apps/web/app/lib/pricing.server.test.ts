@@ -31,6 +31,28 @@ describe("configured public editing catalog", () => {
     ]);
   });
 
+  it("fails closed on malformed package settings when an admin is about to save them", async () => {
+    mocks.getSiteSetting.mockResolvedValue("not valid json");
+    await expect(getPricingPackages(null, undefined, { failOnError: true })).rejects.toThrow();
+
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify({ package: "not-an-array" }));
+    await expect(getPricingPackages(null, undefined, { failOnError: true })).rejects.toThrow("unsupported format");
+
+    mocks.getSiteSetting.mockResolvedValue("");
+    await expect(getPricingPackages(null, undefined, { failOnError: true })).rejects.toThrow("empty");
+  });
+
+  it("rejects unexpected invalid package entries while preserving the retired package migration", async () => {
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify([{ slug: "corrupt", galleryImages: ["https://example.test/image.jpg"] }]));
+    await expect(getPricingPackages(null, undefined, { failOnError: true })).rejects.toThrow("read safely");
+
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify([
+      ...defaultPricingPackages,
+      { ...defaultPricingPackages[0], slug: "single-short", name: "Short-form Edit" },
+    ]));
+    await expect(getPricingPackages(null, undefined, { failOnError: true })).resolves.toHaveLength(6);
+  });
+
   it("migrates saved legacy package settings and adds the three single-video offers", async () => {
     const previousPrices = new Map([["creator", "$249"], ["creator-plus", "$549"], ["creator-pro", "$1,099"]]);
     const saved = defaultPricingPackages.slice(0, 3).map((item) => ({

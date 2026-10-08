@@ -2,6 +2,8 @@
 @import "./typography.css";
 @import "./home-mobile.css";
 @import "./why-hire-us.css";
+@import "./faq.css";
+@import "./faq-page.css";
 
 @theme {
   --color-background: hsl(0 0% 100%);
@@ -29,7 +31,7 @@
   --color-icon-ink: #475767;
   --color-icon-hover-surface: #e5ebf0;
   --color-icon-hover-ink: #b51f2b;
-  --color-rating-star: var(--color-primary);
+  --color-rating-star: #f59e0b;
   --radius-xl: 0.75rem;
 }
 
@@ -559,6 +561,40 @@ a.neo-button:active {
 .neo-workspace__start-project:focus-visible {
   outline: 2px solid #5141a9;
   outline-offset: 3px;
+}
+
+.neo-workspace__setup-cta {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid #5c45d2;
+  border-radius: 999px;
+  padding-inline: 1.25rem;
+  background: #6d55e8;
+  color: #fff;
+  box-shadow: 0 7px 18px rgba(109, 85, 232, 0.22);
+  font-size: 0.875rem;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.neo-workspace__setup-cta:hover {
+  background: #5b44d3;
+  box-shadow: 0 9px 20px rgba(91, 68, 211, 0.26);
+}
+
+.neo-workspace__setup-cta:focus-visible {
+  outline: 2px solid #5141a9;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-workspace__setup-cta {
+    transition-duration: 0.01ms;
+  }
 }
 
 .neo-workspace__nav-item > .material-symbols-outlined {
@@ -2070,7 +2106,17 @@ a.neo-button:active {
   .neo-footer__payments {
     border-left: 0;
     border-top: 1px solid var(--neo-line);
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-inline: 0.875rem;
   }
+
+  .neo-footer__payments > div { flex: none; }
+  .neo-footer__payments > div:last-child { flex-wrap: nowrap; gap: 0.375rem; }
+  .neo-footer__payments .neo-footer__utility-label { white-space: nowrap; font-size: 11px; }
+  .neo-footer__payments .neo-footer-payment { white-space: nowrap; padding-inline: 0.45rem; font-size: 10px; }
 }
 
 .neo-footer-ink {

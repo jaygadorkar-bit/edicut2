@@ -7,7 +7,7 @@
     "dev": "pnpm --filter @edicut/shared build && pnpm --filter @edicut/db build && react-router dev --port 3002",
     "build": "pnpm --filter @edicut/shared build && pnpm --filter @edicut/db build && react-router build",
     "typecheck": "pnpm --filter @edicut/shared build && pnpm --filter @edicut/db build && react-router typegen && pnpm exec tsc --noEmit",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --profile edicut-production",
     "cf:typegen": "wrangler types --env-interface CloudflareEnv worker-configuration.d.ts"
   },
   "dependencies": {

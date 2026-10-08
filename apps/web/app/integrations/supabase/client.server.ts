@@ -113,3 +113,98 @@ export async function refreshSupabaseSession(
 
   return { session: data.session, user: data.user };
 }
+
+/**
+ * Keep legacy password hashes and Supabase Auth credentials aligned for
+ * admin-initiated password resets. The service-role client stays server-only.
+ */
+export async function updateSupabaseUserPasswordByEmail(
+  context: SupabaseRuntimeContext | undefined,
+  email: string,
+  password: string,
+  userIdHint?: string,
+) {
+  if (!isSupabaseConfigured(context)) return false;
+
+  const client = getSupabaseAdmin(context);
+  const authUser = await findSupabaseUserByEmail(client, email, userIdHint);
+  if (!authUser) return false;
+  const { error } = await client.auth.admin.updateUserById(authUser.id, { password });
+  if (error) throw error;
+  return true;
+}
+
+/** Apply admin-managed email corrections to the matching Auth identity. */
+export async function updateSupabaseUserEmailByEmail(
+  context: SupabaseRuntimeContext | undefined,
+  currentEmail: string,
+  newEmail: string,
+  userIdHint?: string,
+) {
+  if (!isSupabaseConfigured(context)) return false;
+
+  const client = getSupabaseAdmin(context);
+  const authUser = await findSupabaseUserByEmail(client, currentEmail, userIdHint);
+  if (!authUser) return false;
+  const { error } = await client.auth.admin.updateUserById(authUser.id, {
+    email: newEmail.trim().toLowerCase(),
+    email_confirm: true,
+  });
+  if (error) throw error;
+  return true;
+}
+
+/** Remove matching Auth identities before permanently deleting local accounts. */
+export async function deleteSupabaseUsersByEmail(
+  context: SupabaseRuntimeContext | undefined,
+  emails: string[],
+) {
+  if (!isSupabaseConfigured(context)) return 0;
+
+  const requestedEmails = new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean));
+  if (!requestedEmails.size) return 0;
+
+  const client = getSupabaseAdmin(context);
+  const matches = new Map<string, string>();
+  const pageSize = 1000;
+  const maximumLookupPages = 50;
+  for (let page = 1; page <= maximumLookupPages; page += 1) {
+    const { data, error } = await client.auth.admin.listUsers({ page, perPage: pageSize });
+    if (error) throw error;
+    for (const user of data.users) {
+      const email = user.email?.trim().toLowerCase();
+      if (email && requestedEmails.has(email)) matches.set(email, user.id);
+    }
+    if (matches.size === requestedEmails.size || data.users.length < pageSize) break;
+    if (page === maximumLookupPages) throw new Error("Supabase user lookup reached its safety limit.");
+  }
+
+  for (const userId of matches.values()) {
+    const { error } = await client.auth.admin.deleteUser(userId);
+    if (error) throw error;
+  }
+  return matches.size;
+}
+
+async function findSupabaseUserByEmail(
+  client: SupabaseClient<Database>,
+  email: string,
+  userIdHint?: string,
+) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (userIdHint) {
+    const { data } = await client.auth.admin.getUserById(userIdHint);
+    if (data.user?.email?.trim().toLowerCase() === normalizedEmail) return data.user;
+  }
+
+  const pageSize = 1000;
+  const maximumLookupPages = 50;
+  for (let page = 1; page <= maximumLookupPages; page += 1) {
+    const { data, error } = await client.auth.admin.listUsers({ page, perPage: pageSize });
+    if (error) throw error;
+    const authUser = data.users.find((user) => user.email?.trim().toLowerCase() === normalizedEmail);
+    if (authUser) return authUser;
+    if (data.users.length < pageSize) return null;
+  }
+  throw new Error("Supabase user lookup reached its safety limit.");
+}

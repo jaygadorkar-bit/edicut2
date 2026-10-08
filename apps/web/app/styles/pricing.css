@@ -112,35 +112,6 @@
 .pack-custom-features svg { flex-shrink: 0; }
 .pack-custom-action { min-width: 0; }
 .pack-custom-action .pack-button { width: 100%; }
-.pack-faq { padding-top: 1.5rem; padding-bottom: 4rem; }
-.pack-faq-heading { max-width: 42rem; margin: 0 auto 2.25rem; text-align: center; }
-.pack-faq-heading h2 { margin-top: .9rem; font-size: clamp(1.875rem, 3.2vw, 2.5rem); }
-.pack-faq-copy { max-width: 38rem; margin: .8rem auto 0; color: var(--pack-copy); font-size: .9375rem; text-wrap: pretty; }
-.pack-faq-layout { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.3fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "artwork questions" "link questions"; gap: 1rem 4rem; align-items: center; }
-.pack-faq-artwork { grid-area: artwork; width: 100%; max-width: 22.5rem; justify-self: center; }
-.pack-faq-artwork svg { display: block; width: 100%; height: auto; overflow: visible; }
-.pack-faq-art-surface { fill: var(--neo-surface-strong); stroke: white; stroke-width: 1.5; }
-.pack-faq-art-inset { fill: #dce5ed; }
-.pack-faq-art-halo { fill: #e6edf3; }
-.pack-faq-art-slate { fill: #7f96aa; }
-.pack-faq-art-landscape { fill: #b2c2cf; }
-.pack-faq-art-calendar-head { fill: #f3dfe2; }
-.pack-faq-art-accent { fill: #df2940; }
-.pack-faq-art-raised { filter: drop-shadow(3px 6px 5px rgb(132 148 163 / 23%)); }
-.pack-faq-art-line { stroke: #344657; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-.pack-faq-art-clock-tick { stroke: #a6b7c5; stroke-width: 2; stroke-linecap: round; }
-.pack-faq-art-check { stroke: #d12238; stroke-width: 2.8; stroke-linecap: round; stroke-linejoin: round; }
-.pack-faq-link { grid-area: link; display: inline-flex; align-items: center; justify-content: center; justify-self: center; align-self: start; gap: .55rem; min-height: 3rem; padding: .75rem 1.25rem; font-size: .875rem; font-weight: 700; text-decoration: none; }
-.pack-faq-link:hover { color: var(--pack-copy); }
-.pack-questions { grid-area: questions; display: grid; align-content: start; gap: .75rem; min-width: 0; }
-.pack-questions details { border-radius: 1.25rem; }
-.pack-questions details[open] { box-shadow: var(--pack-shadow-inset); }
-.pack-questions summary { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.25rem; min-height: 4.5rem; list-style: none; cursor: pointer; font-size: .9375rem; font-weight: 650; border-radius: 1.25rem; }
-.pack-questions summary::-webkit-details-marker { display: none; }
-.pack-questions summary:hover { color: var(--pack-accent); }
-.pack-question-icon { display: flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; flex-shrink: 0; border-radius: .5rem; }
-.pack-question-icon svg { width: 1.25rem; height: 1.25rem; }
-.pack-questions details > p { margin: 0; padding: 0 1.25rem 1.25rem; color: var(--pack-copy); font-size: .9375rem; max-width: 42rem; }
 .pack-final { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: center; gap: 2rem; padding: 3rem; margin-bottom: 4rem; border-radius: 1.75rem; }
 .pack-final h2 { margin-top: 1.1rem; font-size: clamp(2.25rem, 4vw, 3.5rem); letter-spacing: -.055em; }
 .pack-final-copy > p:not(.neo-section-label) { margin-top: 1.25rem; font-size: .9375rem; max-width: 30rem; color: var(--pack-copy); }
@@ -158,7 +129,6 @@
   .pack-hero-objects { display: none; }
   .pack-finder { justify-content: flex-start; }
   .pack-recommendation { margin-left: auto; }
-  .pack-faq-layout { column-gap: 2rem; }
 }
 
 @media (max-width: 900px) {
@@ -196,11 +166,6 @@
   .pack-table-hint { display: block; }
   .pack-table-scroll :is(th, td) { padding: .9rem 1rem; }
   .pack-custom { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
-  .pack-faq { padding-bottom: 2.5rem; }
-  .pack-faq-heading { margin-bottom: 1.5rem; }
-  .pack-faq-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "artwork" "questions" "link"; gap: 1.5rem; }
-  .pack-faq-artwork { max-width: 16.5rem; }
-  .pack-questions summary { font-size: .875rem; }
   .pack-final { grid-template-columns: minmax(0, 1fr); padding: 2rem 1.75rem; margin-bottom: 2.5rem; gap: 1rem; }
   .pack-final-art { grid-row: 1; max-width: 17rem; }
 }

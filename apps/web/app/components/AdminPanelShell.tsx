@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Form, useRouteLoaderData } from "react-router";
-import { ADMIN_BASE_PATH, adminPath } from "../lib/admin-paths";
+import { adminPath } from "../lib/admin-paths";
 import { WorkspaceShell } from "./WorkspaceShell";
 
 export const adminPanelNavItems = [
@@ -60,10 +60,9 @@ export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount,
       notificationsTo={adminPath("?tab=projects")}
       notificationCount={notificationCount}
       accountAction={(
-        <Form method="post" action={ADMIN_BASE_PATH} reloadDocument>
-          <input type="hidden" name="intent" value="logout" />
+        <Form method="post" action="/signout" reloadDocument>
           <button type="submit" className="text-[#a0a3b5] transition hover:text-[#5a43d5]" aria-label="Sign out">
-            <span className="material-symbols-outlined text-[18px]">logout</span>
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
           </button>
         </Form>
       )}

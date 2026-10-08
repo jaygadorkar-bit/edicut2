@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { type SQL } from "drizzle-orm";
+import { creatorProfiles } from "@edicut/db/schema";
 import type { DatabaseClient } from "@edicut/db/client";
-import { createPurchasedProject, saveCreatorProfile } from "./client-workspace.server";
+import { createPurchasedProject, resetCreatorProfile, saveCreatorProfile } from "./client-workspace.server";
 import type { CreatorProfile, ProjectBrief } from "./client-intake";
 
 const ownerId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -54,5 +56,35 @@ describe("purchased project concurrency", () => {
     expect(await saveCreatorProfile(db, ownerId, profile)).toBe(true);
     const query = new PgDialect().sqlToQuery(execute.mock.calls[0][0]).sql;
     expect(query).toContain("details = creator_profiles.details || EXCLUDED.details");
+  });
+});
+
+describe("creator profile reset", () => {
+  it("deletes only the profile row belonging to the selected user", async () => {
+    const filters: SQL[] = [];
+    const returning = vi.fn().mockResolvedValue([{ ownerId }]);
+    const where = vi.fn((condition: SQL) => {
+      filters.push(condition);
+      return { returning };
+    });
+    const deleteFrom = vi.fn(() => ({ where }));
+    const db = { delete: deleteFrom } as unknown as DatabaseClient;
+
+    expect(await resetCreatorProfile(db, ownerId)).toBe(true);
+    expect(deleteFrom).toHaveBeenCalledWith(creatorProfiles);
+    expect(returning).toHaveBeenCalledOnce();
+
+    const query = new PgDialect().sqlToQuery(filters[0]!);
+    expect(query.sql).toContain("owner_id");
+    expect(query.params).toEqual([ownerId]);
+  });
+
+  it("reports when the user has no saved profile", async () => {
+    const returning = vi.fn().mockResolvedValue([]);
+    const where = vi.fn().mockReturnValue({ returning });
+    const deleteFrom = vi.fn().mockReturnValue({ where });
+    const db = { delete: deleteFrom } as unknown as DatabaseClient;
+
+    expect(await resetCreatorProfile(db, ownerId)).toBe(false);
   });
 });

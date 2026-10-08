@@ -185,21 +185,44 @@ function replaceLegacyDefaultPricing(packages: PricingPackage[]) {
   return sortPackages(merged);
 }
 
-export async function getPricingPackages(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {
+export async function getPricingPackages(
+  db: DatabaseClient | null | undefined,
+  context?: SupabaseRuntimeContext,
+  options: { failOnError?: boolean } = {},
+) {
   const value = await getSiteSetting(db, PRICING_PACKAGES_KEY, context, { failOnError: true });
 
-  if (!value) {
+  if (value == null) {
+    return defaultPricingPackages;
+  }
+  if (!value.trim()) {
+    if (options.failOnError) throw new Error("Saved pricing packages are empty.");
     return defaultPricingPackages;
   }
 
   try {
     const parsed = JSON.parse(value);
-    const packages = Array.isArray(parsed)
-      ? parsed.map(normalizePackage).filter((item): item is PricingPackage => Boolean(item))
-      : [];
+    if (!Array.isArray(parsed)) {
+      if (options.failOnError) throw new Error("Saved pricing packages have an unsupported format.");
+      return defaultPricingPackages;
+    }
+
+    const packages = parsed.map(normalizePackage).filter((item): item is PricingPackage => Boolean(item));
+    if (options.failOnError) {
+      const discardedPackages = parsed.filter((item) => !normalizePackage(item, 0));
+      const hasUnexpectedPackage = discardedPackages.some((item) => {
+        const row = item && typeof item === "object" ? item as { slug?: unknown } : {};
+        // This retired package is intentionally discarded when migrating the catalog.
+        return row.slug !== "single-short";
+      });
+      if (hasUnexpectedPackage || !packages.length) {
+        throw new Error("Saved pricing packages could not be read safely.");
+      }
+    }
 
     return packages.length ? replaceLegacyDefaultPricing(packages) : defaultPricingPackages;
-  } catch {
+  } catch (error) {
+    if (options.failOnError) throw error;
     return defaultPricingPackages;
   }
 }

@@ -77,7 +77,7 @@ export default function SubscriptionsRoute() {
     </div>
     {result ? <p role={result.error ? "alert" : "status"} className={`mb-5 rounded-xl p-4 text-sm ${result.error ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}>{result.error || result.success}</p> : null}
     {purchaseHistoryAvailable ? <>
-      {records.some(record => record.status === "paid") && features.includes("projects") ? <Link to="/dashboard/projects" className="neo-workspace__panel mb-5 flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-2xl p-4 text-sm font-bold">Your paid package is ready. Complete your channel profile and start a project.<span aria-hidden="true">→</span></Link> : null}
+      {records.some(record => record.status === "paid") && features.includes("projects") ? <Link to="/dashboard/projects" className="neo-workspace__panel mb-5 flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-2xl p-4 text-sm font-bold">Your paid package is on file. View your project workspace for the next step.<span aria-hidden="true">→</span></Link> : null}
       <SubscriptionList rows={records.map(subscription => ({ subscription }))} />
       <SubscriptionPagination page={page} hasNext={hasNext} />
     </> : <div className="neo-workspace__panel rounded-2xl p-5" role="status">

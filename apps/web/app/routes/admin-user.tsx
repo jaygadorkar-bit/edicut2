@@ -1,14 +1,16 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import bcrypt from "bcryptjs";
-import { and, eq, isNotNull } from "drizzle-orm";
-import { users as usersTable } from "@edicut/db/schema";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
+import { adminUsers as adminUsersTable, users as usersTable } from "@edicut/db/schema";
 import { getDbFromContext } from "../lib/db.server";
 import { isAdminRole, requireAdminUser } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "../lib/admin-paths";
 import { toPublicAdminUser } from "../lib/admin-public";
 import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES } from "../lib/admin-user-roles";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
+import { resetCreatorProfile } from "../lib/client-workspace.server";
+import { deleteSupabaseUsersByEmail, updateSupabaseUserEmailByEmail, updateSupabaseUserPasswordByEmail } from "../integrations/supabase/client.server";
 import { AdminPanelShell } from "../components/AdminPanelShell";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
@@ -164,6 +166,20 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
     }
 
     try {
+      const existingUser = await db.query.users.findFirst({
+        columns: { email: true },
+        where: eq(usersTable.id, userId),
+      });
+      if (!existingUser) return { error: "This account could not be found." };
+      if (existingUser.email.trim().toLowerCase() !== email) {
+        const duplicate = await db.query.users.findFirst({
+          columns: { id: true },
+          where: and(eq(usersTable.email, email), ne(usersTable.id, userId)),
+        });
+        if (duplicate) return { error: "Another account already uses that email." };
+        await updateSupabaseUserEmailByEmail(context, existingUser.email, email, userId);
+      }
+
       await db
         .update(usersTable)
         .set({
@@ -189,6 +205,18 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
     }
   }
 
+  if (intent === "reset-creator-profile") {
+    try {
+      const reset = await resetCreatorProfile(db, userId);
+      return reset
+        ? { success: "Creator profile reset. The user can set it up again." }
+        : { error: "This user does not have a saved creator profile." };
+    } catch (error) {
+      console.error("Admin creator profile reset error:", error);
+      return { error: "Could not reset the creator profile. Please try again later." };
+    }
+  }
+
   if (intent === "reset-password") {
     const password = String(formData.get("password") ?? "");
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
@@ -201,15 +229,27 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
       return { error: "Passwords do not match." };
     }
 
-    await db
-      .update(usersTable)
-      .set({
-        passwordHash: bcrypt.hashSync(password, 10),
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.id, userId));
+    try {
+      const targetUser = await db.query.users.findFirst({
+        columns: { email: true },
+        where: eq(usersTable.id, userId),
+      });
+      if (!targetUser) return { error: "This account could not be found." };
 
-    return { success: "Password reset." };
+      await updateSupabaseUserPasswordByEmail(context, targetUser.email, password, userId);
+      await db
+        .update(usersTable)
+        .set({
+          passwordHash: bcrypt.hashSync(password, 10),
+          updatedAt: new Date(),
+        })
+        .where(eq(usersTable.id, userId));
+
+      return { success: "Password reset." };
+    } catch (error) {
+      console.error("Admin user password reset error:", error);
+      return { error: "Could not reset this account’s password. Check the authentication connection and try again." };
+    }
   }
 
   if (intent === "move-to-trash") {
@@ -232,6 +272,18 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
 
   if (intent === "permanent-delete") {
     try {
+      const target = await db.query.users.findFirst({
+        columns: { email: true, deletedAt: true },
+        where: eq(usersTable.id, userId),
+      });
+      if (!target?.deletedAt) return { error: "Only accounts in trash can be permanently deleted." };
+      const matchingAdmin = await db.query.adminUsers.findFirst({
+        columns: { id: true },
+        where: eq(adminUsersTable.email, target.email.trim().toLowerCase()),
+      });
+      if (matchingAdmin) return { error: "This email is also used by an admin account. Change the admin email before permanently deleting this customer profile." };
+
+      await deleteSupabaseUsersByEmail(context, [target.email]);
       const [deletedUser] = await db.delete(usersTable)
         .where(and(eq(usersTable.id, userId), isNotNull(usersTable.deletedAt)))
         .returning();
@@ -239,7 +291,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
       return redirect(returnTo);
     } catch (error) {
       console.error("Admin account permanent delete error:", error);
-      return { error: "Failed to permanently delete account." };
+      return { error: "Could not permanently delete this account. Its customer record remains in trash; refresh and retry after checking the authentication connection." };
     }
   }
 
@@ -386,6 +438,29 @@ export default function AdminUserRoute() {
               </button>
             </div>
           </Form>
+
+          <div className="border-t border-slate-100 p-5">
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Creator profile</h2>
+            <div className="mt-4 flex flex-col gap-4 rounded-lg bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-black text-slate-800">Reset saved creator details</p>
+                <p id="creator-profile-reset-help" className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                  Clear all saved creator profile details so the user can set them up again. Account settings, purchases, and submitted projects stay unchanged.
+                </p>
+              </div>
+              <Form
+                method="post"
+                className="shrink-0"
+                onSubmit={(event) => !confirm("Reset this creator profile? All saved creator details will be cleared. Account settings, purchases, and submitted projects will stay unchanged.") && event.preventDefault()}
+              >
+                <input type="hidden" name="intent" value="reset-creator-profile" />
+                <button aria-describedby="creator-profile-reset-help" disabled={!canEdit || isSubmitting} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-red-200 px-4 text-sm font-black text-red-700 transition-colors hover:border-red-300 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">restart_alt</span>
+                  Reset creator profile
+                </button>
+              </Form>
+            </div>
+          </div>
 
           <div className="border-t border-slate-100 p-5">
             <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Account lifecycle</h2>

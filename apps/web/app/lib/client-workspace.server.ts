@@ -65,6 +65,12 @@ export async function saveCreatorProfile(db: DatabaseClient, ownerId: string, pr
   `);
   return hasReturnedRows(result);
 }
+export async function resetCreatorProfile(db: DatabaseClient, ownerId: string) {
+  const [deleted] = await db.delete(creatorProfiles)
+    .where(eq(creatorProfiles.ownerId, ownerId))
+    .returning();
+  return Boolean(deleted);
+}
 export async function createPurchasedProject(db: DatabaseClient, ownerId: string, subscriptionId: string, token: string, brief: ProjectBrief) {
   const state = await loadClientWorkspace(db, ownerId);
   if (!state.profile) return { error: "Complete your channel profile before starting a project." };

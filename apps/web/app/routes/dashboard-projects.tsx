@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowRight, UserRound } from "lucide-react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import { desc, eq } from "drizzle-orm";
+import { count as drizzleCount, desc, eq } from "drizzle-orm";
 import { workspaceProjects } from "@edicut/db/schema";
 import { WorkspaceShell } from "../components/WorkspaceShell";
 import { IntakeErrors, IntakeField } from "../components/ClientIntakeFields";
@@ -14,19 +14,30 @@ import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/
 import { consumeUsageLimit } from "../lib/usage-protection.server";
 import { isMissingWorkspaceSchema, isWorkspaceRecordId } from "../lib/workspace";
 import { workspaceProjectColumns, type WorkspaceProjectView } from "../lib/workspace-projects.server";
+import { getPageWithinRange, getPositivePage } from "../lib/admin-data-requirements";
+
+const PROJECTS_PER_PAGE = 25;
 
 export const meta: MetaFunction = () => [{ title: "Projects | EdiCut" }, { name: "robots", content: "noindex,nofollow" }];
 export function headers() { return { "Cache-Control": "no-store", "Referrer-Policy": "same-origin" }; }
 export async function loader(args: LoaderFunctionArgs) {
   const { db, userId, user, features } = await requireClientWorkspace(args);
+  const requestedPage = getPositivePage(new URL(args.request.url).searchParams.get("page"));
   try {
-    const state = await loadClientWorkspace(db, userId);
-    const projects = state.profile ? await db.select(workspaceProjectColumns).from(workspaceProjects)
-      .where(eq(workspaceProjects.ownerId, userId)).orderBy(desc(workspaceProjects.updatedAt)).limit(100) : [];
-    return { user, features, ...state, projects, ready: true, token: crypto.randomUUID() };
+    const [state, projectSummary] = await Promise.all([
+      loadClientWorkspace(db, userId),
+      db.select({ count: drizzleCount() }).from(workspaceProjects).where(eq(workspaceProjects.ownerId, userId)),
+    ]);
+    const projectCount = projectSummary[0]?.count ?? 0;
+    const pageCount = Math.max(1, Math.ceil(projectCount / PROJECTS_PER_PAGE));
+    const page = getPageWithinRange(requestedPage, pageCount);
+    const projects = await db.select(workspaceProjectColumns).from(workspaceProjects)
+      .where(eq(workspaceProjects.ownerId, userId)).orderBy(desc(workspaceProjects.updatedAt))
+      .limit(PROJECTS_PER_PAGE).offset((page - 1) * PROJECTS_PER_PAGE);
+    return { user, features, ...state, projects, projectCount, page, pageCount, hasNext: page < pageCount, ready: true, token: crypto.randomUUID() };
   } catch (error) {
     if (!isMissingClientWorkspaceSchema(error) && !isMissingWorkspaceSchema(error)) throw error;
-    return { user, features, profile: null, purchases: [] as ClientPurchase[], projects: [] as WorkspaceProjectView[], ready: false, token: crypto.randomUUID() };
+    return { user, features, profile: null, purchases: [] as ClientPurchase[], projects: [] as WorkspaceProjectView[], projectCount: 0, page: 1, pageCount: 1, hasNext: false, ready: false, token: crypto.randomUUID() };
   }
 }
 export async function action(args: ActionFunctionArgs) {
@@ -55,7 +66,7 @@ export function creditLabel(purchase: ClientPurchase) {
   return purchase.type === "monthly" ? `${purchase.remaining / 60} editing hours available` : `${purchase.remaining} video credit available`;
 }
 export default function ProjectsRoute() {
-  const { user, features, profile, purchases, projects, ready, token } = useLoaderData<typeof loader>();
+  const { user, features, profile, purchases, projects, projectCount, page, pageCount, hasNext, ready, token } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const busy = useNavigation().state !== "idle";
   const available = purchases.filter(p => p.active && p.remaining > 0);
@@ -92,7 +103,7 @@ export default function ProjectsRoute() {
             <div className="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end sm:pl-4">
               <Link
                 to={hasPaidPackage ? "/dashboard/profile#channel-profile" : "/pricing"}
-                className="neo-workspace__start-project inline-flex min-h-11 items-center gap-2 px-5 text-sm"
+                className="neo-workspace__setup-cta"
               >
                 {hasPaidPackage ? "Set up profile" : "Browse packages"}
                 <ArrowRight aria-hidden="true" size={16} strokeWidth={2.25} />
@@ -106,7 +117,6 @@ export default function ProjectsRoute() {
           </div>
         </section>
       ) : (
-        <>
         <section id="new-project" className="neo-workspace__panel scroll-mt-28 rounded-3xl p-5 sm:p-8" aria-labelledby="new-project-title">
           <p className="neo-workspace__eyebrow">New project</p><h3 id="new-project-title" className="mt-2 text-2xl font-bold">Tell us what you’re making.</h3><p className="mb-7 mt-2 text-sm leading-6 text-slate-600">Creator preferences are saved for <strong>{profile.channelName}</strong>. Only project-specific details are needed below.</p>
           {!available.length ? <p className="rounded-xl bg-slate-100 p-5 text-sm leading-6">No editing balance is available. <Link to="/pricing" className="font-bold underline">Choose another package</Link> or <Link to="/dashboard/subscriptions" className="font-bold underline">check your subscription status</Link>.</p> : <Form method="post">
@@ -137,10 +147,15 @@ export default function ProjectsRoute() {
             <div className="mt-8 border-t border-slate-200 pt-6"><button disabled={busy || !purchase} type="submit" className="neo-workspace__profile-submit min-h-12 w-full rounded-xl px-6 text-sm font-bold disabled:opacity-60 sm:w-auto">{busy ? "Submitting your project…" : "Submit project brief →"}</button><p className="mt-3 text-xs leading-5 text-slate-600">We’ll review your brief and confirm the scope and schedule. No additional payment is collected here.</p></div>
           </Form>}
         </section>
-        <section id="your-projects" className="scroll-mt-28" aria-labelledby="your-projects-title"><h3 id="your-projects-title" className="mb-4 text-xl font-bold">Your projects <span className="ml-2 text-sm font-normal text-slate-500">{projects.length}</span></h3>
-          {projects.length ? <div className="grid gap-4">{projects.map(p => <article key={p.id} className="neo-workspace__panel min-w-0 rounded-2xl p-5 sm:p-6"><div className="flex flex-wrap justify-between gap-3"><div className="min-w-0"><h4 className="break-words font-bold">{p.title}</h4><p className="mt-1 text-xs text-slate-600">{p.channelName} · {p.deadline ? `Target: ${p.deadline}` : "Schedule to be confirmed"}</p></div><span className="h-fit rounded-full bg-slate-200 px-3 py-1 text-xs font-bold">{p.status.replaceAll("_", " ")}</span></div><details className="mt-4"><summary className="min-h-11 cursor-pointer py-3 text-sm font-bold text-slate-600">View submitted brief</summary><p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{p.notes || "No brief was recorded for this older project."}</p></details><div className="mt-3 flex flex-wrap gap-3">{features.includes("uploads") ? <Link to="/dashboard/uploads" className="inline-flex min-h-11 items-center text-xs font-bold underline">Manage file links</Link> : null}{features.includes("reviews") ? <Link to="/dashboard/reviews" className="inline-flex min-h-11 items-center text-xs font-bold underline">Review cuts</Link> : null}</div></article>)}</div> : <p className="neo-workspace__panel rounded-2xl p-6 text-sm text-slate-600">Your first project will appear here after you submit the brief above.</p>}
-        </section>
-      </>)}
+      )}
+      {ready ? <section id="your-projects" className="scroll-mt-28" aria-labelledby="your-projects-title"><h3 id="your-projects-title" className="mb-4 text-xl font-bold">Your projects <span className="ml-2 text-sm font-normal text-slate-500">{projectCount}</span></h3>
+        {projects.length ? <div className="grid gap-4">{projects.map(p => <article key={p.id} className="neo-workspace__panel min-w-0 rounded-2xl p-5 sm:p-6"><div className="flex flex-wrap justify-between gap-3"><div className="min-w-0"><h4 className="break-words font-bold">{p.title}</h4><p className="mt-1 text-xs text-slate-600">{p.channelName} · {p.deadline ? `Target: ${p.deadline}` : "Schedule to be confirmed"}</p></div><span className="h-fit rounded-full bg-slate-200 px-3 py-1 text-xs font-bold">{p.status.replaceAll("_", " ")}</span></div><details className="mt-4"><summary className="min-h-11 cursor-pointer py-3 text-sm font-bold text-slate-600">View submitted brief</summary><p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{p.notes || "No brief was recorded for this older project."}</p></details><div className="mt-3 flex flex-wrap gap-3">{features.includes("uploads") ? <Link to="/dashboard/uploads" className="inline-flex min-h-11 items-center text-xs font-bold underline">Manage file links</Link> : null}{features.includes("reviews") ? <Link to="/dashboard/reviews" className="inline-flex min-h-11 items-center text-xs font-bold underline">Review cuts</Link> : null}</div></article>)}</div> : <p className="neo-workspace__panel rounded-2xl p-6 text-sm text-slate-600">{profile ? "Your first project will appear here after you submit the brief above." : "Your project history will appear here after your first submission. Complete your creator profile above to start."}</p>}
+        {pageCount > 1 ? <nav aria-label="Project pages" className="mt-5 flex items-center justify-between gap-3 text-sm font-bold">
+          {page > 1 ? <Link className="min-h-11 p-3 underline" to={`?page=${page - 1}#your-projects`}>Previous</Link> : <span />}
+          <span>Page {page} of {pageCount}</span>
+          {hasNext ? <Link className="min-h-11 p-3 underline" to={`?page=${page + 1}#your-projects`}>Next</Link> : <span />}
+        </nav> : null}
+      </section> : null}
     </div>
   </WorkspaceShell>;
 }

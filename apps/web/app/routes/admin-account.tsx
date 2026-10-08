@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { adminUsers } from "@edicut/db/schema";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
@@ -11,6 +11,7 @@ import { requireAdminUser } from "../lib/session.server";
 import { verifyPassword } from "../lib/password.server";
 import { AdminPanelShell } from "../components/AdminPanelShell";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import { updateSupabaseUserEmailByEmail, updateSupabaseUserPasswordByEmail } from "../integrations/supabase/client.server";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
@@ -95,6 +96,15 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
 
     try {
+      if (adminUser.email.trim().toLowerCase() !== email) {
+        const duplicate = await db.query.adminUsers.findFirst({
+          columns: { id: true },
+          where: and(eq(adminUsers.email, email), ne(adminUsers.id, adminUser.id)),
+        });
+        if (duplicate) return { error: "Another admin already uses that email." };
+        await updateSupabaseUserEmailByEmail(context, adminUser.email, email);
+      }
+
       await db
         .update(adminUsers)
         .set({
@@ -122,26 +132,32 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
     if (!(await verifyPassword(currentPassword, adminUser.passwordHash))) {
-      return { error: "Current password is incorrect." };
+      return { intent: "change-password", error: "Current password is incorrect." };
     }
 
     if (password.length < 12 || password.length > 128) {
-      return { error: "New admin password must be between 12 and 128 characters." };
+      return { intent: "change-password", error: "New admin password must be between 12 and 128 characters." };
     }
 
     if (password !== confirmPassword) {
-      return { error: "New passwords do not match." };
+      return { intent: "change-password", error: "New passwords do not match." };
     }
 
-    await db
-      .update(adminUsers)
-      .set({
-        passwordHash: bcrypt.hashSync(password, 12),
-        updatedAt: new Date(),
-      })
-      .where(eq(adminUsers.id, adminUser.id));
+    try {
+      await updateSupabaseUserPasswordByEmail(context, adminUser.email, password);
+      await db
+        .update(adminUsers)
+        .set({
+          passwordHash: bcrypt.hashSync(password, 12),
+          updatedAt: new Date(),
+        })
+        .where(eq(adminUsers.id, adminUser.id));
 
-    return { success: "Admin password updated." };
+      return { intent: "change-password", success: "Admin password updated." };
+    } catch (error) {
+      console.error("Admin password update error:", error);
+      return { intent: "change-password", error: "Could not update the password. Check the authentication connection and try again." };
+    }
   }
 
   return { error: "Unknown action." };
@@ -152,6 +168,7 @@ export default function AdminAccountRoute() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const actionIntent = actionData && "intent" in actionData ? actionData.intent : null;
 
   return (
     <AdminPanelShell
@@ -171,10 +188,10 @@ export default function AdminAccountRoute() {
             <p className="mt-1 text-sm font-medium text-slate-500">Update the admin identity used for sign in and panel activity.</p>
           </div>
 
-          {actionData?.error ? (
+          {actionIntent !== "change-password" && actionData?.error ? (
             <div className="mx-5 mt-5 rounded-lg border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-700">{actionData.error}</div>
           ) : null}
-          {actionData?.success ? (
+          {actionIntent !== "change-password" && actionData?.success ? (
             <div className="mx-5 mt-5 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{actionData.success}</div>
           ) : null}
 
@@ -215,6 +232,12 @@ export default function AdminAccountRoute() {
 
           <Form method="post" className="grid gap-4 p-5">
             <input type="hidden" name="intent" value="change-password" />
+            {actionIntent === "change-password" && actionData?.error ? (
+              <p role="alert" className="rounded-lg border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-700">{actionData.error}</p>
+            ) : null}
+            {actionIntent === "change-password" && actionData?.success ? (
+              <p role="status" className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{actionData.success}</p>
+            ) : null}
             <Field label="Current password" name="currentPassword" type="password" required defaultValue="" disabled={isSubmitting} />
             <Field label="New password" name="password" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} maxLength={128} />
             <Field label="Confirm new password" name="confirmPassword" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} maxLength={128} />

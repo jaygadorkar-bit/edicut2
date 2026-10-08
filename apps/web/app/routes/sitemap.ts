@@ -6,7 +6,7 @@ import { resolveWebEnv } from "../lib/context.server";
 import { escapeXml, getCanonicalSiteOrigin } from "../lib/seo";
 import { getSiteSettingsSnapshot } from "../lib/site-settings.server";
 
-const PUBLIC_PATHS = ["/", "/pricing", "/portfolio", "/faq", "/contact", "/privacy", "/terms"];
+const PUBLIC_PATHS = ["/", "/why-hire-us", "/pricing", "/portfolio", "/faq", "/contact", "/privacy", "/terms"];
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = getSupabaseClient(context) ? null : getDbFromContext(context ?? {});

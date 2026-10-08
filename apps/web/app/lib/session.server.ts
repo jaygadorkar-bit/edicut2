@@ -162,14 +162,22 @@ export async function requireUserId(
         headers: { "Set-Cookie": await destroySession(session, context) },
       });
     }
+    const profileId = typeof userId === "string" ? userId : user.id;
+    const profile = await findUserById(getDbFromContext(context ?? {}), profileId);
+    if (!profile?.active || profile.deletedAt) {
+      const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
+      throw redirect(`/signin?${searchParams}`, {
+        headers: { "Set-Cookie": await destroySession(session, context) },
+      });
+    }
+
     if (typeof userId === "string" && userId !== user.id) {
-      const profile = await findUserById(getDbFromContext(context ?? {}), userId);
-      if (!user.email_confirmed_at || !user.email || profile?.email.toLowerCase() !== user.email.trim().toLowerCase()) {
+      if (!user.email_confirmed_at || !user.email || profile.email.toLowerCase() !== user.email.trim().toLowerCase()) {
         throw redirect("/signin", {
           headers: { "Set-Cookie": await destroySession(session, context) },
         });
       }
-      return userId;
+      return profile.id;
     }
     return user.id;
   }
@@ -177,6 +185,13 @@ export async function requireUserId(
   if (!userId || typeof userId !== "string") {
     const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
     throw redirect(`/signin?${searchParams}`);
+  }
+  const profile = await findUserById(getDbFromContext(context ?? {}), userId);
+  if (!profile?.active || profile.deletedAt) {
+    const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
+    throw redirect(`/signin?${searchParams}`, {
+      headers: { "Set-Cookie": await destroySession(session, context) },
+    });
   }
   return userId;
 }

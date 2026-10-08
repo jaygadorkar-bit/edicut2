@@ -1,7 +1,8 @@
 import type { MetaFunction } from "react-router";
 import { useState } from "react";
-import { CircleHelp } from "lucide-react";
+import { CircleHelp, MessageCircle, Search, X } from "lucide-react";
 import { ButtonLink, PageShell, TrustStrip } from "../components/site/Marketing.js";
+import { FaqSection } from "../components/site/FaqSection";
 import { createRouteMeta } from "../lib/seo";
 
 export const meta: MetaFunction = (args) => createRouteMeta(args,
@@ -54,124 +55,90 @@ export default function FAQPage() {
   const [activeCategory, setActiveCategory] = useState("All");
 
   const filteredFaqs = allFaqs.filter((faq) => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      faq.answer.toLowerCase().includes(searchQuery.toLowerCase());
+      faq.question.toLowerCase().includes(normalizedQuery) ||
+      faq.answer.toLowerCase().includes(normalizedQuery);
     const matchesCategory = activeCategory === "All" || faq.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
 
+  const resetFilters = () => {
+    setSearchQuery("");
+    setActiveCategory("All");
+  };
+
   return (
-    <PageShell>
-      {/* Hero Header */}
-      <section className="relative overflow-hidden border-b neo-line px-5 pb-14 pt-16 sm:px-6 lg:pb-20 lg:pt-20">
-        <div className="pointer-events-none absolute -right-24 top-16 h-72 w-72 rounded-full bg-[#e2c9ce]/35 blur-3xl" />
-        <div className="pointer-events-none absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-[#cbdbe8]/60 blur-3xl" />
-
-        <div className="relative mx-auto max-w-4xl text-center">
-          <div className="neo-pill inline-flex items-center gap-2 rounded-full px-4 py-2 yt-tag tracking-[0.16em] neo-section-label">
-            <CircleHelp size={16} aria-hidden="true" />
-            Knowledge Base & FAQ
-          </div>
-
-          <h1 className="yt-display mt-7 neo-ink">
-            Frequently asked <span className="text-primary">questions.</span>
-          </h1>
-
-          <p className="yt-subtitle mx-auto mt-6 max-w-2xl leading-8 neo-muted">
-            Have questions about our editing lanes, turnaround times, software files, or pricing? Find clear answers below.
-          </p>
-
-          {/* Recessed Search Bar */}
-          <div className="neo-surface mx-auto mt-10 max-w-2xl rounded-2xl p-2 sm:p-2.5">
-            <div className="neo-inset relative flex items-center rounded-xl px-4 py-2">
-              <span className="material-symbols-outlined text-[22px] text-primary">search</span>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search topics (e.g. turnaround, thumbnails, 4K, pricing)..."
-                className="w-full bg-transparent px-3 py-2 text-base font-semibold outline-none neo-ink placeholder:text-gray-400"
-              />
-              {searchQuery ? (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="rounded-full p-1 text-gray-400 transition hover:text-black"
-                >
-                  <span className="material-symbols-outlined text-[18px]">close</span>
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Categories & Accordions */}
-      <section className="border-b neo-line px-5 py-20 sm:px-6">
-        <div className="mx-auto max-w-4xl">
-          {/* Category Filter Pills */}
-          <div className="neo-inset mx-auto flex w-fit max-w-full flex-wrap justify-center gap-2 rounded-full p-1.5" role="tablist">
-            {categories.map((category) => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => setActiveCategory(category)}
-                className={`rounded-full px-4 py-2 yt-small font-black transition ${
-                  activeCategory === category
-                    ? "bg-primary text-white neo-red-glow shadow-md"
-                    : "neo-muted hover:bg-white/70 hover:text-foreground"
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-
-          {/* FAQ Accordion List */}
-          <div className="mt-12 space-y-4">
-            {filteredFaqs.length > 0 ? (
-              filteredFaqs.map((faq, index) => (
-                <article key={faq.question} className="neo-card rounded-2xl p-5 sm:p-6">
-                  <details className="group [&_summary::-webkit-details-marker]:hidden" open={index === 0}>
-                    <summary className="flex cursor-pointer items-center justify-between list-none gap-4">
-                      <span className="text-lg font-black neo-ink group-open:text-primary transition-colors">
-                        {faq.question}
-                      </span>
-                      <span className="neo-icon-badge flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">
-                        <span className="material-symbols-outlined neo-faq-arrow text-[20px]">expand_more</span>
-                      </span>
-                    </summary>
-                    <div className="neo-faq-answer">
-                      <div className="neo-faq-answer__content pt-4 text-base font-medium leading-relaxed neo-muted">
-                        {faq.answer}
-                      </div>
-                    </div>
-                  </details>
-                </article>
-              ))
-            ) : (
-              <div className="neo-card rounded-2xl p-12 text-center">
-                <span className="material-symbols-outlined text-[36px] text-gray-400">search_off</span>
-                <p className="mt-3 text-lg font-bold neo-ink">No answers matching "{searchQuery}"</p>
-                <p className="mt-1 text-sm neo-muted">Try a different search keyword or browse by category.</p>
+    <PageShell className="faq-page">
+      <FaqSection
+        id="faq-page"
+        headingLevel="h1"
+        description="Explore practical answers about the editing process, pricing, footage, delivery, and keeping your work secure."
+        items={filteredFaqs}
+        className="faq-page__section"
+        introContent={(
+          <div className="faq-page__controls">
+            <div className="faq-page__search">
+              <label htmlFor="faq-search">Search questions and answers</label>
+              <div className="faq-page__search-field">
+                <Search size={18} aria-hidden="true" />
+                <input
+                  id="faq-search"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.currentTarget.value)}
+                  placeholder="Try “turnaround” or “4K”"
+                />
+                {searchQuery ? (
+                  <button type="button" onClick={() => setSearchQuery("")} aria-label="Clear search">
+                    <X size={17} aria-hidden="true" />
+                  </button>
+                ) : null}
               </div>
-            )}
-          </div>
-
-          {/* Still Have Questions CTA */}
-          <div className="neo-surface mt-14 rounded-[2rem] p-8 text-center sm:p-10">
-            <span className="neo-icon-badge flex mx-auto h-12 w-12 items-center justify-center rounded-2xl">
-              <span className="material-symbols-outlined text-[26px]">support_agent</span>
-            </span>
-            <h3 className="mt-4 yt-title font-black neo-ink">Still have a specific question?</h3>
-            <p className="mx-auto mt-2 max-w-lg yt-subtitle neo-muted">
-              Our creator team is ready to answer questions regarding custom workflows, multi-editor squads, or bespoke quotes.
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <ButtonLink to="/contact">Chat with us</ButtonLink>
-              <ButtonLink to="/pricing" variant="secondary">View Pricing</ButtonLink>
             </div>
+
+            <div className="faq-page__categories">
+              <p>Browse by topic</p>
+              <div className="faq-page__category-list" role="group" aria-label="Filter FAQs by topic">
+                {categories.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    aria-pressed={activeCategory === category}
+                    onClick={() => setActiveCategory(category)}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        )}
+        emptyContent={(
+          <div className="faq-page__empty neo-card">
+            <span className="neo-icon-badge" aria-hidden="true"><CircleHelp size={22} /></span>
+            <h2>No answers found</h2>
+            <p>Try another search or clear your filters to browse all topics.</p>
+            <button type="button" onClick={resetFilters}>Clear search and filters</button>
+          </div>
+        )}
+      />
+
+      <section className="faq-page__support" aria-labelledby="faq-support-title">
+        <div className="faq-page__support-panel neo-surface">
+          <div className="faq-page__support-copy">
+            <span className="faq-page__support-icon neo-icon-badge" aria-hidden="true">
+              <MessageCircle size={21} />
+            </span>
+            <div>
+              <h2 id="faq-support-title">Still have a specific question?</h2>
+              <p>Talk with our team about your editing workflow, turnaround, or a custom quote.</p>
+            </div>
+          </div>
+          <div className="faq-page__support-actions">
+            <ButtonLink to="/contact">Chat with us</ButtonLink>
+            <ButtonLink to="/pricing" variant="secondary">View pricing</ButtonLink>
           </div>
         </div>
       </section>

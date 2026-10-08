@@ -284,6 +284,13 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
         WHERE id = ${projectId}
           AND owner_id = ${userId}
           AND status IN ('review', 'client_review')
+          AND EXISTS (
+            SELECT 1 FROM workspace_project_files f
+            WHERE f.project_id = workspace_projects.id
+              AND f.owner_id = workspace_projects.owner_id
+              AND f.kind = 'review'
+              AND NULLIF(BTRIM(f.share_url), '') IS NOT NULL
+          )
         RETURNING id
       )
       INSERT INTO workspace_project_reviews (owner_id, project_id, decision, feedback)
@@ -292,7 +299,7 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       RETURNING id
     `);
     const recorded = hasReturnedRows(result);
-    if (!recorded) return { error: "That cut is no longer waiting for your review." };
+    if (!recorded) return { error: "That cut is no longer waiting for your review, or its preview link is missing." };
     return { success: decision === "approved" ? "Cut approved. It has been marked delivered." : "Revision request sent to your project history." };
   }
 
@@ -458,42 +465,43 @@ export default function DashboardWorkspaceSection() {
 
         {section === "reviews" ? (
           <section className="grid gap-4" aria-label="Cuts awaiting review">
-            {reviewQueue.length ? reviewQueue.map((project) => (
-              <article key={project.id} className="neo-workspace__panel rounded-[24px] p-5 sm:p-7">
-                {(() => {
-                  const reviewCut = files
-                    .filter((file) => file.projectId === project.id && file.kind === "review")
-                    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
-                  return reviewCut ? (
+            {reviewQueue.length ? reviewQueue.map((project) => {
+              const reviewCut = files
+                .filter((file) => file.projectId === project.id && file.kind === "review" && file.shareUrl.trim().length > 0)
+                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+              return (
+                <article key={project.id} className="neo-workspace__panel rounded-[24px] p-5 sm:p-7">
+                  {reviewCut ? (
                     <a href={reviewCut.shareUrl} target="_blank" rel="noopener noreferrer" className="mb-4 inline-flex h-10 items-center gap-2 rounded-full bg-[#f0ecfb] px-4 text-xs font-black text-[#6550c7] underline">
                       <span className="material-symbols-outlined text-[17px]" aria-hidden="true">play_circle</span>
                       Open {reviewCut.fileName}
                     </a>
-                  ) : <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800">The review link is missing. Contact your project manager before submitting feedback.</p>;
-                })()}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div><p className="neo-workspace__eyebrow">Submitted cut</p><h3 className="neo-workspace__module-title mt-1">{project.title}</h3></div>
-                  <StatusPill status={project.status} />
-                </div>
-                <p className="neo-workspace__module-copy mt-3">Review the cut with your editor’s link, then approve it or send a revision request with specific notes.</p>
-                <Form method="post" className="mt-4 grid gap-4 sm:grid-cols-[220px_minmax(0,1fr)_auto] sm:items-end">
-                  <input type="hidden" name="intent" value="submit-review" />
-                  <input type="hidden" name="projectId" value={project.id} />
-                  <label className="grid gap-2 text-xs font-black text-[#536779]">
-                    Your decision
-                    <select name="decision" defaultValue="approved" className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
-                      <option value="approved">Approve this cut</option>
-                      <option value="revision_requested">Request revisions</option>
-                    </select>
-                  </label>
-                  <label className="grid gap-2 text-xs font-black text-[#536779]">
-                    Review note <span className="font-medium">(required for revisions)</span>
-                    <input name="feedback" maxLength={4000} placeholder="Add a timestamp and the change you need" className="neo-workspace__profile-input h-12 rounded-xl px-4 text-sm font-medium" disabled={isSubmitting} />
-                  </label>
-                  <button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit h-12 rounded-xl px-5 text-sm font-black disabled:opacity-60">{isSubmitting ? "Sending…" : "Send review"}</button>
-                </Form>
-              </article>
-            )) : <EmptyCard title="No cuts are waiting for review" copy="When your editor submits a cut, it will appear here with approval and revision actions." />}
+                  ) : <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800" role="status">The review link is missing. Contact your project manager before submitting feedback.</p>}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div><p className="neo-workspace__eyebrow">Submitted cut</p><h3 className="neo-workspace__module-title mt-1">{project.title}</h3></div>
+                    <StatusPill status={project.status} />
+                  </div>
+                  <p className="neo-workspace__module-copy mt-3">Review the cut with your editor’s link, then approve it or send a revision request with specific notes.</p>
+                  {reviewCut ? <Form method="post" className="mt-4 grid gap-4 sm:grid-cols-[220px_minmax(0,1fr)_auto] sm:items-end">
+                    <input type="hidden" name="intent" value="submit-review" />
+                    <input type="hidden" name="projectId" value={project.id} />
+                    <label className="grid gap-2 text-xs font-black text-[#536779]">
+                      Your decision
+                      <select name="decision" defaultValue="" required className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
+                        <option value="" disabled>Choose a decision</option>
+                        <option value="approved">Approve this cut</option>
+                        <option value="revision_requested">Request revisions</option>
+                      </select>
+                    </label>
+                    <label className="grid gap-2 text-xs font-black text-[#536779]">
+                      Review note <span className="font-medium">(required for revisions)</span>
+                      <textarea name="feedback" maxLength={4000} rows={3} placeholder="Add a timestamp and the change you need" className="neo-workspace__profile-input min-h-12 rounded-xl px-4 py-3 text-sm font-medium" disabled={isSubmitting} />
+                    </label>
+                    <button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit h-12 rounded-xl px-5 text-sm font-black disabled:opacity-60">{isSubmitting ? "Sending…" : "Send review"}</button>
+                  </Form> : null}
+                </article>
+              );
+            }) : <EmptyCard title="No cuts are waiting for review" copy="When your editor submits a cut, it will appear here with approval and revision actions." />}
             {reviews.length ? (
               <section className="neo-workspace__panel rounded-[24px] p-5" aria-labelledby="review-history-title">
                 <h2 id="review-history-title" className="text-base font-black text-[#17202a]">Review history</h2>

@@ -133,3 +133,358 @@
   .why-hire__artwork { height: 160px; margin-bottom: 16px; }
   .why-hire__assurances { flex-direction: column; gap: 12px; margin-top: 24px; }
 }
+
+/* ==========================================================================
+   Animated SVG Video Player (with AI Voice, Mute, and Subtitles)
+   ========================================================================== */
+
+/* ==========================================================================
+   Clean & Minimal Animated Living Pipeline Section (Homepage-style Artworks)
+   ========================================================================== */
+
+.neo-pipeline-section {
+  position: relative;
+  overflow: hidden;
+}
+
+.neo-pipeline-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+}
+
+.neo-pipeline-artwork-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.neo-pipeline-artwork-wrapper:hover {
+  transform: scale(1.015);
+}
+
+.neo-pipeline-artwork-wrapper svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 330px;
+  overflow: visible;
+}
+
+/* Minimalist Caption Subtitle Badge */
+.neo-pipeline-caption {
+  margin-top: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: var(--neo-surface-strong, #ffffff);
+  box-shadow: 3px 4px 14px var(--neo-shadow-dark), -3px -4px 14px var(--neo-shadow-light);
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #344657;
+  max-width: 660px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+@media (max-width: 640px) {
+  .neo-pipeline-caption {
+    font-size: 12.5px;
+    padding: 8px 16px;
+    gap: 8px;
+    border-radius: 20px;
+  }
+}
+
+.neo-pipeline-phase-tag {
+  background: #df2940;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.neo-pipeline-caption-text {
+  text-wrap: pretty;
+}
+
+/* Minimal Mute Button Dock */
+.neo-pipeline-mute-dock {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.neo-pipeline-mute-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--neo-surface, #eef3f8);
+  box-shadow: 4px 5px 12px var(--neo-shadow-dark), -4px -5px 12px var(--neo-shadow-light);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #344657;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.neo-pipeline-mute-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 6px 7px 16px var(--neo-shadow-dark), -6px -7px 16px var(--neo-shadow-light);
+  color: #df2940;
+}
+
+.neo-pipeline-mute-btn:active {
+  transform: translateY(0);
+  box-shadow: inset 2px 2px 5px var(--neo-shadow-dark), inset -2px -2px 5px var(--neo-shadow-light);
+}
+
+.neo-pipeline-mute-btn--muted {
+  color: #8fa5b8;
+  box-shadow: inset 2px 2px 5px var(--neo-shadow-dark), inset -2px -2px 5px var(--neo-shadow-light);
+}
+
+/* Keyframe animations for homepage-style artworks */
+@keyframes svg-audio-wave {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes svg-playhead-glide {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(70px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes svg-stream-arrow {
+  0% { transform: translateY(-4px); opacity: 0.6; }
+  50% { transform: translateY(2px); opacity: 1; }
+  100% { transform: translateY(-4px); opacity: 0.6; }
+}
+
+@keyframes svg-pulse-dot {
+  0%, 100% { opacity: 0.6; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes svg-scissor-snip {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(14deg); }
+}
+
+@keyframes svg-stamp-pop {
+  0% { transform: scale(1.3) rotate(16deg); opacity: 0; }
+  70% { transform: scale(0.95) rotate(10deg); opacity: 1; }
+  100% { transform: scale(1) rotate(11deg); opacity: 1; }
+}
+
+.anim-audio-wave {
+  animation: svg-audio-wave 1s ease-in-out infinite;
+  transform-origin: bottom;
+}
+
+.anim-playhead-sweep {
+  animation: svg-playhead-glide 3.6s ease-in-out infinite;
+}
+
+.anim-stream-arrow {
+  animation: svg-stream-arrow 1.8s ease-in-out infinite;
+}
+
+.anim-pulse-dot {
+  animation: svg-pulse-dot 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.anim-scissor-snip {
+  animation: svg-scissor-snip 1.5s ease-in-out infinite;
+  transform-origin: 288px 88px;
+}
+
+.anim-stamp {
+  animation: svg-stamp-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transform-origin: center;
+}
+
+/* ==========================================================================
+   True Neomorphic Duel Comparison Matrix
+   ========================================================================== */
+
+.neo-comparison-lanes {
+  display: grid;
+  gap: 28px;
+  margin-top: 40px;
+}
+
+@media (min-width: 960px) {
+  .neo-comparison-lanes {
+    grid-template-columns: 1fr 1.08fr;
+    align-items: start;
+  }
+}
+
+/* Inset / Debossed Freelancer Lane */
+.neo-lane--freelancer {
+  border-radius: 32px;
+  padding: 28px;
+  background: #eaeff4;
+  box-shadow: inset 5px 5px 12px rgba(132, 148, 163, 0.28), inset -5px -5px 12px rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(132, 148, 163, 0.18);
+}
+
+/* Raised / Tactile Studio Lane */
+.neo-lane--studio {
+  border-radius: 32px;
+  padding: 30px;
+  background: var(--neo-surface-strong, #f8fafc);
+  box-shadow: 10px 12px 28px var(--neo-shadow-dark), -10px -12px 28px var(--neo-shadow-light);
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  position: relative;
+}
+
+.neo-lane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(64, 82, 99, 0.12);
+  margin-bottom: 20px;
+}
+
+.neo-lane-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--neo-ink);
+}
+
+.neo-lane-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.neo-lane-badge--risk {
+  background: #dfe5ec;
+  color: #728392;
+  box-shadow: inset 2px 2px 4px rgba(132, 148, 163, 0.2), inset -2px -2px 4px rgba(255, 255, 255, 0.8);
+}
+
+.neo-lane-badge--studio {
+  background: #df2940;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(223, 41, 64, 0.35);
+}
+
+/* Comparison Rows */
+.neo-compare-row {
+  border-radius: 20px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  transition: all 0.2s ease;
+}
+
+.neo-compare-row:last-child {
+  margin-bottom: 0;
+}
+
+.neo-compare-row--freelancer {
+  background: rgba(220, 229, 237, 0.45);
+  border: 1px solid rgba(132, 148, 163, 0.15);
+}
+
+.neo-compare-row--studio {
+  background: var(--neo-surface, #f3f6f9);
+  box-shadow: 4px 5px 12px rgba(132, 148, 163, 0.16), -4px -5px 12px rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+}
+
+.neo-compare-row--studio:hover {
+  transform: translateX(4px);
+}
+
+.neo-compare-row h4 {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--neo-ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.neo-compare-row p {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--why-hire-copy);
+  margin-top: 6px;
+}
+
+/* ==========================================================================
+   Studio Reliability Engine (3 Bespoke Columns)
+   ========================================================================== */
+
+.studio-engine-grid {
+  display: grid;
+  gap: 24px;
+  margin-top: 40px;
+}
+
+@media (min-width: 900px) {
+  .studio-engine-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.studio-engine-card {
+  border-radius: 28px;
+  padding: 26px 24px 30px;
+  background: var(--neo-surface);
+  box-shadow: 7px 8px 20px var(--neo-shadow-dark), -7px -8px 20px var(--neo-shadow-light);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: center;
+}
+
+.studio-engine-artwork {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.studio-engine-artwork svg {
+  width: 100%;
+  height: 100%;
+  max-width: 290px;
+  overflow: visible;
+}

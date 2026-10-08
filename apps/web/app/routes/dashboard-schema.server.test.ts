@@ -125,4 +125,19 @@ describe("workspace reads without the optional marketing migration", () => {
     await expect(sectionAction(args("projects", body))).rejects.toMatchObject({ status: 302 });
     expect(mocks.db.execute).not.toHaveBeenCalled();
   });
+
+  it("requires an explicit review decision instead of defaulting to approval", async () => {
+    const body = new URLSearchParams({ intent: "submit-review", projectId: "11111111-1111-4111-8111-111111111111", decision: "" });
+    await expect(sectionAction(args("reviews", body))).resolves.toMatchObject({ error: "Choose a project and a review decision." });
+    expect(mocks.db.execute).not.toHaveBeenCalled();
+  });
+
+  it("does not accept a review decision when its preview link is missing", async () => {
+    const body = new URLSearchParams({ intent: "submit-review", projectId: "11111111-1111-4111-8111-111111111111", decision: "approved" });
+    await expect(sectionAction(args("reviews", body))).resolves.toMatchObject({ error: expect.stringContaining("preview link is missing") });
+    const statement = new PgDialect().sqlToQuery(mocks.db.execute.mock.calls[0][0]);
+    expect(statement.sql).toContain("workspace_project_files");
+    expect(statement.sql).toContain("f.kind = 'review'");
+    expect(statement.sql).toContain("NULLIF(BTRIM(f.share_url), '') IS NOT NULL");
+  });
 });

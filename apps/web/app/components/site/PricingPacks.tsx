@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { ArrowRight, Check, ChevronDown, CircleHelp, Clapperboard, Clock3, FileVideo, Film, Play, Scissors, Upload, Workflow } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Clapperboard, Clock3, FileVideo, Film, Play, Scissors, Upload, Workflow } from "lucide-react";
 import { formatPackagePrice, getCheckoutUrl, type EditingPackage, type SingleVideoPackage, type SubscriptionPackage } from "../../lib/subscriptions";
-import { PricingFaqArtwork } from "./PricingFaqArtwork";
+import { FaqSection } from "./FaqSection";
 import { EditingArtwork } from "./EditingArtwork";
 import { PackageChoiceLink } from "./PackageChoiceLink";
 
@@ -183,18 +183,7 @@ export function PricingPacks({ packages, initialKind = "single" }: { packages: E
         </div>
       </section>}
 
-      <section className="pack-faq pack-container" aria-labelledby="faq-title">
-        <header className="pack-faq-heading">
-          <p className="pack-faq-kicker neo-section-label"><CircleHelp size={16} aria-hidden="true" />Before you choose</p>
-          <h2 id="faq-title">Know what’s included.</h2>
-          <p className="pack-faq-copy">Straight answers on editing scope, monthly hours, and what happens next.</p>
-        </header>
-        <div className="pack-faq-layout">
-          <div className="pack-faq-artwork"><PricingFaqArtwork /></div>
-          <div className="pack-questions">{questions.map(({ question, answer }) => <details key={question} className="neo-card"><summary>{question}<span className="pack-question-icon neo-icon-badge"><ChevronDown className="neo-faq-arrow" aria-hidden="true" /></span></summary><p>{answer}</p></details>)}</div>
-          <Link to="/faq" className="neo-button pack-faq-link">Explore all FAQs <ArrowRight size={16} aria-hidden="true" /></Link>
-        </div>
-      </section>
+      <FaqSection items={questions} title={<>Know what’s included.</>} description="Straight answers on editing scope, monthly hours, and what happens next." />
 
       <section className="pack-final pack-container neo-surface" aria-labelledby="final-title">
         <div className="pack-final-copy">

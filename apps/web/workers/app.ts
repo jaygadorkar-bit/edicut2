@@ -9,6 +9,7 @@ import {
   requestBodyExceedsLimit,
   requestTooLargeResponse,
 } from "../app/lib/usage-protection.server";
+import { isImmutableAssetPath, shouldServeStaticAsset } from "./static-assets";
 
 type WorkerEnvironment = Record<string, unknown> & {
   ASSETS?: Fetcher;
@@ -24,8 +25,6 @@ const handleRequest = createRequestHandler({
   },
 });
 
-const IMMUTABLE_ASSET_PATH = /^\/assets\/.+\.[a-z0-9]+$/i;
-const PUBLIC_ASSET_PATH = /^\/(?:images\/.+|icons\/.+|[^/]+\.(?:svg|png|jpg|jpeg|webp|avif))$/i;
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -48,7 +47,7 @@ function withStaticCacheHeaders(response: Response, pathname: string) {
 
   const headers = new Headers(response.headers);
 
-  if (IMMUTABLE_ASSET_PATH.test(pathname)) {
+  if (isImmutableAssetPath(pathname)) {
     headers.set("Cache-Control", "public, max-age=31536000, immutable");
   } else {
     headers.set("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
@@ -106,10 +105,7 @@ export default {
       return Response.redirect(url.toString(), 308);
     }
 
-    const isStaticAssetRequest =
-      request.method === "GET" || request.method === "HEAD"
-        ? IMMUTABLE_ASSET_PATH.test(pathname) || PUBLIC_ASSET_PATH.test(pathname)
-        : false;
+    const isStaticAssetRequest = shouldServeStaticAsset(request.method, pathname);
 
     if (isStaticAssetRequest && env.ASSETS) {
       const assetResponse = await env.ASSETS.fetch(request.url, request);

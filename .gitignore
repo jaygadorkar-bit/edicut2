@@ -33,8 +33,16 @@ out/
 .turbo/
 .vercel/
 .codex-screens/
+.codex-tmp/
 *.tsbuildinfo
 next-env.d.ts
+__pycache__/
+*.py[cod]
+
+# Raw source media stays local; deployed assets live under apps/web/public.
+/media/
+/apps/web/public/audio/workflow/
+/apps/web/public/audio/why-hire-us/edicut-why-hire-us-mix.wav
 
 # logs and reports
 coverage/

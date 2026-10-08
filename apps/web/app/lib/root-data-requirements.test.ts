@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { shouldLoadPromoBarSettings, shouldLoadRootSiteSettings, shouldShowAdminToolbar } from "./root-data-requirements";
 
 describe("shouldLoadPromoBarSettings", () => {
-  it.each(["/", "/pricing", "/pricing/creator", "/portfolio", "/contact", "/faq", "/privacy", "/terms"])(
+  it.each(["/", "/why-hire-us", "/pricing", "/pricing/creator", "/portfolio", "/contact", "/faq", "/privacy", "/terms"])(
     "loads promo settings for public marketing pages such as %s",
     (pathname) => expect(shouldLoadPromoBarSettings(pathname)).toBe(true),
   );

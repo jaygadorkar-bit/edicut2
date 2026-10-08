@@ -57,6 +57,19 @@ Do not commit Supabase access tokens or service-role keys. The `SUPABASE_SERVICE
 
 Wrangler needs to authenticate with your Cloudflare account before deploying. Use one of the methods below:
 
+### EdiCut default profile
+
+For this repository, always use the `edicut-production` profile for deployments. The profile is
+bound to `E:\development\Edicut`, and the `@edicut/web` deploy script passes
+`--profile edicut-production` automatically:
+
+```powershell
+pnpm --filter @edicut/web run deploy
+```
+
+Do not use a bare `wrangler deploy` command for EdiCut; it can select a different account when
+multiple Cloudflare credentials are present on the machine.
+
 ### Option 1: OAuth Login (Interactive)
 
 ```bash
@@ -64,6 +77,37 @@ pnpm exec wrangler login
 ```
 
 This opens a browser window for you to sign in to your Cloudflare account and grant Wrangler access.
+
+### Recommended: Named OAuth Profiles
+
+Wrangler supports encrypted named profiles for people who work across multiple Cloudflare
+accounts. The `edicut-production` profile is already created and bound to this repository:
+
+```powershell
+cd apps/web
+pnpm exec wrangler auth list
+pnpm exec wrangler whoami
+```
+
+The normal deploy command automatically uses the profile bound to `E:\development\Edicut`:
+
+```powershell
+cd ../..
+pnpm --filter @edicut/web run deploy
+```
+
+For another Cloudflare account, create a profile once and bind it to that project's directory:
+
+```powershell
+cd apps/web
+pnpm exec wrangler auth create client-production
+pnpm exec wrangler auth activate client-production E:\development\client-project
+```
+
+Wrangler stores each profile in its encrypted local credential store. You should only need to
+authorize a profile again if Cloudflare revokes or expires its OAuth grant, or if you delete the
+profile. Use `pnpm exec wrangler auth list` to see profile-to-directory bindings and
+`pnpm exec wrangler auth deactivate <directory>` to remove one.
 
 ### Option 2: API Key Authentication (Non-Interactive)
 
@@ -90,7 +134,9 @@ export CLOUDFLARE_API_KEY=your-api-key-here
 pnpm --filter @edicut/web run deploy
 ```
 
-> **Note:** Wrangler prefers `CLOUDFLARE_API_TOKEN` (fine-grained token). If neither `CLOUDFLARE_API_TOKEN` nor the legacy key pair (`CLOUDFLARE_EMAIL` + `CLOUDFLARE_API_KEY`) is set, deployment will fail in non-interactive environments.
+> **Note:** Use the bound named OAuth profile for local EdiCut deployments. Use
+> `CLOUDFLARE_API_TOKEN` (fine-grained token) only for CI or other non-interactive environments;
+> keep tokens outside the repository.
 
 ## Update Wrangler
 
@@ -134,7 +180,10 @@ Latest production result:
 
 - Worker: `edicut-web`
 - URLs: `https://edicut.com`, `https://www.edicut.com`
+- Deployed: 2026-10-08
+- Version ID: `378b13a0-6767-40f0-8fa4-d9c136efb3a5`
 - Health checks: both `/health` endpoints returned HTTP 200
+- Combined audio asset: `/audio/why-hire-us/edicut-why-hire-us-mix-f3907247.wav` returned HTTP 200 as `audio/wav` (3,613,484 bytes)
 
 ## Legacy Node API
 

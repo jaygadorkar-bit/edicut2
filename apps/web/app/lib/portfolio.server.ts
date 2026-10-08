@@ -123,19 +123,32 @@ export function sortPortfolioSections(sections: PortfolioSection[]) {
   return [...sections].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
-export async function getPortfolioSections(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {
-  const value = await getSiteSetting(db, PORTFOLIO_SECTIONS_KEY, context);
+export async function getPortfolioSections(
+  db: DatabaseClient | null | undefined,
+  context?: SupabaseRuntimeContext,
+  options: { failOnError?: boolean } = {},
+) {
+  const value = await getSiteSetting(db, PORTFOLIO_SECTIONS_KEY, context, { failOnError: options.failOnError });
 
-  if (!value) return defaultPortfolioSections;
+  if (value == null) return defaultPortfolioSections;
+  if (!value.trim()) {
+    if (options.failOnError) throw new Error("Saved portfolio sections are empty.");
+    return defaultPortfolioSections;
+  }
 
   try {
     const parsed = JSON.parse(value);
-    const sections = Array.isArray(parsed)
-      ? parsed.map(normalizeSection).filter((section): section is PortfolioSection => Boolean(section))
-      : [];
+    if (!Array.isArray(parsed)) throw new Error("Saved portfolio sections have an unsupported format.");
+    const sections = parsed.map(normalizeSection).filter((section): section is PortfolioSection => Boolean(section));
+    if (options.failOnError && sections.length !== parsed.length) {
+      throw new Error("Saved portfolio sections could not be read safely.");
+    }
 
-    return sections.length ? sortPortfolioSections(sections) : defaultPortfolioSections;
-  } catch {
+    if (sections.length) return sortPortfolioSections(sections);
+    if (options.failOnError) throw new Error("Saved portfolio sections could not be read.");
+    return defaultPortfolioSections;
+  } catch (error) {
+    if (options.failOnError) throw error;
     return defaultPortfolioSections;
   }
 }

@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, data, redirect, useActionData, useLoaderData, useLocation, useNavigate, useNavigation, useSearchParams } from "react-router";
+import { Form, Link, data, redirect, useActionData, useLoaderData, useLocation, useNavigation, useSearchParams } from "react-router";
 import bcrypt from "bcryptjs";
 import { updateUserRole } from "@edicut/db/repositories/users";
 import { findAdminUserById } from "@edicut/db/repositories/admin-users";
@@ -7,13 +7,16 @@ import { adminUsers as adminUsersTable, customerSubscriptions, marketingAffiliat
 import { getDbFromContext, hasReturnedRows } from "../lib/db.server";
 import {
   destroyAdminSession,
+  destroySession,
   commitAdminSession,
   getAdminSession,
+  getSession,
   isAdminRole,
   requireAdminUser,
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "../lib/admin-paths";
 import { toPublicAdminUser } from "../lib/admin-public";
+import { deleteSupabaseUsersByEmail } from "../integrations/supabase/client.server";
 import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES, type UserRole } from "../lib/admin-user-roles";
 import {
   createPackageId,
@@ -136,6 +139,20 @@ function usageLimitMessage(result: UsageLimitResult, limitedMessage: string) {
   return result === "limited"
     ? limitedMessage
     : "Usage protection is temporarily unavailable. Please try again shortly.";
+}
+
+async function removeUnreferencedPackageUploads(
+  assets: CloudinaryImageResource[],
+  context: Parameters<typeof uploadPackageImageToCloudinary>[1],
+) {
+  if (!assets.length) return true;
+  try {
+    await deleteCloudinaryImages(assets.map((asset) => asset.public_id), context);
+    return true;
+  } catch (error) {
+    console.error("Cloudinary image cleanup failed:", error);
+    return false;
+  }
 }
 
 function linesToList(value: FormDataEntryValue | null) {
@@ -265,6 +282,12 @@ function isUniqueConstraintError(error: unknown) {
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
+}
+
+function readExpectedUpdatedAt(value: FormDataEntryValue | null) {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) || date.toISOString() !== value ? null : date.toISOString();
 }
 
 export const meta: MetaFunction = () => {
@@ -397,7 +420,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   let workspaceProjectRows: Array<{
     project: Pick<
       typeof workspaceProjects.$inferSelect,
-      "id" | "title" | "channelName" | "packageSlug" | "notes" | "status" | "billingStatus" | "finalAmountCents" | "invoiceUrl"
+      "id" | "title" | "channelName" | "packageSlug" | "notes" | "status" | "billingStatus" | "finalAmountCents" | "invoiceUrl" | "updatedAt"
     >;
     ownerName: string | null;
     ownerEmail: string | null;
@@ -424,6 +447,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
             billingStatus: workspaceProjects.billingStatus,
             finalAmountCents: workspaceProjects.finalAmountCents,
             invoiceUrl: workspaceProjects.invoiceUrl,
+            updatedAt: workspaceProjects.updatedAt,
           },
           ownerName: usersTable.name,
           ownerEmail: usersTable.email,
@@ -650,11 +674,15 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "logout") {
-    return redirect(ADMIN_LOGIN_PATH, {
-      headers: {
-        "Set-Cookie": await destroyAdminSession(session, context),
-      },
-    });
+    const userSession = await getSession(request.headers.get("Cookie"), context);
+    const [adminCookie, userCookie] = await Promise.all([
+      destroyAdminSession(session, context),
+      destroySession(userSession, context),
+    ]);
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    headers.append("Set-Cookie", adminCookie);
+    headers.append("Set-Cookie", userCookie);
+    return redirect("/signin?mode=signin", { headers });
   }
 
   const adminUser = await requireAdminUser(request, db, context);
@@ -778,10 +806,12 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   if (intent === "workspace-project-status") {
     const projectId = String(formData.get("projectId") || "");
     const status = String(formData.get("status") || "");
+    const expectedUpdatedAt = readExpectedUpdatedAt(formData.get("expectedUpdatedAt"));
     const reviewUrl = parseWorkspaceShareUrl(String(formData.get("reviewUrl") || ""));
-    if (!projectId || !["intake", "editing", "review", "revision", "delivered"].includes(status)) {
+    if (!isUuid(projectId) || !["intake", "editing", "review", "revision", "delivered"].includes(status)) {
       return { error: "Choose a valid project and status." };
     }
+    if (!expectedUpdatedAt) return { error: "This project changed while you were reviewing it. Refresh and try again." };
     if (status === "review" && !reviewUrl) return { error: "Add the HTTPS preview link before moving a project to customer review." };
     try {
       if (status === "review" && reviewUrl) {
@@ -790,6 +820,7 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
             UPDATE workspace_projects
             SET status = ${status}, updated_at = now()
             WHERE id = ${projectId}
+              AND date_trunc('milliseconds', updated_at) = ${expectedUpdatedAt}::timestamptz
             RETURNING id, owner_id
           )
           INSERT INTO workspace_project_files (owner_id, project_id, kind, file_name, share_url)
@@ -797,13 +828,16 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
           FROM updated
           RETURNING id
         `);
-        if (!hasReturnedRows(result)) return { error: "Project request not found." };
+        if (!hasReturnedRows(result)) return { error: "This project changed while you were reviewing it. Refresh and try again." };
       } else {
         const [updated] = await db.update(workspaceProjects)
           .set({ status, updatedAt: new Date() })
-          .where(eq(workspaceProjects.id, projectId))
+          .where(and(
+            eq(workspaceProjects.id, projectId),
+            sql`date_trunc('milliseconds', ${workspaceProjects.updatedAt}) = ${expectedUpdatedAt}::timestamptz`,
+          ))
           .returning();
-        if (!updated) return { error: "Project request not found." };
+        if (!updated) return { error: "This project changed while you were reviewing it. Refresh and try again." };
       }
       return { success: status === "review" ? "Project moved to customer review with a preview link." : "Project status updated." };
     } catch (error) {
@@ -815,14 +849,16 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
   if (intent === "workspace-project-billing") {
     const projectId = String(formData.get("projectId") || "");
     const billingStatus = String(formData.get("billingStatus") || "");
+    const expectedUpdatedAt = readExpectedUpdatedAt(formData.get("expectedUpdatedAt"));
     const rawFinalAmount = String(formData.get("finalAmount") || "").trim();
     const invoiceUrlValue = String(formData.get("invoiceUrl") || "").trim();
     const invoiceUrl = invoiceUrlValue ? parseWorkspaceShareUrl(invoiceUrlValue) : null;
     const finalAmountCents = billingStatus === "quote_requested" ? null : parseBillingAmountToCents(rawFinalAmount);
 
-    if (!projectId || !["quote_requested", "quote_approved", "invoice_pending", "paid"].includes(billingStatus)) {
+    if (!isUuid(projectId) || !["quote_requested", "quote_approved", "invoice_pending", "paid"].includes(billingStatus)) {
       return { error: "Choose a valid project and billing status." };
     }
+    if (!expectedUpdatedAt) return { error: "This project changed while you were reviewing it. Refresh and try again." };
     if (billingStatus !== "quote_requested" && finalAmountCents === null) {
       return { error: "Enter a final amount greater than zero, using up to two decimal places." };
     }
@@ -839,9 +875,12 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
           invoiceUrl,
           updatedAt: new Date(),
         })
-        .where(eq(workspaceProjects.id, projectId))
+        .where(and(
+          eq(workspaceProjects.id, projectId),
+          sql`date_trunc('milliseconds', ${workspaceProjects.updatedAt}) = ${expectedUpdatedAt}::timestamptz`,
+        ))
         .returning();
-      if (!updated) return { error: "Project request not found." };
+      if (!updated) return { error: "This project changed while you were reviewing it. Refresh and try again." };
       const labels: Record<string, string> = {
         quote_requested: "Billing moved back to quote requested.",
         quote_approved: "Final quote saved for the customer.",
@@ -970,15 +1009,43 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     if (!userIds.every(isUuid)) return { error: "Select valid user accounts." };
     if (userIds.length > MAX_BULK_RECORDS) return { error: `Delete at most ${MAX_BULK_RECORDS} users at a time.` };
 
-    await db.delete(usersTable).where(and(inArray(usersTable.id, userIds), isNotNull(usersTable.deletedAt)));
-    return { success: `Permanently deleted ${userIds.length} users.` };
+    try {
+      const trashedUsers = await db.select({ id: usersTable.id, email: usersTable.email })
+        .from(usersTable)
+        .where(and(inArray(usersTable.id, userIds), isNotNull(usersTable.deletedAt)));
+      if (!trashedUsers.length) return { error: "None of the selected accounts are in trash." };
+
+      const adminEmails = new Set((await db.select({ email: adminUsersTable.email }).from(adminUsersTable))
+        .map(({ email }) => email.trim().toLowerCase()));
+      if (trashedUsers.some(({ email }) => adminEmails.has(email.trim().toLowerCase()))) {
+        return { error: "A selected email is also used by an admin account. Change that admin email before permanently deleting the customer profile." };
+      }
+
+      const trashedUserIds = trashedUsers.map(({ id }) => id);
+      await deleteSupabaseUsersByEmail(context, trashedUsers.map(({ email }) => email));
+      const deletedUsers = await db.delete(usersTable)
+        .where(and(inArray(usersTable.id, trashedUserIds), isNotNull(usersTable.deletedAt)))
+        .returning();
+      return deletedUsers.length
+        ? { success: `Permanently deleted ${deletedUsers.length} user${deletedUsers.length === 1 ? "" : "s"}.` }
+        : { error: "The selected accounts changed while you were deleting them. Refresh and check the trash." };
+    } catch (error) {
+      console.error("Admin bulk account permanent delete error:", error);
+      return { error: "Could not permanently delete the selected accounts. Their customer records remain in trash; refresh and retry after checking the authentication connection." };
+    }
   }
 
   if (intent === "create-package" || intent === "update-package") {
     if (intent === "create-package") {
       return { error: "The public pricing catalog contains six fixed packages. Edit one of those packages instead." };
     }
-    const packages = await getPricingPackages(db);
+    let packages: PricingPackage[];
+    try {
+      packages = await getPricingPackages(db, context, { failOnError: true });
+    } catch (error) {
+      console.error("Pricing settings read failed before package update:", error);
+      return { error: "Pricing settings could not be read safely, so no changes were saved. Refresh and try again." };
+    }
     const packageId = String(formData.get("packageId") || "");
     const existing = packages.find((pkg) => pkg.id === packageId);
 
@@ -989,10 +1056,16 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     const nextPackage = packageFromForm(formData, existing);
     if ("error" in nextPackage) return nextPackage;
 
+    const slugOwner = packages.find((pkg) => pkg.slug === nextPackage.slug && pkg.id !== nextPackage.id);
+    if (slugOwner) {
+      return { error: "Another package already uses this slug." };
+    }
+
     const imageFiles = formData
       .getAll("galleryImageFiles")
       .filter((value): value is File => value instanceof File && value.size > 0);
 
+    let uploadedImageAssets: CloudinaryImageResource[] = [];
     if (imageFiles.length) {
       if (imageFiles.length > MAX_IMAGE_UPLOAD_COUNT) {
         return { error: `Upload at most ${MAX_IMAGE_UPLOAD_COUNT} gallery images at a time.` };
@@ -1000,29 +1073,44 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       if (imageFiles.some((file) => file.size > MAX_IMAGE_FILE_BYTES) || imageFiles.reduce((total, file) => total + file.size, 0) > MAX_IMAGE_BATCH_BYTES) {
         return { error: "Each image must be 10 MB or smaller, with at most 40 MB total per upload." };
       }
-      try {
-        const uploadedImages = await Promise.all(imageFiles.map((file) => uploadPackageImageToCloudinary(file, context)));
-        nextPackage.galleryImages = Array.from(new Set([...nextPackage.galleryImages, ...uploadedImages]));
-      } catch (error) {
-        console.error("Package gallery upload error:", error);
-        return { error: error instanceof Error ? error.message : "Failed to upload package images." };
+      const uploadResults = await Promise.allSettled(imageFiles.map((file) => uploadPackageImageToCloudinary(file, context)));
+      uploadedImageAssets = uploadResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+      if (uploadResults.some((result) => result.status === "rejected")) {
+        const cleanedUp = await removeUnreferencedPackageUploads(uploadedImageAssets, context);
+        return {
+          error: cleanedUp
+            ? "Some gallery images could not be uploaded. Successful uploads were removed; please try again."
+            : "Some gallery images could not be uploaded, and Cloudinary could not remove every successful upload. Check the image library for unused files.",
+        };
       }
-    }
-
-    const slugOwner = packages.find((pkg) => pkg.slug === nextPackage.slug && pkg.id !== nextPackage.id);
-    if (slugOwner) {
-      return { error: "Another package already uses this slug." };
+      nextPackage.galleryImages = Array.from(new Set([...nextPackage.galleryImages, ...uploadedImageAssets.map((asset) => asset.secure_url)]));
     }
 
     const nextPackages = packages.map((pkg) => (pkg.id === nextPackage.id ? nextPackage : pkg));
 
-    await savePricingPackages(db, nextPackages);
+    try {
+      await savePricingPackages(db, nextPackages);
+    } catch (error) {
+      console.error("Package settings save failed:", error);
+      const cleanedUp = await removeUnreferencedPackageUploads(uploadedImageAssets, context);
+      return {
+        error: cleanedUp
+          ? "Package settings could not be saved. Newly uploaded gallery images were removed; please retry."
+          : "Package settings could not be saved, and Cloudinary could not remove every new image. Check the image library for unused files.",
+      };
+    }
     return { success: "Package updated." };
   }
 
   if (intent === "delete-package") {
     const packageId = String(formData.get("packageId") || "");
-    const packages = await getPricingPackages(db);
+    let packages: PricingPackage[];
+    try {
+      packages = await getPricingPackages(db, context, { failOnError: true });
+    } catch (error) {
+      console.error("Pricing settings read failed before package removal:", error);
+      return { error: "Pricing settings could not be read safely, so no changes were saved. Refresh and try again." };
+    }
     if (!packages.some((pkg) => pkg.id === packageId)) {
       return { error: "Package not found." };
     }
@@ -1047,12 +1135,20 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       String(formData.get("uniqueSellingPoint") || "").length > 240
     ) return { error: "Shorten the portfolio creator, tag, or outcome label." };
 
-    const sections = await getPortfolioSections(db, context);
-    const targetSection = sections.find((section) => section.slug === sectionSlug) || sections[0];
-    if (!targetSection) return { error: "Create a portfolio section before uploading a video." };
-
+    let sections: Awaited<ReturnType<typeof getPortfolioSections>>;
     try {
-      const uploaded = await uploadPortfolioVideoToCloudinary(videoFile, context);
+      sections = await getPortfolioSections(db, context, { failOnError: true });
+    } catch (error) {
+      console.error("Portfolio sections read failed before video upload:", error);
+      return { error: "Portfolio settings could not be read, so no video was uploaded. Refresh and try again." };
+    }
+    const targetSection = sections.find((section) => section.slug === sectionSlug);
+    if (!sections.length) return { error: "Create a portfolio section before uploading a video." };
+    if (!targetSection) return { error: "The selected portfolio section is no longer available. Refresh and choose it again." };
+
+    let uploaded: CloudinaryVideoResource | null = null;
+    try {
+      uploaded = await uploadPortfolioVideoToCloudinary(videoFile, context);
       const nextVideo = {
         id: createPortfolioId("video"),
         title,
@@ -1073,27 +1169,46 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       return { success: `Uploaded “${title}” to ${targetSection.name}.` };
     } catch (error) {
       console.error("Portfolio video upload error:", error);
+      if (uploaded) {
+        try {
+          await deleteCloudinaryVideos([uploaded.public_id], context);
+          return { error: "Portfolio settings could not be saved. The uploaded video was removed; please retry." };
+        } catch (cleanupError) {
+          console.error("Cloudinary portfolio video cleanup failed:", cleanupError);
+          return { error: "Portfolio settings could not be saved, and Cloudinary could not remove the new video. Check the video library for an unused file." };
+        }
+      }
       return { error: error instanceof Error ? error.message : "Failed to upload portfolio video." };
     }
   }
 
   if (intent === "delete-portfolio-videos") {
     const publicIds = Array.from(new Set(formData.getAll("publicIds").map(String).filter(Boolean)));
-    const videoUrls = Array.from(new Set(formData.getAll("videoUrls").map(String).filter(Boolean)));
 
     if (!publicIds.length) return { error: "Choose at least one portfolio video to delete." };
-    if (publicIds.length > MAX_BULK_RECORDS || videoUrls.length > MAX_BULK_RECORDS) {
+    if (publicIds.length > MAX_BULK_RECORDS) {
       return { error: `Delete at most ${MAX_BULK_RECORDS} portfolio videos at a time.` };
     }
 
     try {
-      await deleteCloudinaryVideos(publicIds, context);
-      const sections = await getPortfolioSections(db, context);
+      const availableVideos = await listCloudinaryVideos(context);
+      const selectedVideos = publicIds.map((publicId) => availableVideos.find((video) => video.public_id === publicId));
+      if (selectedVideos.some((video) => !video)) {
+        return { error: "Some selected videos are no longer in the Cloudinary library. Refresh and choose them again." };
+      }
+      const videoUrls = selectedVideos.map((video) => video!.secure_url);
+      const sections = await getPortfolioSections(db, context, { failOnError: true });
       await savePortfolioSections(db, removeCloudinaryUrlsFromPortfolioSections(sections, videoUrls), context);
-      return { success: `Deleted ${publicIds.length} portfolio video${publicIds.length === 1 ? "" : "s"}.` };
+      try {
+        await deleteCloudinaryVideos(publicIds, context);
+        return { success: `Deleted ${publicIds.length} portfolio video${publicIds.length === 1 ? "" : "s"}.` };
+      } catch (error) {
+        console.error("Cloudinary video delete error:", error);
+        return { success: `Removed ${publicIds.length} video${publicIds.length === 1 ? "" : "s"} from the portfolio, but Cloudinary could not delete the file${publicIds.length === 1 ? "" : "s"}. Retry from the video library.` };
+      }
     } catch (error) {
-      console.error("Cloudinary video delete error:", error);
-      return { error: error instanceof Error ? error.message : "Failed to delete portfolio videos." };
+      console.error("Portfolio video removal error:", error);
+      return { error: "Could not verify the selected videos or update the portfolio, so no files were deleted. Refresh and try again." };
     }
   }
 
@@ -1161,34 +1276,48 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       return { error: "Each image must be 10 MB or smaller, with at most 40 MB total per upload." };
     }
 
-    try {
-      await Promise.all(imageFiles.map((file) => uploadPackageImageToCloudinary(file, context)));
-      return { success: `Uploaded ${imageFiles.length} image${imageFiles.length === 1 ? "" : "s"}.` };
-    } catch (error) {
-      console.error("Cloudinary images upload error:", error);
-      return { error: error instanceof Error ? error.message : "Failed to upload images." };
+    const uploadResults = await Promise.allSettled(imageFiles.map((file) => uploadPackageImageToCloudinary(file, context)));
+    const uploadedAssets = uploadResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+    if (uploadResults.some((result) => result.status === "rejected")) {
+      const cleanedUp = await removeUnreferencedPackageUploads(uploadedAssets, context);
+      return {
+        error: cleanedUp
+          ? "Some images could not be uploaded. Successful uploads were removed; please try again."
+          : "Some images could not be uploaded, and Cloudinary could not remove every successful upload. Check the image library for unused files.",
+      };
     }
+    return { success: `Uploaded ${uploadedAssets.length} image${uploadedAssets.length === 1 ? "" : "s"}.` };
   }
 
   if (intent === "delete-images") {
     const publicIds = Array.from(new Set(formData.getAll("publicIds").map(String).filter(Boolean)));
-    const imageUrls = Array.from(new Set(formData.getAll("imageUrls").map(String).filter(Boolean)));
 
     if (!publicIds.length) {
       return { error: "Choose at least one image to delete." };
     }
-    if (publicIds.length > MAX_BULK_RECORDS || imageUrls.length > MAX_BULK_RECORDS) {
+    if (publicIds.length > MAX_BULK_RECORDS) {
       return { error: `Delete at most ${MAX_BULK_RECORDS} images at a time.` };
     }
 
     try {
-      await deleteCloudinaryImages(publicIds, context);
-      const packages = await getPricingPackages(db);
+      const availableImages = await listCloudinaryImages(context);
+      const selectedImages = publicIds.map((publicId) => availableImages.find((image) => image.public_id === publicId));
+      if (selectedImages.some((image) => !image)) {
+        return { error: "Some selected images are no longer in the Cloudinary library. Refresh and choose them again." };
+      }
+      const imageUrls = selectedImages.map((image) => image!.secure_url);
+      const packages = await getPricingPackages(db, context, { failOnError: true });
       await savePricingPackages(db, removeCloudinaryUrlsFromPackages(packages, imageUrls));
-      return { success: `Deleted ${publicIds.length} image${publicIds.length === 1 ? "" : "s"}.` };
+      try {
+        await deleteCloudinaryImages(publicIds, context);
+        return { success: `Deleted ${publicIds.length} image${publicIds.length === 1 ? "" : "s"}.` };
+      } catch (error) {
+        console.error("Cloudinary image delete error:", error);
+        return { success: `Removed ${publicIds.length} image${publicIds.length === 1 ? "" : "s"} from package galleries, but Cloudinary could not delete the file${publicIds.length === 1 ? "" : "s"}. Retry from the image library.` };
+      }
     } catch (error) {
-      console.error("Cloudinary images delete error:", error);
-      return { error: error instanceof Error ? error.message : "Failed to delete images." };
+      console.error("Package gallery image removal error:", error);
+      return { error: "Could not verify the selected images or update package galleries, so no files were deleted. Refresh and try again." };
     }
   }
 
@@ -1266,6 +1395,7 @@ function AdminProjects() {
                 <Form method="post" className="admin-project-billing mt-4 grid gap-3 rounded-xl bg-[#f8f8fb] p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end [&>label]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0">
                   <input type="hidden" name="intent" value="workspace-project-billing" />
                   <input type="hidden" name="projectId" value={project.id} />
+                  <input type="hidden" name="expectedUpdatedAt" value={new Date(project.updatedAt).toISOString()} />
                   <label className="grid gap-2 text-xs font-black text-[#536779]">Billing status<select name="billingStatus" defaultValue={project.billingStatus} className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="quote_requested">Quote requested</option><option value="quote_approved">Quote confirmed</option><option value="invoice_pending">Invoice sent</option><option value="paid">Paid</option></select></label>
                   <label className="grid gap-2 text-xs font-black text-[#536779]">Final amount (USD)<input name="finalAmount" type="number" min="0.01" max="9999999.99" step="0.01" defaultValue={project.finalAmountCents == null ? "" : (project.finalAmountCents / 100).toFixed(2)} placeholder="80.00" className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
                   <label className="grid gap-2 text-xs font-black text-[#536779]">Invoice or payment link<input name="invoiceUrl" type="url" maxLength={2048} defaultValue={project.invoiceUrl || ""} placeholder="https://…" className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
@@ -1274,6 +1404,7 @@ function AdminProjects() {
                 <Form method="post" className="mt-4 flex flex-wrap items-end gap-3">
                   <input type="hidden" name="intent" value="workspace-project-status" />
                   <input type="hidden" name="projectId" value={project.id} />
+                  <input type="hidden" name="expectedUpdatedAt" value={new Date(project.updatedAt).toISOString()} />
                   <label className="grid min-w-0 flex-1 basis-48 gap-2 text-xs font-black text-[#536779]">Move project to<select name="status" defaultValue={project.status} className="neo-workspace__profile-input h-11 min-w-0 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="intake">Intake</option><option value="editing">Editing</option><option value="review">Customer review</option><option value="revision">Revision</option><option value="delivered">Delivered</option></select></label>
                   <label className="grid min-w-0 flex-1 basis-56 gap-2 text-xs font-black text-[#536779]">Preview link <input type="url" name="reviewUrl" placeholder="Required for customer review" className="neo-workspace__profile-input h-11 min-w-0 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
                   <button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit h-11 rounded-xl px-4 text-xs font-black disabled:opacity-60">{isSubmitting ? "Saving…" : "Update status"}</button>
@@ -1463,7 +1594,6 @@ function LegacyAdminRoute() {
   const actionSuccess = actionData && "success" in actionData ? actionData.success : null;
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
-  const navigate = useNavigate();
   const navigation = useNavigation();
   
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
@@ -1686,7 +1816,7 @@ function LegacyAdminRoute() {
                             </Form>
                           </>
                         )}
-                        <button onClick={() => setSelectedUsers([])} className="p-1 text-slate-400 "><span className="material-symbols-outlined text-[18px]">close</span></button>
+                        <button type="button" onClick={() => setSelectedUsers([])} aria-label="Clear selected users" className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><span aria-hidden="true" className="material-symbols-outlined text-[18px]">close</span></button>
                       </div>
                     </div>
                   )}
@@ -1699,16 +1829,23 @@ function LegacyAdminRoute() {
                   <table className="w-full text-left">
                     <thead>
                       <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                        <th className="px-6 py-4 w-12">
-                          <input type="checkbox" checked={isAllSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 accent-black" />
+                        <th scope="col" className="w-12 px-3 py-2">
+                          <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
+                            <span className="sr-only">Select all users on this page</span>
+                            <input type="checkbox" checked={isAllSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 accent-black" />
+                          </label>
                         </th>
-                        <th className="cursor-pointer px-6 py-4 " onClick={() => handleSort("name")}>
-                          User {getSortIcon(searchParams, "name")}
+                        <th scope="col" aria-sort={getAriaSort(searchParams, "name")} className="px-6 py-2">
+                          <button type="button" onClick={() => handleSort("name")} className="inline-flex min-h-11 items-center gap-1 text-left">
+                            User {getSortIcon(searchParams, "name")}
+                          </button>
                         </th>
-                        <th className="cursor-pointer px-6 py-4 " onClick={() => handleSort("role")}>
-                          Role {getSortIcon(searchParams, "role")}
+                        <th scope="col" aria-sort={getAriaSort(searchParams, "role")} className="px-6 py-2">
+                          <button type="button" onClick={() => handleSort("role")} className="inline-flex min-h-11 items-center gap-1 text-left">
+                            Role {getSortIcon(searchParams, "role")}
+                          </button>
                         </th>
-                        <th className="min-w-[250px] px-6 py-4">Activity</th>
+                        <th scope="col" className="min-w-[250px] px-6 py-4">Activity</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -1718,11 +1855,10 @@ function LegacyAdminRoute() {
                         users.map(user => (
                           <tr
                             key={user.id}
-                            className="group cursor-pointer transition-colors hover:bg-slate-50 active:bg-slate-100"
-                            onClick={() => navigate(getUserEditUrl(user.id))}
+                            className="group transition-colors hover:bg-slate-50"
                           >
                             <td className="px-6 py-4">
-                              <input type="checkbox" checked={selectedUsers.includes(user.id)} onClick={event => event.stopPropagation()} onChange={() => toggleSelectUser(user.id)} aria-label={`Select ${user.name || user.email}`} className="h-4 w-4 rounded border-slate-300 accent-black" />
+                              <input type="checkbox" checked={selectedUsers.includes(user.id)} onChange={() => toggleSelectUser(user.id)} aria-label={`Select ${user.name || user.email}`} className="h-4 w-4 rounded border-slate-300 accent-black" />
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
@@ -1730,7 +1866,7 @@ function LegacyAdminRoute() {
                                   {user.name?.[0] || user.email[0]}
                                 </div>
                                 <div>
-                                  <Link to={getUserEditUrl(user.id)} onClick={event => event.stopPropagation()} aria-label={`Edit ${user.name || user.email}'s account`} className="text-sm font-black text-slate-900 underline-offset-4">
+                                  <Link to={getUserEditUrl(user.id)} aria-label={`Edit ${user.name || user.email}'s account`} className="text-sm font-black text-slate-900 underline-offset-4">
                                     {user.name || "User"}
                                   </Link>
                                   <p className="text-xs font-medium text-slate-500">{user.email}</p>
@@ -2054,7 +2190,6 @@ function ImagesPanel({
                   <img src={optimizeCloudinaryUrl(image.secure_url)} alt={image.public_id} loading="lazy" decoding="async" width={image.width || undefined} height={image.height || undefined} className="aspect-video w-full bg-slate-100 object-cover" />
                   <span className="absolute left-3 top-3 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black uppercase text-white">{image.format || "image"}</span>
                   <input name="publicIds" value={image.public_id} type="checkbox" className="absolute right-3 top-3 h-5 w-5 accent-black" />
-                  <input name="imageUrls" value={image.secure_url} type="hidden" />
                 </div>
                 <div className="space-y-2 p-4">
                   <p className="truncate text-sm font-black text-slate-900" title={image.public_id}>{image.public_id}</p>
@@ -2180,7 +2315,6 @@ function VideoLibraryPanel({
                 <div className="relative bg-slate-950">
                   <video src={video.secure_url} poster={cloudinaryVideoThumbnailUrl(video.secure_url)} controls preload="none" className="aspect-video w-full object-contain" />
                   <input name="publicIds" value={video.public_id} type="checkbox" className="absolute right-3 top-3 h-5 w-5 accent-black" />
-                  <input name="videoUrls" value={video.secure_url} type="hidden" />
                 </div>
                 <div className="space-y-2 p-4">
                   <p className="truncate text-sm font-black text-slate-900" title={video.public_id}>{video.public_id}</p>
@@ -2553,22 +2687,22 @@ function AdminUsersTable({
     <table className="w-full text-left">
       <thead>
         <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-black uppercase tracking-wider text-slate-500">
-          <th className="px-6 py-4">
+          <th scope="col" aria-sort={getAriaSort(searchParams, "name")} className="px-6 py-2">
             <Link to={sortLink("name")} reloadDocument className="inline-flex items-center gap-1 ">
               Admin {getSortIcon(searchParams, "name")}
             </Link>
           </th>
-          <th className="px-6 py-4">
+          <th scope="col" aria-sort={getAriaSort(searchParams, "role")} className="px-6 py-2">
             <Link to={sortLink("role")} reloadDocument className="inline-flex items-center gap-1 ">
               Role {getSortIcon(searchParams, "role")}
             </Link>
           </th>
-          <th className="px-6 py-4">
+          <th scope="col" aria-sort={getAriaSort(searchParams, "createdAt")} className="px-6 py-2">
             <Link to={sortLink("createdAt")} reloadDocument className="inline-flex items-center gap-1 ">
               Created {getSortIcon(searchParams, "createdAt")}
             </Link>
           </th>
-          <th className="px-6 py-4 text-right">Last Updated</th>
+          <th scope="col" className="px-6 py-4 text-right">Last Updated</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-50">
@@ -2823,4 +2957,10 @@ function getSortIcon(params: URLSearchParams, field: string) {
   const order = params.get("order") || "desc";
   if (sort !== field) return <span className="material-symbols-outlined text-[14px] opacity-20">unfold_more</span>;
   return order === "asc" ? <span className="material-symbols-outlined text-[14px]">expand_less</span> : <span className="material-symbols-outlined text-[14px]">expand_more</span>;
+}
+
+function getAriaSort(params: URLSearchParams, field: string): "none" | "ascending" | "descending" {
+  const sort = params.get("sort") || "createdAt";
+  if (sort !== field) return "none";
+  return (params.get("order") || "desc") === "asc" ? "ascending" : "descending";
 }

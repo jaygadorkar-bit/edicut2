@@ -219,14 +219,22 @@ export async function uploadPackageImageToCloudinary(file: File, context?: Cloud
     body: formData,
   }, UPLOAD_FETCH_TIMEOUT_MS);
 
-  const result = await response.json() as { secure_url?: string; error?: { message?: string } };
+  const result = await response.json() as Partial<CloudinaryImageResource> & { error?: { message?: string } };
 
-  if (!response.ok || !result.secure_url) {
+  if (!response.ok || !result.secure_url || !result.public_id) {
     throw new Error(result.error?.message || "Cloudinary upload failed.");
   }
 
   clearCloudinaryCache();
-  return result.secure_url;
+  return {
+    public_id: result.public_id,
+    secure_url: result.secure_url,
+    bytes: result.bytes || file.size,
+    width: result.width,
+    height: result.height,
+    format: result.format || file.type.split("/")[1],
+    created_at: result.created_at,
+  } satisfies CloudinaryImageResource;
 }
 
 export async function listCloudinaryImages(context?: CloudinaryEnv) {

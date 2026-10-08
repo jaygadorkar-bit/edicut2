@@ -8,6 +8,7 @@ import { formatPackagePrice, parsePackagePrice, SUBSCRIPTION_PACKAGES } from "..
 import { faqs, legalLinks, navLinks, testimonials, workflow } from "./data";
 import { defaultPortfolioSections } from "../../lib/portfolio-demo";
 import { wrapLoopPosition } from "../../lib/portfolio-loop";
+import { FaqSection } from "./FaqSection";
 import { CookieConsent } from "./CookieConsent.js";
 import { ContactPageIntro } from "./ContactPageIntro";
 import { DEFAULT_CONTACT_EMAIL } from "../../lib/contact-email";
@@ -384,10 +385,10 @@ export function SiteFooter() {
     {
       label: "Explore",
       links: [
-      { label: "Who it's for", to: "/#creators" },
-      { label: "Pricing", to: "/pricing" },
-      { label: "Portfolio", to: "/portfolio" },
-      { label: "FAQ", to: "/faq" },
+        { label: "Why Hire Us", to: "/why-hire-us" },
+        { label: "Pricing", to: "/pricing" },
+        { label: "Portfolio", to: "/portfolio" },
+        { label: "FAQ", to: "/faq" },
       ],
     },
     {
@@ -407,8 +408,7 @@ export function SiteFooter() {
         <div className="grid gap-4 md:grid-cols-[minmax(18rem,1.45fr)_minmax(9rem,1fr)_minmax(11rem,1fr)] md:items-stretch">
         <section className="neo-footer__lead flex flex-col justify-between p-5 md:p-6">
           <div>
-            <p className="neo-footer__eyebrow inline-flex items-center gap-1.5 yt-tag font-black tracking-[0.14em] neo-footer-muted"><Film size={14} aria-hidden="true" />EdiCut / creator post-production</p>
-            <h2 className="mt-3 type-card-title neo-footer-ink">Keep in touch</h2>
+            <h2 className="type-card-title neo-footer-ink">Keep in touch</h2>
             <p className="mt-2 max-w-md text-sm leading-5 neo-footer-muted sm:text-[15px]">
               Editing support, creator tips, and useful updates for a steadier publishing rhythm.
             </p>
@@ -1655,30 +1655,7 @@ export function TestimonialsSection() {
 }
 
 export function FAQSection() {
-  return (
-    <section id="faq" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-7xl">
-        <SectionIntro eyebrow="FAQ" eyebrowIcon={CircleHelp} title="What creators usually ask before starting." />
-        <div className="neo-surface mt-10 divide-y neo-line rounded-2xl p-2">
-          {faqs.map(([q, a]) => (
-            <details key={q} className="group rounded-xl p-5 transition hover:bg-transparent" open={q === faqs[0][0]}>
-              <summary className="type-question flex cursor-pointer list-none items-center justify-between gap-4 neo-ink transition-colors group-hover:text-black">
-                {q}
-                <span className="neo-icon-badge flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
-                  <span className="material-symbols-outlined neo-faq-arrow">expand_more</span>
-                </span>
-              </summary>
-              <div className="neo-faq-answer">
-                <div className="neo-faq-answer__content pt-4 leading-7 neo-muted">
-                  {a}
-                </div>
-              </div>
-            </details>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
+  return <FaqSection id="faq" items={faqs.map(([question, answer]) => ({ question, answer }))} />;
 }
 
 export function ContactSection({ compact = false, page = false, status, action = "/?index#contact", contactEmail = DEFAULT_CONTACT_EMAIL }: { compact?: boolean; page?: boolean; status?: "sent" | "security-error" | "invalid-error" | "delivery-error"; action?: string; contactEmail?: string }) {

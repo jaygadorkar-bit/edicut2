@@ -14,7 +14,7 @@ async function requestWithSession() {
 }
 beforeEach(() => {
   vi.clearAllMocks(); mocks.authUser.mockResolvedValue(user);
-  mocks.profile.mockResolvedValue({ id: "local-id", email: user.email }); mocks.refresh.mockResolvedValue(null);
+  mocks.profile.mockResolvedValue({ id: "local-id", email: user.email, active: true, deletedAt: null }); mocks.refresh.mockResolvedValue(null);
 });
 describe("authenticated local profile mapping", () => {
   it("returns the original local ID only when the authenticated email matches", async () => {
@@ -23,6 +23,19 @@ describe("authenticated local profile mapping", () => {
   it.each([undefined, { id: "local-id", email: "other@example.com" }])("rejects missing or mismatched local profiles: %j", async profile => {
     mocks.profile.mockResolvedValue(profile);
     await expect(requireUserId(await requestWithSession(), context)).rejects.toMatchObject({ status: 302 });
+  });
+  it.each([{ active: false, deletedAt: null }, { active: true, deletedAt: new Date() }])("rejects disabled or trashed profiles with a still-valid Supabase access token: %j", async restriction => {
+    mocks.profile.mockResolvedValue({ id: "local-id", email: user.email, ...restriction });
+    await expect(requireUserId(await requestWithSession(), context)).rejects.toMatchObject({ status: 302 });
+    expect(mocks.authUser).toHaveBeenCalledWith(context, "test-token");
+  });
+  it("rejects an already-issued token after the local profile was permanently deleted", async () => {
+    const session = await getSession(null, context);
+    session.set("userId", user.id); session.set("supabaseAccessToken", "test-token");
+    const cookie = await commitSession(session, undefined, context);
+    const request = new Request("http://localhost:3002/dashboard", { headers: { Cookie: cookie.split(";")[0] } });
+    mocks.profile.mockResolvedValue(null);
+    await expect(requireUserId(request, context)).rejects.toMatchObject({ status: 302 });
   });
   it("does not trust an unconfirmed email for linking identities", async () => {
     mocks.authUser.mockResolvedValue({ ...user, email_confirmed_at: undefined });
