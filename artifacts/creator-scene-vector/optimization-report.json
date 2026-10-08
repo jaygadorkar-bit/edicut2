@@ -1,0 +1,62 @@
+{
+  "source": "Creator at microphone with navy bob.webp",
+  "old_bytes": 17462905,
+  "optimized_bytes": 73768,
+  "size_reduction_percent": 99.578,
+  "old_paths": 173754,
+  "optimized_paths": 335,
+  "gzip_bytes": 27409,
+  "sha256": "b93b36d36f0acfb46bb0b773bbb667e6ff884025c2153414d5c735360c3edd8d",
+  "benchmark_note": "Local resvg CPU parse/render at 668 x 376; these are not browser timings.",
+  "benchmark": {
+    "previous": {
+      "median_parse_and_render_ms": 1040.44,
+      "samples_ms": [
+        1042.82,
+        1040.44,
+        1032.22
+      ]
+    },
+    "optimized": {
+      "median_parse_and_render_ms": 36.29,
+      "samples_ms": [
+        37.84,
+        36.29,
+        35.06
+      ]
+    }
+  },
+  "minification_mean_absolute_channel_error": 0.004485709592700005,
+  "tools": {
+    "tracing": "vtracer 0.6.15",
+    "minification": "SVGO 4.1.0",
+    "rendering": "resvg_py 0.5.0"
+  },
+  "simplification": {
+    "name": "balanced",
+    "bytes": 166119,
+    "paths": 335,
+    "display_mean_absolute_channel_error": 4.664673328399658,
+    "display_face_mean_absolute_channel_error": 6.597737789154053,
+    "display_psnr_db": 27.522356031055175,
+    "seconds": 0.27,
+    "parameters": {
+      "colormode": "color",
+      "hierarchical": "stacked",
+      "mode": "spline",
+      "corner_threshold": 60,
+      "max_iterations": 10,
+      "splice_threshold": 45,
+      "path_precision": 2,
+      "filter_speckle": 3,
+      "color_precision": 6,
+      "layer_difference": 16,
+      "length_threshold": 4
+    },
+    "trace_dimensions": [
+      836,
+      470
+    ]
+  },
+  "security": "Path-only SVG; no raster images, scripts, event handlers, animations or external references; accessibility title references validated."
+}

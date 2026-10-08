@@ -17,7 +17,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${status === "all" ? "purchases" : `purchases-${status}`}.csv"`,
+      "Content-Disposition": `attachment; filename="${status === "all" ? "orders" : `orders-${status}`}.csv"`,
     },
   });
 }

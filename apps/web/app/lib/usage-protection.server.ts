@@ -198,6 +198,7 @@ function isAuthPath(pathname: string) {
 
 export function getMaximumBodyBytes(pathname: string, method: string, request: Request) {
   if (["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) return null;
+  if (pathname === "/api/chat") return 5 * 1024 * 1024 + 32 * 1024;
   if (pathname === "/site/node-logmin") {
     return request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data")
       ? MAX_ADMIN_UPLOAD_BODY_BYTES

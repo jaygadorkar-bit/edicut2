@@ -6,8 +6,9 @@ import { PageShell } from "./Marketing";
 import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
 import { validateQuoteDraft } from "../../lib/custom-quote-validation";
 import type { QuoteActionResult } from "../../routes/custom-quote";
+import type { MonthlyAddOnQuotePrefill } from "../../lib/package-addons";
 
-type QuotePageData = { customer: { name: string; email: string; phone: string }; requestToken: string; today: string; submitted: { id: string; title: string; options: CustomQuoteOptions; status: string } | null };
+type QuotePageData = { customer: { name: string; email: string; phone: string }; requestToken: string; today: string; submitted: { id: string; title: string; options: CustomQuoteOptions; status: string } | null; prefill?: MonthlyAddOnQuotePrefill | null };
 type QuoteDraft = Omit<CustomQuoteInput, "requestToken" | "videoCount"> & { videoCount: string };
 const fieldLabels: Record<string, string> = { title: "Project name", projectType: "Project type", requestType: "Request type", platforms: "Platforms", videoCount: "Number of videos", duration: "Finished video length", footage: "Raw footage", cadence: "Delivery schedule", aspectRatios: "Video formats", style: "Editing style", services: "Editing services", revisions: "Revisions", urgency: "Turnaround", budget: "Budget", deadline: "Delivery date", languages: "Languages", channelUrl: "Channel / brand link", footageUrl: "Footage link", referenceUrls: "Reference links", brief: "Your brief", phone: "Phone number", preferredContact: "Preferred contact", requestToken: "Request" };
 
@@ -26,7 +27,7 @@ export function CustomQuoteForm({ data, result }: { data: QuotePageData; result?
 }
 
 function QuoteBuilder({ data, result }: { data: QuotePageData; result?: QuoteActionResult }) {
-  const [values, setValues] = useState<QuoteDraft>({ title: "", phone: data.customer.phone, preferredContact: "email", projectType: "youtube", requestType: "single", platforms: ["youtube"], videoCount: "1", duration: "5to15", footage: "unsure", cadence: "once", aspectRatios: ["landscape"], style: "recommend", services: ["cuts", "audio"], revisions: "recommend", urgency: "flexible", budget: "discuss", deadline: "", languages: "", channelUrl: "", footageUrl: "", referenceUrls: "", brief: "" });
+  const [values, setValues] = useState<QuoteDraft>({ title: "", phone: data.customer.phone, preferredContact: "email", projectType: "youtube", requestType: "single", platforms: ["youtube"], videoCount: "1", duration: "5to15", footage: "unsure", cadence: "once", aspectRatios: ["landscape"], style: "recommend", services: ["cuts", "audio"], revisions: "recommend", urgency: "flexible", budget: "discuss", deadline: "", languages: "", channelUrl: "", footageUrl: "", referenceUrls: "", brief: "", ...data.prefill });
   const [securityError, setSecurityError] = useState("");
   const [clientResult, setClientResult] = useState<QuoteActionResult>();
   const [checking, setChecking] = useState(false);

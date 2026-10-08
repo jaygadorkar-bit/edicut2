@@ -78,6 +78,27 @@
       "when": 1791141028131,
       "tag": "0010_client-project-intake",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791460839293,
+      "tag": "0011_dashboard-chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791461008203,
+      "tag": "0012_chat-attachment-body",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791462691739,
+      "tag": "0013_chat-read-cursors",
+      "breakpoints": true
     }
   ]
 }

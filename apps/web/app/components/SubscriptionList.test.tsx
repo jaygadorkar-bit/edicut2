@@ -43,13 +43,13 @@ describe("subscription views", () => {
     expect(html).toContain('aria-expanded="false"'); expect(html).toContain("customer@example.test");
     expect(html).not.toContain("Mark as paid");
     expect(html).not.toContain("Delete unpaid"); expect(html).not.toContain("Review purchase");
-    expect(html).toContain("Purchase overview"); expect(html).toContain("Purchase ledger");
-    expect(html).toContain('aria-label="Purchase records table"'); expect(html).toContain("<table"); expect(html).toContain("Plan / price");
+    expect(html).toContain("Order overview"); expect(html).toContain("Order ledger");
+    expect(html).toContain('aria-label="Order records table"'); expect(html).toContain("<table"); expect(html).toContain("Plan / price");
     const firstDataRow = html.slice(html.indexOf("<tbody>"), html.indexOf("</tbody>"));
     expect(firstDataRow.match(/<td(?=\s|>)/g)).toHaveLength(4);
     expect(firstDataRow).not.toContain("colSpan");
     expect(html).toContain('href="/?status=unpaid"'); expect(html).toContain('href="/?status=paid"'); expect(html).toContain('aria-current="page"');
-    expect(html).toContain('aria-label="Show unpaid purchases (1)"'); expect(html).toContain('aria-label="Show paid purchases (2)"');
+    expect(html).toContain('aria-label="Show unpaid orders (1)"'); expect(html).toContain('aria-label="Show paid orders (2)"');
     expect(html).not.toContain("Filter purchases by payment status");
     expect(html).not.toContain("subscriptions/export"); expect(html).not.toContain("Export CSV");
     expect(html).toContain('aria-label="Paid package selections"'); expect(html).toContain('aria-valuenow="2"');
@@ -58,7 +58,7 @@ describe("subscription views", () => {
   it("marks the selected payment filter", () => {
     const html = render(subscription, true, { total: 3, paid: 2, unpaid: 1 }, "paid");
     expect(html).toContain('aria-current="page"'); expect(html).toContain('href="/?status=paid"');
-    expect(html).toContain('aria-label="Show paid purchases (2)"');
+    expect(html).toContain('aria-label="Show paid orders (2)"');
     expect(html).not.toContain("Export CSV");
   });
   it.each([false, true])("paid records have no unpaid actions (admin=%s)", admin => {

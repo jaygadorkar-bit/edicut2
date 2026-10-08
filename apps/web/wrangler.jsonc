@@ -6,6 +6,8 @@
   "compatibility_date": "2026-04-19",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "durable_objects": { "bindings": [{ "name": "CHAT_SOCKET_HUB", "class_name": "ChatSocketHub" }] },
+  "migrations": [{ "tag": "chat-sockets-v1", "new_sqlite_classes": ["ChatSocketHub"] }],
   "routes": [
     {
       "pattern": "edicut.com/*",

@@ -1,0 +1,84 @@
+// Full HTTP + WebSocket flow on the isolated localhost test app only.
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import { createRequire } from "node:module";
+const requireWeb = createRequire(new URL("../apps/web/package.json", import.meta.url));
+const { WebSocket } = requireWeb("ws");
+const origin = "http://localhost:3003";
+const cookies = JSON.parse(await fs.readFile(new URL("../.codex-tmp/chat-test-sessions.json", import.meta.url), "utf8"));
+let checks = 0;
+const check = (condition, message) => { assert.ok(condition, message); checks++; };
+async function api(actor, operation = "rooms", values = {}, post) {
+  const query = new URLSearchParams({ scope: actor === "admin" ? "admin" : "client", operation, ...values });
+  const response = await fetch(`${origin}/api/chat?${query}`, { method: post ? "POST" : "GET", headers: { Cookie: cookies[actor] ?? "", Origin: origin }, body: post ? new URLSearchParams(post) : undefined });
+  return { status: response.status, body: await response.json() };
+}
+const openSocket = async actor => {
+  const messages = [];
+  const socket = new WebSocket(`ws://localhost:3003/api/chat/socket?scope=${actor === "admin" ? "admin" : "client"}`, { headers: { Cookie: cookies[actor], Origin: origin } });
+  await new Promise((resolve, reject) => { socket.on("message", bytes => { const event = bytes.toString() === "pong" ? { type: "pong" } : JSON.parse(bytes); messages.push(event); if (event.type === "ready") resolve(); }); socket.once("error", reject); setTimeout(() => reject(new Error("Socket did not become ready")), 8000).unref(); });
+  return { socket, messages };
+};
+const sockets = [];
+try {
+  check((await api("anonymous")).status === 401, "Anonymous access denied");
+  const clientRooms = (await api("client")).body.rooms, otherRooms = (await api("otherClient")).body.rooms;
+  check(clientRooms.length === 2 && otherRooms.length === 2, "Every client has manager and support rooms");
+  const managerRoom = clientRooms.find(r => r.kind === "manager"), supportRoom = clientRooms.find(r => r.kind === "support");
+  check((await api("otherClient", "messages", { roomId: managerRoom.id })).status === 404, "Other clients cannot read a room");
+  check((await api("support", "messages", { roomId: managerRoom.id })).status === 404, "Support cannot read manager rooms");
+  check((await api("manager", "messages", { roomId: supportRoom.id })).status === 404, "Manager cannot read support rooms");
+  check((await api("support")).body.rooms.every(r => r.kind === "support"), "Support inbox contains support rooms only");
+  check((await api("admin")).body.rooms.length === 4, "Admin sees every room");
+  const adminAttempt = await fetch(`${origin}/api/chat?scope=admin`, { headers: { Cookie: cookies.client } });
+  check(adminAttempt.status === 401, "Client cannot use admin scope");
+  const unassigned = otherRooms.find(r => r.kind === "manager");
+  check((await api("otherClient", "", {}, { intent: "send", roomId: unassigned.id, body: "blocked", nonce: crypto.randomUUID() })).status === 403, "Unassigned manager conversation blocks sending");
+  const clientWs = await openSocket("client"), managerWs = await openSocket("manager"), otherWs = await openSocket("otherClient"); sockets.push(clientWs.socket, managerWs.socket, otherWs.socket);
+  clientWs.socket.send("ping");
+  const nonce = crypto.randomUUID(), text = `Live verification ${nonce}`;
+  const sent = await api("client", "", {}, { intent: "send", roomId: managerRoom.id, body: text, nonce });
+  check(sent.status === 200 && sent.body.message.body === text, "Client message is saved");
+  const duplicate = await api("client", "", {}, { intent: "send", roomId: managerRoom.id, body: text, nonce });
+  check(duplicate.body.message.id === sent.body.message.id, "Retry nonce deduplicates delivery");
+  const conflict = await api("client", "", {}, { intent: "send", roomId: managerRoom.id, body: "different", nonce });
+  check(conflict.status === 409, "Nonce cannot be reused for different text");
+  const history = await api("manager", "messages", { roomId: managerRoom.id });
+  check(history.body.messages.filter(m => m.clientNonce === nonce).length === 1, "No duplicate persisted messages");
+  check(managerWs.messages.some(m => m.type === "refresh"), "Real WebSocket notifies manager");
+  check(!otherWs.messages.some(m => m.type === "refresh"), "Unrelated client receives no event");
+  check(clientWs.messages.some(m => m.type === "pong"), "WebSocket heartbeat works");
+  await api("manager", "", {}, { intent: "typing", roomId: managerRoom.id });
+  await api("manager", "", {}, { intent: "read", roomId: managerRoom.id, messageId: sent.body.message.id });
+  const receipt = await api("client", "messages", { roomId: managerRoom.id });
+  check(receipt.body.receipts.some(r => r.actorKey.startsWith("user:") && r.role === "project_manager"), "Read receipts return reader identity");
+  check(clientWs.messages.some(m => m.type === "typing" && m.roomId === managerRoom.id), "Typing delivered over WebSocket");
+  check((await api("client", "messages", { roomId: managerRoom.id, search: text })).body.messages.length === 1, "Message search finds exact match");
+  check((await api("client", "messages", { roomId: managerRoom.id, beforeAt: "invalid", beforeId: "bad" })).status === 400, "Invalid cursors are rejected");
+  check((await api("manager", "", {}, { intent: "edit", roomId: managerRoom.id, messageId: sent.body.message.id, body: "tamper" })).status === 403, "Other senders cannot edit a message");
+  const edited = await api("client", "", {}, { intent: "edit", roomId: managerRoom.id, messageId: sent.body.message.id, body: "Edited verification" });
+  check(edited.body.message.editedAt && edited.body.message.body === "Edited verification", "Own message edit persists");
+  const deleted = await api("client", "", {}, { intent: "delete", roomId: managerRoom.id, messageId: sent.body.message.id });
+  check(deleted.body.message.deletedAt && deleted.body.message.body === "", "Deletion removes message text");
+  const supportSent = await api("otherClient", "", {}, { intent: "send", roomId: otherRooms.find(r => r.kind === "support").id, body: "Support verification", nonce: crypto.randomUUID() });
+  check(supportSent.status === 200, "Support works without a manager");
+  const otherManagerId = "10000000-0000-4000-8000-000000000004";
+  check((await api("client", "", {}, { intent: "assign", roomId: managerRoom.id, managerId: otherManagerId, expectedManagerId: managerRoom.managerId })).status === 403, "Only admins assign managers");
+  const reassigned = await api("admin", "", {}, { intent: "assign", roomId: managerRoom.id, managerId: otherManagerId, expectedManagerId: managerRoom.managerId });
+  check(reassigned.status === 200, "Admin reassigns manager");
+  check((await api("manager", "messages", { roomId: managerRoom.id })).status === 404, "Previous manager loses history access immediately");
+  check((await api("manager", "", {}, { intent: "send", roomId: managerRoom.id, body: "unauthorized", nonce: crypto.randomUUID() })).status === 404, "Previous manager cannot send after reassignment");
+  check((await api("otherManager", "messages", { roomId: managerRoom.id })).status === 200, "New manager gets existing history");
+  check((await api("admin", "", {}, { intent: "assign", roomId: managerRoom.id, managerId: "", expectedManagerId: managerRoom.managerId })).status === 409, "Concurrent stale assignment is rejected");
+  await api("admin", "", {}, { intent: "assign", roomId: managerRoom.id, managerId: managerRoom.managerId, expectedManagerId: otherManagerId });
+  const cross = await fetch(`${origin}/api/chat`, { method:"POST", headers:{ Cookie:cookies.client, Origin:"https://attacker.example" }, body:new URLSearchParams({ intent:"send", roomId:managerRoom.id, body:"csrf", nonce:crypto.randomUUID() }) });
+  check(cross.status === 403, "Cross-origin messages rejected");
+  const form = new FormData(); form.set("intent", "send"); form.set("roomId", managerRoom.id); form.set("body", "fake image"); form.set("nonce", crypto.randomUUID()); form.set("file", new Blob(["<svg>malformed</svg>"], { type:"image/png" }), "fake.png");
+  const badFile = await fetch(`${origin}/api/chat?scope=client`, { method:"POST", headers:{ Cookie:cookies.client, Origin:origin }, body:form });
+  check(badFile.status === 400, "Spoofed file content rejected before external upload");
+  check((await api("otherClient", "attachment", { roomId: managerRoom.id, messageId: history.body.messages[0].id })).status === 404, "Unauthorized attachment download rejected");
+  // Reconnecting fetches persisted history regardless of missed socket events.
+  clientWs.socket.close(); const reconnected = await openSocket("client"); sockets.push(reconnected.socket);
+  check((await api("client", "messages", { roomId: managerRoom.id })).body.messages.some(m => m.id === sent.body.message.id && m.deletedAt), "Reconnect resync includes message changes");
+  console.log(`${checks} isolated HTTP/WebSocket checks passed: roles, live events, typing, receipts, search, edits, deletion, CSRF, attachments, reassignment, and reconnect.`);
+} finally { for (const socket of sockets) socket.close(); }

@@ -13,8 +13,10 @@ export function WhyHireUsFilm({ showPlanButton = true }: { showPlanButton?: bool
   const [hasEnded, setHasEnded] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   const [audioError, setAudioError] = useState(false);
+  const [isPlayButtonVisible, setIsPlayButtonVisible] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const filmRef = useRef<HTMLDivElement>(null);
+  const playButtonRef = useRef<HTMLButtonElement>(null);
   const hasStartedRef = useRef(false);
   const playAttempt = useRef(0);
   const descriptionId = useId();
@@ -40,6 +42,18 @@ export function WhyHireUsFilm({ showPlanButton = true }: { showPlanButton?: bool
     const audio = audioRef.current;
     return () => { playAttempt.current += 1; audio?.pause(); };
   }, []);
+
+  useEffect(() => {
+    if (hasStarted) return;
+    const button = playButtonRef.current;
+    if (!button) return;
+    if (typeof IntersectionObserver === "undefined") { setIsPlayButtonVisible(true); return; }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry) setIsPlayButtonVisible(entry.isIntersecting && entry.intersectionRatio >= .5);
+    }, { threshold: .5 });
+    observer.observe(button);
+    return () => observer.disconnect();
+  }, [hasStarted]);
 
   useEffect(() => {
     if (!isPlaying || isBuffering) return;
@@ -117,7 +131,7 @@ export function WhyHireUsFilm({ showPlanButton = true }: { showPlanButton?: bool
             </div>)}
           </div>
           <div className="studio-film__controls">
-            <button type="button" className="studio-film__watch neo-button neo-button--primary" aria-label={playbackLabel} onClick={() => { void togglePlayback(); }}>
+            <button ref={playButtonRef} type="button" className="studio-film__watch neo-button neo-button--primary" data-play-prompt={isPlayButtonVisible && !hasStarted} aria-label={playbackLabel} onClick={() => { void togglePlayback(); }}>
               <span className="studio-film__play-icon">{isPlaying ? <Pause size={17} fill="currentColor" aria-hidden="true" /> : <Play size={17} fill="currentColor" aria-hidden="true" />}</span>
               <span className="studio-film__watch-label" aria-hidden="true"><span key={playbackLabel} className="studio-film__watch-label-text">{playbackLabel}</span></span>
             </button>

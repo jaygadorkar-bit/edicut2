@@ -62,6 +62,27 @@ beforeEach(() => {
 });
 
 describe("payment-first checkout", () => {
+  it.each(["creator", "creator-plus", "creator-pro"])("rejects per-video add-ons for monthly package %s before pricing or saving", async slug => {
+    for (const addon of ["thumbnail", "short-form"]) {
+      await expect(loader(args(`?addon=${addon}`, undefined, slug))).rejects.toMatchObject({ status: 400 });
+      expect(await action(args("", { intent: "start-checkout", packageSlug: slug, country: "US", phone: "+12025550123", addon }, slug))).toMatchObject({ error: expect.stringContaining("valid package add-ons") });
+    }
+    expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
+    expect(mocks.findCouponForQuote).not.toHaveBeenCalled();
+  });
+  it("preserves historical monthly add-on snapshots on the payment step", async () => {
+    mocks.getOwnedSubscription.mockResolvedValueOnce({ id: "saved-id", status: "unpaid", subtotalCents: 316600, amountCents: 316600, addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 1700 }] });
+    const result = await loader(args("?step=payment&subscription=saved-id&addon=short-form"));
+    expect(result.total).toBe(3166);
+    expect(result.addOns).toEqual([{ id: "thumbnail", label: "Custom thumbnail", amountCents: 1700 }]);
+  });
+  it("starts a fresh monthly review without retired per-video extras from a saved selection", async () => {
+    mocks.getOwnedSubscription.mockResolvedValueOnce({ id: "saved-id", status: "unpaid", addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }] });
+    const result = await loader(args("?subscription=saved-id"));
+    expect(result.addOns).toEqual([]);
+    expect(result.total).toBe(3149);
+    expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
+  });
   it("loads both add-ons at server prices and quotes the full subtotal", async () => {
     const result = await loader(args("?addon=thumbnail&addon=short-form&coupon=SAVE10&amountCents=1", undefined, "single-creator"));
     expect(result.total).toBe(149);

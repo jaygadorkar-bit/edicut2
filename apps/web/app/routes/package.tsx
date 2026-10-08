@@ -9,6 +9,7 @@ import { PackageAddOns } from "../components/site/PackageAddOns";
 import { PackageCarousel } from "../components/site/PackageCarousel";
 import { packageAddOnTotal, selectedPackageAddOns, type PackageAddOnId } from "../lib/package-addons";
 import packageStyles from "../styles/package.css?url";
+import addOnStyles from "../styles/package-addons.css?url";
 import { getDbFromContext } from "../lib/db.server";
 import { getPricingPackages, configuredEditingPackage, configuredPublicEditingPackages, publicPricingPackages } from "../lib/pricing.server";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
@@ -17,7 +18,7 @@ import { normalizeMarketingCode } from "../lib/marketing.server";
 import { createRouteMeta } from "../lib/seo";
 import { formatPackagePrice, getCheckoutUrl, type EditingPackage } from "../lib/subscriptions";
 
-export const links: LinksFunction = () => [{ rel: "stylesheet", href: packageStyles }];
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: packageStyles }, { rel: "stylesheet", href: addOnStyles }];
 
 export const meta: MetaFunction<typeof loader> = (args) => createRouteMeta(
   args,
@@ -36,7 +37,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const alternatives = configuredPublicEditingPackages(allPackages).filter((item) => item.slug !== editingPackage.slug);
   const query = new URL(request.url).searchParams;
   const affiliateCode = normalizeMarketingCode(query.get("ref") || "") || "";
-  const addOns = selectedPackageAddOns(query.getAll("addon")).map(item => item.id);
+  const addOns = selectedPackageAddOns(query.getAll("addon"), editingPackage.packageType).map(item => item.id);
   return { packageRecord, editingPackage, alternatives, affiliateCode, addOns };
 }
 
@@ -149,7 +150,7 @@ function PackageArtwork() {
 
 function PackageCheckoutCard({ editingPackage, affiliateCode, initialAddOns }: { editingPackage: EditingPackage; affiliateCode: string; initialAddOns: PackageAddOnId[] }) {
   const [addOns, setAddOns] = useState(initialAddOns);
-  const extras = packageAddOnTotal(selectedPackageAddOns(addOns)) / 100;
+  const extras = packageAddOnTotal(selectedPackageAddOns(addOns, editingPackage.packageType)) / 100;
   const checkoutHref = getCheckoutUrl(editingPackage, { affiliateCode, addOns });
   const isMonthly = editingPackage.packageType === "monthly";
   return <section className="package-checkout neo-surface" aria-labelledby="package-title">
@@ -170,8 +171,8 @@ function PackageCheckoutCard({ editingPackage, affiliateCode, initialAddOns }: {
       {isMonthly ? <li className="flex gap-2"><Clock3 size={15} className="mt-0.5 shrink-0" aria-hidden="true" />{editingPackage.editingHoursPerMonth} hours per month · {editingPackage.editingHoursPerWorkday} {editingPackage.editingHoursPerWorkday === 1 ? "hour" : "hours"} per workday</li>
         : <li className="flex gap-2"><FileVideo size={15} className="mt-0.5 shrink-0" aria-hidden="true" />{editingPackage.finishedLength} finished · {editingPackage.rawFootageLimit} raw footage</li>}
     </ul>
-    <PackageAddOns selected={addOns} onChange={setAddOns} />
-    <div className="package-selection-total" aria-live="polite" aria-atomic="true"><span>{isMonthly && extras ? "First month + extras" : "Your total"}</span><strong>{formatPackagePrice(editingPackage.basePrice + extras)}</strong></div>
+    <PackageAddOns editingPackage={editingPackage} selected={addOns} onChange={setAddOns} />
+    <div className="package-selection-total" aria-live="polite" aria-atomic="true"><span>{isMonthly ? "Monthly total" : "Your total"}</span><strong>{formatPackagePrice(editingPackage.basePrice + extras)}</strong></div>
     <PackageChoiceLink to={checkoutHref} label={isMonthly ? "Choose monthly package" : "Choose this video edit"} className="package-checkout-button" />
   </section>;
 }

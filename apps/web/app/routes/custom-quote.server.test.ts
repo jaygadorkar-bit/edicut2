@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  requireCustomer: vi.fn(), save: vi.fn(), getOwned: vi.fn(), limit: vi.fn(), captcha: vi.fn(),
+  requireCustomer: vi.fn(), save: vi.fn(), getOwned: vi.fn(), limit: vi.fn(), captcha: vi.fn(), getPricingPackages: vi.fn(),
 }));
 vi.mock("../lib/custom-quotes.server", () => ({ requireQuoteCustomer: mocks.requireCustomer, saveCustomQuote: mocks.save, getCustomerQuote: mocks.getOwned, quoteBusinessDate: () => "2026-10-04" }));
 vi.mock("../lib/usage-protection.server", async original => ({ ...await original<typeof import("../lib/usage-protection.server")>(), consumeUsageLimit: mocks.limit }));
 vi.mock("../lib/recaptcha.server", () => ({ verifyRecaptchaToken: mocks.captcha }));
+vi.mock("../lib/pricing.server", async original => ({ ...await original<typeof import("../lib/pricing.server")>(), getPricingPackages: mocks.getPricingPackages }));
+import { defaultPricingPackages } from "../lib/pricing.server";
 import { action, loader, headers } from "./custom-quote";
 const id = "22222222-2222-4222-8222-222222222222";
 const customer = { id: "customer-1", name: "Customer", email: "customer@example.com", phone: "" };
@@ -14,8 +16,31 @@ function args(fields?: Record<string, string>, query = "", extraHeaders?: Record
 }
 beforeEach(() => {
   vi.resetAllMocks(); mocks.requireCustomer.mockResolvedValue({ db: {}, customer }); mocks.save.mockResolvedValue({ id }); mocks.getOwned.mockResolvedValue(null); mocks.limit.mockResolvedValue("allowed"); mocks.captcha.mockResolvedValue({ success: true });
+  mocks.getPricingPackages.mockResolvedValue(defaultPricingPackages);
 });
 describe("authenticated custom quote route", () => {
+  it("uses the configured monthly plan name and ignores inactive plans", async () => {
+    mocks.getPricingPackages.mockResolvedValueOnce(defaultPricingPackages.map(pack => pack.slug === "creator-plus" ? { ...pack, name: "Channel Growth" } : pack));
+    expect((await loader(args(undefined, "?package=creator-plus&monthly-addon=extra-editing-hours"))).prefill?.title).toBe("Channel Growth: Extra editing hours");
+    mocks.getPricingPackages.mockResolvedValueOnce(defaultPricingPackages.map(pack => pack.slug === "creator-plus" ? { ...pack, active: false } : pack));
+    expect((await loader(args(undefined, "?package=creator-plus&monthly-addon=extra-editing-hours"))).prefill).toBeNull();
+  });
+  it.each([
+    ["extra-editing-hours", "Extra editing hours", "cuts"],
+    ["thumbnail-bundle", "Monthly thumbnail bundle", "thumbnails"],
+  ])("prefills the %s quote for a monthly plan without creating a request", async (id, label, service) => {
+    const result = await loader(args(undefined, `?package=creator-plus&monthly-addon=${id}`));
+    expect(result.prefill).toMatchObject({ title: `Growth: ${label}`, requestType: "recurring", cadence: "monthly", services: [service] });
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it.each([
+    "?package=single-creator&monthly-addon=thumbnail-bundle",
+    "?package=unknown&monthly-addon=extra-editing-hours",
+    "?package=creator-plus&monthly-addon=free-upgrade&price=0&title=forged",
+  ])("ignores unsupported monthly quote parameters: %s", async query => {
+    expect((await loader(args(undefined, query))).prefill).toBeNull();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
   it("requires customer authentication for both viewing and submitting", async () => {
     mocks.requireCustomer.mockRejectedValue(new Response(null, { status: 302, headers: { Location: "/signin?redirectTo=%2Fcustom-quote" } }));
     await expect(loader(args())).rejects.toMatchObject({ status: 302 });

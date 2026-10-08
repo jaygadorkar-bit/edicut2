@@ -608,21 +608,38 @@ a.neo-button:active {
   text-align: center;
 }
 
-.neo-workspace__nav-item--has-unread > .material-symbols-outlined {
+.neo-workspace__nav-item,
+.neo-workspace__bottom-nav-item {
   position: relative;
-  overflow: visible;
 }
 
-.neo-workspace__nav-item--has-unread > .material-symbols-outlined::after {
-  position: absolute;
-  top: -1px;
-  right: -2px;
-  width: 7px;
-  height: 7px;
-  border: 2px solid #edf2f6;
+.neo-workspace__nav-count {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: #b86e78;
-  content: "";
+  background: #cf1635;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.neo-workspace__nav-count--large {
+  width: 26px;
+  height: 26px;
+  font-size: 10px;
+}
+
+.neo-workspace__nav-count--overlay {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  box-shadow: 0 0 0 2px #edf2f6;
 }
 
 .neo-workspace__nav-item:hover {
@@ -2846,43 +2863,42 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
   position: relative;
 }
 
-.neo-workspace__route-progress {
+.neo-workspace-loading {
   position: fixed;
   z-index: 1100;
-  inset: 0 0 auto;
-  height: 3px;
-  overflow: hidden;
-  background: rgba(109, 85, 232, 0.12);
-  opacity: 0;
-  pointer-events: none;
-  animation: neo-workspace-route-progress-appear 100ms ease 120ms both;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--neo-bg) 42%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  cursor: progress;
+  touch-action: none;
 }
 
-.neo-workspace__route-progress-sweep {
+.neo-workspace-loading__spinner {
+  position: relative;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--neo-muted);
+}
+
+.neo-workspace-loading__segment {
   position: absolute;
-  inset-block: 0;
-  width: 38%;
-  background: linear-gradient(90deg, transparent, #6d55e8 42%, #a89aff 58%, transparent);
-  animation: neo-workspace-route-progress 1.15s cubic-bezier(0.4, 0, 0.2, 1) 120ms infinite both;
+  top: calc(50% - .3rem);
+  left: calc(50% - .1rem);
+  width: .2rem;
+  height: .6rem;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: var(--segment-opacity);
+  transform: rotate(calc(var(--segment) * 30deg)) translateY(-.9rem);
+  animation: neo-workspace-loading-spin 1s linear infinite;
 }
 
-.neo-workspace__content {
-  transition: opacity 180ms ease, transform 180ms ease;
-}
-
-.neo-workspace__content[data-navigation-pending="true"] {
-  opacity: 0.78;
-  transform: translateY(3px);
-  transition-delay: 120ms;
-}
-
-@keyframes neo-workspace-route-progress {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(310%); }
-}
-
-@keyframes neo-workspace-route-progress-appear {
-  to { opacity: 1; }
+@keyframes neo-workspace-loading-spin {
+  from { opacity: 1; }
+  to { opacity: .18; }
 }
 
 .neo-workspace__mobile-heading {
@@ -2894,20 +2910,9 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .neo-workspace__route-progress {
-    opacity: 1;
+  .neo-workspace-loading__segment {
     animation: none !important;
-  }
-
-  .neo-workspace__route-progress-sweep {
-    width: 100%;
-    background: #6d55e8;
-    animation: none !important;
-    transform: none;
-  }
-
-  .neo-workspace__content {
-    transition: none;
+    opacity: var(--segment-opacity);
   }
 }
 

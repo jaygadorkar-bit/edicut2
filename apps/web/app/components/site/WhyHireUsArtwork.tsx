@@ -6,8 +6,8 @@ function Motion({ at = 0, duration = .65, kind = "reveal", children }: { at?: nu
 }
 
 function Card({ x, y, width, height, children, inset = false }: { x: number; y: number; width: number; height: number; children?: ReactNode; inset?: boolean }) {
-  return <g transform={`translate(${x} ${y})`} className={inset ? "offer-inset" : "offer-card"}>
-    <rect width={width} height={height} rx="18" fill={inset ? "#e7edf2" : "var(--offer-card-fill)"} stroke={inset ? "#dae3ea" : "#faffff"} />{children}
+  return <g transform={`translate(${x} ${y})`}>
+    <rect className={inset ? "offer-inset" : "offer-card"} width={width} height={height} rx="18" fill={inset ? "#e7edf2" : "var(--offer-card-fill)"} stroke={inset ? "#dae3ea" : "#faffff"} />{children}
   </g>;
 }
 
@@ -32,20 +32,18 @@ function Avatar({ x, y, manager = false, creator = false }: { x: number; y: numb
   </g>;
 }
 
+function RecordingScene({ x, y, width, height, radius = 12 }: { x: number; y: number; width: number; height: number; radius?: number }) {
+  const clipId = `recording-scene-${useId().replace(/:/g, "")}`;
+  return <g>
+    <defs><clipPath id={clipId}><rect x={x} y={y} width={width} height={height} rx={radius} /></clipPath></defs>
+    <image x={x} y={y} width={width} height={height} href="/artwork/why-hire-us/creator-recording-scene-b93b36d3.svg" preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clipId})`} />
+  </g>;
+}
+
 function Video({ x, y, width = 230, height = 130, captions = false }: { x: number; y: number; width?: number; height?: number; captions?: boolean }) {
   return <svg x={x} y={y} width={width} height={height} viewBox="0 0 230 130">
-    <rect width="230" height="130" rx="12" fill="#dbe8e3" />
-    <path d="M0 19h230M0 92h230" stroke="#c8dbd3" strokeWidth="1" opacity=".55" />
-    <path d="M73 12h143v77H73z" fill="#e7f0ec" opacity=".48" />
-    <rect x="13" y="16" width="49" height="73" rx="6" fill="#adccc0" />
-    <path d="M25 36h25M25 47h25M25 58h18" stroke="#eaf3ef" strokeWidth="3" strokeLinecap="round" />
-    <path d="M189 117V46m0 35-14-15m14-7 13-12" stroke="#9ab9aa" strokeWidth="3" strokeLinecap="round" />
-    <path d="M180 119h19l-2 7h-15z" fill="#c8d9d2" />
-
-    <Portrait x={53} y={0} size={130} />
-    <path d="M160 108V87a5 5 0 0 1 10 0v21" fill="#344657" />
-    <path d="M160 108v13m-8 0h16" stroke="#344657" strokeWidth="2" strokeLinecap="round" />
-    {captions ? <g><rect x="38" y="99" width="158" height="22" rx="5" fill="#17202a" /><text x="117" y="114" textAnchor="middle" fill="white" fontSize="10" fontWeight="650">Your story, beautifully told.</text></g> : null}
+    <RecordingScene x={0} y={0} width={230} height={130} />
+    {captions ? <g><rect x="38" y="107" width="158" height="19" rx="5" fill="#17202a" /><text x="117" y="120" textAnchor="middle" fill="white" fontSize="10" fontWeight="650">Your story, beautifully told.</text></g> : null}
   </svg>;
 }
 
@@ -185,10 +183,7 @@ function MobileTeamScene() {
   return <>
     <MobileText x={160} y={34} size={20} anchor="middle">Made for your channel</MobileText>
     <MobileCard x={18} y={48} width={284} height={138} inset>
-      <rect x="31" y="64" width="42" height="73" rx="8" fill="#adccc0" />
-      <path d="M41 84h22M41 94h22M41 104h15" stroke="#f5fbf8" strokeWidth="3" strokeLinecap="round" />
-      <path d="M266 137V90m0 25-12-13m12-7 11-11" stroke="#9ab9aa" strokeWidth="3" strokeLinecap="round" />
-      <MobilePortrait cx={160} cy={107} size={102} character="creator" background="#dbe8e3" />
+      <RecordingScene x={18} y={48} width={284} height={138} radius={18} />
       <rect x="69" y="150" width="182" height="28" rx="8" fill="#17202a" />
       <MobileText x={160} y={170} size={17} color="#ffffff" anchor="middle">Your story, well told</MobileText>
     </MobileCard>
@@ -201,10 +196,7 @@ function MobileCraftScene() {
   return <>
     <Logo x={24} y={13} width={88} height={38} /><MobileText x={298} y={39} size={20} anchor="end">Studio finish</MobileText>
     <MobileCard x={18} y={53} width={284} height={123} inset>
-      <rect x="31" y="66" width="258" height="96" rx="14" fill="#dbe8e3" />
-      <rect x="43" y="83" width="33" height="63" rx="7" fill="#adccc0" />
-      <path d="M51 99h17M51 108h17M51 117h12" stroke="#f5fbf8" strokeWidth="2.5" strokeLinecap="round" />
-      <MobilePortrait cx={164} cy={113} size={88} character="creator" background="#d1e1da" />
+      <RecordingScene x={18} y={53} width={284} height={123} radius={18} />
       <rect x="88" y="145" width="154" height="27" rx="8" fill="#17202a" />
       <MobileText x={165} y={164} size={17} color="#ffffff" anchor="middle">Studio polish</MobileText>
     </MobileCard>
@@ -263,8 +255,7 @@ function MobileClosingScene() {
   return <>
     <Logo x={102} y={11} width={116} height={50} />
     <MobileCard x={18} y={65} width={284} height={121} inset>
-      <rect x="30" y="76" width="260" height="96" rx="14" fill="#dbe8e3" />
-      <MobilePortrait cx={160} cy={121} size={82} character="creator" background="#d1e1da" />
+      <RecordingScene x={18} y={65} width={284} height={121} radius={18} />
       <rect x="64" y="150" width="192" height="29" rx="8" fill="#17202a" />
       <MobileText x={160} y={171} size={18} color="#ffffff" anchor="middle">Your next great edit</MobileText>
     </MobileCard>

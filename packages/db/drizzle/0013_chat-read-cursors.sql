@@ -1,0 +1,1 @@
+ALTER TABLE "chat_reads" ADD COLUMN "last_read_id" uuid;

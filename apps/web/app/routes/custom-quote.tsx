@@ -8,6 +8,9 @@ import { verifyRecaptchaToken } from "../lib/recaptcha.server";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { isWorkspaceRecordId } from "../lib/workspace";
 import "../styles/custom-quotes.css";
+import { getCatalogPackage } from "../lib/subscriptions";
+import { monthlyAddOnQuotePrefill } from "../lib/package-addons";
+import { configuredEditingPackage, getPricingPackages } from "../lib/pricing.server";
 
 export const meta: MetaFunction = () => [{ title: "Request a custom quote | EdiCut" }, { name: "robots", content: "noindex,nofollow" }];
 export function headers() { return { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" }; }
@@ -18,10 +21,15 @@ const MAX_QUOTE_BODY_BYTES = 128 * 1024;
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const { db, customer } = await requireQuoteCustomer(request, context);
-  const submittedId = new URL(request.url).searchParams.get("submitted");
+  const query = new URL(request.url).searchParams;
+  const submittedId = query.get("submitted");
   const submitted = submittedId && isWorkspaceRecordId(submittedId) ? await getCustomerQuote(db, customer.id, submittedId) : null;
   if (submittedId && !submitted) throw new Response("Quote request not found", { status: 404 });
-  return { customer, requestToken: crypto.randomUUID(), today: quoteBusinessDate(), submitted };
+  const requestedSlug = query.get("package") || "";
+  const requestedPackage = getCatalogPackage(requestedSlug)?.packageType === "monthly"
+    ? configuredEditingPackage(requestedSlug, await getPricingPackages(db, context)) : null;
+  const prefill = requestedPackage ? monthlyAddOnQuotePrefill(requestedPackage, query.get("monthly-addon") || "") : null;
+  return { customer, requestToken: crypto.randomUUID(), today: quoteBusinessDate(), submitted, prefill };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {

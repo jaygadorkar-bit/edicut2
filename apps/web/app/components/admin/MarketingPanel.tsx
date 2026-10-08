@@ -21,7 +21,7 @@ export function MarketingPanel({
     <section className="grid min-w-0 grid-cols-1 gap-5 [&_label]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0" aria-labelledby="marketing-title">
       <header className="neo-workspace__panel p-5 sm:p-6">
         <p className="neo-workspace__eyebrow">Growth tools</p>
-        <h1 id="marketing-title" className="neo-workspace__module-title mt-1">Coupons</h1>
+        <h1 id="marketing-title" className="neo-workspace__module-title mt-1">Discounts</h1>
         <p className="neo-workspace__module-copy mt-2 max-w-2xl">
           Create discount codes for eligible package purchases. Payment is recorded manually by staff.
         </p>
@@ -31,7 +31,7 @@ export function MarketingPanel({
       {actionData?.success ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{actionData.success}</p> : null}
       {!data.schemaReady ? (
         <div role="alert" className="neo-workspace__panel border-amber-300 bg-amber-50 p-5 text-sm font-semibold text-amber-950">
-          <h2 className="text-base font-black">Marketing database setup is needed</h2>
+          <h2 className="text-base font-black">Discount database setup is needed</h2>
           <p className="mt-2">Apply the marketing database migration before creating discount codes.</p>
         </div>
       ) : (

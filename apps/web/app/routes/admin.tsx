@@ -1645,7 +1645,7 @@ function LegacyAdminRoute() {
       : tab === "settings"
           ? "Settings"
           : tab === "marketing"
-            ? "Coupons"
+            ? "Discounts"
           : tab === "affiliates"
             ? "Affiliates"
           : tab === "users"
@@ -2654,7 +2654,7 @@ function SettingsPanel({
   );
 }
 
-function AdminUsersTable({
+export function AdminUsersTable({
   adminUsers,
   searchParams,
 }: {
@@ -2669,6 +2669,8 @@ function AdminUsersTable({
   }>;
   searchParams: URLSearchParams;
 }) {
+  const returnTo = adminPath(`?${searchParams.toString()}`);
+  const rowLinkClass = "flex min-h-[72px] items-center px-6 py-4 after:absolute after:inset-0 after:content-['']";
   const sortLink = (field: string) => {
     const params = new URLSearchParams(searchParams);
     const currentSort = params.get("sort") || "createdAt";
@@ -2709,10 +2711,13 @@ function AdminUsersTable({
         {adminUsers.length === 0 ? (
           <tr><td colSpan={4} className="py-20 text-center text-slate-400">No admin accounts found.</td></tr>
         ) : (
-          adminUsers.map((admin) => (
-            <tr key={admin.id} className="-colors">
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-3">
+          adminUsers.map((admin) => {
+            const editUrl = `${adminPath(`/admins/${admin.id}`)}?returnTo=${encodeURIComponent(returnTo)}`;
+            return (
+            <tr key={admin.id} className="transition-colors hover:bg-slate-50 focus-within:bg-slate-50">
+              <td className="relative p-0">
+                <Link to={editUrl} aria-label={`Edit ${admin.name || admin.email}'s admin account`} className={`${rowLinkClass} focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[#6750dc]`}>
+                  <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs font-bold uppercase text-white">
                     {admin.name?.[0] || admin.email[0]}
                   </div>
@@ -2720,17 +2725,20 @@ function AdminUsersTable({
                     <p className="text-sm font-black text-slate-900">{admin.name || "Admin"}</p>
                     <p className="text-xs font-medium text-slate-500">{admin.email}</p>
                   </div>
-                </div>
+                  </div>
+                </Link>
               </td>
-              <td className="px-6 py-4">
+              <td className="relative p-0">
+                <Link tabIndex={-1} to={editUrl} className={rowLinkClass}>
                 <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-red-700 ring-1 ring-inset ring-red-600/10">
                   {admin.role}
                 </span>
+                </Link>
               </td>
-              <td className="px-6 py-4 text-xs font-bold text-slate-500">{new Date(admin.createdAt).toLocaleDateString()}</td>
-              <td className="px-6 py-4 text-right text-xs font-bold text-slate-500">{new Date(admin.updatedAt).toLocaleDateString()}</td>
+              <td className="relative p-0 text-xs font-bold text-slate-500"><Link tabIndex={-1} to={editUrl} className={rowLinkClass}>{new Date(admin.createdAt).toLocaleDateString()}</Link></td>
+              <td className="relative p-0 text-right text-xs font-bold text-slate-500"><Link tabIndex={-1} to={editUrl} className={`${rowLinkClass} justify-end`}>{new Date(admin.updatedAt).toLocaleDateString()}</Link></td>
             </tr>
-          ))
+          ); })
         )}
       </tbody>
     </table>

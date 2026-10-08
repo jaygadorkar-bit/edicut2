@@ -64,7 +64,13 @@
 .studio-film__watch-label { display: grid; flex: 1; min-width: 0; height: 18px; overflow: hidden; text-align: center; }
 .studio-film__watch-label-text { display: block; white-space: nowrap; animation: studio-control-label-in 220ms cubic-bezier(0.2, 0.75, 0.25, 1) both; }
 @keyframes studio-control-label-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-.studio-film__watch .studio-film__play-icon { display: grid; place-items: center; flex: none; width: 17px; height: 17px; color: inherit; transition: color 250ms; }
+.studio-film__watch .studio-film__play-icon { --play-breathe-scale: 1.4; display: grid; place-items: center; flex: none; width: 17px; height: 17px; color: var(--studio-red); transition: color 250ms; }
+/* A continuous, gentle invitation until the first playback attempt. */
+.studio-film__controls .studio-film__watch[data-play-prompt="true"] .studio-film__play-icon { animation: studio-play-breathe 3.4s cubic-bezier(.45, 0, .55, 1) infinite; transform-origin: center; }
+@keyframes studio-play-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(var(--play-breathe-scale)); }
+}
 .studio-film__play-icon svg { stroke-width: 1.5; }
 .studio-film .studio-film__controls .neo-button:focus-visible { outline: 2px solid var(--studio-muted); outline-offset: 4px; }
 
@@ -141,6 +147,7 @@
   .studio-film .studio-film__title--scene { font-size: 34px; }
   .studio-film .studio-film__description { max-width: 390px; font-size: 15px; margin: 14px auto 0; }
   .studio-film__controls { margin-top: 0; }
+  .studio-film__watch .studio-film__play-icon { --play-breathe-scale: 1.055; }
   .offer-artwork--desktop { display: none; }
   .offer-artwork--mobile { display: block; }
 }
@@ -159,4 +166,5 @@
   .studio-film__controls .neo-button,
   .studio-film__controls .neo-button :is(span, svg) { transition: none; }
   .studio-film__watch-label-text { animation: none; }
+  .studio-film__controls .studio-film__watch[data-play-prompt="true"] .studio-film__play-icon { animation: none; }
 }

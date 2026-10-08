@@ -39,7 +39,7 @@ const videos = {
   granTurismo: sample("oz-O74SmTSQ", "Gran Turismo 7 — Announcement Trailer", "PlayStation", "Gaming"),
   air3: sample("xi85DAbv5oU", "Introducing DJI Air 3", "DJI", "Commercial"),
   pocket3: sample("_Bpwo7JlmII", "Introducing DJI Osmo Pocket 3", "DJI", "Commercial"),
-  appleAtWork: sample("6K4eUO53-UE", "Apple at Work — Seamless Integration", "Apple", "Commercial"),
+  mavic4: sample("BNEmDcQr6hk", "Introducing DJI Mavic 4 Pro", "DJI", "Commercial"),
   mavic3: sample("r5kukRMmZNI", "Introducing DJI Mavic 3 Pro", "DJI", "Commercial"),
   olivia: sample("CXvG2CBJ3SE", "Olivia Rodrigo's Beauty Routine", "Vogue", "Health & Beauty"),
   rihanna: sample("KONe4SNFA64", "Rihanna's Going-Out Makeup", "Vogue", "Health & Beauty"),
@@ -52,10 +52,10 @@ const videos = {
 };
 
 const sections = [
-  { name: "Featured", slug: "featured", videos: [videos.dji, videos.tyla, videos.ghost, videos.iphone, videos.rubin, videos.appleAtWork] },
+  { name: "Featured", slug: "featured", videos: [videos.dji, videos.tyla, videos.ghost, videos.iphone, videos.rubin, videos.macbook] },
   { name: "Podcast", slug: "podcast", videos: [videos.rubin, videos.metaverse, videos.huberman, videos.altman, videos.bezos, videos.altmanFollowup] },
   { name: "Gaming", slug: "gaming", videos: [videos.ghost, videos.zelda, videos.godOfWar, videos.spiderMan, videos.horizon, videos.granTurismo] },
-  { name: "Commercial", slug: "commercial", videos: [videos.dji, videos.nike, videos.air3, videos.pocket3, videos.appleAtWork, videos.mavic3] },
+  { name: "Commercial", slug: "commercial", videos: [videos.dji, videos.nike, videos.air3, videos.pocket3, videos.mavic4, videos.mavic3] },
   { name: "Health and Beauty", slug: "health-and-beauty", videos: [videos.tyla, videos.kendall, videos.olivia, videos.rihanna, videos.selena, videos.sabrina] },
   { name: "Review", slug: "review", videos: [videos.iphone, videos.macbook, videos.galaxy, videos.macbook16, videos.macbookMax, videos.pixel] },
 ];

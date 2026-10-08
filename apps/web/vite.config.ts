@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
+import { chatWebSocketPlugin } from "./dev/chat-websocket";
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -28,7 +29,7 @@ export default defineConfig(({ mode, isSsrBuild }) => {
       hmr: {
         host: "localhost",
         // Docker exposes the development server on host port 3002.
-        clientPort: 3002,
+        clientPort: Number(process.env.DEV_PORT ?? 3002),
         overlay: true,
       },
     },
@@ -49,6 +50,6 @@ export default defineConfig(({ mode, isSsrBuild }) => {
     ssr: {
       noExternal: ["react-router", "@react-router/dev", "@react-router/cloudflare"],
     },
-    plugins: [reactRouter(), tsconfigPaths(), tailwindcss()],
+    plugins: [chatWebSocketPlugin(), reactRouter(), tsconfigPaths(), tailwindcss()],
   };
 });

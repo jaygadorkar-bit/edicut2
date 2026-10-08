@@ -73,13 +73,12 @@
 .pack-output svg { color: var(--pack-copy); }
 .pack-output p.pack-output-raw-footage { font-size: .75rem; white-space: nowrap; }
 .pack-output-muted { color: var(--pack-copy); }
-.pack-details-link { display: flex; align-items: center; justify-content: center; min-height: 2.75rem; font-size: .8125rem; font-weight: 600; margin-top: .25rem; color: var(--pack-copy); }
-.pack-details-link:hover { color: var(--pack-accent); text-decoration: underline; text-underline-offset: 3px; }
-.pack-features { display: grid; gap: .7rem; padding-top: .9rem; padding-bottom: 1.4rem; font-size: .8125rem; line-height: 1.6; }
-.pack-features li { display: flex; align-items: flex-start; gap: .6rem; }
-.pack-features svg { margin-top: .17rem; padding: 2px; border-radius: 50%; background: var(--neo-inset); color: var(--pack-copy); box-shadow: inset 1px 1px 3px rgb(132 148 163 / 20%); }
-.pack-delivery { display: flex; gap: .5rem; align-items: center; border-top: 1px solid var(--neo-line); padding-top: .9rem; margin-top: auto; color: var(--pack-copy); font-size: .8125rem; }
-.pack-delivery strong { color: var(--neo-ink); }
+.pack-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding-top: .85rem; margin-top: .25rem; border-top: 1px solid var(--neo-line); }
+.pack-metrics > div { display: flex; flex-direction: column; align-items: center; gap: .35rem; min-width: 0; text-align: center; }
+.pack-metrics > div + div { border-left: 1px solid var(--neo-line); }
+.pack-metrics dt { order: 2; font-size: .75rem; line-height: 1.4; color: var(--pack-copy); }
+.pack-metrics dd { display: flex; align-items: center; justify-content: center; gap: .35rem; font-size: 1.25rem; font-weight: 700; line-height: 1.2; }
+.pack-grid > .pack-card > .pack-button { margin-top: auto; }
 .pack-workflow { padding-block: 1.25rem 0; }
 .pack-workflow-heading { max-width: 44rem; margin: 0 auto 2.25rem; text-align: center; }
 .pack-workflow-heading h2 { margin-top: 1rem; }
@@ -107,9 +106,6 @@
 .pack-custom { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2rem; margin-top: 1.75rem; }
 .pack-custom h3 { margin-top: 0; }
 .pack-custom-copy > p { max-width: 40rem; margin-top: .75rem; font-size: .875rem; color: var(--pack-copy); line-height: 1.7; }
-.pack-custom-features { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; margin-top: 1.25rem; color: var(--pack-copy); font-size: .8125rem; }
-.pack-custom-features li { display: flex; align-items: center; gap: .5rem; }
-.pack-custom-features svg { flex-shrink: 0; }
 .pack-custom-action { min-width: 0; }
 .pack-custom-action .pack-button { width: 100%; }
 .pack-final { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: center; gap: 2rem; padding: 3rem; margin-bottom: 4rem; border-radius: 1.75rem; }
@@ -124,8 +120,7 @@
 @media (max-width: 1023px) {
   .pack-card { padding: 1.25rem; }
   .pack-grid { gap: 1rem; }
-  .pack-card-topline { flex-wrap: wrap; align-content: start; min-height: 5.5rem; }
-  .pack-output { min-height: 9rem; align-content: start; }
+  .pack-card-topline { flex-wrap: wrap; align-content: start; }
   .pack-hero-objects { display: none; }
   .pack-finder { justify-content: flex-start; }
   .pack-recommendation { margin-left: auto; }
@@ -156,7 +151,6 @@
   .pack-card-topline { flex-wrap: nowrap; min-height: 2.75rem; }
   .pack-output { min-height: 0; }
   .pack-price strong { font-size: clamp(2rem, 9vw + 1rem, 3rem); }
-  .pack-card .pack-features { font-size: .875rem; }
   .pack-workflow { padding-block: 1rem 0; }
   .pack-workflow-steps { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
   .pack-workflow-steps li { padding: 1.25rem 1.75rem 1.75rem; }

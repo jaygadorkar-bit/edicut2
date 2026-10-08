@@ -6,7 +6,7 @@ import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { getDbFromContext } from "../lib/db.server";
 import { getPortfolioSections, publicPortfolioSections } from "../lib/portfolio.server";
 import { createRouteMeta } from "../lib/seo";
-import { formatPackagePrice, type SubscriptionPackage } from "../lib/subscriptions";
+import { formatPackagePrice, type SingleVideoPackage } from "../lib/subscriptions";
 import { configuredPublicEditingPackages, getPricingPackages } from "../lib/pricing.server";
 import "../styles/portfolio.css";
 
@@ -23,13 +23,13 @@ export async function loader({ context }: LoaderFunctionArgs) {
   ]);
   return {
     portfolioSections,
-    monthlyPackages: configuredPublicEditingPackages(pricingPackages).filter((item): item is SubscriptionPackage => item.packageType === "monthly"),
+    singleVideoPackages: configuredPublicEditingPackages(pricingPackages).filter((item): item is SingleVideoPackage => item.packageType === "single"),
   };
 }
 
 export default function PortfolioPage() {
-  const { portfolioSections, monthlyPackages } = useLoaderData<typeof loader>();
-  const startingPrice = monthlyPackages.length ? Math.min(...monthlyPackages.map((pack) => pack.basePrice)) : null;
+  const { portfolioSections, singleVideoPackages } = useLoaderData<typeof loader>();
+  const startingPrice = singleVideoPackages.length ? Math.min(...singleVideoPackages.map((pack) => pack.basePrice)) : null;
 
   return (
     <PageShell className="portfolio-page">
@@ -76,11 +76,15 @@ export default function PortfolioPage() {
               </ul>
             </div>
             <div className="portfolio-packs-action">
-              <span className="portfolio-pack-icon" aria-hidden="true"><Layers3 size={32} strokeWidth={1.5} /></span>
-              {startingPrice !== null ? <>
-                <p>Monthly editing packs from</p>
-                <p className="portfolio-packs-price">{formatPackagePrice(startingPrice)}<span>/month</span></p>
-              </> : <p>Explore our single-video and monthly editing packages.</p>}
+              <div className="portfolio-packs-offer">
+                <span className="portfolio-pack-icon" aria-hidden="true"><Layers3 size={32} strokeWidth={1.5} /></span>
+                <div className="portfolio-packs-offer-copy">
+                  {startingPrice !== null ? <>
+                    <p>Single video edits from</p>
+                    <p className="portfolio-packs-price">{formatPackagePrice(startingPrice)}<span>/video</span></p>
+                  </> : <p>Ask us about your next single-video edit.</p>}
+                </div>
+              </div>
               <Link to="/pricing" className="neo-button portfolio-button portfolio-button-primary">
                 Shop editing packs <ArrowUpRight size={19} aria-hidden="true" />
               </Link>

@@ -10,5 +10,11 @@
 .package-addon-copy strong { color: var(--neo-ink); font-size: .8125rem; font-weight: 650; }
 .package-addon-copy > span { color: var(--neo-muted); font-size: .75rem; line-height: 1.5; }
 .package-addon-price { margin-left: auto; flex-shrink: 0; font-size: .8125rem; font-weight: 750; color: var(--neo-ink); }
+.package-addons-note { margin-top: .65rem; color: var(--neo-muted); font-size: .75rem; line-height: 1.5; }
+.package-addon--quote { align-items: flex-start; gap: .75rem; padding-block: .75rem; text-decoration: none; }
+.package-addon--quote:focus-visible { outline: 2px solid var(--neo-ink); outline-offset: 3px; }
+.package-addon--quote[aria-disabled="true"] { opacity: .5; cursor: default; }
+.package-addon-icon { display: grid; place-items: center; flex-shrink: 0; width: 2rem; height: 2rem; border-radius: .65rem; color: var(--neo-muted); }
+.package-addon--quote .package-addon-price { display: flex; align-items: center; gap: .2rem; padding-top: .15rem; font-size: .75rem; }
 @media (max-width: 374px) { .package-addon { gap: .5rem; padding-inline: .25rem; } }
 @media (prefers-reduced-motion: reduce) { .package-addon { transition: none; } }

@@ -135,7 +135,7 @@ async function readEnv(context: CloudinaryEnv | undefined, account: CloudinaryAc
   };
 }
 
-async function requireCloudinaryEnv(context: CloudinaryEnv | undefined, account: CloudinaryAccount = "image") {
+export async function requireCloudinaryEnv(context: CloudinaryEnv | undefined, account: CloudinaryAccount = "image") {
   const env = await readEnv(context, account);
 
   if (!env.cloudName || !env.apiKey || !env.apiSecret) {
@@ -181,7 +181,7 @@ async function sha1Hex(value: string) {
     .join("");
 }
 
-async function signUpload(params: Record<string, string | number>, apiSecret: string) {
+export async function signUpload(params: Record<string, string | number>, apiSecret: string) {
   const signatureBase = Object.entries(params)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value}`)

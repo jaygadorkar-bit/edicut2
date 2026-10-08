@@ -3,6 +3,8 @@
 ## Customer flow
 
 - Plan review asks only for country and an international phone number.
+- Single-video packages offer a custom thumbnail and a short-form video at $20 each. Monthly packages instead offer extra editing hours and a monthly thumbnail bundle through prefilled custom quote requests; their scope and prices are confirmed separately.
+- New monthly package selections reject per-video add-ons in both URL and form inputs. Historical payment records continue to use their saved add-on labels and prices. Returning an old monthly selection to plan review starts with the current monthly options, without changing the historical record.
 - `POST /checkout/:slug` with `start-checkout` validates contact details and rechecks the coupon against the server price. It saves an **unpaid** subscription and redirects to its payment page.
 - Payment uses the saved price and contact details. A direct payment URL without an owned, visible record redirects to review. A paid record redirects to Subscription.
 - `/dashboard/subscriptions` lists the customer's plans. The former `/dashboard/billing` URL redirects here. The existing `billing` permission key is retained for compatibility, with the label **Subscription**.
@@ -11,6 +13,10 @@
 ## Admin flow
 
 `/site/node-logmin/subscriptions` lists the plan, amount, country, phone, customer identity, and payment status. **Mark as paid** asks the admin to confirm that the displayed amount was received. It records the admin ID and payment timestamp; it does not charge a card or create recurring billing.
+
+The admin menu calls this page **Orders** and places it below Dashboard. Its red numbered badge counts visible unpaid selections awaiting manual payment confirmation; confirming payment or removing an order decreases the count. The Enquiries badge counts messages that have neither been read nor replied to. Counts refresh every 30 seconds while the page is visible, and on focus/reconnection, through an authenticated, uncached endpoint without triggering the page loading overlay. Audit Logs is omitted from navigation; audit history remains available internally.
+
+`node scripts/verify-admin-navigation.mjs` checks real count transitions, authorization, and export naming against the guarded disposable local fixture database on port 55439 and app on port 3003. It never targets the live database.
 
 The mutation requires an active admin role, same-site origin, a valid record ID, and an unchanged record revision. A concurrent edit, delete, or payment makes a stale confirmation fail. Coupon redemption and the discounted payment transition run atomically. Repeated payment confirmation cannot increment the redemption counter twice.
 

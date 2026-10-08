@@ -187,7 +187,7 @@ export function getCheckoutUrl(editingPackage: EditingPackage, options: { runtim
   const params = new URLSearchParams();
   if (options.runtime && editingPackage.packageType === "monthly") params.set("runtime", "1");
   if (options.raw && editingPackage.packageType === "monthly") params.set("raw", "1");
-  packageAddOnQuery(options.addOns ?? [], params);
+  packageAddOnQuery(options.addOns ?? [], editingPackage.packageType, params);
   const affiliateCode = options.affiliateCode?.trim().toUpperCase();
   if (affiliateCode && /^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(affiliateCode)) params.set("ref", affiliateCode);
   const query = params.toString();

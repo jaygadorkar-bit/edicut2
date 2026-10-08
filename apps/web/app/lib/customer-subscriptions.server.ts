@@ -81,7 +81,7 @@ function csvCell(value: unknown) {
 
 export function adminSubscriptionsCsv(rows: AdminSubscriptionExportRow[]) {
   const columns = [
-    "Purchase ID", "Customer Name", "Customer Email", "Plan", "Package", "Purchase Type",
+    "Order ID", "Customer Name", "Customer Email", "Plan", "Package", "Order Type",
     "Amount", "Currency", "Payment Status", "Country Code", "Phone", "Coupon Code",
     "Add-ons", "Selected At", "Paid At",
   ];

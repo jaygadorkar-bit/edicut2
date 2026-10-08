@@ -16,8 +16,8 @@ import {
   useRouteLoaderData,
   useRouteError,
 } from "react-router";
-import { and, count as drizzleCount, isNull, ne } from "drizzle-orm";
-import { contactMessages } from "@edicut/db/schema";
+import { getAdminNavigationCounts } from "./lib/admin-navigation-counts.server";
+import { getAdminProfileImage } from "./lib/admin-profile.server";
 import stylesheetUrl from "./styles/global.css?url";
 import { resolveWebEnv } from "./lib/context.server";
 import type { LoaderContext } from "./types";
@@ -30,7 +30,8 @@ import { getAdminToolbarAccess, type AdminToolbarAccess } from "./lib/admin-tool
 import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 import { getSupabaseClient } from "./integrations/supabase/client.server";
 import { SmoothScroll } from "./components/site/SmoothScroll.js";
-import { shouldEnableSiteMotion } from "./lib/site-motion";
+import { shouldEnableSiteMotion, shouldUseWorkspaceLoader } from "./lib/site-motion";
+import { WorkspaceLoadingOverlay } from "./components/WorkspaceLoadingOverlay";
 import { shouldLoadPromoBarSettings, shouldLoadRootSiteSettings, shouldShowAdminToolbar } from "./lib/root-data-requirements";
 import { getRouteErrorDebugDetails, getRouteErrorPresentation } from "./lib/route-error-presentation";
 import { getMaterialSymbolsStylesheetUrl } from "./lib/material-symbols";
@@ -48,6 +49,7 @@ const usePageTransitionLayoutEffect = typeof document === "undefined" ? useEffec
 const PAGE_TRANSITION_COVER_MS = 860;
 const PAGE_TRANSITION_REVEAL_MS = 920;
 const NAVIGATION_STALL_NOTICE_MS = 15_000;
+const WORKSPACE_LOADING_DELAY_MS = 120;
 
 export function links() {
   return [
@@ -94,10 +96,17 @@ export async function loader({
     : "none";
   const isAdminSignedIn = adminToolbarAccess === "verified";
   const isAdminPanelPath = url.pathname === ADMIN_BASE_PATH || url.pathname.startsWith(`${ADMIN_BASE_PATH}/`);
-  const unreadEnquiryCount = isAdminSignedIn && isAdminPanelPath && url.pathname !== ADMIN_LOGIN_PATH
-    ? Number((await getDbFromContext(context ?? {}).select({ count: drizzleCount() }).from(contactMessages)
-      .where(and(isNull(contactMessages.repliedAt), ne(contactMessages.status, "read"))))[0]?.count || 0)
-    : 0;
+  const storedAdminImage = adminSession.get("profileImageUrl");
+  const storedAdminEmail = adminSession.get("profileEmail");
+  const adminProfile = isAdminSignedIn && (isAdminPanelPath || url.pathname === "/dashboard/messages")
+    ? await getAdminProfileImage(getDbFromContext(context ?? {}), adminUserId || userAdminUserId)
+      ?? (typeof storedAdminImage === "string" && storedAdminImage.startsWith("https://") && storedAdminImage.length <= 2048 && typeof storedAdminEmail === "string"
+        ? { email: storedAdminEmail, imageUrl: storedAdminImage } : null)
+    : null;
+  const { pendingOrderCount, unreadEnquiryCount } = isAdminSignedIn
+    && (isAdminPanelPath || url.pathname === "/dashboard/messages") && url.pathname !== ADMIN_LOGIN_PATH
+    ? await getAdminNavigationCounts(getDbFromContext(context ?? {}))
+    : { pendingOrderCount: 0, unreadEnquiryCount: 0 };
 
   const isAdminArea = url.pathname.startsWith(ADMIN_BASE_PATH);
   const isAdminLogin = url.pathname === ADMIN_LOGIN_PATH;
@@ -164,8 +173,10 @@ export async function loader({
     nodeApiBaseUrl: env.NODE_API_BASE_URL ?? "http://localhost:8787/api/node",
     isSignedIn: Boolean(userId),
     isAdminSignedIn,
+    adminProfile,
     adminToolbarAccess,
     unreadEnquiryCount,
+    pendingOrderCount,
     adminToolbarEnabled,
     searchCrawlingEnabled,
     maintenanceModeEnabled,
@@ -175,6 +186,7 @@ export async function loader({
   }, {
     headers: {
       ...(robotsContent ? { "X-Robots-Tag": robotsContent } : {}),
+      ...(isAdminSignedIn && (isAdminPanelPath || url.pathname === "/dashboard/messages") ? { "Cache-Control": "private, no-store" } : {}),
     },
   });
 }
@@ -236,6 +248,29 @@ export default function AppRoot() {
   const pendingOperationsKey = [navigationKey, fetcherKey].filter(Boolean).join("|");
   const hasPendingOperations = pendingOperationsKey.length > 0;
   const [navigationStalled, setNavigationStalled] = useState(false);
+  const workspacePending = shouldUseWorkspaceLoader(location.pathname) && hasPendingOperations && !navigationStalled;
+  const [workspaceLoaderReady, setWorkspaceLoaderReady] = useState(false);
+  const workspaceFocusBeforeLoading = useRef<HTMLElement | null>(null);
+  const showWorkspaceLoader = workspacePending && workspaceLoaderReady;
+
+  useEffect(() => {
+    if (!workspacePending) {
+      setWorkspaceLoaderReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      workspaceFocusBeforeLoading.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setWorkspaceLoaderReady(true);
+    }, WORKSPACE_LOADING_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [workspacePending]);
+
+  useEffect(() => {
+    if (showWorkspaceLoader) return;
+    const previousFocus = workspaceFocusBeforeLoading.current;
+    if (previousFocus?.isConnected && document.activeElement === document.body) previousFocus.focus({ preventScroll: true });
+    workspaceFocusBeforeLoading.current = null;
+  }, [showWorkspaceLoader]);
 
   useEffect(() => {
     if (!hasPendingOperations) {
@@ -251,11 +286,13 @@ export default function AppRoot() {
   return (
     <>
       {useSiteMotion ? <SmoothScroll /> : null}
-      <div className={`neo-app-shell${showAdminToolbar ? " neo-app-shell--admin-toolbar" : ""}`}>
+      <div className={`neo-app-shell${showAdminToolbar ? " neo-app-shell--admin-toolbar" : ""}`}
+        aria-busy={workspacePending || undefined} inert={showWorkspaceLoader}>
         {showAdminToolbar ? <AdminToolbar /> : null}
         <Outlet />
         {useSiteMotion ? <PageTransition navigationStalled={navigationStalled} /> : null}
       </div>
+      {showWorkspaceLoader ? <WorkspaceLoadingOverlay /> : null}
       {includeStructuredData ? (
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />
       ) : null}

@@ -77,7 +77,7 @@ function AdminSubscriptionChart({ rows, summary, status }: { rows: Row[]; summar
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="neo-workspace__eyebrow">Payment status</p>
-          <h3 id="subscription-status-heading" className="mt-1 text-lg font-black text-slate-900">Purchase overview</h3>
+          <h3 id="subscription-status-heading" className="mt-1 text-lg font-black text-slate-900">Order overview</h3>
         </div>
         <p className="text-sm font-bold tabular-nums text-slate-600">
           <span className="text-xl font-black text-slate-900">{summary.total}</span> saved {summary.total === 1 ? "plan" : "plans"}
@@ -96,7 +96,7 @@ function AdminSubscriptionChart({ rows, summary, status }: { rows: Row[]; summar
             return <Link
               key={value}
               to={`?status=${value}`}
-              aria-label={`Show ${label.toLowerCase()} purchases (${count})`}
+              aria-label={`Show ${label.toLowerCase()} orders (${count})`}
               aria-current={active ? "page" : undefined}
               className={`block min-w-0 rounded-xl border p-3 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${active ? selectedTone : "border-transparent hover:border-slate-200 hover:bg-slate-50/80"}`}
             >
@@ -125,17 +125,17 @@ function AdminSubscriptionChart({ rows, summary, status }: { rows: Row[]; summar
     <section className="overflow-hidden rounded-2xl border border-slate-300 bg-white/85 shadow-sm" aria-labelledby="subscription-ledger-heading">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 bg-slate-50/80 px-4 py-3 sm:px-5">
         <div>
-          <p className="neo-workspace__eyebrow">Purchase records</p>
-          <h3 id="subscription-ledger-heading" className="mt-1 text-base font-black text-slate-900">Purchase ledger</h3>
+          <p className="neo-workspace__eyebrow">Order records</p>
+          <h3 id="subscription-ledger-heading" className="mt-1 text-base font-black text-slate-900">Order ledger</h3>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold tabular-nums text-slate-600">{rows.length} on this page</span>
         </div>
       </div>
 
-      <div role="region" aria-label="Purchase records table" tabIndex={0} className="overflow-x-auto overscroll-x-contain focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600">
+      <div role="region" aria-label="Order records table" tabIndex={0} className="overflow-x-auto overscroll-x-contain focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-600">
         <table className="w-full min-w-[720px] table-fixed border-collapse text-left">
-          <caption className="sr-only">Saved customer purchases and payment status</caption>
+          <caption className="sr-only">Saved customer orders and payment status</caption>
           <colgroup><col className="w-[34%]" /><col className="w-[33%]" /><col className="w-[17%]" /><col className="w-[16%]" /></colgroup>
           <thead>
             <tr className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-600">
@@ -147,7 +147,7 @@ function AdminSubscriptionChart({ rows, summary, status }: { rows: Row[]; summar
           </thead>
           {rows.length ? <tbody>
             {rows.map(row => <AdminSubscriptionRow key={row.subscription.id} row={row} />)}
-          </tbody> : <tbody><tr><td colSpan={4} className="px-5 py-10 text-center text-sm text-slate-600">No {status} purchases on this page.</td></tr></tbody>}
+          </tbody> : <tbody><tr><td colSpan={4} className="px-5 py-10 text-center text-sm text-slate-600">No {status} orders on this page.</td></tr></tbody>}
         </table>
       </div>
     </section>
@@ -186,7 +186,7 @@ function AdminSubscriptionRow({ row: { subscription: record, name, email } }: { 
           type="button"
           aria-expanded={expanded}
           aria-controls={expanded ? overviewId : undefined}
-          aria-label={`Purchase overview for ${customerLabel}'s ${record.planName} plan`}
+          aria-label={`Order overview for ${customerLabel}'s ${record.planName} plan`}
           className="min-h-10 w-full rounded-md text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
         >
           <span className="block truncate font-bold text-slate-900">{record.planName}<span className="ml-2 font-semibold tabular-nums text-slate-700">{amount}<span className="font-normal text-slate-500">{isMonthly ? addOns.length ? " · first month + extras" : " / month" : " · one time"}</span></span></span>
@@ -206,11 +206,11 @@ function AdminSubscriptionRow({ row: { subscription: record, name, email } }: { 
 
     {expanded ? <tr className="bg-slate-50/70">
       <td colSpan={4} className="border-b border-slate-200 px-3 py-4 sm:px-4">
-        <section id={overviewId} aria-label={`Purchase overview for ${record.planName}`} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <section id={overviewId} aria-label={`Order overview for ${record.planName}`} className="grid gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
             <div>
-              <p className="neo-workspace__eyebrow">Selected purchase</p>
-              <h4 className="mt-1 text-base font-black text-slate-900">Purchase overview</h4>
+              <p className="neo-workspace__eyebrow">Selected order</p>
+              <h4 className="mt-1 text-base font-black text-slate-900">Order overview</h4>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">{purchaseLabel}</span>
           </div>
@@ -224,10 +224,10 @@ function AdminSubscriptionRow({ row: { subscription: record, name, email } }: { 
           {addOns.length ? <div className="border-t border-slate-100 pt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Purchased add-ons</p><PurchaseAddOns addOns={addOns} currency={record.currency} /></div> : null}
         </section>
 
-        {confirmingAction ? <div role="group" aria-label={`Confirm ${confirmingAction === "mark-paid" ? "payment" : confirmingAction === "mark-unpaid" ? "setting purchase unpaid" : "purchase deletion"}`} className={`mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${confirmingAction === "delete-purchase" ? "border-red-200 bg-red-50" : confirmingAction === "mark-unpaid" ? "border-amber-200 bg-amber-50" : "border-blue-200 bg-blue-50"}`}>
+        {confirmingAction ? <div role="group" aria-label={`Confirm ${confirmingAction === "mark-paid" ? "payment" : confirmingAction === "mark-unpaid" ? "setting order unpaid" : "order deletion"}`} className={`mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 ${confirmingAction === "delete-purchase" ? "border-red-200 bg-red-50" : confirmingAction === "mark-unpaid" ? "border-amber-200 bg-amber-50" : "border-blue-200 bg-blue-50"}`}>
           <div className="max-w-xl text-xs leading-5 text-slate-800">
             {confirmingAction === "mark-paid" ? <p>Confirm receipt of {amount} for this {purchaseLabel}. This records payment and does not charge a card.</p>
-              : confirmingAction === "mark-unpaid" ? <p>Set this purchase to unpaid? Paid access will be removed and the coupon use released. This is blocked after project work starts.</p>
+              : confirmingAction === "mark-unpaid" ? <p>Set this order to unpaid? Paid access will be removed and the coupon use released. This is blocked after project work starts.</p>
                 : <p>Remove this {purchaseLabel} from the ledger and customer account? {unpaid ? "The selection can be created again later." : "Paid access and its coupon use will be removed."} Deletion is blocked after project work starts.</p>}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -235,7 +235,7 @@ function AdminSubscriptionRow({ row: { subscription: record, name, email } }: { 
               <input type="hidden" name="intent" value={confirmingAction} />
               <input type="hidden" name="subscriptionId" value={record.id} />
               <input type="hidden" name="expectedUpdatedAt" value={new Date(record.updatedAt).toISOString()} />
-              <button ref={confirmationButtonRef} disabled={pending} aria-label={`${confirmingAction === "mark-paid" ? "Confirm payment received for" : confirmingAction === "mark-unpaid" ? "Confirm setting unpaid for" : "Confirm deletion of"} ${customerLabel}'s ${record.planName} purchase`} className={`min-h-10 rounded-md px-3 text-xs font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${confirmingAction === "delete-purchase" ? "bg-red-700 hover:bg-red-800 focus-visible:outline-red-700" : "bg-slate-900 hover:bg-slate-700 focus-visible:outline-slate-700"}`}>{pending ? "Saving…" : confirmingAction === "mark-paid" ? "Confirm payment" : confirmingAction === "mark-unpaid" ? "Confirm unpaid" : "Delete purchase"}</button>
+              <button ref={confirmationButtonRef} disabled={pending} aria-label={`${confirmingAction === "mark-paid" ? "Confirm payment received for" : confirmingAction === "mark-unpaid" ? "Confirm setting unpaid for" : "Confirm deletion of"} ${customerLabel}'s ${record.planName} order`} className={`min-h-10 rounded-md px-3 text-xs font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${confirmingAction === "delete-purchase" ? "bg-red-700 hover:bg-red-800 focus-visible:outline-red-700" : "bg-slate-900 hover:bg-slate-700 focus-visible:outline-slate-700"}`}>{pending ? "Saving…" : confirmingAction === "mark-paid" ? "Confirm payment" : confirmingAction === "mark-unpaid" ? "Confirm unpaid" : "Delete order"}</button>
             </Form>
             <button type="button" disabled={pending} onClick={() => setConfirmingAction(null)} className="min-h-10 rounded-md border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 disabled:opacity-50">Cancel</button>
           </div>
@@ -244,7 +244,7 @@ function AdminSubscriptionRow({ row: { subscription: record, name, email } }: { 
           <div className="flex flex-wrap gap-2">
             {unpaid ? <button ref={returnFocusRef} type="button" disabled={pending} aria-label={`Mark ${customerLabel}'s ${record.planName} package as paid`} onClick={event => { returnFocusRef.current = event.currentTarget; setConfirmingAction("mark-paid"); }} className="min-h-11 rounded-lg border border-slate-300 bg-white px-4 text-xs font-bold text-slate-800 transition-colors hover:border-slate-500 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 disabled:cursor-not-allowed disabled:opacity-50">Mark as paid</button>
               : <button ref={returnFocusRef} type="button" disabled={pending} aria-label={`Set ${customerLabel}'s ${record.planName} package as unpaid`} onClick={event => { returnFocusRef.current = event.currentTarget; setConfirmingAction("mark-unpaid"); }} className="min-h-11 rounded-lg border border-amber-300 bg-amber-50 px-4 text-xs font-bold text-amber-950 transition-colors hover:border-amber-400 hover:bg-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700 disabled:cursor-not-allowed disabled:opacity-50">Set as unpaid</button>}
-            <button ref={unpaid ? undefined : returnFocusRef} type="button" disabled={pending} aria-label={`Delete ${customerLabel}'s ${record.planName} purchase`} onClick={event => { returnFocusRef.current = event.currentTarget; setConfirmingAction("delete-purchase"); }} className="min-h-11 rounded-lg border border-red-200 bg-white px-4 text-xs font-bold text-red-800 transition-colors hover:border-red-300 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50">Delete purchase</button>
+            <button ref={unpaid ? undefined : returnFocusRef} type="button" disabled={pending} aria-label={`Delete ${customerLabel}'s ${record.planName} order`} onClick={event => { returnFocusRef.current = event.currentTarget; setConfirmingAction("delete-purchase"); }} className="min-h-11 rounded-lg border border-red-200 bg-white px-4 text-xs font-bold text-red-800 transition-colors hover:border-red-300 hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:cursor-not-allowed disabled:opacity-50">Delete order</button>
           </div>
         </div>}
       </td>
@@ -254,7 +254,7 @@ function AdminSubscriptionRow({ row: { subscription: record, name, email } }: { 
 
 export function SubscriptionPagination({ page, hasNext, status }: { page: number; hasNext: boolean; status?: SubscriptionPaymentFilter }) {
   const pageUrl = (targetPage: number) => status ? `?status=${status}&page=${targetPage}` : `?page=${targetPage}`;
-  return <nav aria-label="Purchase pages" className="mt-6 flex items-center justify-between gap-3 text-sm font-bold">
+  return <nav aria-label={status ? "Order pages" : "Purchase pages"} className="mt-6 flex items-center justify-between gap-3 text-sm font-bold">
     {page > 1 ? <Link className="min-h-11 p-3 underline" to={pageUrl(page - 1)}>Previous</Link> : <span />}
     <span>Page {page}</span>
     {hasNext ? <Link className="min-h-11 p-3 underline" to={pageUrl(page + 1)}>Next</Link> : <span />}

@@ -1,0 +1,59 @@
+{
+  "source_sha256": "4f40cc6ab6f12aaaec6f711f3409da393de758281dca33faf1ef68c6bea4a1c1",
+  "source_file": "Creator at microphone with navy bob.webp",
+  "dimensions": [
+    1672,
+    941
+  ],
+  "tools": {
+    "vtracer": "0.6.15",
+    "resvg_py": "0.5.0"
+  },
+  "outputs": [
+    {
+      "file": "creator-recording-scene.svg",
+      "sha256": "0f1f3f56af564dd68eda624cacf2ce7b541e19dc5a55f0e979402c3bdf21925e",
+      "bytes": 17462905,
+      "gzip_bytes": 2784698,
+      "paths": 173754,
+      "parameters": {
+        "colormode": "color",
+        "hierarchical": "stacked",
+        "mode": "spline",
+        "filter_speckle": 0,
+        "color_precision": 8,
+        "layer_difference": 1,
+        "corner_threshold": 60,
+        "length_threshold": 3.5,
+        "max_iterations": 10,
+        "splice_threshold": 45,
+        "path_precision": 4
+      },
+      "psnr_db": 35.86079482974519,
+      "mean_absolute_channel_error": 1.0378830432891846
+    },
+    {
+      "file": "creator-recording-scene-compact.svg",
+      "sha256": "122a60f2a040f41644f1917f4cf77104c921c43ee2bf798ad630a0ba1b2c4c53",
+      "bytes": 3494289,
+      "gzip_bytes": 1195045,
+      "paths": 7905,
+      "parameters": {
+        "colormode": "color",
+        "hierarchical": "stacked",
+        "mode": "spline",
+        "corner_threshold": 60,
+        "length_threshold": 3.5,
+        "max_iterations": 10,
+        "splice_threshold": 45,
+        "path_precision": 4,
+        "filter_speckle": 1,
+        "color_precision": 8,
+        "layer_difference": 4
+      },
+      "psnr_db": 33.29642181792471,
+      "mean_absolute_channel_error": 1.7437189817428589
+    }
+  ],
+  "validation": "Well-formed SVG with path geometry, no embedded raster images, scripts, or external references. Rendered with resvg and compared against the decoded WebP at 1672 x 941."
+}

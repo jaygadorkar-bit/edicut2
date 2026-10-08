@@ -63,6 +63,49 @@ export const siteSettings = pgTable("site_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const chatRooms = pgTable("chat_rooms", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clientId: uuid("client_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 16 }).notNull(),
+  managerId: uuid("manager_id").references(() => users.id, { onDelete: "set null" }),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true, precision: 3 }),
+  lastMessagePreview: varchar("last_message_preview", { length: 180 }),
+  createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("chat_rooms_client_kind_idx").on(table.clientId, table.kind),
+  index("chat_rooms_manager_updated_idx").on(table.managerId, table.updatedAt),
+  index("chat_rooms_updated_idx").on(table.updatedAt),
+  check("chat_rooms_kind_check", sql`${table.kind} IN ('manager', 'support') AND (${table.kind} = 'manager' OR ${table.managerId} IS NULL)`),
+]);
+
+export const chatMessages = pgTable("chat_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  roomId: uuid("room_id").notNull().references(() => chatRooms.id, { onDelete: "cascade" }),
+  actorKey: varchar("actor_key", { length: 48 }).notNull(),
+  senderUserId: uuid("sender_user_id").references(() => users.id, { onDelete: "set null" }),
+  senderAdminId: uuid("sender_admin_id").references(() => adminUsers.id, { onDelete: "set null" }),
+  senderName: text("sender_name").notNull(),
+  senderRole: varchar("sender_role", { length: 32 }).notNull(),
+  body: text("body").notNull(),
+  attachment: jsonb("attachment").$type<{ publicId: string; name: string; mime: string; bytes: number }>(),
+  editedAt: timestamp("edited_at", { withTimezone: true, precision: 3 }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true, precision: 3 }),
+  clientNonce: uuid("client_nonce").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("chat_messages_actor_nonce_idx").on(table.actorKey, table.clientNonce),
+  index("chat_messages_room_created_idx").on(table.roomId, table.createdAt, table.id),
+  check("chat_messages_body_check", sql`char_length(${table.body}) <= 4000 AND (char_length(btrim(${table.body})) > 0 OR ${table.attachment} IS NOT NULL OR ${table.deletedAt} IS NOT NULL)`),
+]);
+
+export const chatReads = pgTable("chat_reads", {
+  roomId: uuid("room_id").notNull().references(() => chatRooms.id, { onDelete: "cascade" }),
+  actorKey: varchar("actor_key", { length: 48 }).notNull(),
+  lastReadAt: timestamp("last_read_at", { withTimezone: true, precision: 3 }).notNull(),
+  lastReadId: uuid("last_read_id"),
+}, table => [uniqueIndex("chat_reads_room_actor_idx").on(table.roomId, table.actorKey)]);
+
 export const marketingAffiliates = pgTable("marketing_affiliates", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),

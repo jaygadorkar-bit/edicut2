@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { ArrowRight, Check, ChevronDown, Clapperboard, Clock3, FileVideo, Film, Play, Scissors, Upload, Workflow } from "lucide-react";
-import { formatPackagePrice, getCheckoutUrl, type EditingPackage, type SingleVideoPackage, type SubscriptionPackage } from "../../lib/subscriptions";
+import { ArrowRight, Check, ChevronDown, Clapperboard, Clock3, FileVideo, Film, Play, RotateCcw, Scissors, SlidersHorizontal, Upload, UserRoundCheck, Workflow, type LucideIcon } from "lucide-react";
+import { formatPackagePrice, getCheckoutUrl, STUDIO_PACKAGE_STAFFING, type EditingPackage, type SingleVideoPackage, type SubscriptionPackage } from "../../lib/subscriptions";
 import { FaqSection } from "./FaqSection";
 import { EditingArtwork } from "./EditingArtwork";
 import { PackageChoiceLink } from "./PackageChoiceLink";
@@ -9,12 +9,21 @@ import { PackageChoiceLink } from "./PackageChoiceLink";
 const questions = [
   { question: "How does monthly editing time work?", answer: "Your package reserves the listed editing hours across a standard 22-workday month. Editing, feedback rounds, and included finishing work draw from that time. We agree the scope and schedule with you before production starts." },
   { question: "Are unused monthly hours carried over?", answer: "No. Each package is a monthly capacity reservation, so unused hours expire at the end of that package month. We’ll help prioritize the work that fits your available time." },
-  { question: "How is a single-video package different?", answer: "A single-video package is priced per deliverable, with a finished-length limit, raw-footage limit, revision allowance, and first-cut target shown on its card. Choose one when you have a specific edit rather than recurring monthly work." },
+  { question: "How is a single-video package different?", answer: "A single-video package is priced per deliverable, with a finished-length limit, raw-footage limit, and revision allowance. Open its package page for the full scope and first-cut target. Choose one when you have a specific edit rather than recurring monthly work." },
   { question: "Can I ask for work outside the listed scope?", answer: "Yes. Longer edits, extra source footage, custom VFX, project files, and work beyond reserved monthly hours can be quoted separately. We confirm any added price and timing before work begins." },
   { question: "Can I pay online today?", answer: "The checkout currently saves your selection and contact details, but card payments are not enabled yet. Contact us if you’d like to discuss a package or confirm the next step." },
 ];
 
 type PackageKind = EditingPackage["packageType"];
+
+const packageIcons: Record<string, LucideIcon> = {
+  "single-creator": Scissors,
+  "single-studio": SlidersHorizontal,
+  "single-feature": Film,
+  creator: Scissors,
+  "creator-plus": SlidersHorizontal,
+  "creator-pro": Film,
+};
 
 function comparisonRows(packages: EditingPackage[]) {
   const monthly = packages.filter((pack): pack is SubscriptionPackage => pack.packageType === "monthly");
@@ -46,8 +55,8 @@ function PackageScope({ pack }: { pack: EditingPackage }) {
   if (pack.packageType === "monthly") {
     return <div className="pack-output neo-inset" aria-label="Monthly editing capacity">
       <p><Clock3 size={19} aria-hidden="true" /><strong>{pack.editingHoursPerMonth} editing hours / month</strong></p>
-      <p><Clock3 size={19} aria-hidden="true" />{pack.editingHoursPerWorkday} {pack.editingHoursPerWorkday === 1 ? "hour" : "hours"} per workday</p>
       <p><FileVideo size={19} aria-hidden="true" />Planned across {pack.workingDaysPerMonth} working days</p>
+      <PackageMetrics pack={pack} />
     </div>;
   }
 
@@ -55,7 +64,26 @@ function PackageScope({ pack }: { pack: EditingPackage }) {
     <p><FileVideo size={19} aria-hidden="true" /><strong>{pack.videoFormat}</strong></p>
     <p><Film size={19} aria-hidden="true" />Finished edit: {pack.finishedLength.toLowerCase()}</p>
     <p className="pack-output-raw-footage"><Upload size={19} aria-hidden="true" />Raw footage: {pack.rawFootageLimit.toLowerCase().replace(/ minutes?$/, " min")}</p>
+    <PackageMetrics pack={pack} />
   </div>;
+}
+
+function PackageMetrics({ pack }: { pack: EditingPackage }) {
+  const editorCount = pack.features.includes(STUDIO_PACKAGE_STAFFING[1]) ? 2 : 1;
+  const metrics = [
+    pack.packageType === "single"
+      ? { Icon: RotateCcw, value: pack.revisionRounds, label: pack.revisionRounds === 1 ? "Revision" : "Revisions" }
+      : { Icon: Clock3, value: pack.editingHoursPerWorkday, label: "Hours / day" },
+    { Icon: Scissors, value: editorCount, label: editorCount === 1 ? "Editor" : "Editors" },
+    { Icon: UserRoundCheck, value: 1, label: "Manager" },
+  ];
+
+  return <dl className="pack-metrics">
+    {metrics.map(({ Icon, value, label }) => <div key={label}>
+      <dt>{label}</dt>
+      <dd><Icon size={15} aria-hidden="true" /><span>{value}</span></dd>
+    </div>)}
+  </dl>;
 }
 
 export function HomePricingSection({ packages }: { packages: EditingPackage[] }) {
@@ -97,18 +125,16 @@ function PricingPackageOptions({ packages, packageKind, onPackageKindChange, id 
       <div className={`pack-grid pack-grid--${packs.length}`}>
         {packs.map((pack, index) => {
           const popular = pack.badge.toLowerCase().includes("popular");
+          const PackageIcon = packageIcons[pack.slug] ?? Clapperboard;
           return <article key={pack.slug} id={`pack-${pack.slug}`} className={`pack-card neo-card ${popular ? "pack-card--recommended" : ""}`} aria-labelledby={`pack-${pack.slug}-name`}>
             <div className="pack-card-topline">
-              <span className="pack-card-icon neo-icon-badge"><Clapperboard size={23} aria-hidden="true" /></span>
+              <span className="pack-card-icon neo-icon-badge" aria-hidden="true"><PackageIcon size={23} strokeWidth={1.75} /></span>
               <span className="pack-card-badge">{popular ? <Check size={14} aria-hidden="true" /> : null}{pack.badge}</span>
             </div>
             <h3 id={`pack-${pack.slug}-name`}>{pack.name}</h3>
             <p className="pack-price"><strong>{formatPackagePrice(pack.basePrice)}</strong><span>{isMonthly ? "USD / month" : "USD / video"}</span></p>
             <PackageScope pack={pack} />
-            <PackageChoiceLink to={getCheckoutUrl(pack)} label={`Choose ${pack.name}`} className="pack-button" delay={index * 180} />
-            <Link to={`/pricing/${pack.slug}`} className="pack-details-link">See {pack.name} details</Link>
-            <ul className="pack-features">{pack.features.map((feature) => <li key={feature}><Check size={16} aria-hidden="true" /><span>{feature}</span></li>)}</ul>
-            {pack.packageType === "single" ? <div className="pack-delivery"><Clock3 size={17} aria-hidden="true" /><span>First-cut target: <strong>{pack.firstCutHours} hours</strong></span></div> : null}
+            <PackageChoiceLink to={`/pricing/${pack.slug}`} label={`Choose ${pack.name}`} className="pack-button" delay={index * 180} />
           </article>;
         })}
       </div>
@@ -117,7 +143,6 @@ function PricingPackageOptions({ packages, packageKind, onPackageKindChange, id 
         <div className="pack-custom-copy">
           <h3 id={`${id}-custom-title`}>Have a larger project?</h3>
           <p>Build a brief around your formats, editing needs, and schedule. We’ll confirm the scope and price before production starts.</p>
-          <ul className="pack-custom-features"><li><Check size={16} aria-hidden="true" />Flexible video formats</li><li><Check size={16} aria-hidden="true" />Services you choose</li><li><Check size={16} aria-hidden="true" />Timing that fits</li></ul>
         </div>
         <div className="pack-custom-action"><Link to="/custom-quote" className="neo-button pack-button">Request a custom quote <ArrowRight size={17} aria-hidden="true" /></Link></div>
       </article>

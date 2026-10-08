@@ -190,7 +190,7 @@ describe("subscription persistence protections", () => {
       },
       name: 'Ada, "Ace"\nName', email: "ada@example.test",
     }]);
-    expect(csv.startsWith("\uFEFF\"Purchase ID\",\"Customer Name\"")).toBe(true);
+    expect(csv.startsWith("\uFEFF\"Order ID\",\"Customer Name\"")).toBe(true);
     expect(csv).toContain(`"'=HYPERLINK(""https://example.test"",""Open"")"`);
     expect(csv).toContain(`"Ada, ""Ace""\nName"`);
     expect(csv).toContain("\"104.00\",\"USD\",\"paid\"");

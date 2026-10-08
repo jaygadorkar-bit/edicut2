@@ -10,9 +10,12 @@ import {
   requestTooLargeResponse,
 } from "../app/lib/usage-protection.server";
 import { isImmutableAssetPath, shouldServeStaticAsset } from "./static-assets";
+import { authorizeChatSocket } from "../app/lib/chat-socket.server";
+export { ChatSocketHub } from "./chat-socket";
 
 type WorkerEnvironment = Record<string, unknown> & {
   ASSETS?: Fetcher;
+  CHAT_SOCKET_HUB?: DurableObjectNamespace;
 };
 
 const handleRequest = createRequestHandler({
@@ -36,7 +39,7 @@ const CONTENT_SECURITY_POLICY = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https: https://*.cloudinary.com https://res.cloudinary.com",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://*.cloudinary.com https://www.google.com",
+  "connect-src 'self' wss://edicut.com https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://*.cloudinary.com https://www.google.com",
   "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/",
 ].join("; ");
 
@@ -65,7 +68,10 @@ function withStaticCacheHeaders(response: Response, pathname: string) {
 
 function withSecurityHeaders(response: Response, request: Request) {
   const headers = new Headers(response.headers);
-  headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+  const routePolicy = headers.get("Content-Security-Policy");
+  // Enforce both policies so private downloads keep their stricter sandbox.
+  headers.set("Content-Security-Policy", routePolicy && routePolicy !== CONTENT_SECURITY_POLICY
+    ? `${CONTENT_SECURITY_POLICY}, ${routePolicy}` : CONTENT_SECURITY_POLICY);
   headers.set("X-Frame-Options", "DENY");
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -114,6 +120,17 @@ export default {
 
     const edgeLimit = await enforceEdgeRequestLimits(request, env);
     if (edgeLimit) return withSecurityHeaders(edgeLimit, request);
+
+    if (pathname === "/api/chat/socket") {
+      if (!env.CHAT_SOCKET_HUB) return withSecurityHeaders(new Response("Live chat is temporarily unavailable", { status: 503 }), request);
+      try {
+        const actor = await authorizeChatSocket(request, createWebLoadContext({ env: env as Record<string, string | undefined>, ctx }));
+        // Preserve the original 101 response and its webSocket property.
+        return env.CHAT_SOCKET_HUB.get(env.CHAT_SOCKET_HUB.idFromName(actor.key)).fetch(request);
+      } catch (error) {
+        return withSecurityHeaders(error instanceof Response ? error : new Response("Chat connection unavailable", { status: 503 }), request);
+      }
+    }
 
     const maximumBodyBytes = getMaximumBodyBytes(pathname, request.method, request);
     if (maximumBodyBytes !== null) {

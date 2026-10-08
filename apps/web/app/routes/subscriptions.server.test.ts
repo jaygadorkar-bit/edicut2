@@ -98,7 +98,7 @@ describe("admin subscription route", () => {
     expect(mocks.listAdminSubscriptionsForExport).toHaveBeenCalledWith(expect.anything(), "paid");
     expect(mocks.listAdminSubscriptions).not.toHaveBeenCalled();
     expect(result.headers.get("Content-Type")).toBe("text/csv; charset=utf-8");
-    expect(result.headers.get("Content-Disposition")).toBe('attachment; filename="purchases-paid.csv"');
+    expect(result.headers.get("Content-Disposition")).toBe('attachment; filename="orders-paid.csv"');
     expect(result.headers.get("Cache-Control")).toBe("no-store");
     expect(result.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(await result.text()).toBe("csv export");
@@ -106,7 +106,7 @@ describe("admin subscription route", () => {
   it("defaults CSV downloads to all purchases", async () => {
     const result = await adminExportLoader(args());
     expect(mocks.listAdminSubscriptionsForExport).toHaveBeenCalledWith(expect.anything(), "all");
-    expect(result.headers.get("Content-Disposition")).toBe('attachment; filename="purchases.csv"');
+    expect(result.headers.get("Content-Disposition")).toBe('attachment; filename="orders.csv"');
   });
   it("exports all purchases when the status query is invalid", async () => {
     await adminExportLoader(args(undefined, "?status=other"));
@@ -119,12 +119,12 @@ describe("admin subscription route", () => {
   });
   it("sets a paid purchase to unpaid using its displayed revision", async () => {
     const result = await adminAction(args({ intent: "mark-unpaid", subscriptionId: "sub-id", expectedUpdatedAt: "2026-10-03T00:00:00.000Z" }));
-    expect(result).toHaveProperty("success", "Purchase marked unpaid. Paid access has been removed.");
+    expect(result).toHaveProperty("success", "Order marked unpaid. Paid access has been removed.");
     expect(mocks.markSubscriptionUnpaid).toHaveBeenCalledWith(expect.anything(), "sub-id", "2026-10-03T00:00:00.000Z");
   });
   it("deletes purchases through the guarded admin helper", async () => {
     const result = await adminAction(args({ intent: "delete-purchase", subscriptionId: "sub-id", expectedUpdatedAt: "2026-10-03T00:00:00.000Z" }));
-    expect(result).toHaveProperty("success", "Purchase removed from the ledger.");
+    expect(result).toHaveProperty("success", "Order removed from the ledger.");
     expect(mocks.deleteAdminSubscription).toHaveBeenCalledWith(expect.anything(), "sub-id", "2026-10-03T00:00:00.000Z");
   });
   it("explains when a purchase cannot be changed after project work", async () => {

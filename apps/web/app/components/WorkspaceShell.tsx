@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Link, matchPath, NavLink, useLocation, useNavigation } from "react-router";
 import { useEffect, useRef, useState } from "react";
 
@@ -11,7 +11,14 @@ export type WorkspaceNavItem = {
   end?: boolean;
   badge?: string;
   unreadCount?: number;
+  unreadLabel?: string;
 };
+
+export type WorkspaceNavigationPanel = (controls: {
+  collapsed: boolean;
+  closeMenu: () => void;
+  returnToMainMenu: () => void;
+}) => ReactNode;
 
 type WorkspaceShellProps = {
   title: string;
@@ -38,14 +45,16 @@ type WorkspaceShellProps = {
   settingsTo?: string | null;
   startProjectTo?: string | null;
   notificationsTo?: string | null;
+  chatTo?: string | null;
   notificationCount?: number;
+  navigationPanel?: WorkspaceNavigationPanel;
   children: ReactNode;
 };
 
 export function WorkspaceShell({
   title,
   subtitle,
-  navItems,
+  navItems: providedNavItems,
   account,
   accountAction,
   headerActions,
@@ -63,12 +72,21 @@ export function WorkspaceShell({
   settingsTo,
   startProjectTo,
   notificationsTo = "/dashboard/reviews",
+  chatTo = "/dashboard/chat",
   notificationCount = 0,
+  navigationPanel,
   children,
 }: WorkspaceShellProps) {
+  const navItems = chatTo && !providedNavItems.some(item => item.to === chatTo)
+    ? [...providedNavItems.slice(0, Math.min(2, providedNavItems.length)), { label: "Chat", icon: "chat", to: chatTo }, ...providedNavItems.slice(Math.min(2, providedNavItems.length))]
+    : providedNavItems;
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [showNavigationPanel, setShowNavigationPanel] = useState(Boolean(navigationPanel));
+  const desktopNavigationRef = useRef<HTMLElement>(null);
+  const mobileNavigationRef = useRef<HTMLElement>(null);
+  const previousNavigationModeRef = useRef(showNavigationPanel);
   const headerRef = useRef<HTMLElement>(null);
   const bottomControlsRef = useRef<HTMLDivElement>(null);
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -91,12 +109,24 @@ export function WorkspaceShell({
   const moreMobileItems = navItems.filter((item) => !primaryMobileTo.has(item.to) && !pinnedAccountNavTo.has(item.to));
   const showMobileMore = mobileBottomMore ?? moreMobileItems.length > 0;
   const settingsTarget = settingsTo === null ? null : settingsTo ?? profileTo ?? null;
+  const panelActive = Boolean(navigationPanel && showNavigationPanel);
+  const closeMenu = () => { setIsMobileMenuOpen(false); setIsMoreOpen(false); };
+  const returnToMainMenu = () => setShowNavigationPanel(false);
+  const navigateItem = (item: WorkspaceNavItem, event: MouseEvent<HTMLAnchorElement>, mobile = false) => {
+    if (navigationPanel && item.to === chatTo && isNavItemActive(item, location.pathname, location.search)) {
+      event.preventDefault();
+      setShowNavigationPanel(true);
+      setIsCollapsed(false);
+      setIsMoreOpen(false);
+      if (mobile) setIsMobileMenuOpen(true);
+    } else if (mobile) closeMenu();
+  };
   const mobileMenuButton = mobileMenu ? (
     <button
       ref={mobileMenuTriggerRef}
       type="button"
       className="neo-workspace__menu-toggle neo-workspace__icon-button lg:hidden"
-      aria-label={isMobileMenuOpen ? "Close workspace menu" : "Open workspace menu"}
+      aria-label={isMobileMenuOpen ? "Close workspace menu" : panelActive ? "Open conversations" : "Open workspace menu"}
       aria-controls="neo-workspace-mobile-menu"
       aria-expanded={isMobileMenuOpen}
       onClick={() => {
@@ -107,6 +137,16 @@ export function WorkspaceShell({
       <span className="material-symbols-outlined text-[21px]">{isMobileMenuOpen ? "close" : "menu"}</span>
     </button>
   ) : null;
+
+  useEffect(() => {
+    if (previousNavigationModeRef.current === showNavigationPanel) return;
+    previousNavigationModeRef.current = showNavigationPanel;
+    const frame = requestAnimationFrame(() => {
+      const menu = window.matchMedia("(min-width: 1024px)").matches ? desktopNavigationRef.current : isMobileMenuOpen ? mobileNavigationRef.current : null;
+      menu?.querySelector<HTMLElement>('a[href], button:not([disabled])')?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [showNavigationPanel, isMobileMenuOpen]);
 
   useEffect(() => {
     if (!isMoreOpen) return;
@@ -199,10 +239,10 @@ export function WorkspaceShell({
             </button>
           </div>
 
-          {!isCollapsed ? <p className="neo-workspace__eyebrow mt-10 shrink-0 px-3">Workspace</p> : null}
-          <nav className={`neo-workspace__desktop-nav ${isCollapsed ? "mt-10" : "mt-3"} grid gap-1.5`} aria-label="Workspace navigation">
-            {navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).map((item) => (
-              <WorkspaceNavLink key={`${item.label}-${item.to}`} item={item} collapsed={isCollapsed} />
+          {!isCollapsed && !panelActive ? <p className="neo-workspace__eyebrow mt-10 shrink-0 px-3">Workspace</p> : null}
+          <nav ref={desktopNavigationRef} className={`neo-workspace__desktop-nav ${panelActive ? "mt-6 flex flex-col" : `${isCollapsed ? "mt-10" : "mt-3"} grid gap-1.5`}`} aria-label={panelActive ? "Conversations" : "Workspace navigation"}>
+            {panelActive ? navigationPanel!({ collapsed: isCollapsed, closeMenu, returnToMainMenu }) : navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).map((item) => (
+              <WorkspaceNavLink key={`${item.label}-${item.to}`} item={item} collapsed={isCollapsed} onNavigate={event => navigateItem(item, event)} />
             ))}
           </nav>
 
@@ -249,12 +289,6 @@ export function WorkspaceShell({
         aria-busy={isNavigationPending}
       >
         <header ref={headerRef} className="neo-workspace__header sticky top-0 z-30 px-4 py-4 backdrop-blur-xl sm:px-7 lg:px-9">
-          {isNavigationPending ? (
-            <div className="neo-workspace__route-progress" role="status">
-              <span className="neo-workspace__route-progress-sweep" aria-hidden="true" />
-              <span className="sr-only">Loading page</span>
-            </div>
-          ) : null}
           <div className="neo-workspace__header-inner mx-auto flex max-w-[1500px] items-center justify-between gap-4">
             {hideHeaderTitle ? (
               <div className="flex min-w-0 flex-1 items-center">
@@ -302,7 +336,7 @@ export function WorkspaceShell({
           {mobileMenu ? null : (
             <nav className="neo-workspace__mobile-nav mx-auto mt-3 flex max-w-[1500px] gap-2 overflow-x-auto pb-0.5 lg:hidden" aria-label="Mobile workspace navigation">
               {navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).slice(0, 5).map((item) => (
-                <WorkspaceNavLink key={`mobile-${item.label}-${item.to}`} item={item} compact />
+                  <WorkspaceNavLink key={`mobile-${item.label}-${item.to}`} item={item} compact onNavigate={event => navigateItem(item, event, true)} />
               ))}
             </nav>
           )}
@@ -310,7 +344,6 @@ export function WorkspaceShell({
 
         <div
           className="neo-workspace__content mx-auto max-w-[1500px] px-4 py-5 sm:px-7 sm:py-7 lg:px-9"
-          data-navigation-pending={isNavigationPending ? "true" : undefined}
         >
           {children}
         </div>
@@ -351,16 +384,13 @@ export function WorkspaceShell({
                   <span className="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
                 </button>
               </div>
-              <p id="neo-workspace-mobile-drawer-title" className="neo-workspace__eyebrow mt-10 px-3">Workspace</p>
-              <nav className="neo-workspace__mobile-drawer-nav mt-3 grid gap-1" aria-label="Workspace navigation">
-                {navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).map((item) => (
+              <p id="neo-workspace-mobile-drawer-title" className={`neo-workspace__eyebrow px-3 ${panelActive ? "sr-only" : "mt-10"}`}>{panelActive ? "Conversations" : "Workspace"}</p>
+              <nav ref={mobileNavigationRef} className={`neo-workspace__mobile-drawer-nav ${panelActive ? "mt-6 flex flex-col" : "mt-3 grid gap-1"}`} aria-label={panelActive ? "Conversations" : "Workspace navigation"}>
+                {panelActive ? navigationPanel!({ collapsed: false, closeMenu, returnToMainMenu }) : navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).map((item) => (
                   <WorkspaceNavLink
                     key={`drawer-${item.label}-${item.to}`}
                     item={item}
-                    onNavigate={() => {
-                      setIsMobileMenuOpen(false);
-                      setIsMoreOpen(false);
-                    }}
+                    onNavigate={event => navigateItem(item, event, true)}
                   />
                 ))}
               </nav>
@@ -405,10 +435,7 @@ export function WorkspaceShell({
                   <WorkspaceNavLink
                     key={`more-${item.label}-${item.to}`}
                     item={item}
-                    onNavigate={() => {
-                      setIsMoreOpen(false);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onNavigate={event => navigateItem(item, event, true)}
                   />
                 ))}
               </nav>
@@ -424,10 +451,7 @@ export function WorkspaceShell({
                 key={`bottom-${item.label}-${item.to}`}
                 item={item}
                 bottom
-                onNavigate={() => {
-                  setIsMoreOpen(false);
-                  setIsMobileMenuOpen(false);
-                }}
+                onNavigate={event => navigateItem(item, event, true)}
               />
             ))}
             {showMobileMore && moreMobileItems.length > 0 ? (
@@ -475,9 +499,9 @@ function WorkspaceNavLink({
   compact?: boolean;
   collapsed?: boolean;
   bottom?: boolean;
-  onNavigate?: () => void;
+  onNavigate?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
-  const getClassName = (active: boolean) => `${navClassName(active, compact, collapsed, bottom)}${item.unreadCount ? " neo-workspace__nav-item--has-unread" : ""}`;
+  const getClassName = (active: boolean) => navClassName(active, compact, collapsed, bottom);
   const className = ({ isActive }: { isActive: boolean }) => getClassName(item.active ?? isActive);
   const contents = (
     <>
@@ -508,12 +532,16 @@ function WorkspaceNavLink({
 
 function NavIcon({ item, collapsed, bottom }: { item: WorkspaceNavItem; collapsed: boolean; bottom: boolean }) {
   const label = bottom ? item.bottomLabel ?? item.label : item.label;
+  const count = typeof item.unreadCount === "number" && Number.isSafeInteger(item.unreadCount) && item.unreadCount > 0 ? item.unreadCount : 0;
 
   return (
     <>
       <span aria-hidden="true" className={`material-symbols-outlined ${bottom ? "neo-workspace__bottom-nav-icon" : "text-[19px]"}`}>{item.icon}</span>
       {collapsed ? <span className="sr-only">{label}</span> : <span className={bottom ? "neo-workspace__bottom-nav-label" : "min-w-0 flex-1 truncate"}>{label}</span>}
-      {item.unreadCount ? <span className="sr-only">{item.unreadCount} unread enquiries</span> : null}
+      {count > 0 ? <>
+        <span aria-hidden="true" className={`neo-workspace__nav-count${collapsed || bottom ? " neo-workspace__nav-count--overlay" : ""}${count > 99 ? " neo-workspace__nav-count--large" : ""}`}>{count > 99 ? "99+" : count}</span>
+        <span className="sr-only">{`, ${count} ${item.unreadLabel ?? "unread enquiries"}`}</span>
+      </> : null}
       {!collapsed && !bottom && item.badge ? <span className="rounded-full bg-[#5a43d5] px-1.5 py-0.5 text-[9px] font-black text-white">{item.badge}</span> : null}
     </>
   );
@@ -534,9 +562,10 @@ function isNavItemActive(item: WorkspaceNavItem, pathname: string, search: strin
 
 export function Avatar({ name, imageUrl, size = "md" }: { name: string; imageUrl?: string | null; size?: "sm" | "md" }) {
   const initials = getInitials(name);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
 
-  return imageUrl ? (
-    <img src={imageUrl} alt="" loading="lazy" decoding="async" className={`neo-workspace__avatar ${size === "sm" ? "neo-workspace__avatar--sm" : ""} rounded-full object-cover`} />
+  return imageUrl && failedImageUrl !== imageUrl ? (
+    <img src={imageUrl} alt="" loading="lazy" decoding="async" onError={() => setFailedImageUrl(imageUrl)} className={`neo-workspace__avatar ${size === "sm" ? "neo-workspace__avatar--sm" : ""} rounded-full object-cover`} />
   ) : (
     <span className={`neo-workspace__avatar ${size === "sm" ? "neo-workspace__avatar--sm" : ""}`}>
       {initials}

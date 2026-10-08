@@ -207,15 +207,19 @@ async function createAdminOAuthCompletionResponse({
   userId,
   redirectTo,
   appUrl,
+  profile,
 }: {
   request: Request;
   context?: LoaderContext;
   userId: string;
   redirectTo: string;
   appUrl: string;
+  profile: GoogleProfile;
 }) {
   const session = await getAdminSession(request.headers.get("Cookie"), context);
   session.set("adminUserId", userId);
+  session.set("profileEmail", profile.email?.trim().toLowerCase());
+  session.set("profileImageUrl", typeof profile.picture === "string" && profile.picture.startsWith("https://") && profile.picture.length <= 2048 ? profile.picture : null);
 
   const headers = new Headers({
     "Content-Type": "text/html; charset=utf-8",
@@ -347,6 +351,7 @@ export async function completeGoogleOAuth(request: Request, context: LoaderConte
       userId: adminUser.id,
       redirectTo: safeAdminReturnTo(typeof stored.returnTo === "string" ? stored.returnTo : null),
       appUrl,
+      profile,
     });
   }
 

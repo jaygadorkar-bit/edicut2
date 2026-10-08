@@ -15,7 +15,7 @@ Last updated: 2026-08-23
 | Provider | Target | Latest result |
 | --- | --- | --- |
 | GitHub | `https://github.com/jaygadorkar-bit/edicut2` | Push local `main` after validation |
-| Cloudflare Workers | `edicut-web` on `https://edicut.com` and `https://www.edicut.com` | Version `13a40842-0d45-4dd7-9884-5a9d50e6d71b` deployed on 2026-08-23 in the Jaygadorkar Cloudflare account. |
+| Cloudflare Workers | `edicut-web` on `https://edicut.com` and `https://www.edicut.com` | Version `4f018a5c-9bb6-4ce8-b8f1-357e1a1aa9db` deployed on 2026-10-08 in the Jaygadorkar Cloudflare account. |
 | Supabase | Auth + PostgreSQL from `SUPABASE_*` | Hosted `Edicut` project in South Asia (Mumbai); initial migration applied and verified |
 | Cloudinary | Managed image delivery and server-signed uploads | Worker secrets configured |
 
@@ -181,8 +181,12 @@ Latest production result:
 - Worker: `edicut-web`
 - URLs: `https://edicut.com`, `https://www.edicut.com`
 - Deployed: 2026-10-08
-- Version ID: `94cd539c-49ce-47fa-9398-b93230a0ba58`
-- Health checks: both `/health` endpoints returned HTTP 200
+- Version ID: `4f018a5c-9bb6-4ce8-b8f1-357e1a1aa9db`
+- Previous production version: `60030587-b0cd-41f1-8ead-e8d2cad1d1b2`
+- Health checks: apex `/health` returned HTTP 200; `www` redirected to the apex and returned HTTP 200
+- Optimized scene: `/artwork/why-hire-us/creator-recording-scene-b93b36d3.svg` returned HTTP 200 as `image/svg+xml` (73,768 bytes), with SHA-256 matching the local release asset
+- Live desktop and mobile checks: the red play icon loops before the first press, the button remains fixed, and pressing Intro stops the icon animation; pausing does not restart it and reloading resets the prompt
+- Validation: web type check, production build, 11 timeline/static-asset tests, and Wrangler deployment dry run passed; live browser checks found no console errors or horizontal overflow
 - Combined audio asset: `/audio/why-hire-us/edicut-why-hire-us-mix-f3907247.wav` returned HTTP 200 as `audio/wav` (3,613,484 bytes)
 
 ## Legacy Node API

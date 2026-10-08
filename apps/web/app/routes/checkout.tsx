@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useActionData, useFetcher, useLoaderData, useNavigation } from "react-router";
 import { useState } from "react";
 import { ArrowLeft, ArrowRight, Check, CreditCard, LockKeyhole, Construction } from "lucide-react";
@@ -17,6 +17,9 @@ import { getLatestCustomerContact, getOwnedSubscription, isSameSiteMutation, rea
 import { queueTelegramOrderNotice } from "../lib/telegram-notifications.server";
 import { PackageAddOns } from "../components/site/PackageAddOns";
 import { packageAddOnQuery, packageAddOnTotal, parsePackageAddOns, savedPackageAddOns, selectedPackageAddOns } from "../lib/package-addons";
+import addOnStyles from "../styles/package-addons.css?url";
+
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: addOnStyles }];
 
 type CouponPreview = { code: string; subtotalCents: number; discountCents: number; discountedTotalCents: number };
 type CheckoutActionData = { error?: string; couponCode?: string; couponError?: string; couponPreview?: CouponPreview };
@@ -81,8 +84,10 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     throw redirect(`/checkout/${editingPackage.slug}${review.size ? `?${review}` : ""}`);
   }
   if (savedSubscription?.status === "paid") throw redirect("/dashboard/projects");
+  const reviewAddOnIds = url.searchParams.has("addon") ? url.searchParams.getAll("addon")
+    : selectedPackageAddOns(savedPackageAddOns(savedSubscription?.addOns).map(item => item.id), editingPackage.packageType).map(item => item.id);
   const addOns = paymentStep ? savedPackageAddOns(savedSubscription?.addOns)
-    : parsePackageAddOns(url.searchParams.has("addon") ? url.searchParams.getAll("addon") : savedPackageAddOns(savedSubscription?.addOns).map(item => item.id));
+    : parsePackageAddOns(reviewAddOnIds, editingPackage.packageType);
   if (!addOns) throw new Response("Invalid package add-ons", { status: 400 });
   const total = paymentStep && savedSubscription?.subtotalCents != null ? savedSubscription.subtotalCents / 100
     : getCheckoutTotal(editingPackage) + packageAddOnTotal(addOns) / 100;
@@ -116,7 +121,7 @@ export async function action({ request, params, context }: ActionFunctionArgs): 
   const code = String(formData.get("couponCode") || "").trim();
   const editingPackage = await getCheckoutPackage(params.slug, context);
   if (!editingPackage || formData.get("packageSlug") !== editingPackage.slug) return { couponCode: code.toUpperCase(), couponError: "Choose a valid package before applying a coupon." };
-  const addOns = parsePackageAddOns(formData.getAll("addon"));
+  const addOns = parsePackageAddOns(formData.getAll("addon"), editingPackage.packageType);
   if (!addOns) return { error: "Choose valid package add-ons." };
   const subtotalCents = getCheckoutTotal(editingPackage) * 100 + packageAddOnTotal(addOns);
   if (intent === "start-checkout") {
@@ -172,7 +177,7 @@ function CheckoutContent() {
   const [couponInput, setCouponInput] = useState(couponCode);
   const [couponRequestCode, setCouponRequestCode] = useState("");
   const [selectedAddOnIds, setSelectedAddOnIds] = useState(initialAddOns.map(item => item.id));
-  const addOns = paymentStep ? initialAddOns : selectedPackageAddOns(selectedAddOnIds);
+  const addOns = paymentStep ? initialAddOns : selectedPackageAddOns(selectedAddOnIds, editingPackage.packageType);
   const addOnCents = packageAddOnTotal(addOns);
   const subtotalCents = paymentStep ? savedSubscription!.subtotalCents : editingPackage.basePrice * 100 + addOnCents;
   const [phone, setPhone] = useState(() => savedSubscription?.phone ?? customerContact?.phone ?? (savedSubscription?.country ? `${countryCallingCode(savedSubscription.country)} ` : ""));
@@ -184,7 +189,7 @@ function CheckoutContent() {
   const amountCents = (paymentStep ? savedSubscription?.amountCents : undefined) ?? appliedCoupon?.discountedTotalCents ?? subtotalCents;
   const couponBusy = couponFetcher.state !== "idle";
   const canProceed = !saving && !couponBusy && (!normalizedCode || Boolean(appliedCoupon));
-  const query = packageAddOnQuery(selectedAddOnIds);
+  const query = packageAddOnQuery(selectedAddOnIds, editingPackage.packageType);
   if (affiliateCode) query.set("ref", affiliateCode);
   if (appliedCoupon) query.set("coupon", appliedCoupon.code);
   if (paymentStep && savedSubscription) {
@@ -192,7 +197,7 @@ function CheckoutContent() {
     if (savedSubscription.couponCode) query.set("coupon", savedSubscription.couponCode);
   }
   const reviewHref = `/checkout/${editingPackage.slug}${query.size ? `?${query}` : ""}`;
-  const planQuery = packageAddOnQuery(selectedAddOnIds);
+  const planQuery = packageAddOnQuery(selectedAddOnIds, editingPackage.packageType);
   if (affiliateCode) planQuery.set("ref", affiliateCode);
   const planHref = `/pricing/${editingPackage.slug}${planQuery.size ? `?${planQuery}` : ""}`;
   const includedTeam = editingPackage.slug === "creator-pro" ? STUDIO_PACKAGE_STAFFING : REQUIRED_PACKAGE_STAFFING;
@@ -293,7 +298,7 @@ function CheckoutContent() {
                   <ScopeItem label="Revision rounds" value={String(editingPackage.revisionRounds)} />
                 </>}
               </dl>
-              <PackageAddOns selected={selectedAddOnIds} onChange={setSelectedAddOnIds} disabled={saving} />
+              <PackageAddOns editingPackage={editingPackage} selected={selectedAddOnIds} onChange={setSelectedAddOnIds} disabled={saving} />
             </section>
             </div>
           )}
