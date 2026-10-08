@@ -1,5 +1,5 @@
 const IMMUTABLE_ASSET_PATH = /^\/assets\/.+\.[a-z0-9]+$/i;
-const PUBLIC_ASSET_PATH = /^\/(?:images\/.+|icons\/.+|audio\/.+|[^/]+\.(?:svg|png|jpg|jpeg|webp|avif))$/i;
+const PUBLIC_ASSET_PATH = /^\/(?:images\/.+|icons\/.+|audio\/.+|artwork\/.+|fonts\/.+|[^/]+\.(?:svg|png|jpg|jpeg|webp|avif))$/i;
 
 export function isImmutableAssetPath(pathname: string) {
   return IMMUTABLE_ASSET_PATH.test(pathname);

@@ -14,7 +14,10 @@ describe("Worker static asset routing", () => {
     expect(shouldServeStaticAsset("GET", "/dashboard/projects")).toBe(false);
   });
 
-  it("preserves existing image, icon, and fingerprinted asset routing", () => {
+  it("serves public artwork, fonts, images, icons, and fingerprinted assets", () => {
+    expect(shouldServeStaticAsset("GET", "/artwork/why-hire-us/creator.svg")).toBe(true);
+    expect(shouldServeStaticAsset("HEAD", "/artwork/why-hire-us/manager.svg")).toBe(true);
+    expect(shouldServeStaticAsset("GET", "/fonts/dm-sans-latin-normal.woff2")).toBe(true);
     expect(shouldServeStaticAsset("GET", "/images/portfolio/preview.webp")).toBe(true);
     expect(shouldServeStaticAsset("GET", "/icons/brand/logo.svg")).toBe(true);
     expect(shouldServeStaticAsset("GET", "/assets/why-hire-us-abc123.css")).toBe(true);
