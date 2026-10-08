@@ -181,7 +181,7 @@ Latest production result:
 - Worker: `edicut-web`
 - URLs: `https://edicut.com`, `https://www.edicut.com`
 - Deployed: 2026-10-08
-- Version ID: `378b13a0-6767-40f0-8fa4-d9c136efb3a5`
+- Version ID: `94cd539c-49ce-47fa-9398-b93230a0ba58`
 - Health checks: both `/health` endpoints returned HTTP 200
 - Combined audio asset: `/audio/why-hire-us/edicut-why-hire-us-mix-f3907247.wav` returned HTTP 200 as `audio/wav` (3,613,484 bytes)
 
