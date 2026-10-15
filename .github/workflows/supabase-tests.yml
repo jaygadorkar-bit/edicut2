@@ -1,0 +1,51 @@
+name: Supabase database tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start local Supabase
+        run: |
+          if ! npx --yes supabase@2.121.0 start > /dev/null 2>&1; then
+            echo "::error::Local Supabase failed to start. Reproduce with 'pnpm supabase:start' to inspect migration errors."
+            exit 1
+          fi
+
+      - name: Lint local database schema
+        run: npx --yes supabase@2.121.0 db lint --local --fail-on error
+
+      - name: Run pgTAP database tests
+        run: npx --yes supabase@2.121.0 test db --local
+
+      - name: Test authenticated Realtime delivery and isolation
+        run: pnpm supabase:test:realtime
+
+      - name: Stop local Supabase
+        if: always()
+        run: npx --yes supabase@2.121.0 stop --no-backup

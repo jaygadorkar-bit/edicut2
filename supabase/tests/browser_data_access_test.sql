@@ -1,4 +1,7 @@
 BEGIN;
+SELECT plan(1);
+
+SELECT lives_ok($check$
 DO $$
 DECLARE
   app_table text;
@@ -27,12 +30,26 @@ BEGIN
           RAISE EXCEPTION 'Unexpected column % privilege for % on %', permission, browser_role, app_table;
         END IF;
       END LOOP;
+      IF app_table <> 'site_settings' THEN
+        FOREACH permission IN ARRAY ARRAY['SELECT', 'INSERT', 'UPDATE', 'REFERENCES'] LOOP
+          IF has_any_column_privilege('service_role', format('public.%I', app_table), permission) THEN
+            RAISE EXCEPTION 'Unexpected column % privilege for service_role on %', permission, app_table;
+          END IF;
+        END LOOP;
+      END IF;
     END LOOP;
     FOREACH permission IN ARRAY ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE'] LOOP
-      IF NOT has_table_privilege('service_role', format('public.%I', app_table), permission) THEN
-        RAISE EXCEPTION 'Missing server % privilege on %', permission, app_table;
+      IF app_table = 'site_settings' AND permission IN ('SELECT', 'INSERT', 'UPDATE') THEN
+        IF NOT has_table_privilege('service_role', format('public.%I', app_table), permission) THEN
+          RAISE EXCEPTION 'Missing site-settings server % privilege', permission;
+        END IF;
+      ELSIF has_table_privilege('service_role', format('public.%I', app_table), permission) THEN
+        RAISE EXCEPTION 'Unexpected service_role % privilege on %', permission, app_table;
       END IF;
     END LOOP;
   END LOOP;
 END $$;
+$check$, 'browser roles have no direct app-table access and server grants stay explicit');
+
+SELECT * FROM finish();
 ROLLBACK;

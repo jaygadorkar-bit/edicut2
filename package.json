@@ -17,6 +17,8 @@
     "supabase:stop": "npx supabase stop",
     "supabase:status": "npx supabase status",
     "supabase:types": "npx supabase gen types typescript --local",
+    "supabase:test:db": "npx supabase test db --local",
+    "supabase:test:realtime": "node apps/web/scripts/test-realtime-broadcast.mjs",
     "supabase:push": "npx supabase db push",
     "supabase:lint": "npx supabase db lint --local",
     "deploy:cloudflare": "pnpm --filter @edicut/web run deploy",
