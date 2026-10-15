@@ -87,26 +87,25 @@ export async function loader({
   const userId = session.get("userId");
   const adminUserId = adminSession.get("adminUserId");
   const userAdminUserId = session.get("adminUserId");
+  // Reuse the database client within this request; every read still hits its source.
+  let rootDb: ReturnType<typeof getDbFromContext> | undefined;
+  const getRootDb = () => rootDb ??= getDbFromContext(context ?? {});
   const adminToolbarAccess: AdminToolbarAccess = shouldLoadRootSiteSettings(url.pathname) && (userId || adminUserId)
-    ? await getAdminToolbarAccess(getDbFromContext(context ?? {}), {
+    ? await getAdminToolbarAccess(getRootDb(), {
       userId,
+      userCredentialVersion: session.get("authCredentialVersion"),
+      userAccessToken: session.get("supabaseAccessToken"),
       adminUserId,
+      adminCredentialVersion: adminSession.get("authCredentialVersion"),
+      adminAccessToken: adminSession.get("supabaseAccessToken"),
       verifiedUserAdminId: session.get("adminAccessVerified") === true ? userAdminUserId : undefined,
-    })
+      verifiedUserAdminCredentialVersion: session.get("adminCredentialVersion"),
+    }, context)
     : "none";
   const isAdminSignedIn = adminToolbarAccess === "verified";
   const isAdminPanelPath = url.pathname === ADMIN_BASE_PATH || url.pathname.startsWith(`${ADMIN_BASE_PATH}/`);
   const storedAdminImage = adminSession.get("profileImageUrl");
   const storedAdminEmail = adminSession.get("profileEmail");
-  const adminProfile = isAdminSignedIn && (isAdminPanelPath || url.pathname === "/dashboard/messages")
-    ? await getAdminProfileImage(getDbFromContext(context ?? {}), adminUserId || userAdminUserId)
-      ?? (typeof storedAdminImage === "string" && storedAdminImage.startsWith("https://") && storedAdminImage.length <= 2048 && typeof storedAdminEmail === "string"
-        ? { email: storedAdminEmail, imageUrl: storedAdminImage } : null)
-    : null;
-  const { pendingOrderCount, unreadEnquiryCount } = isAdminSignedIn
-    && (isAdminPanelPath || url.pathname === "/dashboard/messages") && url.pathname !== ADMIN_LOGIN_PATH
-    ? await getAdminNavigationCounts(getDbFromContext(context ?? {}))
-    : { pendingOrderCount: 0, unreadEnquiryCount: 0 };
 
   const isAdminArea = url.pathname.startsWith(ADMIN_BASE_PATH);
   const isAdminLogin = url.pathname === ADMIN_LOGIN_PATH;
@@ -124,21 +123,32 @@ export async function loader({
     url.pathname === "/robots.txt" ||
     url.pathname === "/sitemap.xml";
 
-  const siteSettings = shouldLoadRootSiteSettings(url.pathname)
-    ? await getSiteSettingsSnapshot(
-        getSupabaseClient(context) ? null : getDbFromContext(context ?? {}),
-        context,
-        {
-          includeAdminToolbar: isAdminSignedIn,
-          includePromoBar: shouldLoadPromoBarSettings(url.pathname),
-        },
-      )
-    : {
+  // Authorization remains fresh and completes before any privileged reads.
+  const [adminProfile, { pendingOrderCount, unreadEnquiryCount }, siteSettings] = await Promise.all([
+    isAdminSignedIn && (isAdminPanelPath || url.pathname === "/dashboard/messages")
+      ? getAdminProfileImage(getRootDb(), adminUserId || userAdminUserId).then(profile => profile
+        ?? (typeof storedAdminImage === "string" && storedAdminImage.startsWith("https://") && storedAdminImage.length <= 2048 && typeof storedAdminEmail === "string"
+          ? { email: storedAdminEmail, imageUrl: storedAdminImage } : null))
+      : null,
+    isAdminSignedIn && (isAdminPanelPath || url.pathname === "/dashboard/messages") && !isAdminLogin
+      ? getAdminNavigationCounts(getRootDb())
+      : { pendingOrderCount: 0, unreadEnquiryCount: 0 },
+    shouldLoadRootSiteSettings(url.pathname)
+      ? getSiteSettingsSnapshot(
+          getSupabaseClient(context) ? null : getRootDb(),
+          context,
+          {
+            includeAdminToolbar: isAdminSignedIn,
+            includePromoBar: shouldLoadPromoBarSettings(url.pathname),
+          },
+        )
+      : {
         adminToolbarEnabled: false,
         searchCrawlingEnabled: false,
         maintenanceModeEnabled: false,
         promoBarSettings: { enabled: false, message: "" },
-      };
+      },
+  ]);
   const { adminToolbarEnabled, searchCrawlingEnabled, maintenanceModeEnabled, promoBarSettings } = siteSettings;
   const appUrl = env.APP_URL ?? "http://localhost:3002";
 

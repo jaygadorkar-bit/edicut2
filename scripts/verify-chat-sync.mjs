@@ -1,0 +1,44 @@
+// Snapshot API checks on the disposable localhost:3003 app only.
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+const origin = "http://localhost:3003";
+const cookies = JSON.parse(await fs.readFile(new URL("../.codex-tmp/chat-test-sessions.json", import.meta.url), "utf8"));
+let checks = 0;
+const check = (condition, label) => { assert.ok(condition, label); checks++; };
+async function api(actor, operation = "sync", values = {}) {
+  const url = `${origin}/api/chat?${new URLSearchParams({ scope: actor === "admin" ? "admin" : "client", operation, ...values })}`;
+  const response = await fetch(url, { headers: { Cookie: cookies[actor] ?? "" } });
+  return { status: response.status, cache: response.headers.get("cache-control"), body: await response.json() };
+}
+check((await api("anonymous")).status === 401, "Anonymous snapshots are denied");
+const inbox = await api("client");
+check(inbox.status === 200 && inbox.cache === "no-store", "Snapshots are private and never cached");
+check(inbox.body.history === null && !inbox.body.historyUnavailable, "Roomless snapshots return lists and counts only");
+const room = inbox.body.state.rooms[0];
+const snapshot = await api("client", "sync", { roomId: room.id });
+const rooms = await api("client", "rooms"), unread = await api("client", "unread"), history = await api("client", "messages", { roomId: room.id });
+check(JSON.stringify(snapshot.body.state) === JSON.stringify(rooms.body), "Combined rooms match the existing list endpoint");
+check(JSON.stringify(snapshot.body.unread) === JSON.stringify(unread.body), "Combined unread counts match the global endpoint");
+check(JSON.stringify(snapshot.body.history) === JSON.stringify(history.body), "Combined history and read receipts match the existing history endpoint");
+const other = await api("otherClient", "sync", { roomId: room.id });
+check(other.status === 200 && other.body.history === null && other.body.historyUnavailable, "Another customer's history is absent without breaking their own inbox");
+check(other.body.state.rooms.every(value => value.clientId !== room.clientId), "Cross-customer snapshots do not leak room metadata");
+const unsupported = await api("support", "sync", { roomId: room.id });
+check(unsupported.body.history === null && unsupported.body.historyUnavailable, "Support staff cannot read project history through snapshots");
+const unpaidRoom = other.body.state.rooms[0];
+const unpaid = await api("otherClient", "sync", { roomId: unpaidRoom.id });
+check(unpaid.body.history.messages.length === 0 && !unpaid.body.history.room.projectUnlocked, "Unpaid projects stay locked and hide content");
+const manager = await api("manager", "sync", { roomId: room.id });
+check(manager.body.history.messages.length === history.body.messages.length, "Assigned managers can read the same history");
+const admin = await api("admin", "sync", { roomId: room.id });
+check(admin.body.history.room.id === room.id, "Admins can read the project group snapshot");
+const ticketInbox = await api("client", "sync", { view: "tickets" });
+const ticket = ticketInbox.body.state.rooms[0];
+check(ticketInbox.body.state.rooms.every(value => value.kind === "support") && ticketInbox.body.state.ticketCounts, "Ticket snapshots preserve queue filters and totals");
+const ticketView = await api("client", "sync", { view: "tickets", roomId: ticket.id });
+check(ticketView.body.history.room.ticket.number > 0, "Ticket history keeps its issue and ticket number");
+const phrase = history.body.messages.find(value => value.body)?.body.slice(0, 30) ?? "no match";
+const searched = await api("client", "sync", { roomId: room.id, messageSearch: phrase, search: "no client match" });
+check(searched.body.state.rooms.length === 0 && searched.body.history.messages.every(value => value.body.includes(phrase)), "Room search and history search stay independent");
+check((await api("client", "sync", { roomId: "invalid" })).status === 400, "Invalid snapshot room IDs are rejected before queries");
+console.log(`Combined chat refresh verified: ${checks} checks passed on the isolated test app.`);

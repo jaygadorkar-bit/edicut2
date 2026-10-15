@@ -27,3 +27,9 @@ export const workspaceProjectColumns = {
 };
 
 export type WorkspaceProjectView = Pick<typeof workspaceProjects.$inferSelect, keyof typeof workspaceProjectColumns>;
+
+export const workspaceProjectSummaryColumns = {
+  id: workspaceProjects.id, title: workspaceProjects.title, channelName: workspaceProjects.channelName,
+  status: workspaceProjects.status, updatedAt: workspaceProjects.updatedAt,
+};
+export type WorkspaceProjectSummary = Pick<typeof workspaceProjects.$inferSelect, keyof typeof workspaceProjectSummaryColumns>;

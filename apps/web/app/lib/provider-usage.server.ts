@@ -1,6 +1,8 @@
 import type { CloudinaryUsage } from "./cloudinary.server";
 import { fetchWithTimeout } from "@edicut/shared/server-fetch";
 import type { DatabaseClient } from "@edicut/db/client";
+import { getGoogleDriveStorageQuota, type GoogleDriveStorageQuotaResult } from "./google-drive-storage.server";
+import type { LoaderContext } from "../types";
 import { sql } from "drizzle-orm";
 import { getDatabaseUrlFromContext } from "./db.server";
 
@@ -9,18 +11,12 @@ type ProviderEnv = {
   cloudflare?: { env?: Record<string, string | undefined> };
 };
 
-const LOCAL_ENV_CACHE_MS = 60_000;
-const PROVIDER_CACHE_MS = 60_000;
-
-let localEnvCache: { expiresAt: number; values: Record<string, string> } | null = null;
-let providerCache: { expiresAt: number; data: ProviderUsage[] } | null = null;
-let providerCachePromise: Promise<ProviderUsage[]> | null = null;
-
 export type UsageCardStat = {
   label: string;
   value: string;
   help?: string;
   meterPercent?: number;
+  group?: string;
 };
 
 export type UsageDetail = {
@@ -35,7 +31,7 @@ export type UsageResource = {
 };
 
 export type ProviderUsage = {
-  id: "cloudflare" | "vercel" | "neon" | "supabase" | "cloudinary";
+  id: "cloudflare" | "cloudflare-d1" | "vercel" | "neon" | "supabase" | "cloudinary" | "google-drive";
   name: string;
   icon: string;
   configured: boolean;
@@ -116,6 +112,22 @@ type CloudflareWorkerGroup = {
   sum?: { requests?: number; errors?: number; subrequests?: number };
 };
 
+type CloudflareD1AnalyticsGroup = {
+  dimensions?: { date?: string; databaseId?: string };
+  sum?: { rowsRead?: number; rowsWritten?: number };
+};
+
+type CloudflareD1StorageGroup = {
+  dimensions?: { date?: string; databaseId?: string };
+  max?: { databaseSizeBytes?: number };
+};
+
+type CloudflareD1Usage = {
+  rowsRead: number | null;
+  rowsWritten: number | null;
+  storageBytes: number | null;
+};
+
 type SupabaseApiCount = {
   total_auth_requests?: number;
   total_realtime_requests?: number;
@@ -136,11 +148,6 @@ type VercelCharge = {
 
 async function readLocalEnvFile() {
   if (!globalThis.process?.cwd) return {};
-  const now = Date.now();
-
-  if (localEnvCache && localEnvCache.expiresAt > now) {
-    return localEnvCache.values;
-  }
 
   try {
     const [{ readFile }, path] = await Promise.all([import("node:fs/promises"), import("node:path")]);
@@ -179,7 +186,6 @@ async function readLocalEnvFile() {
       }
     }
 
-    localEnvCache = { expiresAt: now + LOCAL_ENV_CACHE_MS, values };
     return values;
   } catch {
     return {};
@@ -220,7 +226,7 @@ async function readEnv(context?: ProviderEnv) {
 }
 
 async function fetchJson<T>(url: string, init: RequestInit) {
-  const response = await fetchWithTimeout(url, init);
+  const response = await fetchWithTimeout(url, { ...init, cache: "no-store" });
   const result = await response.json().catch(() => ({})) as T & { error?: unknown; errors?: unknown[]; message?: string };
 
   if (!response.ok) {
@@ -236,7 +242,7 @@ async function fetchJson<T>(url: string, init: RequestInit) {
 }
 
 async function fetchText(url: string, init: RequestInit) {
-  const response = await fetchWithTimeout(url, init);
+  const response = await fetchWithTimeout(url, { ...init, cache: "no-store" });
   const result = await response.text();
 
   if (!response.ok) {
@@ -435,6 +441,7 @@ function getNeonDatabaseUsageCards(metrics: NeonDatabaseMetrics | null): UsageCa
         ? `Live pg_database_size for ${metrics.databaseName} on the active DATABASE_URL. Neon Free includes 1 GB of Postgres storage per project, but the app cannot verify your account plan from this URL. This reading covers this database on the connected branch; other branches and retained history can affect project storage separately.`
         : "Live database metrics could not be read through the active DATABASE_URL.",
       meterPercent: metrics ? getUsagePercent(metrics.databaseBytes, neonFreeStorageLimitBytes) : undefined,
+      group: "Database",
     },
     {
       label: "Active connections",
@@ -443,8 +450,26 @@ function getNeonDatabaseUsageCards(metrics: NeonDatabaseMetrics | null): UsageCa
         ? "Current PostgreSQL sessions for this database divided by max_connections reported by the active Neon compute. This is a live connection-capacity measure, not a monthly quota."
         : "Live connection metrics could not be read through the active DATABASE_URL.",
       meterPercent: metrics ? getUsagePercent(metrics.activeConnections, metrics.maxConnections) : undefined,
+      group: "Database",
     },
-    { label: "User tables", value: metrics ? formatNumber(metrics.userTables) : "Unavailable" },
+    { label: "User tables", value: metrics ? formatNumber(metrics.userTables) : "Unavailable", group: "Database" },
+  ];
+}
+
+function getNeonComputeLimitCards(): UsageCardStat[] {
+  return [
+    {
+      label: "Monthly compute allowance",
+      value: "100 CU-hours / project",
+      help: "Neon Free reference: 100 CU-hours per project each month. This panel does not have a CU-hour consumption reading, and your account plan may differ.",
+      group: "Compute limits · Free reference",
+    },
+    {
+      label: "Autoscaling ceiling",
+      value: "Up to 2 CU · ~8 GB RAM",
+      help: "Neon Free reference maximum. The configured endpoint may have a lower autoscaling ceiling; this panel does not read endpoint autoscaling settings.",
+      group: "Compute limits · Free reference",
+    },
   ];
 }
 
@@ -456,7 +481,7 @@ function getNeonConnectionUsage(database: NonNullable<ReturnType<typeof parseNeo
     configured: true,
     status: metrics ? "connected" : "partial",
     statusLabel: metrics ? "Live usage" : "Usage unavailable",
-    cards: getNeonDatabaseUsageCards(metrics),
+    cards: [...getNeonDatabaseUsageCards(metrics), ...getNeonComputeLimitCards()],
     details: [
       { label: "Database", value: metrics?.databaseName || database.database },
       { label: "Host", value: database.host },
@@ -487,6 +512,66 @@ function formatUsageValue(value: { usage?: number; limit?: number; used_percent?
   if (usage !== null && percent) return `${formatValue(usage)} (${percent})`;
   if (usage !== null) return formatValue(usage);
   return "Unavailable";
+}
+
+function formatGoogleStorageBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** index).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function getGoogleDriveProvider(result: GoogleDriveStorageQuotaResult): ProviderUsage {
+  const quota = result.status === "connected" ? result.quota : null;
+  const notConnected = result.status === "not-connected";
+  const accountUsage = quota?.accountUsageBytes;
+  const driveUsage = quota?.driveUsageBytes;
+  const limit = quota?.limitBytes;
+  const usedValue = typeof accountUsage === "number"
+    ? `${formatGoogleStorageBytes(accountUsage)} / ${limit === null ? "Unlimited" : limit === undefined ? "Unavailable" : formatGoogleStorageBytes(limit)}`
+    : "Unavailable";
+  const freeValue = limit === null
+    ? "Unlimited"
+    : typeof limit === "number" && typeof accountUsage === "number"
+      ? formatGoogleStorageBytes(Math.max(0, limit - accountUsage))
+      : "Unavailable";
+  return {
+    id: "google-drive",
+    name: "Google Drive",
+    icon: "drive",
+    configured: !notConnected,
+    status: quota ? "connected" : notConnected ? "not-configured" : "partial",
+    statusLabel: quota ? "Connected" : notConnected ? "Not connected" : "Usage unavailable",
+    cards: [
+      {
+        label: "Google storage used",
+        value: notConnected ? "Not connected" : usedValue,
+        help: "Total storage used across this Google account, including Drive, Gmail, and Google Photos.",
+        meterPercent: typeof accountUsage === "number" && typeof limit === "number" ? getUsagePercent(accountUsage, limit) : undefined,
+        group: "Google Drive storage",
+      },
+      {
+        label: "Free for Drive uploads",
+        value: notConnected ? "Not connected" : freeValue,
+        help: "Remaining shared Google account storage, calculated from the account limit minus total usage across Drive, Gmail, and Photos.",
+        group: "Google Drive storage",
+      },
+      {
+        label: "Files in Drive",
+        value: notConnected ? "Not connected" : typeof driveUsage === "number" ? formatGoogleStorageBytes(driveUsage) : "Unavailable",
+        help: "Storage used by files in Drive. The total account usage above also includes Gmail and Google Photos.",
+        group: "Google Drive storage",
+      },
+      {
+        label: "Download bandwidth",
+        value: notConnected ? "Not connected" : "No live meter",
+        help: "The Drive storage API does not report bandwidth used or remaining. Google's current new-project quota model lists 1 TB of API egress per project per day; this project's assigned limit may differ, so check Google Cloud Console → APIs & Services → Google Drive API → Quotas. Google may also temporarily restrict unusually popular file downloads without publishing a numeric per-file threshold.",
+        group: "Google Drive limits",
+      },
+    ],
+    details: [],
+    resources: [],
+  };
 }
 
 function monthDateRange() {
@@ -655,9 +740,117 @@ async function getCloudflareWorkerUsage(headers: Record<string, string>, account
   }), { requests: 0, errors: 0, subrequests: 0 });
 }
 
-async function getCloudflareUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<ProviderUsage> {
+async function getCloudflareD1Usage(headers: Record<string, string>, accountId: string): Promise<CloudflareD1Usage> {
+  const today = new Date().toISOString().slice(0, 10);
+  const query = `
+    query($accountTag: string!, $start: Date!, $end: Date!) {
+      viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+          d1AnalyticsAdaptiveGroups(limit: 10000, filter: { date_geq: $start, date_leq: $end }) {
+            sum { rowsRead rowsWritten }
+            dimensions { date databaseId }
+          }
+          d1StorageAdaptiveGroups(limit: 10000, filter: { date_geq: $start, date_leq: $end }) {
+            max { databaseSizeBytes }
+            dimensions { date databaseId }
+          }
+        }
+      }
+    }
+  `;
+  const result = await fetchJson<{
+    data?: {
+      viewer?: {
+        accounts?: Array<{
+          d1AnalyticsAdaptiveGroups?: CloudflareD1AnalyticsGroup[];
+          d1StorageAdaptiveGroups?: CloudflareD1StorageGroup[];
+        }>;
+      };
+    };
+  }>("https://api.cloudflare.com/client/v4/graphql", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ query, variables: { accountTag: accountId, start: today, end: today } }),
+  });
+  const account = result.data?.viewer?.accounts?.[0];
+  const analytics = account?.d1AnalyticsAdaptiveGroups;
+  const storage = account?.d1StorageAdaptiveGroups;
+  if (!analytics || !storage) throw new Error("Cloudflare did not return D1 analytics.");
+
+  const databaseSizes = new Map<string, number>();
+  for (const group of storage) {
+    const databaseId = group.dimensions?.databaseId;
+    const bytes = group.max?.databaseSizeBytes;
+    if (!databaseId || typeof bytes !== "number" || !Number.isFinite(bytes)) continue;
+    databaseSizes.set(databaseId, Math.max(databaseSizes.get(databaseId) || 0, bytes));
+  }
+
+  return {
+    rowsRead: analytics.reduce((total, group) => total + (typeof group.sum?.rowsRead === "number" ? group.sum.rowsRead : 0), 0),
+    rowsWritten: analytics.reduce((total, group) => total + (typeof group.sum?.rowsWritten === "number" ? group.sum.rowsWritten : 0), 0),
+    storageBytes: storage.length ? Array.from(databaseSizes.values()).reduce((total, bytes) => total + bytes, 0) : null,
+  };
+}
+
+function getCloudflareD1Provider(usage: CloudflareD1Usage | null, configured: boolean): ProviderUsage {
+  const d1ReadLimit = 5_000_000;
+  const d1WriteLimit = 100_000;
+  const d1AccountStorageLimitBytes = 5 * 1024 * 1024 * 1024;
+
+  return {
+    id: "cloudflare-d1",
+    name: "Cloudflare D1",
+    icon: "database",
+    configured,
+    status: usage ? "connected" : configured ? "partial" : "not-configured",
+    statusLabel: usage ? "Live usage" : configured ? "Limits only" : "Not configured",
+    cards: [
+      {
+        label: "Rows read (today UTC)",
+        value: usage ? `${formatNumber(usage.rowsRead ?? 0)} / 5M Free reference` : "Unavailable",
+        help: usage
+          ? "Rows scanned across all D1 databases in this account for the current UTC day. Workers Free allows 5 million rows read per day; this is a reference because this panel cannot verify your plan."
+          : "Requires Account Analytics:Read access. D1 reads count rows scanned, summed across the account. The Free limit is 5 million rows read per UTC day; Workers Paid is billed monthly.",
+        meterPercent: usage?.rowsRead === null || !usage ? undefined : getUsagePercent(usage.rowsRead, d1ReadLimit),
+      },
+      {
+        label: "Rows written (today UTC)",
+        value: usage ? `${formatNumber(usage.rowsWritten ?? 0)} / 100K Free reference` : "Unavailable",
+        help: usage
+          ? "Rows written across all D1 databases in this account for the current UTC day. Workers Free allows 100,000 rows written per day; this is a reference because this panel cannot verify your plan."
+          : "Requires Account Analytics:Read access. D1 writes count rows written, summed across the account. The Free limit is 100,000 rows written per UTC day; Workers Paid is billed monthly.",
+        meterPercent: usage?.rowsWritten === null || !usage ? undefined : getUsagePercent(usage.rowsWritten, d1WriteLimit),
+      },
+      {
+        label: "Storage (account)",
+        value: usage?.storageBytes === null || !usage ? "Unavailable" : `${formatBytes(usage.storageBytes)} / 5 GB Free reference`,
+        help: usage?.storageBytes === null || !usage
+          ? "Requires Account Analytics:Read access. Cloudflare D1 storage metrics are summed across databases. Workers Free includes 5 GB total account storage; Workers Paid includes 5 GB before additional storage charges."
+          : "Current maximum database sizes summed across databases in this account. Workers Free includes 5 GB total D1 storage; this is a Free-tier reference because this panel cannot verify your plan.",
+        meterPercent: usage?.storageBytes === null || !usage ? undefined : getUsagePercent(usage.storageBytes, d1AccountStorageLimitBytes),
+      },
+      {
+        label: "Max database size",
+        value: "500 MB Free reference",
+        help: "Cloudflare lists a 500 MB per-database maximum on Workers Free and 10 GB on Workers Paid. Account plan is not available to this panel.",
+      },
+      {
+        label: "Queries per Worker invocation",
+        value: "50 Free reference",
+        help: "Cloudflare allows up to 50 D1 query subrequests per Worker invocation on Free and 1,000 on Workers Paid. Account plan is not available to this panel.",
+      },
+    ],
+    details: [],
+    resources: [],
+  };
+}
+
+async function getCloudflareUsage(env: Awaited<ReturnType<typeof readEnv>>): Promise<ProviderUsage[]> {
   if (!env.cloudflareApiToken && (!env.cloudflareEmail || !env.cloudflareApiKey)) {
-    return notConfigured("cloudflare", "Cloudflare", "shield", ["CLOUDFLARE_API_TOKEN", "or CLOUDFLARE_EMAIL + CLOUDFLARE_API_KEY"]);
+    return [
+      notConfigured("cloudflare", "Cloudflare", "shield", ["CLOUDFLARE_API_TOKEN", "or CLOUDFLARE_EMAIL + CLOUDFLARE_API_KEY"]),
+      getCloudflareD1Provider(null, false),
+    ];
   }
 
   try {
@@ -673,14 +866,17 @@ async function getCloudflareUsage(env: Awaited<ReturnType<typeof readEnv>>): Pro
       (!env.cloudflareZoneId || zone.id === env.cloudflareZoneId) &&
       (!env.cloudflareZoneName || zone.name === env.cloudflareZoneName),
     );
-    const [analytics, workerUsage] = await Promise.all([
+    const [analytics, workerUsage, d1Usage] = await Promise.all([
       getCloudflareZoneAnalytics(headers, zoneList).catch(() => null),
       env.cloudflareAccountId && env.cloudflareWorkerName
         ? getCloudflareWorkerUsage(headers, env.cloudflareAccountId, env.cloudflareWorkerName).catch(() => null)
         : Promise.resolve(null),
+      env.cloudflareAccountId
+        ? getCloudflareD1Usage(headers, env.cloudflareAccountId).catch(() => null)
+        : Promise.resolve(null),
     ]);
     const hasUsageData = Boolean(analytics || workerUsage);
-    return {
+    const cloudflareProvider: ProviderUsage = {
       id: "cloudflare",
       name: "Cloudflare",
       icon: "shield",
@@ -695,6 +891,7 @@ async function getCloudflareUsage(env: Awaited<ReturnType<typeof readEnv>>): Pro
             ? "Workers Free allows 100,000 requests per account per UTC day; this count is for the configured Worker, and other Workers share the allowance."
             : "Requires account analytics access and a configured Worker name.",
           meterPercent: workerUsage ? getUsagePercent(workerUsage.requests, 100_000) : undefined,
+          group: "Workers & website",
         },
         {
           label: "Worker subrequests (today UTC)",
@@ -705,28 +902,36 @@ async function getCloudflareUsage(env: Awaited<ReturnType<typeof readEnv>>): Pro
           meterPercent: workerUsage && workerUsage.requests > 0
             ? getUsagePercent(workerUsage.subrequests, workerUsage.requests * 50)
             : undefined,
+          group: "Workers & website",
         },
         {
           label: "Worker errors (today UTC)",
           value: workerUsage ? `${formatNumber(workerUsage.errors)} / ${formatNumber(workerUsage.requests)} invocations` : "Unavailable",
           help: "Errors compared with this Worker's invocations; there is no separate error-count quota.",
+          group: "Workers & website",
         },
         {
           label: "Zone requests (30d)",
           value: analytics ? `${formatNumber(analytics.requests)} / unmetered` : "Unavailable",
           help: analytics ? `${formatPercent(analytics.cacheHitRate)} cache hit rate · Free website traffic has no metered request allowance.` : undefined,
+          group: "Workers & website",
         },
         {
           label: "Bandwidth (30d)",
           value: analytics ? `${formatBytes(analytics.bytes)} / unmetered` : "Unavailable",
           help: analytics ? `${formatBytes(analytics.cachedBytes)} served from cache · Free website traffic is unmetered.` : undefined,
+          group: "Workers & website",
         },
       ],
       details: [],
       resources: [],
     };
+    return [cloudflareProvider, getCloudflareD1Provider(d1Usage, true)];
   } catch (error) {
-    return errorProvider("cloudflare", "Cloudflare", "shield", error);
+    return [
+      errorProvider("cloudflare", "Cloudflare", "shield", error),
+      getCloudflareD1Provider(null, true),
+    ];
   }
 }
 
@@ -866,10 +1071,11 @@ async function getNeonUsage(env: Awaited<ReturnType<typeof readEnv>>, db: Databa
       statusLabel: databaseMetrics ? "Live usage" : projectStats.length ? "Connected" : "No projects",
       cards: [
         ...(database ? getNeonDatabaseUsageCards(databaseMetrics) : []),
-        { label: "Projects", value: formatNumber(projectList.length), help: env.neonProjectId ? "Filtered project configured" : "Token-visible projects" },
-        { label: "Branches", value: formatNumber(branchCount), help: `Across ${selectedProjects.length || 0} checked` },
-        { label: "Endpoints", value: formatNumber(endpointCount), help: `${runningEndpoints} active` },
-        { label: "Regions", value: formatNumber(regions.length), help: regions.slice(0, 2).join(", ") || "Unknown" },
+        ...getNeonComputeLimitCards(),
+        { label: "Projects", value: formatNumber(projectList.length), help: env.neonProjectId ? "Filtered project configured" : "Token-visible projects", group: "Project inventory" },
+        { label: "Branches", value: formatNumber(branchCount), help: `Across ${selectedProjects.length || 0} checked`, group: "Project inventory" },
+        { label: "Endpoints", value: formatNumber(endpointCount), help: `${runningEndpoints} active`, group: "Project inventory" },
+        { label: "Regions", value: formatNumber(regions.length), help: regions.slice(0, 2).join(", ") || "Unknown", group: "Project inventory" },
       ],
       details: [
         { label: "Configured project", value: env.neonProjectId || "All token-visible projects" },
@@ -1081,41 +1287,25 @@ function getCloudinaryProvider(
 
 export async function getProviderUsageOverview(
   context: ProviderEnv | undefined,
-  cloudinaryUsage: CloudinaryUsage | null,
-  cloudinaryVideoUsage: CloudinaryUsage | null,
+  cloudinaryUsage: CloudinaryUsage | null | Promise<CloudinaryUsage | null>,
+  cloudinaryVideoUsage: CloudinaryUsage | null | Promise<CloudinaryUsage | null>,
   db: DatabaseClient,
 ) {
   const env = await readEnv(context);
-  const now = Date.now();
-  let infrastructureProviders = providerCache && providerCache.expiresAt > now ? providerCache.data : null;
-
-  if (!infrastructureProviders) {
-    if (!providerCachePromise) {
-      providerCachePromise = (async () => {
-        const providers = await Promise.all([
-          getCloudflareUsage(env),
-          getSupabaseUsage(env),
-        ]);
-        providerCache = { expiresAt: Date.now() + PROVIDER_CACHE_MS, data: providers };
-        providerCachePromise = null;
-        return providers;
-      })().catch((error) => {
-        providerCachePromise = null;
-        throw error;
-      });
-    }
-
-    infrastructureProviders = await providerCachePromise;
-  }
-
-  const neonProvider = parseNeonDatabaseUrl(env.databaseUrl) || env.neonApiKey
-    ? await getNeonUsage(env, db)
-    : null;
+  const [cloudflareProviders, supabaseProvider, neonProvider, imageUsage, videoUsage, driveQuota] = await Promise.all([
+    getCloudflareUsage(env), getSupabaseUsage(env),
+    parseNeonDatabaseUrl(env.databaseUrl) || env.neonApiKey ? getNeonUsage(env, db) : null,
+    cloudinaryUsage, cloudinaryVideoUsage,
+    getGoogleDriveStorageQuota(db, context as LoaderContext).catch(() => ({ status: "unavailable" } as const)),
+  ]);
+  const infrastructureProviders = [...cloudflareProviders, supabaseProvider];
 
   return [
     ...infrastructureProviders.filter((provider) => provider.id === "cloudflare"),
+    ...infrastructureProviders.filter((provider) => provider.id === "cloudflare-d1"),
     ...(neonProvider ? [neonProvider] : []),
-    ...infrastructureProviders.filter((provider) => provider.id !== "cloudflare"),
-    getCloudinaryProvider(cloudinaryUsage, cloudinaryVideoUsage),
+    ...infrastructureProviders.filter((provider) => provider.id !== "cloudflare" && provider.id !== "cloudflare-d1"),
+    getGoogleDriveProvider(driveQuota),
+    getCloudinaryProvider(imageUsage, videoUsage),
   ].map(({ id, name, status, statusLabel, cards }) => ({ id, name, status, statusLabel, cards }));
 }

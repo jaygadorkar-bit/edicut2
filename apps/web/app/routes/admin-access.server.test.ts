@@ -6,7 +6,7 @@ vi.mock("@edicut/db/repositories/users", () => ({ findUserById: mocks.user }));
 vi.mock("../lib/db.server", () => ({ getDbFromContext: () => ({}) }));
 
 import { loader } from "./admin-access";
-import { commitSession, getAdminSession, getSession } from "../lib/session.server";
+import { commitSession, getAdminSession, getSession, getSessionCredentialVersion } from "../lib/session.server";
 import { ADMIN_ACCESS_PATH, ADMIN_BASE_PATH } from "../lib/admin-paths";
 
 const context = { cloudflare: { env: { SESSION_SECRET: "admin-access-test-only-secret" } } };
@@ -22,8 +22,12 @@ beforeEach(() => {
 async function openPanel(verified: boolean) {
   const session = await getSession(null, context);
   session.set("userId", user.id);
+  session.set("authCredentialVersion", await getSessionCredentialVersion(user, context));
   session.set("adminUserId", admin.id);
-  if (verified) session.set("adminAccessVerified", true);
+  if (verified) {
+    session.set("adminAccessVerified", true);
+    session.set("adminCredentialVersion", await getSessionCredentialVersion(admin, context, "admin"));
+  }
   const cookie = (await commitSession(session, undefined, context)).split(";")[0];
   const request = new Request(`http://localhost:3002${ADMIN_ACCESS_PATH}`, { headers: { Cookie: cookie } });
   return loader({ request, context, params: {} } as Parameters<typeof loader>[0]);
@@ -56,11 +60,11 @@ describe("verified workspace admin panel access", () => {
     expect(response.headers.has("Set-Cookie")).toBe(true);
   });
 
-  it("does not promote a workspace account when its email differs from the admin account", async () => {
+  it("invalidates the existing workspace session when its profile email changes", async () => {
     mocks.user.mockResolvedValue({ ...user, email: "different@example.com" });
-    const response = await openPanel(true);
-    expect(response.headers.get("Location")).toBe("/dashboard");
-    expect(response.headers.has("Set-Cookie")).toBe(false);
+    const response = await openPanel(true).catch(error => error as Response);
+    expect(response.headers.get("Location")).toContain("/signin");
+    expect(response.headers.has("Set-Cookie")).toBe(true);
   });
 
   it.each([{ ...admin, active: false }, { ...admin, role: "customer" }, undefined])(

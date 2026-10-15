@@ -1,8 +1,8 @@
-import { useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+import { redirect, useLoaderData, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { WorkspaceShell } from "../components/WorkspaceShell";
 import { ChatWorkspace } from "../components/ChatWorkspace";
 import { requireChatActor } from "../lib/chat-access.server";
-import { ensureClientChatRooms, isMissingChatSchema, listChatRooms } from "../lib/chat.server";
+import { createChatStore, isMissingChatSchema } from "../lib/chat-store.server";
 import { clientNavigation } from "../lib/client-workspace-navigation";
 import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
 import { getAllowedDashboardFeatures } from "../lib/role-feature-access";
@@ -12,9 +12,16 @@ export const meta: MetaFunction = () => [{ title: "Chat | EdiCut" }, { name: "ro
 export const headers = () => ({ "Cache-Control": "no-store" });
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const { db, actor } = await requireChatActor(request, context);
-  const features = getAllowedDashboardFeatures(actor.role, await getRoleFeatureAccessSettings(db, context));
-  try { await ensureClientChatRooms(db, actor); return { actor, features, state: await listChatRooms(db, actor) }; }
-  catch (error) { if (!isMissingChatSchema(error)) throw error; return { actor, features, state: { rooms: [], hasMore: false, page: 1, ready: false } }; }
+  const chat = createChatStore(db, context);
+  if (actor.role === 'customer_support') throw redirect('/dashboard/tickets');
+  const [access, state] = await Promise.all([
+    getRoleFeatureAccessSettings(db, context),
+    (async () => {
+      try { await chat.ensureClientChatRooms(actor); return await chat.listChatRooms(actor); }
+      catch (error) { if (!isMissingChatSchema(error)) throw error; return { rooms: [], hasMore: false, page: 1, ready: false }; }
+    })(),
+  ]);
+  return { actor, features: getAllowedDashboardFeatures(actor.role, access), state };
 }
 export default function DashboardChat() {
   const { actor, features, state } = useLoaderData<typeof loader>();

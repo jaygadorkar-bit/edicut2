@@ -1,0 +1,12 @@
+{
+  "name": "edicut-chat-d1-production",
+  "account_id": "f2c46bb116722bcb7dc4be44e500154b",
+  "compatibility_date": "2026-04-19",
+  "d1_databases": [{
+    "binding": "CHAT_D1",
+    "database_name": "edicut-chat-production",
+    "database_id": "248da0e0-8360-4d6d-9d06-83e1504f332f",
+    "migrations_dir": ".",
+    "migrations_pattern": "[0-9]*.sql"
+  }]
+}

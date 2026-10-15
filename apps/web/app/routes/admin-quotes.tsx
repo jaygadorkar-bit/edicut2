@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, Form, Link, useActionData, useLoaderData, useNavigation } from "react-router";
+import { data, Form, Link, useActionData, useLoaderData, useNavigation, useSearchParams } from "react-router";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { customQuotes } from "@edicut/db/schema";
 import { customQuoteOptionsSchema, quoteProjectTypes, quoteStatuses, quoteStatusSchema, quoteOptionLabel } from "@edicut/shared/contracts/custom-quotes";
@@ -31,7 +31,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const parsedStatus = quoteStatusSchema.safeParse(url.searchParams.get("status"));
   const status = parsedStatus.success ? parsedStatus.data : "all";
-  const where = status === "all" ? undefined : eq(customQuotes.status, status);
+  const eventId = url.searchParams.get("event");
+  if (eventId && !isWorkspaceRecordId(eventId)) throw new Response("Quote not found.", { status: 404 });
+  const where = eventId ? eq(customQuotes.id, eventId) : status === "all" ? undefined : eq(customQuotes.status, status);
   const [filtered, summaryRows] = await Promise.all([
     db.select({ count: count() }).from(customQuotes).where(where),
     db.select({ total: count(), new: sql<number>`count(*) FILTER (WHERE ${customQuotes.status} = 'new')`.mapWith(Number), reviewing: sql<number>`count(*) FILTER (WHERE ${customQuotes.status} = 'reviewing')`.mapWith(Number), contacted: sql<number>`count(*) FILTER (WHERE ${customQuotes.status} = 'contacted')`.mapWith(Number), closed: sql<number>`count(*) FILTER (WHERE ${customQuotes.status} = 'closed')`.mapWith(Number) }).from(customQuotes),
@@ -67,6 +69,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function AdminQuotesPage() {
+  const [params] = useSearchParams();
   const { admin, records, status, page, total, totalPages, summary } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -74,6 +77,7 @@ export default function AdminQuotesPage() {
   const href = (filter: string, nextPage = 1) => `${adminPath("/quotes")}?${new URLSearchParams({ status: filter, page: String(nextPage) })}`;
   return <AdminPanelShell title="Custom quotes" activeTab="quotes" account={{ name: admin.name || admin.email, detail: admin.email }}>
     <div className="admin-quotes-page">
+      {params.get("event") ? <p className="quote-admin-notice">Showing the selected quote. <Link to={adminPath("/quotes")} className="underline">View all quotes</Link></p> : null}
       <div className="admin-quotes-heading"><div><h2>Custom quotes</h2><p>Review the scope clients need and follow up with a tailored quote.</p></div><Link className="neo-button" to="/custom-quote"><FileText size={17} aria-hidden="true" />Quote form</Link></div>
       {result?.error || result?.success ? <p role={result.error ? "alert" : "status"} className={`quote-admin-notice${result.error ? " is-error" : ""}`}>{result.error || result.success}</p> : null}
       <section className="quote-admin-metrics" aria-label="Quote request summary">{[

@@ -9,19 +9,10 @@ type CloudinaryEnv = {
 
 type CloudinaryAccount = "image" | "video";
 
-const CLOUDINARY_CACHE_MS = 60_000;
 const MAX_CLOUDINARY_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_CLOUDINARY_VIDEO_BYTES = 50 * 1024 * 1024;
 const MAX_CLOUDINARY_DELETE_IDS = 100;
 
-let imageListCache: { expiresAt: number; data: CloudinaryImageResource[] } | null = null;
-let imageListPromise: Promise<CloudinaryImageResource[]> | null = null;
-let videoListCache: { expiresAt: number; data: CloudinaryVideoResource[] } | null = null;
-let videoListPromise: Promise<CloudinaryVideoResource[]> | null = null;
-let imageUsageCache: { expiresAt: number; data: CloudinaryUsage } | null = null;
-let imageUsagePromise: Promise<CloudinaryUsage> | null = null;
-let videoUsageCache: { expiresAt: number; data: CloudinaryUsage } | null = null;
-let videoUsagePromise: Promise<CloudinaryUsage> | null = null;
 
 async function readLocalEnvFile() {
   if (!globalThis.process?.cwd) {
@@ -108,25 +99,16 @@ export type CloudinaryUsage = {
   };
 };
 
-function clearCloudinaryCache() {
-  imageListCache = null;
-  imageListPromise = null;
-  videoListCache = null;
-  videoListPromise = null;
-  imageUsageCache = null;
-  imageUsagePromise = null;
-  videoUsageCache = null;
-  videoUsagePromise = null;
-}
-
 async function readEnv(context: CloudinaryEnv | undefined, account: CloudinaryAccount) {
   const nodeEnv = globalThis.process?.env as Record<string, string | undefined> | undefined;
-  const localEnv = await readLocalEnvFile();
   const prefix = account === "video" ? "CLOUDINARY_VIDEO_" : "CLOUDINARY_";
-  const get = (name: "CLOUD_NAME" | "API_KEY" | "API_SECRET") => {
+  const runtimeValue = (name: "CLOUD_NAME" | "API_KEY" | "API_SECRET") => {
     const key = `${prefix}${name}`;
-    return context?.cloudflare?.env?.[key] ?? context?.cf?.env?.[key] ?? nodeEnv?.[key] ?? localEnv[key];
+    return context?.cloudflare?.env?.[key] ?? context?.cf?.env?.[key] ?? nodeEnv?.[key];
   };
+  const localEnv = ["CLOUD_NAME", "API_KEY", "API_SECRET"].every(name => runtimeValue(name as "CLOUD_NAME" | "API_KEY" | "API_SECRET"))
+    ? {} : await readLocalEnvFile();
+  const get = (name: "CLOUD_NAME" | "API_KEY" | "API_SECRET") => runtimeValue(name) ?? localEnv[`${prefix}${name}`];
 
   return {
     cloudName: get("CLOUD_NAME"),
@@ -159,6 +141,7 @@ async function cloudinaryAdminRequest<T>(
   const env = await requireCloudinaryEnv(context, account);
   const response = await fetchWithTimeout(`https://api.cloudinary.com/v1_1/${env.cloudName}${path}`, {
     ...init,
+    cache: "no-store",
     headers: {
       Authorization: authHeader(env.apiKey, env.apiSecret),
       ...(init.headers || {}),
@@ -225,7 +208,6 @@ export async function uploadPackageImageToCloudinary(file: File, context?: Cloud
     throw new Error(result.error?.message || "Cloudinary upload failed.");
   }
 
-  clearCloudinaryCache();
   return {
     public_id: result.public_id,
     secure_url: result.secure_url,
@@ -238,55 +220,24 @@ export async function uploadPackageImageToCloudinary(file: File, context?: Cloud
 }
 
 export async function listCloudinaryImages(context?: CloudinaryEnv) {
-  const now = Date.now();
+  const result = await cloudinaryAdminRequest<{ resources?: CloudinaryImageResource[] }>(
+    "/resources/image/upload?prefix=edicut/&max_results=100", context,
+  );
+  return result.resources || [];
+}
 
-  if (imageListCache && imageListCache.expiresAt > now) {
-    return imageListCache.data;
-  }
-
-  if (!imageListPromise) {
-    imageListPromise = cloudinaryAdminRequest<{ resources?: CloudinaryImageResource[] }>(
-      "/resources/image/upload?prefix=edicut/&max_results=100",
-      context,
-      {},
-      "image",
-    )
-      .then((result) => {
-        const data = result.resources || [];
-        imageListCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
-        imageListPromise = null;
-        return data;
-      })
-      .catch((error) => {
-        imageListPromise = null;
-        throw error;
-      });
-  }
-
-  return imageListPromise;
+/** Fetch a scalar overview count instead of downloading the image inventory. */
+export async function countCloudinaryImages(context?: CloudinaryEnv) {
+  const result = await cloudinaryAdminRequest<{ total_count?: number }>("/resources/search", context, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expression: "resource_type:image AND type:upload AND public_id:edicut/*", max_results: 1 }),
+  });
+  if (!Number.isSafeInteger(result.total_count) || result.total_count! < 0) throw new Error("Cloudinary image count unavailable.");
+  return result.total_count!;
 }
 
 export async function getCloudinaryUsage(context?: CloudinaryEnv) {
-  const now = Date.now();
-
-  if (imageUsageCache && imageUsageCache.expiresAt > now) {
-    return imageUsageCache.data;
-  }
-
-  if (!imageUsagePromise) {
-    imageUsagePromise = cloudinaryAdminRequest<CloudinaryUsage>("/usage", context, {}, "image")
-      .then((data) => {
-        imageUsageCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
-        imageUsagePromise = null;
-        return data;
-      })
-      .catch((error) => {
-        imageUsagePromise = null;
-        throw error;
-      });
-  }
-
-  return imageUsagePromise;
+  return cloudinaryAdminRequest<CloudinaryUsage>("/usage", context);
 }
 
 export async function uploadPortfolioVideoToCloudinary(file: File, context?: CloudinaryEnv) {
@@ -323,7 +274,6 @@ export async function uploadPortfolioVideoToCloudinary(file: File, context?: Clo
     throw new Error(result.error?.message || "Cloudinary video upload failed.");
   }
 
-  clearCloudinaryCache();
   return {
     public_id: result.public_id,
     secure_url: result.secure_url,
@@ -336,55 +286,14 @@ export async function uploadPortfolioVideoToCloudinary(file: File, context?: Clo
 }
 
 export async function listCloudinaryVideos(context?: CloudinaryEnv) {
-  const now = Date.now();
-
-  if (videoListCache && videoListCache.expiresAt > now) {
-    return videoListCache.data;
-  }
-
-  if (!videoListPromise) {
-    videoListPromise = cloudinaryAdminRequest<{ resources?: CloudinaryVideoResource[] }>(
-      "/resources/video/upload?prefix=edicut/portfolio&max_results=100",
-      context,
-      {},
-      "video",
-    )
-      .then((result) => {
-        const data = result.resources || [];
-        videoListCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
-        videoListPromise = null;
-        return data;
-      })
-      .catch((error) => {
-        videoListPromise = null;
-        throw error;
-      });
-  }
-
-  return videoListPromise;
+  const result = await cloudinaryAdminRequest<{ resources?: CloudinaryVideoResource[] }>(
+    "/resources/video/upload?prefix=edicut/portfolio&max_results=100", context, {}, "video",
+  );
+  return result.resources || [];
 }
 
 export async function getCloudinaryVideoUsage(context?: CloudinaryEnv) {
-  const now = Date.now();
-
-  if (videoUsageCache && videoUsageCache.expiresAt > now) {
-    return videoUsageCache.data;
-  }
-
-  if (!videoUsagePromise) {
-    videoUsagePromise = cloudinaryAdminRequest<CloudinaryUsage>("/usage", context, {}, "video")
-      .then((data) => {
-        videoUsageCache = { expiresAt: Date.now() + CLOUDINARY_CACHE_MS, data };
-        videoUsagePromise = null;
-        return data;
-      })
-      .catch((error) => {
-        videoUsagePromise = null;
-        throw error;
-      });
-  }
-
-  return videoUsagePromise;
+  return cloudinaryAdminRequest<CloudinaryUsage>("/usage", context, {}, "video");
 }
 
 export async function deleteCloudinaryImages(publicIds: string[], context?: CloudinaryEnv) {
@@ -410,7 +319,6 @@ export async function deleteCloudinaryImages(publicIds: string[], context?: Clou
     },
     "image",
   );
-  clearCloudinaryCache();
 }
 
 export async function deleteCloudinaryVideos(publicIds: string[], context?: CloudinaryEnv) {
@@ -434,7 +342,6 @@ export async function deleteCloudinaryVideos(publicIds: string[], context?: Clou
     },
     "video",
   );
-  clearCloudinaryCache();
 }
 
 export function removeCloudinaryUrlsFromPackages(packages: PricingPackage[], deletedUrls: string[]) {

@@ -10,6 +10,11 @@ describe("panel mutation boundaries", () => {
     expect(isSameSiteMutation(new Request(url, { method: "POST", headers: { "Sec-Fetch-Site": "cross-site" } }))).toBe(false);
     expect(isSameSiteMutation(new Request(url))).toBe(false);
   });
+  it("rejects foreign referrers and sibling sites when Origin is missing", () => {
+    expect(isSameSiteMutation(new Request(url, { method: "POST", headers: { Referer: "https://attacker.test/form" } }))).toBe(false);
+    expect(isSameSiteMutation(new Request(url, { method: "POST", headers: { "Sec-Fetch-Site": "same-site" } }))).toBe(false);
+    expect(isSameSiteMutation(new Request(url, { method: "POST", headers: { Referer: "https://edicut.com/dashboard", "Sec-Fetch-Site": "same-origin" } }))).toBe(true);
+  });
   it("reads URL-encoded forms including multilingual text", async () => {
     const form = await readMutationForm(new Request(url, { method: "POST", body: new URLSearchParams({ intent: "save-profile", name: "বাংলা" }) }), 4096);
     expect(form?.get("name")).toBe("বাংলা");

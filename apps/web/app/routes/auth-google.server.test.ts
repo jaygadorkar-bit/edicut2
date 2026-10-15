@@ -10,7 +10,7 @@ vi.mock("../lib/google-auth.server", () => ({ startGoogleOAuth: mocks.startGoogl
 vi.mock("../lib/recaptcha.server", () => ({ verifyRecaptchaToken: mocks.verifyRecaptchaToken }));
 vi.mock("../lib/customer-subscriptions.server", () => ({ isSameSiteMutation: mocks.isSameSiteMutation }));
 
-import { action } from "./auth-google";
+import { action, loader } from "./auth-google";
 
 function args(values: Record<string, string> = {}) {
   const formData = new FormData();
@@ -24,6 +24,35 @@ beforeEach(() => {
   mocks.isSameSiteMutation.mockReturnValue(true);
   mocks.verifyRecaptchaToken.mockResolvedValue({ success: true });
   mocks.startGoogleOAuth.mockResolvedValue(new Response(null, { status: 302, headers: { Location: "https://accounts.google.com/" } }));
+});
+
+describe("Google OAuth GET navigation", () => {
+  function get(query = "") {
+    return loader({ request: new Request(`http://localhost:3002/auth/google${query}`), params: {}, context: {} } as Parameters<typeof loader>[0]);
+  }
+
+  it("redirects a direct visit to sign-in without bypassing the CAPTCHA", () => {
+    const response = get();
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/signin");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(mocks.startGoogleOAuth).not.toHaveBeenCalled();
+  });
+
+  it("preserves the user's destination", () => {
+    expect(get("?returnTo=%2Fdashboard%2Fprojects%3Fpage%3D2").headers.get("Location"))
+      .toBe("/signin?redirectTo=%2Fdashboard%2Fprojects%3Fpage%3D2");
+  });
+
+  it("returns admins to the admin login", () => {
+    expect(get("?mode=admin&returnTo=%2Fsite%2Fnode-logmin%2Fusers").headers.get("Location"))
+      .toBe("/site/node-logmin/login?redirectTo=%2Fsite%2Fnode-logmin%2Fusers");
+  });
+
+  it.each(["https://example.com", "//example.com", "/\\example.com", "/\n/example.com"])
+    ("discards unsafe return paths: %s", (returnTo) => {
+      expect(get(`?returnTo=${encodeURIComponent(returnTo)}`).headers.get("Location")).toBe("/signin");
+    });
 });
 
 describe("Google OAuth reCAPTCHA gate", () => {

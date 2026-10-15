@@ -3,7 +3,7 @@ import { findAdminUserById } from "@edicut/db/repositories/admin-users";
 import { findUserById } from "@edicut/db/repositories/users";
 import { redirect } from "react-router";
 import type { LoaderContext } from "../types";
-import { destroySession, getAdminSession, getSession, isAdminRole, requireAdminUser, requireUserId } from "./session.server";
+import { destroySession, getAdminSession, getSession, hasCurrentSessionCredentials, isAdminRole, requireAdminUser, requireUserId } from "./session.server";
 import { getRoleFeatureAccessSettings } from "./site-settings.server";
 import { getAllowedDashboardFeatures, getDashboardLandingPath, type DashboardFeature } from "./role-feature-access";
 import { toPublicUser } from "./admin-public";
@@ -28,7 +28,8 @@ export async function requireContactInboxAccess(request: Request, db: DatabaseCl
   const adminId = session.get("adminUserId");
   if (session.get("adminAccessVerified") === true && typeof adminId === "string" && adminId) {
     const admin = await findAdminUserById(db, adminId);
-    if (admin?.active && isAdminRole(admin.role) && admin.email.trim().toLowerCase() === user.email.trim().toLowerCase()) {
+    if (admin?.active && isAdminRole(admin.role) && admin.email.trim().toLowerCase() === user.email.trim().toLowerCase()
+      && await hasCurrentSessionCredentials(session.get("adminCredentialVersion"), admin, context, "admin")) {
       return { db, user: { ...toPublicUser(user), role: "admin" }, allowedFeatures: Array.from(new Set<DashboardFeature>([...allowedFeatures, "support"])) };
     }
   }

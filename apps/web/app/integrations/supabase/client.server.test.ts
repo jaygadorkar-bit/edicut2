@@ -6,11 +6,12 @@ const mocks = vi.hoisted(() => ({
   listUsers: vi.fn(),
   updateUserById: vi.fn(),
   deleteUser: vi.fn(),
+  setSession: vi.fn(), signOut: vi.fn(), adminSignOut: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.createClient }));
 
-import { deleteSupabaseUsersByEmail, updateSupabaseUserEmailByEmail, updateSupabaseUserPasswordByEmail } from "./client.server";
+import { deleteSupabaseUsersByEmail, revokeSupabaseSession, updateSupabaseUserEmailByEmail, updateSupabaseUserPasswordByEmail } from "./client.server";
 
 let keySequence = 0;
 function context() {
@@ -26,19 +27,43 @@ const authUser = { id: "auth-user-id", email: "client@example.com" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.createClient.mockImplementation(() => ({ auth: { admin: {
+  mocks.createClient.mockImplementation(() => ({ auth: { setSession: mocks.setSession, signOut: mocks.signOut, admin: {
     getUserById: mocks.getUserById,
     listUsers: mocks.listUsers,
     updateUserById: mocks.updateUserById,
     deleteUser: mocks.deleteUser,
+    signOut: mocks.adminSignOut,
   } } }));
   mocks.getUserById.mockResolvedValue({ data: { user: null }, error: { message: "not found" } });
   mocks.listUsers.mockResolvedValue({ data: { users: [] }, error: null });
   mocks.updateUserById.mockResolvedValue({ error: null });
   mocks.deleteUser.mockResolvedValue({ error: null });
+  mocks.setSession.mockResolvedValue({ error: null }); mocks.signOut.mockResolvedValue({ error: null }); mocks.adminSignOut.mockResolvedValue({ error: null });
 });
 
 describe("server-side Supabase Auth account updates", () => {
+  it("revokes the current provider session after refreshing expired access credentials", async () => {
+    await revokeSupabaseSession(context(), "access-token", "refresh-token");
+    expect(mocks.setSession).toHaveBeenCalledWith({ access_token: "access-token", refresh_token: "refresh-token" });
+    expect(mocks.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+  it("does not claim successful logout during a provider outage", async () => {
+    mocks.setSession.mockResolvedValue({ error: { status: 503 } });
+    await expect(revokeSupabaseSession(context(), "access-token", "refresh-token")).rejects.toThrow("revocation is unavailable");
+    expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+  it("allows already-invalid provider sessions to be cleared", async () => {
+    mocks.setSession.mockResolvedValue({ error: { status: 400, code: "refresh_token_not_found" } });
+    await expect(revokeSupabaseSession(context(), "access-token", "refresh-token")).resolves.toBeUndefined();
+  });
+  it("does not mistake a misconfigured provider key for an already-revoked session", async () => {
+    mocks.setSession.mockResolvedValue({ error: { status: 401, code: "invalid_api_key" } });
+    await expect(revokeSupabaseSession(context(), "access-token", "refresh-token")).rejects.toThrow("revocation is unavailable");
+  });
+  it("keeps local-only logouts independent of Supabase", async () => {
+    await revokeSupabaseSession(undefined, undefined, undefined);
+    expect(mocks.createClient).not.toHaveBeenCalled();
+  });
   it("updates a password using a matching auth ID without scanning the user directory", async () => {
     mocks.getUserById.mockResolvedValue({ data: { user: authUser }, error: null });
     await expect(updateSupabaseUserPasswordByEmail(context(), authUser.email, "NewPassword123!", authUser.id)).resolves.toBe(true);

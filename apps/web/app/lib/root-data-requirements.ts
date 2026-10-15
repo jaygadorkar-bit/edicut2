@@ -1,6 +1,7 @@
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
 
 const ROUTES_WITHOUT_PROMO_SETTINGS = [
+  "/logo-animation",
   ADMIN_BASE_PATH,
   ADMIN_LOGIN_PATH,
   "/dashboard",
@@ -18,6 +19,7 @@ const ROUTES_WITHOUT_PROMO_SETTINGS = [
 ];
 
 const ROUTES_WITHOUT_ROOT_SETTINGS = [
+  "/logo-animation",
   "/auth/google",
   "/api/auth/callback/google",
   "/signin",

@@ -1,3 +1,5 @@
+import { safeAdminRedirect } from "../lib/safe-redirect";
+import { invalidateAccountSessionsByEmail } from "../lib/account-sessions.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import bcrypt from "bcryptjs";
@@ -16,6 +18,9 @@ import { AdminPanelShell } from "../components/AdminPanelShell";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 import { isWorkspaceRecordId } from "../lib/workspace";
+import { chatAccessRecipients, notifyChatAccessChange } from "../lib/chat-realtime.server";
+import { removeD1ChatUsers } from "../lib/chat-cleanup.server";
+import { chatMigrationPaused } from "../lib/chat-store.server";
 
 export function links() { return [{ rel: "stylesheet", href: stylesheetUrl }]; }
 
@@ -54,11 +59,7 @@ function isEmail(value: string) {
 }
 
 function safeAdminReturnTo(value: string | null) {
-  if (!value || !value.startsWith(ADMIN_BASE_PATH) || value.startsWith(ADMIN_LOGIN_PATH) || value.includes("//")) {
-    return adminPath("?tab=users");
-  }
-
-  return value;
+  return safeAdminRedirect(value);
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
@@ -196,6 +197,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
           updatedAt: new Date(),
         })
         .where(eq(usersTable.id, userId));
+      await notifyChatAccessChange(db, context, { userIds: [userId] });
 
       return { success: "Account updated." };
     } catch (error: any) {
@@ -224,8 +226,8 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
     const password = String(formData.get("password") ?? "");
     const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
-    if (password.length < 8 || password.length > 128) {
-      return { error: "Password must be between 8 and 128 characters." };
+    if (password.length < 12 || new TextEncoder().encode(password).byteLength > 72) {
+      return { error: "Password must be at least 12 characters and no more than 72 bytes." };
     }
 
     if (password !== confirmPassword) {
@@ -239,6 +241,10 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
       });
       if (!targetUser) return { error: "This account could not be found." };
 
+      if (targetUser.email.trim().toLowerCase() === adminUser.email.trim().toLowerCase()) {
+        return { error: "Use your admin account settings and current password to change your own password." };
+      }
+
       await updateSupabaseUserPasswordByEmail(context, targetUser.email, password, userId);
       await db
         .update(usersTable)
@@ -247,7 +253,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
           updatedAt: new Date(),
         })
         .where(eq(usersTable.id, userId));
-
+      await invalidateAccountSessionsByEmail(db, targetUser.email);
       return { success: "Password reset." };
     } catch (error) {
       console.error("Admin user password reset error:", error);
@@ -260,6 +266,7 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
       .update(usersTable)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(eq(usersTable.id, userId));
+    await notifyChatAccessChange(db, context, { userIds: [userId] });
 
     return redirect(returnTo);
   }
@@ -269,11 +276,13 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
       .update(usersTable)
       .set({ deletedAt: null, updatedAt: new Date() })
       .where(eq(usersTable.id, userId));
+    await notifyChatAccessChange(db, context, { userIds: [userId] });
 
     return { success: "Account restored." };
   }
 
   if (intent === "permanent-delete") {
+    if (chatMigrationPaused(context)) return { error: "Chat migration is in progress. Please retry permanent deletion after the upgrade finishes." };
     try {
       const target = await db.query.users.findFirst({
         columns: { email: true, deletedAt: true },
@@ -286,11 +295,14 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
       });
       if (matchingAdmin) return { error: "This email is also used by an admin account. Change the admin email before permanently deleting this customer profile." };
 
+      const chatRecipientKeys = await chatAccessRecipients(db, [userId], undefined, context).catch(() => [`user:${userId}`]);
       await deleteSupabaseUsersByEmail(context, [target.email]);
+      await removeD1ChatUsers(context, [userId]);
       const [deletedUser] = await db.delete(usersTable)
         .where(and(eq(usersTable.id, userId), isNotNull(usersTable.deletedAt)))
         .returning();
       if (!deletedUser) return { error: "Only accounts in trash can be permanently deleted." };
+      await notifyChatAccessChange(db, context, { recipientKeys: chatRecipientKeys });
       return redirect(returnTo);
     } catch (error) {
       console.error("Admin account permanent delete error:", error);

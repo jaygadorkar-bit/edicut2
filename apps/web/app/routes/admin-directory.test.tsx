@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
-import { AdminUsersTable } from "./admin";
+import { AdminUsersTable } from "../components/admin/AdminManagementPanel";
 
 it("links every admin cell to the same editor with one keyboard stop and the directory filters retained", () => {
   const admin = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Admin", email: "admin@example.test", role: "admin", active: true, createdAt: new Date(), updatedAt: new Date() };

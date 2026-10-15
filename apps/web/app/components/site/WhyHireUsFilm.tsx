@@ -24,7 +24,7 @@ export function WhyHireUsFilm({ showPlanButton = true }: { showPlanButton?: bool
   const isPoster = !hasStarted;
   const { position, layers } = frame;
   const copyLayoutLayer = layers.reduce((current, layer) => layer.copyOpacity > current.copyOpacity ? layer : current);
-  const playbackLabel = audioError ? "Retry" : isPlaying ? isBuffering ? "Loading…" : "Pause" : hasEnded ? "Replay" : hasStarted ? "Resume" : "Intro";
+  const playbackLabel = audioError ? "Retry" : isPlaying ? isBuffering ? "Loading…" : "Pause" : hasEnded ? "Replay" : hasStarted ? "Resume" : "Play";
 
   const sync = useCallback(() => {
     setFrame(getFilmFrame(audioRef.current?.currentTime ?? 0, hasStartedRef.current));

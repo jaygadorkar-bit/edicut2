@@ -1,15 +1,73 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DatabaseClient } from "@edicut/db/client";
+import { marketingAffiliates, marketingCoupons, users } from "@edicut/db/schema";
 import {
   calculateCouponDiscount,
   calculateCommissionCents,
   combineAffiliateMetrics,
   isMissingMarketingSchema,
   getAffiliatePortalData,
+  getAdminMarketingData,
   normalizeMarketingCode,
   parseCommissionRateBps,
   parseCouponDate,
 } from "./marketing.server";
+
+describe("admin marketing query scope", () => {
+  function database(coupons: unknown[] = []) {
+    const tables: unknown[] = [];
+    const db = { select: vi.fn(() => ({ from: (table: unknown) => {
+      tables.push(table);
+      const rows = table === marketingCoupons ? coupons : [];
+      const query = Object.assign(Promise.resolve(rows), {
+        innerJoin: () => query, leftJoin: () => query, where: () => query,
+        orderBy: () => query, limit: () => query, groupBy: () => query,
+      });
+      return query;
+    } })) } as unknown as DatabaseClient;
+    return { db, tables };
+  }
+
+  it("loads discounts with one query and no affiliate or order reads", async () => {
+    const { db, tables } = database();
+    expect(await getAdminMarketingData(db, "https://edicut.com", "coupons")).toEqual({
+      schemaReady: true, coupons: [], affiliates: [], affiliateCandidates: [],
+    });
+    expect(tables).toEqual([marketingCoupons]);
+  });
+
+  it("loads affiliates without fetching coupons", async () => {
+    const { db, tables } = database();
+    const result = await getAdminMarketingData(db, "https://edicut.com", "affiliates");
+    expect(tables).toEqual([marketingAffiliates, users, marketingAffiliates, marketingAffiliates]);
+    expect(result.schemaReady).toBe(true);
+    expect(result.coupons).toEqual([]);
+  });
+
+  it("preserves the combined view for existing callers", async () => {
+    const { db, tables } = database();
+    await getAdminMarketingData(db, "https://edicut.com");
+    expect(tables).toHaveLength(5);
+    expect(tables).toContain(marketingCoupons);
+  });
+
+  it("reads changed coupon records on every request", async () => {
+    const coupons = [{ id: "coupon", code: "FIRST", startsAt: null, expiresAt: null, active: true }];
+    const { db, tables } = database(coupons);
+    const first = await getAdminMarketingData(db, "https://edicut.com", "coupons");
+    coupons[0].code = "UPDATED";
+    const next = await getAdminMarketingData(db, "https://edicut.com", "coupons");
+    expect(first.coupons[0].code).toBe("FIRST");
+    expect(next.coupons[0].code).toBe("UPDATED");
+    expect(tables).toEqual([marketingCoupons, marketingCoupons]);
+  });
+
+  it("does not hide database permission failures", async () => {
+    const failure = new Error("permission denied");
+    const db = { select: () => ({ from: () => { throw failure; } }) } as unknown as DatabaseClient;
+    await expect(getAdminMarketingData(db, "https://edicut.com", "coupons")).rejects.toBe(failure);
+  });
+});
 
 describe("missing marketing schema detection", () => {
   it("recognizes a missing table wrapped by Drizzle", () => {

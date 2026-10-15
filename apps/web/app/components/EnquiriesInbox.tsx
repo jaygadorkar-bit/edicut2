@@ -66,6 +66,7 @@ export function EnquiriesInbox({ data }: { data: EnquiriesInboxData }) {
   const content = (
     <div className="enquiries-page">
       <VisibleEnquiryReadTracker messages={messages} />
+      {params.get("event") ? <p className="enquiries-notice">Showing the selected enquiry. <Link to="/dashboard/messages" className="underline">View all enquiries</Link></p> : null}
       <div className="enquiries-heading">
         <div><h2>Enquiries</h2><p>Messages from contact forms across EdiCut appear here.</p></div>
         <Link to="/contact#contact" className="neo-button"><Icon name="open_in_new" />Contact form</Link>

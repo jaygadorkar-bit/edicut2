@@ -1,3 +1,4 @@
+import { safeAdminRedirect } from "../lib/safe-redirect";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -52,15 +53,7 @@ export function headers() {
 }
 
 function safeRedirectTo(value: FormDataEntryValue | string | null) {
-  if (typeof value !== "string" || !value.startsWith(ADMIN_BASE_PATH)) {
-    return ADMIN_BASE_PATH;
-  }
-
-  if (value.startsWith(ADMIN_LOGIN_PATH) || value.includes("//")) {
-    return ADMIN_BASE_PATH;
-  }
-
-  return value;
+  return safeAdminRedirect(value);
 }
 
 function getAttemptStore() {
@@ -205,7 +198,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     }
 
     const result = await signInWithSupabase({ context, email, password });
-    if (!result.error && result.user && result.session) {
+    if (!result.error && result.user?.email_confirmed_at && result.session && result.user.email?.trim().toLowerCase() === user.email.trim().toLowerCase()) {
       clearFailedAttempts(attemptKey);
       return createAdminSession({
         request,
@@ -215,11 +208,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
         accessToken: result.session.access_token,
         refreshToken: result.session.refresh_token,
       });
-    }
-
-    if (user.passwordHash && await verifyPassword(password, user.passwordHash)) {
-      clearFailedAttempts(attemptKey);
-      return createAdminSession({ request, context, userId: user.id, redirectTo });
     }
 
     recordFailedAttempt(attemptKey);
@@ -327,9 +315,11 @@ export default function AdminLoginRoute() {
             <span className="material-symbols-outlined text-primary">lock</span>
           </div>
 
-          {securityError || actionData?.error || searchParams.get("error") === "recaptcha" ? (
-            <div className="mt-5 rounded-lg border border-red-100 bg-[#FFF5F5] p-3 text-sm font-bold text-[#D90000]">
-              {securityError || actionData?.error || "Security check failed. Please try again."}
+          {securityError || actionData?.error || ["recaptcha", "google-unavailable"].includes(searchParams.get("error") || "") ? (
+            <div role="alert" className="mt-5 rounded-lg border border-red-100 bg-[#FFF5F5] p-3 text-sm font-bold text-[#D90000]">
+              {securityError || actionData?.error || (searchParams.get("error") === "google-unavailable"
+                ? "Google sign-in could not be completed. Please start a new sign-in attempt."
+                : "Security check failed. Please try again.")}
             </div>
           ) : null}
 

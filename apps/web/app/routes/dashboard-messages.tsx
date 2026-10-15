@@ -11,6 +11,7 @@ import type { LoaderContext } from "../types";
 import { getPageWithinRange, getPositivePage } from "../lib/admin-data-requirements";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { readMutationForm } from "../lib/mutation-request.server";
+import { isWorkspaceRecordId } from "../lib/workspace";
 
 const PAGE_SIZE = 10;
 const MAX_IMPORT_BYTES = 1024 * 1024;
@@ -34,7 +35,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   }
   const filter = getFilter(url.searchParams.get("filter"));
   const requestedPage = getPositivePage(url.searchParams.get("page"));
-  const whereClause = getFilterClause(filter);
+  const eventId = url.searchParams.get("event");
+  if (eventId && !isWorkspaceRecordId(eventId)) throw new Response("Enquiry not found.", { status: 404 });
+  const whereClause = eventId ? eq(contactMessages.id, eventId) : getFilterClause(filter);
 
   if (url.searchParams.get("export") === "csv") {
     return redirect(`/dashboard/messages/export?filter=${filter}`, { headers: { "Cache-Control": "no-store" } });

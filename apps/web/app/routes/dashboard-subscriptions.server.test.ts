@@ -35,7 +35,7 @@ describe("purchase history availability", () => {
   it("preserves owner filtering and pagination when purchase history is available", async () => {
     mocks.list.mockResolvedValue(Array.from({ length: 26 }, (_, id) => ({ id })));
     const result = await loader(args());
-    expect(mocks.list).toHaveBeenCalledWith(mocks.db, "customer-1", 2);
+    expect(mocks.list).toHaveBeenCalledWith(mocks.db, "customer-1", 2, undefined);
     expect(result.purchaseHistoryAvailable).toBe(true);
     expect(result.records).toHaveLength(25);
     expect(result.hasNext).toBe(true);

@@ -128,10 +128,32 @@ describe("consumeUsageLimit", () => {
 });
 
 describe("Worker request limits", () => {
+  it.each([
+    ["/signin.data", "AUTH_REQUEST_LIMITER"],
+    ["/forgot-password.data", "AUTH_REQUEST_LIMITER"],
+    ["/update-password.data", "AUTH_REQUEST_LIMITER"],
+    ["/site/node-logmin/login.data", "AUTH_REQUEST_LIMITER"],
+    ["/auth/google.data", "AUTH_REQUEST_LIMITER"],
+    ["/contact.data", "PUBLIC_FORM_LIMITER"],
+    ["/_root.data", "PUBLIC_FORM_LIMITER"],
+    ["/site/node-logmin.data", "ADMIN_MULTIPART_LIMITER"],
+  ])("applies the specialized %s request limiter: %s", async (path, binding) => {
+    const env = Object.fromEntries(RATE_LIMIT_BINDINGS.map(name => [name, { limit: vi.fn(async () => ({ success: true })) }]));
+    const request = new Request(`https://edicut.com${path}`, { method: "POST", headers: { "Content-Type": "multipart/form-data; boundary=test" }, body: "test" });
+    await expect(enforceEdgeRequestLimits(request, env)).resolves.toBeNull();
+    expect(env[binding].limit).toHaveBeenCalledOnce();
+  });
+  it("applies route-specific body caps to encoded framework data endpoints", () => {
+    const request = new Request("https://edicut.com/signin.data", { method: "POST", body: "x" });
+    expect(getMaximumBodyBytes("/signin%2edata", "POST", request)).toBe(64 * 1024);
+    expect(getMaximumBodyBytes("/_root.data", "POST", request)).toBe(64 * 1024);
+    expect(getMaximumBodyBytes("/api/chat.data", "POST", request)).toBe(5 * 1024 * 1024 + 32 * 1024);
+  });
   it("normalizes encoded, repeated, trailing, and case-variant paths", () => {
     expect(normalizePathname("//SITE/%6EODE-LOGMIN/users//42/")).toBe("/SITE/nODE-LOGMIN/users/42");
     expect(normalizePathname("/%2Fsignin")).toBe("/signin");
   });
+  it("bounds review chunks and gives them a separate rate bucket without relaxing normal forms",async()=>{const env=Object.fromEntries([...RATE_LIMIT_BINDINGS,"REVIEW_UPLOAD_LIMITER"].map(name=>[name,{limit:vi.fn(async()=>({success:true}))}]));const request=new Request("https://edicut.com/api/project-reviews/44444444-4444-4444-8444-444444444444?upload=55555555-5555-4555-8555-555555555555&offset=0",{method:"POST",headers:{"Content-Type":"application/octet-stream"},body:"chunk"});expect(getMaximumBodyBytes(new URL(request.url).pathname,"POST",request)).toBe(8*1024*1024);expect(await enforceEdgeRequestLimits(request,env)).toBeNull();expect(env.REVIEW_UPLOAD_LIMITER.limit).toHaveBeenCalledOnce();expect(env.APP_MUTATION_LIMITER.limit).not.toHaveBeenCalled();expect(env.APP_REQUEST_LIMITER.limit).toHaveBeenCalledOnce();});
 
   it("chooses body caps by route and allows bodyless methods", () => {
     const form = (url: string, contentType = "application/x-www-form-urlencoded") => new Request(url, {

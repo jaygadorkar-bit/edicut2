@@ -1,8 +1,16 @@
 /** Allow same-origin POST forms, including older clients without Origin. */
 export function isSameSiteMutation(request: Request) {
+  if (request.method !== "POST" || request.headers.get("Sec-Fetch-Site") === "cross-site") return false;
   const origin = request.headers.get("Origin");
-  return request.method === "POST" && (!origin || origin === new URL(request.url).origin)
-    && request.headers.get("Sec-Fetch-Site") !== "cross-site";
+  const expected = new URL(request.url).origin;
+  if (origin) return origin === expected;
+  const referer = request.headers.get("Referer");
+  if (referer) {
+    try { return new URL(referer).origin === expected; }
+    catch { return false; }
+  }
+  // Same-site sibling domains are not trusted when no exact origin is supplied.
+  return request.headers.get("Sec-Fetch-Site") !== "same-site";
 }
 
 /** Bound the actual stream before parsing either text forms or media uploads. */

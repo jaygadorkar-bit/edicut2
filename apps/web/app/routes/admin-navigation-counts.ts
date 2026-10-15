@@ -14,9 +14,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = getDbFromContext(context);
   const access = await getAdminToolbarAccess(db, {
     userId,
+    userCredentialVersion: session.get("authCredentialVersion"),
+    userAccessToken: session.get("supabaseAccessToken"),
     adminUserId,
+    adminCredentialVersion: adminSession.get("authCredentialVersion"),
+    adminAccessToken: adminSession.get("supabaseAccessToken"),
     verifiedUserAdminId: session.get("adminAccessVerified") === true ? session.get("adminUserId") : undefined,
-  });
+    verifiedUserAdminCredentialVersion: session.get("adminCredentialVersion"),
+  }, context);
   if (access !== "verified") return Response.json({ error: "Permission denied" }, { status: 403, headers });
   return Response.json(await getAdminNavigationCounts(db), { headers });
 }

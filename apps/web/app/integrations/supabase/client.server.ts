@@ -114,6 +114,26 @@ export async function refreshSupabaseSession(
   return { session: data.session, user: data.user };
 }
 
+/** Revoke this provider session before deleting its HTTP-only browser cookie. */
+export async function revokeSupabaseSession(context: SupabaseRuntimeContext | undefined, accessToken: unknown, refreshToken: unknown) {
+  if (typeof accessToken !== "string" || !accessToken) return;
+  const client = getSupabaseClient(context);
+  if (!client) throw new Error("Session revocation is unavailable.");
+  if (typeof refreshToken === "string" && refreshToken) {
+    // setSession refreshes expired access tokens before attempting logout.
+    const { error } = await client.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    if (error) {
+      if (["refresh_token_not_found", "refresh_token_already_used", "session_not_found", "session_expired"].includes(error.code ?? "")) return;
+      throw new Error("Session revocation is unavailable.");
+    }
+    const { error: logoutError } = await client.auth.signOut({ scope: "local" });
+    if (logoutError) throw new Error("Session revocation is unavailable.");
+  } else {
+    const { error } = await client.auth.admin.signOut(accessToken, "local");
+    if (error && ![401, 403, 404].includes(error.status ?? 0)) throw new Error("Session revocation is unavailable.");
+  }
+}
+
 /**
  * Keep legacy password hashes and Supabase Auth credentials aligned for
  * admin-initiated password resets. The service-role client stays server-only.

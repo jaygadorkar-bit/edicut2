@@ -3,7 +3,8 @@ const mocks = vi.hoisted(() => ({ fetch: vi.fn(), update: vi.fn(), insert: vi.fn
 vi.mock("@edicut/shared/server-fetch", () => ({ fetchWithTimeout: mocks.fetch }));
 vi.mock("@edicut/db/repositories/admin-users", () => ({ findAdminUserByEmail: mocks.findAdmin }));
 vi.mock("./session.server", () => ({ createUserSession: mocks.createSession, isAdminRole: (role: string) => role === "admin", getAdminSession: async () => ({ set: mocks.adminSessionSet }), commitAdminSession: mocks.commitAdmin }));
-import { completeGoogleOAuth, startGoogleOAuth } from "./google-auth.server";
+import { completeGoogleOAuth, createGoogleOAuthFailureResponse, startGoogleOAuth } from "./google-auth.server";
+import { createCookie } from "react-router";
 const context = { env: {}, cf: { ctx: {} as ExecutionContext, env: { APP_URL: "http://localhost:3002", AUTH_GOOGLE_ID: "test-id", AUTH_GOOGLE_SECRET: "test-secret" } } };
 const profile = { id: "local-id", email: "client@example.com", active: true, deletedAt: null };
 const db = { query: { users: { findFirst: mocks.existing } }, update: mocks.update, insert: mocks.insert };
@@ -22,6 +23,22 @@ beforeEach(() => {
   mocks.createSession.mockResolvedValue(new Response(null, { status: 302, headers: { Location: "/dashboard" } }));
 });
 describe("Google account restrictions", () => {
+  it.each(["user", "admin"])("clears failed %s OAuth attempts and returns to the correct login", async mode => {
+    const response = await createGoogleOAuthFailureResponse(await callback(mode));
+    const destination = new URL(response.headers.get("Location")!, "http://localhost:3002");
+    expect(destination.pathname).toBe(mode === "admin" ? "/site/node-logmin/login" : "/signin");
+    expect(destination.searchParams.get("error")).toBe("google-unavailable");
+    expect(destination.searchParams.has("code")).toBe(false);
+    expect(destination.searchParams.has("state")).toBe(false);
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  });
+  it("normalizes untrusted retry destinations", async () => {
+    const cookie = await createCookie("_edicut_google_oauth").serialize({ mode: "user", returnTo: "/\\attacker.test" });
+    const response = await createGoogleOAuthFailureResponse(new Request("http://localhost:3002/api/auth/callback/google", { headers: { Cookie: cookie } }));
+    expect(new URL(response.headers.get("Location")!, "http://localhost:3002").searchParams.get("redirectTo")).toBe("/dashboard");
+  });
   it.each([{ ...profile, active: false }, { ...profile, deletedAt: new Date() }])("does not reactivate restricted profiles: %j", async existing => {
     mocks.existing.mockResolvedValue(existing);
     await expect(completeGoogleOAuth(await callback(), context, db as never)).rejects.toMatchObject({ status: 302 });

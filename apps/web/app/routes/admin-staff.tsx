@@ -1,3 +1,5 @@
+import { safeAdminRedirect } from "../lib/safe-redirect";
+import { invalidateAccountSessionsByEmail } from "../lib/account-sessions.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useActionData, useLoaderData, useNavigation } from "react-router";
 import bcrypt from "bcryptjs";
@@ -24,7 +26,7 @@ function recordId(params: LoaderFunctionArgs["params"]) {
   return params.adminId;
 }
 function returnPath(value: string | null) {
-  return value?.startsWith(ADMIN_BASE_PATH) && !value.startsWith(ADMIN_LOGIN_PATH) && !value.includes("//") ? value : adminPath("?tab=users&view=admins");
+  return safeAdminRedirect(value, adminPath("?tab=users&view=admins"));
 }
 export async function loader({ request, context, params }: LoaderFunctionArgs) {
   const db = getDbFromContext(context);
@@ -76,11 +78,12 @@ export async function action({ request, context, params }: ActionFunctionArgs) {
   if (intent === "reset-password") {
     if (id === actor.id) return { error: "Change your own password in account settings using your current password." };
     const password = String(form.get("password") ?? "");
-    if (password.length < 12 || password.length > 128) return { error: "Admin password must be between 12 and 128 characters." };
+    if (password.length < 12 || new TextEncoder().encode(password).byteLength > 72) return { error: "Admin password must be at least 12 characters and no more than 72 bytes." };
     if (password !== String(form.get("confirmPassword") ?? "")) return { error: "Passwords do not match." };
     try {
       await updateSupabaseUserPasswordByEmail(context, target.email, password);
       await db.update(adminUsers).set({ passwordHash: bcrypt.hashSync(password, 12), updatedAt: new Date() }).where(eq(adminUsers.id, id));
+      await invalidateAccountSessionsByEmail(db, target.email);
       return { success: "Admin password reset." };
     } catch {
       console.error("Admin directory password reset failed");

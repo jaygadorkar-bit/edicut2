@@ -8,6 +8,7 @@ describe("shouldEnableSiteMotion", () => {
   );
 
   it.each([
+    "/logo-animation",
     "/dashboard",
     "/dashboard/profile",
     "/dashboard/projects",

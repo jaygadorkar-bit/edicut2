@@ -29,7 +29,8 @@ describe("admin notification endpoint", () => {
     expect(await response.json()).toEqual({ pendingOrderCount: 3, unreadEnquiryCount: 7 });
     expect(mocks.getAdminToolbarAccess).toHaveBeenCalledWith(expect.anything(), {
       userId: "user-id", adminUserId: "admin-id", verifiedUserAdminId: "verified-admin",
-    });
+      userCredentialVersion: undefined, userAccessToken: undefined, adminCredentialVersion: undefined, adminAccessToken: undefined, verifiedUserAdminCredentialVersion: undefined,
+    }, {});
   });
   it("does not query counts for a customer, inactive admin, or revoked admin session", async () => {
     mocks.getAdminToolbarAccess.mockResolvedValue("none");
@@ -48,11 +49,13 @@ describe("admin notification endpoint", () => {
     await loader(args());
     expect(mocks.getAdminToolbarAccess).toHaveBeenLastCalledWith(expect.anything(), {
       userId: "user-id", adminUserId: undefined, verifiedUserAdminId: "verified-admin",
-    });
+      userCredentialVersion: undefined, userAccessToken: undefined, adminCredentialVersion: undefined, adminAccessToken: undefined, verifiedUserAdminCredentialVersion: undefined,
+    }, {});
     mocks.session.adminAccessVerified = false;
     await loader(args());
     expect(mocks.getAdminToolbarAccess).toHaveBeenLastCalledWith(expect.anything(), {
       userId: "user-id", adminUserId: undefined, verifiedUserAdminId: undefined,
-    });
+      userCredentialVersion: undefined, userAccessToken: undefined, adminCredentialVersion: undefined, adminAccessToken: undefined, verifiedUserAdminCredentialVersion: undefined,
+    }, {});
   });
 });

@@ -7,8 +7,10 @@ import { WorkspaceShell, type WorkspaceNavigationPanel } from "./WorkspaceShell"
 export const adminPanelNavItems = [
   { label: "Dashboard", icon: "dashboard_customize", tab: "overview" },
   { label: "Orders", icon: "receipt_long", tab: "subscriptions" },
+  { label: "Projects", icon: "video_library", tab: "projects" },
   { label: "Users", icon: "group", tab: "users" },
   { label: "Chat", icon: "chat", tab: "chat" },
+  { label: "Support tickets", icon: "confirmation_number", tab: "tickets" },
   { label: "Enquiries", icon: "mail", tab: "messages" },
   { label: "Custom quotes", icon: "description", tab: "quotes" },
   { label: "Roles", icon: "shield_person", tab: "roles" },
@@ -17,7 +19,6 @@ export const adminPanelNavItems = [
   { label: "Affiliates", icon: "groups", tab: "affiliates" },
   { label: "Images", icon: "image", tab: "images" },
   { label: "Videos", icon: "movie", tab: "videos" },
-  { label: "Projects", icon: "video_library", tab: "projects" },
   { label: "Infrastructure", icon: "monitoring", tab: "infrastructure" },
   { label: "Settings", icon: "settings", tab: "settings" },
 ] as const;
@@ -35,10 +36,11 @@ type AdminPanelShellProps = {
   headerActions?: ReactNode;
   notificationCount?: number;
   navigationPanel?: WorkspaceNavigationPanel;
+  conversationTo?: string;
   children: ReactNode;
 };
 
-export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount, pendingOrderCount, headerActions, notificationCount = 0, navigationPanel, children }: AdminPanelShellProps) {
+export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount, pendingOrderCount, headerActions, notificationCount = 0, navigationPanel, conversationTo, children }: AdminPanelShellProps) {
   const rootData = useRouteLoaderData("root") as { unreadEnquiryCount?: number; pendingOrderCount?: number; adminProfile?: { email: string; imageUrl: string } | null } | undefined;
   const profileImageUrl = rootData?.adminProfile?.email.trim().toLowerCase() === account.detail.trim().toLowerCase()
     ? rootData.adminProfile.imageUrl : null;
@@ -47,13 +49,15 @@ export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount,
     label,
     bottomLabel: tab === "overview" ? "Overview" : undefined,
     icon,
-    to: tab === "messages" ? "/dashboard/messages" : tab === "infrastructure" || tab === "subscriptions" || tab === "quotes" || tab === "chat" ? adminPath(`/${tab}`) : adminPath(`?tab=${tab}`),
+    to: tab === "messages" ? "/dashboard/messages" : ["infrastructure", "subscriptions", "quotes", "chat", "tickets", "projects"].includes(tab) ? adminPath(`/${tab}`) : adminPath(`?tab=${tab}`),
     active: tab === activeTab,
     unreadCount: tab === "messages" ? counts.unreadEnquiryCount : tab === "subscriptions" ? counts.pendingOrderCount : undefined,
     unreadLabel: tab === "subscriptions" ? "orders awaiting payment confirmation" : "unread enquiries",
   }));
   return (
     <WorkspaceShell
+      chatScope="admin"
+      projectChatTo={adminPath("/chat")}
       title={title}
       navItems={navItems}
       account={{ ...account, imageUrl: account.imageUrl ?? profileImageUrl }}
@@ -61,7 +65,8 @@ export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount,
       mobileBottomNav={false}
       navigationFeedback
       hideHeaderTitle
-      chatTo={adminPath("/chat")}
+      chatTo={conversationTo ?? adminPath("/chat")}
+      ticketsTo={adminPath("/tickets")}
       profileTo={adminPath("/account")}
       settingsTo={adminPath("/account")}
       notificationsTo={adminPath("?tab=projects")}

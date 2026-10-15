@@ -19,12 +19,16 @@ const brief: ProjectBrief = {
 };
 
 describe("purchased project concurrency", () => {
-  it("locks the paid purchase before charging its entitlement balance", async () => {
+  it.each([
+    { purchaseType: "monthly", pendingMigration: false },
+    { purchaseType: "single", pendingMigration: false },
+    { purchaseType: "monthly", pendingMigration: true },
+  ] as const)("preserves $purchaseType billing units (pending migration: $pendingMigration)", async ({ purchaseType, pendingMigration }) => {
     const selectResults = [
       [{ details: profile }],
       [{
         subscription: {
-          id: subscriptionId, ownerId, packageSlug: "creator-pro", planName: "Studio", purchaseType: "monthly",
+          id: subscriptionId, ownerId, packageSlug: purchaseType === "monthly" ? "creator-pro" : "single-creator", planName: "Studio", purchaseType,
           status: "paid", paidAt: new Date("2026-10-01T00:00:00.000Z"), deletedAt: null,
         },
         entitlement: { grantedUnits: 6600, usedUnits: 0 },
@@ -41,14 +45,22 @@ describe("purchased project concurrency", () => {
       return chain;
     });
     const execute = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ project_id: "project-id" }]);
+    if (pendingMigration) execute.mockReset().mockResolvedValueOnce([]).mockRejectedValueOnce({ cause: { code: "23514", constraint: "project_intakes_reserved_check" } });
     const db = { select, execute } as unknown as DatabaseClient;
 
-    expect(await createPurchasedProject(db, ownerId, subscriptionId, "cccccccc-cccc-4ccc-8ccc-cccccccccccc", brief)).toEqual({ id: expect.any(String) });
-    const query = new PgDialect().sqlToQuery(execute.mock.calls[1][0]).sql;
+    expect(await createPurchasedProject(db, ownerId, subscriptionId, "cccccccc-cccc-4ccc-8ccc-cccccccccccc", brief)).toEqual(pendingMigration ? { error: expect.stringContaining("Your balance was not charged") } : { id: expect.any(String) });
+    const compiled = new PgDialect().sqlToQuery(execute.mock.calls[1][0]);
+    const query = compiled.sql;
     expect(query).toContain("WITH eligible AS MATERIALIZED");
     expect(query).toContain("FOR UPDATE OF s");
     expect(query).toContain("NULL::varchar, NULL::varchar");
     expect(query.indexOf("FOR UPDATE OF s")).toBeLessThan(query.indexOf("UPDATE purchase_entitlements"));
+    expect(query).toContain("e.used_units < e.granted_units");
+    const unitParameter = Number(query.match(/used_units = used_units \+ \$(\d+)/)![1]) - 1;
+    expect(compiled.params[unitParameter]).toBe(purchaseType === "monthly" ? 0 : 1);
+    const savedBrief = compiled.params.find(value => typeof value === "string" && value.startsWith('{"title":'));
+    expect(JSON.parse(String(savedBrief))).toMatchObject({ editingMinutes: 0 });
+    expect(compiled.params.some(value => typeof value === "string" && value.includes(purchaseType === "monthly" ? "no hours deducted at submission" : "Uses one purchased video credit"))).toBe(true);
   });
   it("preserves legacy channel fields when saving the reduced profile", async () => {
     const execute = vi.fn().mockResolvedValue([{ owner_id: ownerId }]);

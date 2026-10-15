@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), env: vi.fn(), sign: vi.fn() }));
 vi.mock("./cloudinary.server", () => ({ requireCloudinaryEnv: mocks.env, signUpload: mocks.sign }));
 vi.mock("@edicut/shared/server-fetch", () => ({ fetchWithTimeout: mocks.fetch, UPLOAD_FETCH_TIMEOUT_MS: 45000 }));
-import { CHAT_FILE_MAX_BYTES, deleteChatFile, downloadChatFile, uploadChatFile, validateChatFile } from "./chat-files.server";
+import { CHAT_FILE_MAX_BYTES, chatAttachmentName, deleteChatFile, downloadChatFile, uploadChatFile, validateChatFile } from "./chat-files.server";
 beforeEach(() => { vi.clearAllMocks(); mocks.env.mockResolvedValue({ cloudName: "test-cloud", apiKey: "test-key", apiSecret: "test-secret" }); mocks.sign.mockResolvedValue("test-signature"); });
 describe("private chat attachments", () => {
   const png = () => new File([Uint8Array.from([137,80,78,71,13,10,26,10,0,0,0,0])], "reference.png", { type:"image/png" });
@@ -13,6 +13,15 @@ describe("private chat attachments", () => {
     expect(await validateChatFile(new File(["<svg>"], "icon.svg", { type:"image/svg+xml" }))).toBeTruthy();
     expect(await validateChatFile(new File([], "empty.pdf", { type:"application/pdf" }))).toBeTruthy();
     expect(await validateChatFile(new File([new Uint8Array(CHAT_FILE_MAX_BYTES+1)], "big.pdf", { type:"application/pdf" }))).toBeTruthy();
+  });
+  it("truncates Unicode attachment names without splitting surrogate pairs", () => {
+    const name = `${"a".repeat(179)}😀brief.pdf`;
+    const safeName = chatAttachmentName({ name, type: "application/pdf" });
+    expect(Array.from(safeName)).toHaveLength(180);
+    expect(() => encodeURIComponent(safeName)).not.toThrow();
+    expect(() => encodeURIComponent(chatAttachmentName({ name: "\uD800.pdf", type: "application/pdf" }))).not.toThrow();
+    expect(chatAttachmentName({ name: "report\u202Efdp.exe", type: "image/png" })).toBe("reportfdp.png");
+    expect(chatAttachmentName({ name: "invoice.exe", type: "application/pdf" })).toBe("invoice.pdf");
   });
   it("uploads through signed raw/private requests and excludes provider URLs", async () => {
     mocks.fetch.mockImplementation(async (_url, init) => Response.json({ public_id:init.body.get("public_id"), bytes:12, type:"private", resource_type:"raw", secure_url:"https://not-exposed.example/file" }));
@@ -27,11 +36,11 @@ describe("private chat attachments", () => {
   });
   it("proxies a short-lived private download with safe response headers", async () => {
     mocks.fetch.mockResolvedValue(new Response("%PDF-1.7"));
-    const response = await downloadChatFile({ publicId:"edicut/chat/room/file.pdf", name:'brief "new".pdf', mime:"application/pdf", bytes:8 });
+    const response = await downloadChatFile({ publicId:"edicut/chat/room/file.pdf", name:"brief 'new' (copy).pdf", mime:"application/pdf", bytes:8 });
     const url = new URL(mocks.fetch.mock.calls[0][0]);
     expect(url.pathname).toBe("/v1_1/test-cloud/raw/download"); expect(url.searchParams.get("type")).toBe("private");
     expect(Number(url.searchParams.get("expires_at"))-Number(url.searchParams.get("timestamp"))).toBeLessThanOrEqual(60);
-    expect(response.headers.get("Cache-Control")).toBe("no-store"); expect(response.headers.get("Content-Disposition")).toMatch(/^attachment;/); expect(response.headers.get("Content-Security-Policy")).toContain("sandbox");
+    expect(response.headers.get("Cache-Control")).toBe("no-store"); expect(response.headers.get("Content-Disposition")).toContain("brief%20%27new%27%20%28copy%29.pdf"); expect(response.headers.get("Content-Security-Policy")).toContain("sandbox");
   });
   it("cleans up files with a signed private destroy request", async () => { mocks.fetch.mockResolvedValue(Response.json({ result:"ok" })); await deleteChatFile({ publicId:"test.pdf", name:"test.pdf", mime:"application/pdf", bytes:8 }); expect(mocks.fetch.mock.calls[0][0]).toMatch(/\/raw\/destroy$/); expect(mocks.fetch.mock.calls[0][1].body.get("type")).toBe("private"); });
 });

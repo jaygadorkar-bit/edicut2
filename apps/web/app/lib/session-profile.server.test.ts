@@ -21,8 +21,9 @@ describe("authenticated local profile mapping", () => {
     expect(await requireUserId(await requestWithSession(), context)).toBe("local-id");
   });
   it.each([undefined, { id: "local-id", email: "other@example.com" }])("rejects missing or mismatched local profiles: %j", async profile => {
+    const request = await requestWithSession();
     mocks.profile.mockResolvedValue(profile);
-    await expect(requireUserId(await requestWithSession(), context)).rejects.toMatchObject({ status: 302 });
+    await expect(requireUserId(request, context)).rejects.toMatchObject({ status: 302 });
   });
   it.each([{ active: false, deletedAt: null }, { active: true, deletedAt: new Date() }])("rejects disabled or trashed profiles with a still-valid Supabase access token: %j", async restriction => {
     mocks.profile.mockResolvedValue({ id: "local-id", email: user.email, ...restriction });

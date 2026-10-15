@@ -1,3 +1,4 @@
+import { safeRedirectPath } from "../lib/safe-redirect";
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
 import { AuthPage } from "../components/auth/AuthModal";
 import { users } from "@edicut/db/schema";
@@ -36,10 +37,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
   const password = typeof rawPassword === "string" ? rawPassword : "";
   const remember = formData.get("remember") === "on";
-  const redirectTo = sanitizeRedirect((formData.get("redirectTo") as string | null) || "/dashboard");
+  const redirectTo = safeRedirectPath(formData.get("redirectTo"));
 
   if (!(["signin", "signup"] as const).includes(intent as "signin" | "signup") || !email || email.length > 254 || !password || password.length < 6 || password.length > 1024) {
     return { error: "Invalid email or password (min 6 characters).", intent };
+  }
+
+  if (intent === "signup" && (password.length < 12 || new TextEncoder().encode(password).byteLength > 72)) {
+    return { error: "Use at least 12 characters and a password no longer than 72 bytes.", intent };
   }
 
   const identityKey = await hashUsageLimitKey(email);
@@ -78,7 +83,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   const db = getDbFromContext(context);
   const adminUser = intent === "signin" ? await findAdminUserByEmail(db, email) : null;
+  const useSupabase = supabaseAuthEnabled(context);
   const adminCredentialsVerified = Boolean(
+    !useSupabase &&
     adminUser?.active &&
     isAdminRole(adminUser.role) &&
     adminUser.passwordHash &&
@@ -86,7 +93,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   );
 
   if (intent === "signup") {
-    if (supabaseAuthEnabled(context)) {
+    if (useSupabase) {
       const result = await signUpWithSupabase({
         context,
         email,
@@ -134,7 +141,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   if (intent === "signin") {
-    if (supabaseAuthEnabled(context)) {
+    if (useSupabase) {
       const result = await signInWithSupabase({ context, email, password });
 
       if (!result.error && result.user && result.session) {
@@ -158,50 +165,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
         });
       }
 
-      if (result.error) {
-        // Keep existing local accounts usable while they are being moved into
-        // Supabase Auth. New accounts never use this fallback path.
-        const legacyUser = await findUserByEmail(db, email);
-        if (legacyUser?.active && !legacyUser.deletedAt && legacyUser.passwordHash && await verifyPassword(password, legacyUser.passwordHash)) {
-          return createUserSession({
-            request,
-            context,
-            userId: legacyUser.id,
-            remember,
-            redirectTo,
-            adminUserId: adminCredentialsVerified ? adminUser?.id : undefined,
-            adminAccessVerified: adminCredentialsVerified,
-          });
-        }
-
-        if (adminUser?.active && isAdminRole(adminUser.role) && adminUser.passwordHash && await verifyPassword(password, adminUser.passwordHash)) {
-          const existingProfile = await findUserByEmail(db, email);
-          if (existingProfile && (!existingProfile.active || existingProfile.deletedAt)) {
-            return { error: "Invalid credentials.", intent };
-          }
-          const [profile] = existingProfile
-            ? [existingProfile]
-            : await db.insert(users).values({
-                email,
-                name: adminUser.name,
-                role: "customer",
-                active: true,
-                passwordHash: adminUser.passwordHash,
-              }).returning();
-
-          return createUserSession({
-            request,
-            context,
-            userId: profile.id,
-            remember,
-            redirectTo,
-            adminUserId: adminUser.id,
-            adminAccessVerified: true,
-          });
-        }
-
-        return { error: "Invalid credentials.", intent };
-      }
+      // A provider rejection must not be bypassed with an older local password.
+      if (result.error) return { error: "Invalid credentials.", intent };
 
       return { error: "Supabase did not return an authenticated session.", intent };
     }
@@ -260,8 +225,4 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 export default function SigninPage() {
   return <AuthPage />;
-}
-
-function sanitizeRedirect(value: string) {
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
 }

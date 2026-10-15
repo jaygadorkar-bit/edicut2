@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useActionData, useLoaderData } from "react-router";
+import { Link, useActionData, useLoaderData } from "react-router";
+import { isWorkspaceRecordId } from "../lib/workspace";
 import { customerSubscriptions } from "@edicut/db/schema";
 import { count as drizzleCount, isNull, sql } from "drizzle-orm";
 import { AdminPanelShell } from "../components/AdminPanelShell";
@@ -10,6 +11,7 @@ import { toPublicAdminUser } from "../lib/admin-public";
 import { deleteAdminSubscription, isSameSiteMutation, listAdminSubscriptions, markSubscriptionPaid, markSubscriptionUnpaid, readSubscriptionForm, subscriptionPage, subscriptionPaymentFilter } from "../lib/customer-subscriptions.server";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { getPageWithinRange } from "../lib/admin-data-requirements";
+import { notifyChatAccessChange } from "../lib/chat-realtime.server";
 
 export const meta: MetaFunction = () => [{ title: "Orders | EdiCut Admin" }, { name: "robots", content: "noindex,nofollow" }];
 export function headers() { return { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" }; }
@@ -23,21 +25,23 @@ async function adminAccess(request: Request, context: LoaderFunctionArgs["contex
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const { db, admin } = await adminAccess(request, context);
+  const eventId = new URL(request.url).searchParams.get("event") || undefined;
+  if (eventId && !isWorkspaceRecordId(eventId)) throw new Response("Order not found.", { status: 404 });
   const status = subscriptionPaymentFilter(request);
-  const requestedPage = subscriptionPage(request);
+  const requestedPage = eventId ? 1 : subscriptionPage(request);
   const [summaryRows, requestedRecords] = await Promise.all([
     db.select({
       total: drizzleCount(),
       paid: sql<number>`count(*) FILTER (WHERE ${customerSubscriptions.status} = 'paid')`.mapWith(Number),
       unpaid: sql<number>`count(*) FILTER (WHERE ${customerSubscriptions.status} = 'unpaid')`.mapWith(Number),
     }).from(customerSubscriptions).where(isNull(customerSubscriptions.deletedAt)),
-    listAdminSubscriptions(db, requestedPage, status),
+    listAdminSubscriptions(db, requestedPage, status, eventId),
   ]);
   const summary = summaryRows[0] ?? { total: 0, paid: 0, unpaid: 0 };
   const statusTotal = status === "paid" ? summary.paid : summary.unpaid;
   const page = getPageWithinRange(requestedPage, Math.ceil(statusTotal / 25));
   const records = page === requestedPage ? requestedRecords : await listAdminSubscriptions(db, page, status);
-  return { admin: toPublicAdminUser(admin), records: records.slice(0, 25), summary, page, status, hasNext: records.length > 25 };
+  return { admin: toPublicAdminUser(admin), records: records.slice(0, 25), summary, page, status, eventId, hasNext: records.length > 25 };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -54,14 +58,17 @@ export async function action({ request, context }: ActionFunctionArgs) {
   try {
     if (intent === "mark-paid") {
       const updated = await markSubscriptionPaid(db, subscriptionId, admin.id, expectedUpdatedAt);
+      if (updated) await notifyChatAccessChange(db, context, { subscriptionId });
       return updated ? { success: "Payment recorded for this order." } : { error: "This order changed, was already paid or removed, or its coupon is no longer available. Refresh and check its status." };
     }
     if (intent === "mark-unpaid") {
       const updated = await markSubscriptionUnpaid(db, subscriptionId, expectedUpdatedAt);
+      if (updated) await notifyChatAccessChange(db, context, { subscriptionId });
       return updated ? { success: "Order marked unpaid. Paid access has been removed." } : { error: "This order changed or has already been used for project work. Refresh and review its activity before changing payment status." };
     }
     if (intent === "delete-purchase") {
       const deleted = await deleteAdminSubscription(db, subscriptionId, expectedUpdatedAt);
+      if (deleted) await notifyChatAccessChange(db, context, { subscriptionId });
       return deleted ? { success: "Order removed from the ledger." } : { error: "This order changed or has already been used for project work. Refresh and review its activity before deleting it." };
     }
     return { error: "This order action is not available." };
@@ -72,7 +79,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function AdminSubscriptionsRoute() {
-  const { admin, records, summary, page, status, hasNext } = useLoaderData<typeof loader>();
+  const { admin, records, summary, page, status, hasNext, eventId } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   return <AdminPanelShell title="Orders" activeTab="subscriptions" account={{ name: admin.name || admin.email, detail: admin.email }} pendingOrderCount={summary.unpaid}>
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -82,6 +89,7 @@ export default function AdminSubscriptionsRoute() {
       </a>
     </div>
     {result ? <p role={result.error ? "alert" : "status"} className={`mb-5 rounded-xl p-4 text-sm ${result.error ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}>{result.error || result.success}</p> : null}
+    {eventId ? <p className="mb-4 text-sm text-slate-600">Showing the selected order. <Link to="/site/node-logmin/subscriptions" className="underline">View all orders</Link></p> : null}
     <SubscriptionList rows={records} admin summary={summary} status={status} />
     <SubscriptionPagination page={page} hasNext={hasNext} status={status} />
   </AdminPanelShell>;

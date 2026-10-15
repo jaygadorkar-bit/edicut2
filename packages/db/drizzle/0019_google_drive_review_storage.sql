@@ -1,0 +1,8 @@
+ALTER TABLE "project_review_versions" DROP CONSTRAINT "project_review_versions_provider_check";--> statement-breakpoint
+ALTER TABLE "video_storage_connections" DROP CONSTRAINT "video_storage_connections_provider_check";--> statement-breakpoint
+ALTER TABLE "project_review_uploads" ADD COLUMN "provider" varchar(20) DEFAULT 'youtube' NOT NULL;--> statement-breakpoint
+ALTER TABLE "project_review_uploads" ADD COLUMN "drive_file_id" varchar(240);--> statement-breakpoint
+ALTER TABLE "project_review_versions" ADD COLUMN "drive_file_id" varchar(240);--> statement-breakpoint
+ALTER TABLE "project_review_uploads" ADD CONSTRAINT "project_review_uploads_provider_check" CHECK ("project_review_uploads"."provider" IN ('youtube','google_drive'));--> statement-breakpoint
+ALTER TABLE "project_review_versions" ADD CONSTRAINT "project_review_versions_provider_check" CHECK (("project_review_versions"."provider"='cloudinary' AND "project_review_versions"."youtube_id" IS NULL AND "project_review_versions"."drive_file_id" IS NULL AND "project_review_versions"."bytes"<=52428800) OR ("project_review_versions"."provider"='youtube' AND "project_review_versions"."youtube_id" IS NOT NULL AND "project_review_versions"."drive_file_id" IS NULL AND "project_review_versions"."youtube_id" ~ '^[A-Za-z0-9_-]{11}$') OR ("project_review_versions"."provider"='google_drive' AND "project_review_versions"."youtube_id" IS NULL AND "project_review_versions"."drive_file_id" ~ '^[A-Za-z0-9_-]{10,240}$'));--> statement-breakpoint
+ALTER TABLE "video_storage_connections" ADD CONSTRAINT "video_storage_connections_provider_check" CHECK ("video_storage_connections"."provider" IN ('youtube','google_drive'));

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { getRouteErrorDebugDetails, getRouteErrorPresentation } from "./route-error-presentation";
 
 describe("getRouteErrorPresentation", () => {
+  it("offers a clear recovery message for a database timeout", () => {
+    const error = new Error("Failed query: private SQL", { cause: new TypeError("fetch failed") });
+    expect(getRouteErrorPresentation(error).title).toBe("We couldn’t connect just now");
+    expect(getRouteErrorDebugDetails(error)).not.toContain("private SQL");
+  });
   it("shows a safe recovery message for unexpected errors", () => {
     const presentation = getRouteErrorPresentation(new Error("database secret connection string"));
 

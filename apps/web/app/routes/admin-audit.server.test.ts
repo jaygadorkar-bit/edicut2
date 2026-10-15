@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   admin: { id: "admin-id", email: "admin@example.com", active: true, role: "admin", passwordHash: "private-admin-hash" },
-  directoryCount: 13, offsets: [] as number[], imageList: vi.fn(), videoList: vi.fn(), deleteImages: vi.fn(), deleteVideos: vi.fn(),
+  directoryCount: 13, offsets: [] as number[], imageList: vi.fn(), imageCount: vi.fn(async () => 0), videoList: vi.fn(), deleteImages: vi.fn(), deleteVideos: vi.fn(),
   uploadImage: vi.fn(), uploadVideo: vi.fn(),
   portfolioSections: [] as any[], pricingPackages: [] as any[], portfolioRead: vi.fn(), savePortfolio: vi.fn(), savePricing: vi.fn(),
   events: [] as string[], savedPortfolio: [] as any[], savedPricing: [] as any[], update: vi.fn(), delete: vi.fn(), execute: vi.fn(),
@@ -18,6 +18,7 @@ vi.mock("../integrations/supabase/client.server", () => ({ deleteSupabaseUsersBy
 vi.mock("../lib/cloudinary.server", async importOriginal => ({
   ...await importOriginal<typeof import("../lib/cloudinary.server")>(),
   listCloudinaryImages: mocks.imageList, listCloudinaryVideos: mocks.videoList,
+  countCloudinaryImages: mocks.imageCount,
   uploadPackageImageToCloudinary: mocks.uploadImage,
   uploadPortfolioVideoToCloudinary: mocks.uploadVideo,
   deleteCloudinaryImages: mocks.deleteImages, deleteCloudinaryVideos: mocks.deleteVideos,
@@ -38,7 +39,7 @@ vi.mock("../lib/db.server", async importOriginal => {
   return { ...await importOriginal<typeof import("../lib/db.server")>(), getDbFromContext: () => ({
     update: mocks.update, delete: mocks.delete, execute: mocks.execute,
     select: (fields?: Record<string, unknown>) => ({ from: (table: unknown) => {
-      const rows = !fields
+      const rows = !fields || fields.role && fields.active
         ? [{ id: "11111111-1111-4111-8111-111111111111", email: "client@example.com", active: true, passwordHash: "private-directory-hash" }]
         : fields.total ? [{ total: 13, admins: 1, managers: 0, support: 0, customers: 13, editors: 0, trash: 0 }]
         : fields.ownerId ? []
@@ -65,6 +66,7 @@ beforeEach(() => {
   mocks.savedPortfolio.length = 0; mocks.savedPricing.length = 0;
   mocks.trashedUsers.length = 0; mocks.adminEmails.length = 0;
   mocks.portfolioRead.mockImplementation(async () => mocks.portfolioSections);
+  mocks.imageCount.mockResolvedValue(0);
   mocks.imageList.mockResolvedValue([]); mocks.videoList.mockResolvedValue([]);
   mocks.uploadImage.mockImplementation(async (file: File) => ({ public_id: `edicut/packages/${file.name}`, secure_url: `https://res.cloudinary.com/edicut/image/upload/edicut/packages/${file.name}`, bytes: file.size }));
   mocks.uploadVideo.mockResolvedValue({ public_id: "edicut/portfolio/uploaded", secure_url: "https://res.cloudinary.com/edicut/video/upload/edicut/portfolio/uploaded.mp4", bytes: 4 });
@@ -76,6 +78,35 @@ beforeEach(() => {
   mocks.deleteSupabaseUsersByEmail.mockImplementation(async (_context: unknown, emails: string[]) => { mocks.events.push("delete-auth"); return emails.length; });
 });
 describe("admin panel audit regressions", () => {
+  it("returns overview metrics before a slow media provider resolves", async () => {
+    const media = Promise.withResolvers<number>();
+    mocks.imageCount.mockReturnValueOnce(media.promise);
+    const result = await load("?tab=overview");
+    expect(result.data.stats.total).toBe(13);
+    expect(result.data.overviewMedia).toBeInstanceOf(Promise);
+    expect(mocks.imageList).not.toHaveBeenCalled();
+    media.resolve(350);
+    await expect(result.data.overviewMedia).resolves.toEqual({ count: 350, error: null });
+  });
+  it("contains media failures in the streamed metric without exposing provider details", async () => {
+    mocks.imageCount.mockRejectedValueOnce(new Error("private-provider-detail"));
+    const result = await load("?tab=overview");
+    const media = await result.data.overviewMedia;
+    expect(media?.error).toContain("could not be loaded");
+    expect(media?.error).not.toContain("private-provider-detail");
+    expect(result.data.stats.total).toBe(13);
+  });
+  it("fetches a new live count on each overview request and skips it on other tabs", async () => {
+    mocks.imageCount.mockResolvedValueOnce(3).mockResolvedValueOnce(4);
+    const first = await load("?tab=overview"), next = await load("?tab=overview");
+    expect((await first.data.overviewMedia)?.count).toBe(3);
+    expect((await next.data.overviewMedia)?.count).toBe(4);
+    for (const tab of ["users", "packages", "images", "videos", "audit"]) {
+      const result = await load(`?tab=${tab}`);
+      expect(result.data.overviewMedia).toBeNull();
+    }
+    expect(mocks.imageCount).toHaveBeenCalledTimes(2);
+  });
   it.each(["active", "admins"])("clamps huge page numbers before querying the %s directory", async view => {
     const result = await load(`?tab=users&view=${view}&page=99999999`);
     expect(result.data.currentPage).toBe(2); expect(result.data.totalPages).toBe(2); expect(mocks.offsets).toEqual([10]);

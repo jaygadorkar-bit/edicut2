@@ -137,9 +137,10 @@ export async function enforceEdgeRequestLimits(request: Request, env: WorkerEnvi
     { binding: "APP_REQUEST_LIMITER", key: clientKey },
   ];
 
-  if (isMutation) checks.push({ binding: "APP_MUTATION_LIMITER", key: clientKey });
+  const reviewChunk = request.method==="POST" && /^\/api\/project-reviews\/[\da-f-]{36}$/.test(pathname) && request.headers.get("content-type")?.toLowerCase()==="application/octet-stream";
+  if (isMutation) checks.push({ binding: reviewChunk?"REVIEW_UPLOAD_LIMITER":"APP_MUTATION_LIMITER", key: reviewChunk?`ip:${clientKey}`:clientKey });
 
-  if ((isMutation && isAuthPath(pathname)) || pathname === "/auth/google" || pathname === "/api/auth/callback/google") {
+  if ((isMutation && isAuthPath(pathname)) || pathname === "/auth/google" || pathname === "/api/auth/callback/google" || pathname === "/api/auth/callback/youtube") {
     checks.push({ binding: "AUTH_REQUEST_LIMITER", key: clientKey });
   }
 
@@ -182,7 +183,9 @@ export function normalizePathname(pathname: string) {
     // Keep malformed escapes intact; they will not match a sensitive route.
   }
   const collapsed = decoded.replace(/\/+/g, "/").replace(/\/$/, "");
-  return collapsed || "/";
+  // React Router sends navigation/action requests to these same routes via .data.
+  if (collapsed === "/_root.data") return "/";
+  return collapsed.replace(/\.data$/, "") || "/";
 }
 
 function isAuthPath(pathname: string) {
@@ -193,12 +196,15 @@ function isAuthPath(pathname: string) {
     "/site/node-logmin/login",
     "/auth/google",
     "/api/auth/callback/google",
+    "/api/auth/callback/youtube",
   ].includes(pathname);
 }
 
 export function getMaximumBodyBytes(pathname: string, method: string, request: Request) {
+  pathname = normalizePathname(pathname).toLowerCase();
   if (["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) return null;
   if (pathname === "/api/chat") return 5 * 1024 * 1024 + 32 * 1024;
+  if (/^\/api\/project-reviews\/[\da-f-]{36}$/.test(pathname) && request.headers.get("content-type")?.toLowerCase() === "application/octet-stream") return 8 * 1024 * 1024;
   if (pathname === "/site/node-logmin") {
     return request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data")
       ? MAX_ADMIN_UPLOAD_BODY_BYTES

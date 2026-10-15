@@ -8,6 +8,7 @@ describe("shouldLoadPromoBarSettings", () => {
   );
 
   it.each([
+    "/logo-animation",
     "/site/node-logmin",
     "/site/node-logmin/login",
     "/site/node-logmin/account",
@@ -35,6 +36,7 @@ describe("shouldLoadRootSiteSettings", () => {
   );
 
   it.each([
+    "/logo-animation",
     "/auth/google",
     "/api/auth/callback/google",
     "/signin",

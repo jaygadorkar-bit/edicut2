@@ -1,3 +1,4 @@
+import { safeAdminRedirect } from "../lib/safe-redirect";
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { findAdminUserById } from "@edicut/db/repositories/admin-users";
@@ -9,15 +10,12 @@ import {
   getSession,
   requireUserId,
   isAdminRole,
+  hasCurrentSessionCredentials,
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 
 function safeReturnTo(value: string | null) {
-  if (!value || !value.startsWith(ADMIN_BASE_PATH) || value.startsWith(ADMIN_LOGIN_PATH) || value.includes("//")) {
-    return ADMIN_BASE_PATH;
-  }
-
-  return value;
+  return safeAdminRedirect(value);
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -51,7 +49,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     user.deletedAt ||
     !adminUser?.active ||
     !isAdminRole(adminUser.role) ||
-    user.email?.trim().toLowerCase() !== adminUser.email.trim().toLowerCase()
+    user.email?.trim().toLowerCase() !== adminUser.email.trim().toLowerCase() ||
+    !await hasCurrentSessionCredentials(userSession.get("adminCredentialVersion"), adminUser, context, "admin")
   ) {
     return redirect("/dashboard");
   }

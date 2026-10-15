@@ -74,6 +74,17 @@
   }
 }
 
+.project-brief input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.project-brief input[type="number"]::-webkit-inner-spin-button,
+.project-brief input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .neo-hero-title-line {
   display: block;
   opacity: 0;
@@ -254,23 +265,217 @@
 }
 
 .neo-home .neo-support-launcher {
+  position: fixed;
+  z-index: 65;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0;
   color: var(--neo-ink);
-  background: transparent;
-  border-color: transparent;
-  box-shadow: 0 8px 18px rgba(132, 148, 163, 0.24);
+  background: #fff;
+  border: 1px solid #9ab2c2;
+  border-radius: 1.125rem;
+  box-shadow: 0 3px 10px rgba(35, 57, 72, 0.16);
+}
+
+.neo-home .neo-support-launcher:focus-visible {
+  outline: 2px solid #527f9c;
+  outline-offset: 3px;
 }
 
 .neo-home .neo-support-launcher:hover {
-  padding-left: 1rem;
-  background: transparent;
-  box-shadow: 0 10px 22px rgba(132, 148, 163, 0.28);
+  background: #fff;
+  border-color: #7899ad;
+  box-shadow: 0 6px 16px rgba(35, 57, 72, 0.2);
 }
 
 .neo-home .neo-support-launcher__icon {
-  color: #fff;
+  width: 1.875rem;
+  height: 1.875rem;
+  color: #111820;
+}
+
+.neo-home .neo-support-panel {
+  position: fixed;
+  z-index: 70;
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  width: 20rem;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 6rem);
+  margin: 0;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 1.5rem;
+  background: linear-gradient(145deg, #f8fafc, #e9eef3);
+  color-scheme: light;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  color: var(--neo-ink);
+}
+
+.neo-home .neo-support-panel__surface {
+  overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(145deg, #f8fafc, #e9eef3);
+}
+
+.neo-home .neo-support-panel__header {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--neo-line);
+  background: linear-gradient(145deg, var(--neo-surface-strong), var(--neo-surface));
+}
+
+.neo-home .neo-support-panel__badge {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 0.95rem;
+  background: rgba(226, 30, 43, 0.08);
+  box-shadow: 3px 3px 8px rgba(132, 148, 163, 0.12), -3px -3px 8px rgba(255, 255, 255, 0.86);
+  color: #b51f2b;
+}
+
+.neo-home .neo-support-panel__title,
+.neo-home .neo-support-panel__subtitle {
+  margin: 0;
+}
+
+.neo-home .neo-support-panel__title {
+  color: var(--neo-ink);
+  font-size: 0.95rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.neo-home .neo-support-panel__subtitle {
+  margin-top: 0.2rem;
+  color: var(--neo-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.neo-home .neo-support-panel__close {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border: 1px solid transparent;
+  border-radius: 0.9rem;
+  background: transparent;
+  color: var(--neo-muted);
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.neo-home .neo-support-panel__close:hover {
+  border-color: var(--neo-line);
+  background: var(--neo-bg);
+  color: var(--neo-ink);
+}
+
+.neo-home .neo-support-panel__close:focus-visible,
+.neo-home .neo-support-panel__channel:focus-visible {
+  outline: 2px solid #527f9c;
+  outline-offset: 3px;
+}
+
+.neo-home .neo-support-panel__body {
+  padding: 1rem;
+}
+
+.neo-home .neo-support-panel__channel {
+  display: flex;
+  min-height: 4.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  border-radius: 1.1rem;
+  background: linear-gradient(145deg, var(--neo-surface-strong), var(--neo-surface));
+  box-shadow: 4px 4px 10px rgba(132, 148, 163, 0.12), -4px -4px 10px rgba(255, 255, 255, 0.82);
+  color: var(--neo-ink);
+  text-align: left;
+  text-decoration: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.neo-home .neo-support-panel__channel:hover {
+  border-color: rgba(22, 163, 74, 0.28);
+  box-shadow: 5px 6px 14px rgba(132, 148, 163, 0.16), -4px -4px 10px rgba(255, 255, 255, 0.86);
+  transform: translateY(-1px);
+}
+
+.neo-home .neo-support-panel__whatsapp {
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
   background: #16a34a;
-  border: 1px solid #16a34a;
-  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.3);
+  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.2);
+  color: #fff;
+}
+
+.neo-home .neo-support-panel__channel-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 0.15rem;
+}
+
+.neo-home .neo-support-panel__channel-title {
+  color: var(--neo-ink);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.neo-home .neo-support-panel__channel-detail {
+  overflow: hidden;
+  color: var(--neo-muted);
+  font-size: 0.75rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neo-home .neo-support-panel__action {
+  flex: 0 0 auto;
+  color: #16834b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.neo-home .neo-support-panel__channel:hover .neo-support-panel__action,
+.neo-home .neo-support-panel__channel:focus-visible .neo-support-panel__action {
+  opacity: 1;
+}
+
+.neo-home .neo-support-panel__footer {
+  padding: 0.65rem 1rem 0.75rem;
+  border-top: 1px solid var(--neo-line);
+  color: var(--neo-muted);
+  font-size: 0.625rem;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 /* True Neomorphic Action Button System (Seamless Page-Matched Ancient-Walrus-24 Specification) */
@@ -3170,6 +3375,10 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
   .neo-admin-toolbar__inner {
     gap: 0.6rem;
     padding-inline: 1rem;
+  }
+
+  .neo-admin-toolbar__client-dashboard span {
+    display: none;
   }
 
   .neo-workspace__header {

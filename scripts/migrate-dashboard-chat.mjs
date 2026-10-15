@@ -16,9 +16,9 @@ const migrations = journal.entries.map(entry => { const source = fs.readFileSync
 const applied = await query("SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at");
 if (applied.some(row => !migrations.some(migration => migration.hash === row.hash && String(migration.when) === String(row.created_at)))) throw new Error("Migration history differs from this checkout. Inspect before applying.");
 const pending = migrations.filter(migration => !applied.some(row => row.hash === migration.hash));
-if (pending.some(migration => !["0011_dashboard-chat", "0012_chat-attachment-body", "0013_chat-read-cursors"].includes(migration.tag))) throw new Error("An unrelated migration is pending. Inspect before applying chat changes.");
+if (pending.some(migration => !["0011_dashboard-chat", "0012_chat-attachment-body", "0013_chat-read-cursors", "0014_support-tickets"].includes(migration.tag))) throw new Error("An unrelated migration is pending. Inspect before applying chat changes.");
 console.log(JSON.stringify({ host:target.hostname, database:target.pathname.slice(1), pending:pending.map(m => m.tag), apply }));
 if (apply && pending.length) {
   await query.transaction([query("SELECT pg_advisory_xact_lock(1790989172)"), ...pending.flatMap(migration => [...migration.statements.map(statement => query(statement)), query("INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)",[migration.hash,migration.when])])]);
-  console.log("Chat migrations applied atomically. Existing users and messages were not modified.");
+  console.log("Chat migrations applied atomically. Existing users and messages were preserved; existing support history was linked to tickets.");
 }

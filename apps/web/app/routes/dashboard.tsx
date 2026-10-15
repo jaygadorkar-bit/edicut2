@@ -9,7 +9,7 @@ import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
 import { canAccessDashboardFeature, getAllowedDashboardFeatures, getDashboardLandingPath, type DashboardFeature } from "../lib/role-feature-access";
 import { WorkspaceShell } from "../components/WorkspaceShell";
 import { isMissingWorkspaceSchema, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
-import { workspaceProjectColumns, type WorkspaceProjectView } from "../lib/workspace-projects.server";
+import { workspaceProjectSummaryColumns, type WorkspaceProjectSummary } from "../lib/workspace-projects.server";
 import { toPublicUser } from "../lib/admin-public";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 import { ClientBalance } from "../components/ClientBalance";
@@ -18,8 +18,6 @@ import { isMissingClientWorkspaceSchema, loadClientWorkspace } from "../lib/clie
 const navItems = [
   { label: "Dashboard", icon: "dashboard_customize", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
-  { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
-  { label: "Uploads", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
   { label: "Enquiries", icon: "mail", path: "/dashboard/messages", feature: "support" as DashboardFeature },
   { label: "Subscriptions", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
@@ -55,20 +53,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const userId = await requireUserId(request, context);
   const db = getDbFromContext(context);
-  const user = await findUserById(db, userId);
+  const [user, roleFeatureAccess] = await Promise.all([findUserById(db, userId), getRoleFeatureAccessSettings(db, context)]);
   if (!user?.active || user.deletedAt) {
     const session = await getSession(request.headers.get("Cookie"), context);
     throw redirect("/signin?redirectTo=/dashboard", { headers: { "Set-Cookie": await destroySession(session, context) } });
   }
 
-  const roleFeatureAccess = await getRoleFeatureAccessSettings(db, context);
   const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
 
   if (allowedFeatures.length === 0) {
     return {
       user: toPublicUser(user),
       allowedFeatures,
-      projects: [] as WorkspaceProjectView[],
+      projects: [] as WorkspaceProjectSummary[],
       projectCount: 0,
       activeCount: 0,
       reviewCount: 0,
@@ -87,57 +84,63 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const canViewProjects = allowedFeatures.includes("projects");
   const canViewReviews = allowedFeatures.includes("reviews");
   const canViewUploads = allowedFeatures.includes("uploads");
-  let projects: WorkspaceProjectView[] = [];
+  let projects: WorkspaceProjectSummary[] = [];
   let projectCount = 0;
   let activeCount = 0;
   let reviewCount = 0;
   let fileCount = 0;
   let workspaceReady = true;
-  try {
-    const ownerFilter = eq(workspaceProjects.ownerId, userId);
-    const recentProjectsPromise: Promise<WorkspaceProjectView[]> = canViewProjects
-      ? db.select(workspaceProjectColumns).from(workspaceProjects).where(ownerFilter).orderBy(desc(workspaceProjects.updatedAt)).limit(5)
-      : Promise.resolve([]);
-    const projectSummaryPromise = canViewProjects || canViewReviews
-      ? db.select({
-          total: canViewProjects ? drizzleCount() : sql<number>`0`.mapWith(Number),
-          active: canViewProjects
-            ? sql<number>`count(*) filter (where ${workspaceProjects.status} <> 'delivered')`.mapWith(Number)
-            : sql<number>`0`.mapWith(Number),
-          reviews: canViewReviews
-            ? sql<number>`count(*) filter (where ${workspaceProjects.status} in ('review', 'client_review'))`.mapWith(Number)
-            : sql<number>`0`.mapWith(Number),
-        }).from(workspaceProjects).where(ownerFilter)
-      : Promise.resolve([{ total: 0, active: 0, reviews: 0 }]);
-    const fileSummaryPromise = canViewUploads
-      ? db.select({ count: drizzleCount() }).from(workspaceProjectFiles).where(eq(workspaceProjectFiles.ownerId, userId))
-      : Promise.resolve([{ count: 0 }]);
-    const [recentProjects, projectSummary, fileSummary] = await Promise.all([
-      recentProjectsPromise,
-      projectSummaryPromise,
-      fileSummaryPromise,
-    ]);
-    projects = recentProjects;
-    if (canViewProjects) {
-      projectCount = projectSummary[0]?.total ?? 0;
-      activeCount = projectSummary[0]?.active ?? 0;
+  const loadOverview = async () => {
+    try {
+      const ownerFilter = eq(workspaceProjects.ownerId, userId);
+      const recentProjectsPromise: Promise<WorkspaceProjectSummary[]> = canViewProjects
+        ? db.select(workspaceProjectSummaryColumns).from(workspaceProjects).where(ownerFilter).orderBy(desc(workspaceProjects.updatedAt)).limit(5)
+        : Promise.resolve([]);
+      const projectSummaryPromise = canViewProjects || canViewReviews
+        ? db.select({
+            total: canViewProjects ? drizzleCount() : sql<number>`0`.mapWith(Number),
+            active: canViewProjects
+              ? sql<number>`count(*) filter (where ${workspaceProjects.status} <> 'delivered')`.mapWith(Number)
+              : sql<number>`0`.mapWith(Number),
+            reviews: canViewReviews
+              ? sql<number>`count(*) filter (where ${workspaceProjects.status} in ('review', 'client_review'))`.mapWith(Number)
+              : sql<number>`0`.mapWith(Number),
+          }).from(workspaceProjects).where(ownerFilter)
+        : Promise.resolve([{ total: 0, active: 0, reviews: 0 }]);
+      const fileSummaryPromise = canViewUploads
+        ? db.select({ count: drizzleCount() }).from(workspaceProjectFiles).where(eq(workspaceProjectFiles.ownerId, userId))
+        : Promise.resolve([{ count: 0 }]);
+      const [recentProjects, projectSummary, fileSummary] = await Promise.all([
+        recentProjectsPromise,
+        projectSummaryPromise,
+        fileSummaryPromise,
+      ]);
+      projects = recentProjects;
+      if (canViewProjects) {
+        projectCount = projectSummary[0]?.total ?? 0;
+        activeCount = projectSummary[0]?.active ?? 0;
+      }
+      if (canViewReviews) reviewCount = projectSummary[0]?.reviews ?? 0;
+      if (canViewUploads) fileCount = fileSummary[0]?.count ?? 0;
+    } catch (error) {
+      if (!isMissingWorkspaceSchema(error)) throw error;
+      workspaceReady = false;
     }
-    if (canViewReviews) reviewCount = projectSummary[0]?.reviews ?? 0;
-    if (canViewUploads) fileCount = fileSummary[0]?.count ?? 0;
-  } catch (error) {
-    if (!isMissingWorkspaceSchema(error)) throw error;
-    workspaceReady = false;
-  }
+  };
 
-  let clientBalance: Awaited<ReturnType<typeof loadClientWorkspace>> | null = null;
-  let balanceReady = true;
-  if (allowedFeatures.includes("billing")) {
-    try { clientBalance = await loadClientWorkspace(db, userId); }
-    catch (error) {
-      if (!isMissingClientWorkspaceSchema(error)) throw error;
-      balanceReady = false;
+  const loadBalance = async () => {
+    let clientBalance: Awaited<ReturnType<typeof loadClientWorkspace>> | null = null;
+    let balanceReady = true;
+    if (allowedFeatures.includes("billing")) {
+      try { clientBalance = await loadClientWorkspace(db, userId); }
+      catch (error) {
+        if (!isMissingClientWorkspaceSchema(error)) throw error;
+        balanceReady = false;
+      }
     }
-  }
+    return { clientBalance, balanceReady };
+  };
+  const [, { clientBalance, balanceReady }] = await Promise.all([loadOverview(), loadBalance()]);
   return { user: toPublicUser(user), allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, workspaceReady, noDashboardAccess: false, clientBalance, balanceReady };
 }
 

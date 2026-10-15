@@ -36,7 +36,12 @@ const sections = [
   },
   {
     icon: "support_agent",
-    title: "6. Legal & Support Inquiries",
+    title: "6. YouTube Review Integration",
+    copy: <>Using the YouTube upload or playback features also binds you to the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" className="underline">YouTube Terms of Service</a>. Upload only videos you have permission to share as unlisted. Unlisted links can be watched or reshared by anyone who receives them. YouTube controls upload allowances, processing, compression, availability, and playback. Keep original master files in your own archive.</>,
+  },
+  {
+    icon: "support_agent",
+    title: "7. Legal & Support Inquiries",
     copy: "Questions regarding these terms or enterprise master service agreements (MSAs) can be directed to legal@edicut.com.",
   },
 ];

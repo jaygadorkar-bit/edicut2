@@ -3,9 +3,10 @@ import type { DatabaseClient } from "@edicut/db/client";
 const mocks = vi.hoisted(() => ({ session: new Map<string, unknown>(), adminSession: new Map<string, unknown>(), admin: vi.fn(), user: vi.fn(), requireAdmin: vi.fn(), requireUser: vi.fn() }));
 vi.mock("@edicut/db/repositories/admin-users", () => ({ findAdminUserById: mocks.admin }));
 vi.mock("@edicut/db/repositories/users", () => ({ findUserById: mocks.user }));
-vi.mock("./session.server", () => ({ getSession: async () => mocks.session, getAdminSession: async () => mocks.adminSession, requireAdminUser: mocks.requireAdmin, requireUserId: mocks.requireUser, destroySession: async () => "expired", isAdminRole: (role: string) => role === "admin" }));
+vi.mock("./session.server", async importOriginal => ({ ...await importOriginal<typeof import("./session.server")>(), getSession: async () => mocks.session, getAdminSession: async () => mocks.adminSession, requireAdminUser: mocks.requireAdmin, requireUserId: mocks.requireUser, destroySession: async () => "expired", isAdminRole: (role: string) => role === "admin" }));
 vi.mock("./site-settings.server", () => ({ getRoleFeatureAccessSettings: async () => ({}) }));
 import { requireContactInboxAccess } from "./contact-inbox-access.server";
+import { getSessionCredentialVersion } from "./session.server";
 const request = new Request("http://localhost:3002/dashboard/messages");
 const db = {} as DatabaseClient;
 const admin = { id: "admin-1", email: "owner@example.com", name: "Owner", active: true, role: "admin" };
@@ -26,6 +27,7 @@ describe("contact inbox authorization", () => {
   });
   it("allows a verified admin using the matching customer workspace", async () => {
     mocks.session.set("adminUserId", admin.id); mocks.session.set("adminAccessVerified", true);
+    mocks.session.set("adminCredentialVersion", await getSessionCredentialVersion(admin, undefined, "admin"));
     expect(await requireContactInboxAccess(request, db)).toMatchObject({ user: { role: "admin" }, allowedFeatures: expect.arrayContaining(["support"]) });
   });
   it.each([{ ...admin, active: false }, { ...admin, role: "customer" }, { ...admin, email: "different@example.com" }, undefined])("denies an invalid linked admin: %j", async (record) => {

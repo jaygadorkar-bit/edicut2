@@ -190,10 +190,16 @@ function couponView(coupon: typeof marketingCoupons.$inferSelect): MarketingCoup
   };
 }
 
-export async function getAdminMarketingData(db: DatabaseClient, siteOrigin: string): Promise<AdminMarketingData> {
+export async function getAdminMarketingData(
+  db: DatabaseClient,
+  siteOrigin: string,
+  view: "all" | "coupons" | "affiliates" = "all",
+): Promise<AdminMarketingData> {
+  const includeCoupons = view !== "affiliates";
+  const includeAffiliates = view !== "coupons";
   const [coupons, affiliateProfiles, affiliateCandidates, projectMetrics, subscriptionMetrics] = await Promise.all([
-    db.select().from(marketingCoupons).orderBy(desc(marketingCoupons.createdAt)),
-    db.select({
+    includeCoupons ? db.select().from(marketingCoupons).orderBy(desc(marketingCoupons.createdAt)) : Promise.resolve([]),
+    includeAffiliates ? db.select({
       id: marketingAffiliates.id,
       userId: users.id,
       name: users.name,
@@ -204,14 +210,14 @@ export async function getAdminMarketingData(db: DatabaseClient, siteOrigin: stri
     })
       .from(marketingAffiliates)
       .innerJoin(users, eq(marketingAffiliates.userId, users.id))
-      .orderBy(desc(marketingAffiliates.createdAt)),
-    db.select({ id: users.id, name: users.name, email: users.email })
+      .orderBy(desc(marketingAffiliates.createdAt)) : Promise.resolve([]),
+    includeAffiliates ? db.select({ id: users.id, name: users.name, email: users.email })
       .from(users)
       .leftJoin(marketingAffiliates, eq(marketingAffiliates.userId, users.id))
       .where(and(eq(users.role, "affiliate"), eq(users.active, true), isNull(users.deletedAt), isNull(marketingAffiliates.id)))
       .orderBy(users.email)
-      .limit(100),
-    db.select({
+      .limit(100) : Promise.resolve([]),
+    includeAffiliates ? db.select({
       affiliateId: marketingAffiliates.id,
       referralCount: sql<number>`count(${workspaceProjects.id})`.mapWith(Number),
       paidReferralCount: sql<number>`count(${workspaceProjects.id}) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid')`.mapWith(Number),
@@ -223,8 +229,8 @@ export async function getAdminMarketingData(db: DatabaseClient, siteOrigin: stri
         eq(workspaceProjects.affiliateId, marketingAffiliates.id),
         and(isNull(workspaceProjects.affiliateId), eq(workspaceProjects.affiliateCode, marketingAffiliates.code)),
       ))
-      .groupBy(marketingAffiliates.id),
-    db.select({
+      .groupBy(marketingAffiliates.id) : Promise.resolve([]),
+    includeAffiliates ? db.select({
       affiliateId: marketingAffiliates.id,
       referralCount: sql<number>`count(${customerSubscriptions.id})`.mapWith(Number),
       paidReferralCount: sql<number>`count(${customerSubscriptions.id}) FILTER (WHERE ${customerSubscriptions.status} = 'paid')`.mapWith(Number),
@@ -236,7 +242,7 @@ export async function getAdminMarketingData(db: DatabaseClient, siteOrigin: stri
         eq(customerSubscriptions.affiliateId, marketingAffiliates.id),
         isNull(customerSubscriptions.deletedAt),
       ))
-      .groupBy(marketingAffiliates.id),
+      .groupBy(marketingAffiliates.id) : Promise.resolve([]),
   ]);
 
   const metrics = combineAffiliateMetrics(

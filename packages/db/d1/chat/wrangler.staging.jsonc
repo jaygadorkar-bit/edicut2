@@ -1,0 +1,12 @@
+{
+  "name": "edicut-chat-d1-staging",
+  "account_id": "f2c46bb116722bcb7dc4be44e500154b",
+  "compatibility_date": "2026-04-19",
+  "d1_databases": [{
+    "binding": "CHAT_D1",
+    "database_name": "edicut-chat-staging",
+    "database_id": "b7a44a27-8995-45a9-8d50-516194c6306d",
+    "migrations_dir": ".",
+    "migrations_pattern": "[0-9]*.sql"
+  }]
+}

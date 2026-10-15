@@ -13,18 +13,37 @@ export default defineConfig(({ mode, isSsrBuild }) => {
   const localEnv = loadEnv(mode, workspaceRoot, "");
   // React Router's dev server runs from apps/web; keep this server-side config
   // out of Vite's client env while loading the same keys as the Worker.
-  for (const name of ["NEXT_PUBLIC_RECAPTCHA_SITE_KEY", "RECAPTCHA_SECRET_KEY"]) {
+  for (const name of [
+    "NEXT_PUBLIC_RECAPTCHA_SITE_KEY", "RECAPTCHA_SECRET_KEY",
+    "YOUTUBE_OAUTH_CLIENT_ID", "YOUTUBE_OAUTH_CLIENT_SECRET", "YOUTUBE_TOKEN_SECRET",
+  ]) {
     if (process.env[name] === undefined && localEnv[name]) process.env[name] = localEnv[name];
   }
 
   return {
     envDir: workspaceRoot,
-    cacheDir: ".vite-cache",
+    cacheDir: process.env.DEV_CACHE_DIR ?? ".vite-cache",
     server: {
       host: "0.0.0.0",
+      strictPort: true,
       watch: {
-        usePolling: true,
-        interval: 250,
+        // Windows bind mounts need polling; native development can use OS events.
+        usePolling: process.env.CHOKIDAR_USEPOLLING === "true",
+        interval: Number(process.env.CHOKIDAR_INTERVAL) || 1000,
+        ignored: [
+          "**/.codex*/**",
+          "**/.pnpm-store*/**",
+          "**/.react-router/**",
+          "**/.wrangler*/**",
+          "**/chrome-profile/**",
+          "**/scratch/**",
+          "**/artifacts/**",
+          "**/media/**",
+          "**/coverage/**",
+          "**/build/**",
+          "**/*.tsbuildinfo",
+          "**/*.{test,spec}.{ts,tsx}",
+        ],
       },
       hmr: {
         host: "localhost",

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   admin: vi.fn(),
-  db: { query: { adminUsers: { findFirst: vi.fn() } }, update: vi.fn() },
+  db: { query: { adminUsers: { findFirst: vi.fn() } }, update: vi.fn(), execute: vi.fn() },
   verifyPassword: vi.fn(),
   consumeUsageLimit: vi.fn(),
   updateSupabaseUserEmailByEmail: vi.fn(),
@@ -52,6 +52,7 @@ describe("admin account credential consistency", () => {
     expect(mocks.verifyPassword).toHaveBeenCalledWith("OldPassword123!", admin.passwordHash);
     expect(mocks.updateSupabaseUserPasswordByEmail).toHaveBeenCalledWith(context, admin.email, "NewPassword123!");
     expect(mocks.db.update).toHaveBeenCalled();
+    expect(mocks.db.execute).toHaveBeenCalledOnce();
   });
 
   it("leaves the local credential unchanged when the Auth provider rejects the update", async () => {

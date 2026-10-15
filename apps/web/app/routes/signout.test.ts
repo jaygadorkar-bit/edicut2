@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+vi.mock("@edicut/db/repositories/users", () => ({ findUserById: async () => ({ id: "test-user", sessionVersion: "11111111-1111-4111-8111-111111111111" }) }));
+vi.mock("@edicut/db/repositories/admin-users", () => ({ findAdminUserById: async () => ({ id: "test-admin", sessionVersion: "22222222-2222-4222-8222-222222222222" }) }));
+vi.mock("../lib/db.server", () => ({ getDbFromContext: () => ({ update: () => ({ set: () => ({ where: async () => undefined }) }) }) }));
 import { action, loader } from "./signout";
 import { commitAdminSession, commitSession, getAdminSession, getSession } from "../lib/session.server";
 

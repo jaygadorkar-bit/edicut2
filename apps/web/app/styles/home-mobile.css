@@ -479,11 +479,6 @@
     font-size: var(--type-size-small);
   }
 
-  .neo-home .neo-support-launcher,
-  .neo-home .neo-support-panel {
-    display: none;
-  }
-
   .neo-home .neo-mobile-support {
     position: relative;
     z-index: 20;
@@ -536,25 +531,9 @@
     visibility: hidden;
   }
 
-  .neo-homepage-shell .neo-support-launcher {
-    right: 1rem;
-    bottom: max(1rem, env(safe-area-inset-bottom));
-    padding: 0.375rem;
-    border-radius: 50%;
-  }
-
-  .neo-homepage-shell .neo-support-panel {
-    bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 3.75rem);
-    margin-right: 1rem;
-  }
-
   .neo-homepage-shell .neo-support-panel button {
     min-height: 2.75rem;
     min-width: 2.75rem;
-  }
-
-  .neo-homepage-shell .neo-support-panel > div:first-child {
-    background: var(--neo-ink);
   }
 
 }

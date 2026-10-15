@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
   listAdminSubscriptionsForExport: vi.fn(async () => [] as unknown[]), adminSubscriptionsCsv: vi.fn(() => "csv export"),
   deleteUnpaidSubscription: vi.fn(async () => true), markSubscriptionPaid: vi.fn(async () => true),
   markSubscriptionUnpaid: vi.fn(async () => true), deleteAdminSubscription: vi.fn(async () => true),
+  notifyChatAccessChange: vi.fn(async () => {}),
 }));
+vi.mock("../lib/chat-realtime.server", () => ({ notifyChatAccessChange: mocks.notifyChatAccessChange }));
 vi.mock("../lib/session.server", () => ({ requireUserId: mocks.requireUserId, requireAdminUser: mocks.requireAdminUser, isAdminRole: (role: string) => role === "admin" }));
 vi.mock("@edicut/db/repositories/users", () => ({ findUserById: mocks.findUserById }));
 vi.mock("../lib/db.server", () => ({ getDbFromContext: mocks.getDbFromContext }));
@@ -43,9 +45,19 @@ beforeEach(() => {
   mocks.subscriptionSummaryRows = [{ total: 3, paid: 1, unpaid: 2 }];
 });
 describe("customer subscription route", () => {
+  it("opens a notification record with the authenticated owner and resets pagination", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const result = await customerLoader(args(undefined, `?page=99&event=${id}&ownerId=foreign`));
+    expect(result.page).toBe(1);
+    expect(mocks.listCustomerSubscriptions).toHaveBeenCalledWith(expect.anything(), "customer-id", 1, id);
+  });
+  it("rejects malformed notification references before reading records", async () => {
+    await expect(customerLoader(args(undefined, "?event=invalid"))).rejects.toMatchObject({ status: 404 });
+    expect(mocks.listCustomerSubscriptions).not.toHaveBeenCalled();
+  });
   it("uses the authenticated owner and does not serialize password hashes", async () => {
     const result = await customerLoader(args(undefined, "?page=2&ownerId=foreign"));
-    expect(mocks.listCustomerSubscriptions).toHaveBeenCalledWith(expect.anything(), "customer-id", 2);
+    expect(mocks.listCustomerSubscriptions).toHaveBeenCalledWith(expect.anything(), "customer-id", 2, undefined);
     expect(result.user).not.toHaveProperty("passwordHash");
   });
   it("deletes only through the owner-scoped helper", async () => {
@@ -73,9 +85,15 @@ describe("customer subscription route", () => {
   });
 });
 describe("admin subscription route", () => {
+  it("opens a selected order independently of its old status or page", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    const result = await adminLoader(args(undefined, `?page=99&event=${id}`));
+    expect(result.page).toBe(1);
+    expect(mocks.listAdminSubscriptions).toHaveBeenCalledWith(expect.anything(), 1, "unpaid", id);
+  });
   it("lists records without sending private admin fields", async () => {
     const result = await adminLoader(args());
-    expect(mocks.listAdminSubscriptions).toHaveBeenCalledWith(expect.anything(), 1, "unpaid");
+    expect(mocks.listAdminSubscriptions).toHaveBeenCalledWith(expect.anything(), 1, "unpaid", undefined);
     expect(result.admin).not.toHaveProperty("passwordHash");
     expect(result.status).toBe("unpaid");
     expect(result.summary).toEqual({ total: 3, paid: 1, unpaid: 2 });
@@ -83,14 +101,14 @@ describe("admin subscription route", () => {
   it("applies paid filtering before pagination", async () => {
     mocks.subscriptionSummaryRows = [{ total: 81, paid: 51, unpaid: 30 }];
     const result = await adminLoader(args(undefined, "?status=paid&page=2"));
-    expect(mocks.listAdminSubscriptions).toHaveBeenCalledWith(expect.anything(), 2, "paid");
+    expect(mocks.listAdminSubscriptions).toHaveBeenCalledWith(expect.anything(), 2, "paid", undefined);
     expect(result.status).toBe("paid"); expect(result.page).toBe(2);
   });
   it("clamps an out-of-range page to the last page for the selected status", async () => {
     mocks.subscriptionSummaryRows = [{ total: 26, paid: 0, unpaid: 26 }];
     const result = await adminLoader(args(undefined, "?status=unpaid&page=4"));
     expect(result.page).toBe(2);
-    expect(mocks.listAdminSubscriptions).toHaveBeenNthCalledWith(1, expect.anything(), 4, "unpaid");
+    expect(mocks.listAdminSubscriptions).toHaveBeenNthCalledWith(1, expect.anything(), 4, "unpaid", undefined);
     expect(mocks.listAdminSubscriptions).toHaveBeenNthCalledWith(2, expect.anything(), 2, "unpaid");
   });
   it("downloads the full CSV for the selected status with safe attachment headers", async () => {

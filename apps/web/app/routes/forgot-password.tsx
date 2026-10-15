@@ -1,3 +1,4 @@
+import { safeRedirectPath } from "../lib/safe-redirect";
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
 import type { FormEvent } from "react";
 import { useState } from "react";
@@ -85,7 +86,7 @@ export default function ForgotPasswordPage() {
   const actionData = useActionData<ForgotPasswordActionData>();
   const navigation = useNavigation();
   const submit = useSubmit();
-  const redirectTo = sanitizeRedirect(searchParams.get("redirectTo") || "/dashboard");
+  const redirectTo = safeRedirectPath(searchParams.get("redirectTo") || "/dashboard");
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [securityPending, setSecurityPending] = useState(false);
   const submitting = navigation.state !== "idle" || securityPending;
@@ -184,8 +185,4 @@ export default function ForgotPasswordPage() {
       </div>
     </main>
   );
-}
-
-function sanitizeRedirect(value: string) {
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
 }

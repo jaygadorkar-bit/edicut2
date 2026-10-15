@@ -25,16 +25,14 @@ export function headers() {
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = getDbFromContext(context);
   const adminUser = await requireAdminUser(request, db, context, new URL(request.url).pathname);
-  const [cloudinaryUsage, cloudinaryVideoUsage] = await Promise.all([
-    getCloudinaryUsage(context).catch((error) => {
+  const cloudinaryUsage = getCloudinaryUsage(context).catch((error) => {
       console.error("Cloudinary usage error:", error);
       return null;
-    }),
-    getCloudinaryVideoUsage(context).catch((error) => {
+    });
+  const cloudinaryVideoUsage = getCloudinaryVideoUsage(context).catch((error) => {
       console.error("Cloudinary video usage error:", error);
       return null;
-    }),
-  ]);
+    });
   const providers = await getProviderUsageOverview(context, cloudinaryUsage, cloudinaryVideoUsage, db).catch((error) => {
     console.error("Provider usage overview error:", error);
     return [];

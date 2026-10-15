@@ -6,6 +6,7 @@ export type AdminDataRequirements = {
   roleFeatureAccess: boolean;
   portfolioSections: boolean;
   images: boolean;
+  imageCount: boolean;
   imageUsage: boolean;
   videos: boolean;
   videoUsage: boolean;
@@ -27,7 +28,8 @@ export function getAdminDataRequirements(tab: string): AdminDataRequirements {
     siteSettings: tab === "settings",
     roleFeatureAccess: tab === "roles",
     portfolioSections: isVideos,
-    images: isOverview || isImages,
+    images: isImages,
+    imageCount: isOverview,
     imageUsage: isImages,
     videos: isVideos,
     videoUsage: isVideos,

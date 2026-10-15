@@ -58,6 +58,23 @@ beforeEach(() => {
 });
 
 describe("contact inquiry delivery", () => {
+  it("rejects oversized streams without relying on Content-Length", async () => {
+    const body = new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode(`brief=${"a".repeat(65 * 1024)}`)); controller.close();
+    } });
+    const request = new Request("http://localhost:3002/contact", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body, duplex: "half" } as RequestInit & { duplex: "half" });
+    const response = await submitContactInquiry({ request, context: {}, returnTo: "/contact" });
+    expect(getRedirectLocation(response)).toBe("/contact?error=invalid#contact");
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.verifyRecaptchaToken).not.toHaveBeenCalled();
+  });
+  it("rejects cross-site submissions before parsing or sending notifications", async () => {
+    const request = contactRequest();
+    request.headers.set("Origin", "https://attacker.test");
+    expect((await submitContactInquiry({ request, context: {}, returnTo: "/contact" })).status).toBe(403);
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.queueTelegramContactInquiryNotice).not.toHaveBeenCalled();
+  });
   it("rejects a malformed form body without crashing or writing data", async () => {
     const request = new Request("http://localhost:3002/contact", { method: "POST", body: "invalid", headers: { "Content-Type": "multipart/form-data" } });
     const response = await submitContactInquiry({ request, context: {}, returnTo: "/contact" });

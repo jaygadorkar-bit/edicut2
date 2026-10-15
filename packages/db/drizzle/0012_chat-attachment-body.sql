@@ -3,9 +3,13 @@ ALTER TABLE "chat_messages" ADD CONSTRAINT "chat_messages_body_check" CHECK (cha
 --> statement-breakpoint
 -- Chat data is available only through the application's authorized server API.
 ALTER TABLE chat_rooms ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
 ALTER TABLE chat_reads ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
 REVOKE ALL ON chat_rooms, chat_messages, chat_reads FROM PUBLIC;
+--> statement-breakpoint
 DO $$ BEGIN
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON chat_rooms, chat_messages, chat_reads FROM anon;

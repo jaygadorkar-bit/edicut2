@@ -1,6 +1,7 @@
 import { ADMIN_ACCESS_PATH, ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
 
 const ROUTES_WITHOUT_SITE_MOTION = [
+  "/logo-animation",
   ADMIN_BASE_PATH,
   "/dashboard",
   "/signin",

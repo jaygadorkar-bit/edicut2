@@ -20,6 +20,22 @@ beforeEach(() => {
   mocks.supabaseSignIn.mockResolvedValue({ error: "Invalid credentials." }); mocks.session.mockResolvedValue(new Response(null, { status: 302 }));
 });
 describe("customer sign-in account restrictions", () => {
+  it.each(["shortpass", "x".repeat(73), "বাংলা".repeat(8)])("rejects weak or truncated signup passwords before creating an account", async password => {
+    const result = await action({ request: request(undefined, new URLSearchParams({ intent: "signup", email: local.email, password })), context: {}, params: {} } as Parameters<typeof action>[0]);
+    expect(result).toHaveProperty("error");
+    expect(mocks.local).not.toHaveBeenCalled(); expect(mocks.session).not.toHaveBeenCalled();
+  });
+  it("does not accept a stale local password after Supabase rejects it", async () => {
+    mocks.enabled.mockReturnValue(true);
+    const result = await action({ request: request(), context: {}, params: {} } as Parameters<typeof action>[0]);
+    expect(result).toMatchObject({ error: "Invalid credentials." });
+    expect(mocks.local).not.toHaveBeenCalled();
+    expect(mocks.session).not.toHaveBeenCalled();
+  });
+  it("normalizes a backslash open redirect before creating a local session", async () => {
+    await action({ request: request(undefined, new URLSearchParams({ intent: "signin", email: local.email, password: "test-password", redirectTo: "/\\attacker.test" })), context: {}, params: {} } as Parameters<typeof action>[0]);
+    expect(mocks.session).toHaveBeenCalledWith(expect.objectContaining({ redirectTo: "/dashboard" }));
+  });
   it.each([false, true])("rejects disabled or trashed local accounts with Supabase enabled=%s", async enabled => {
     mocks.enabled.mockReturnValue(enabled);
     for (const record of [{ ...local, active: false }, { ...local, deletedAt: new Date() }]) {

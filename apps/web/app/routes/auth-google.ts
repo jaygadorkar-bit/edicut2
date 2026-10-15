@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { startGoogleOAuth } from "../lib/google-auth.server";
 import { ADMIN_LOGIN_PATH } from "../lib/admin-paths";
@@ -7,6 +7,19 @@ import { isSameSiteMutation } from "../lib/customer-subscriptions.server";
 import { requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import type { LoaderContext } from "../types";
 import { readMutationForm } from "../lib/mutation-request.server";
+import { safeRedirectPath } from "../lib/safe-redirect";
+
+// Bookmarks, refreshes and GET navigations must return to the CAPTCHA-gated form.
+export function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const destination = new URL(url.searchParams.get("mode") === "admin" ? ADMIN_LOGIN_PATH : "/signin", url);
+  const returnTo = url.searchParams.get("returnTo");
+  const returnPath = safeRedirectPath(returnTo, "");
+  if (returnPath) destination.searchParams.set("redirectTo", returnPath);
+  return redirect(`${destination.pathname}${destination.search}`, {
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
 export async function action({ request, context }: ActionFunctionArgs) {
   if (requestBodyExceedsLimit(request, 16 * 1024)) {
@@ -26,9 +39,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const destination = new URL(mode === "admin" ? ADMIN_LOGIN_PATH : "/signin", request.url);
     destination.searchParams.set("error", "recaptcha");
     const returnTo = formData.get("returnTo");
-    if (typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//")) {
-      destination.searchParams.set("redirectTo", returnTo);
-    }
+    const returnPath = safeRedirectPath(returnTo, "");
+    if (returnPath) destination.searchParams.set("redirectTo", returnPath);
     return redirect(`${destination.pathname}${destination.search}`);
   }
 

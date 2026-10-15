@@ -1,4 +1,5 @@
 import { isRouteErrorResponse } from "react-router";
+import { isDatabaseConnectionError } from "./database-errors";
 
 export type RouteErrorPresentation = {
   label: string;
@@ -9,6 +10,9 @@ export type RouteErrorPresentation = {
 const GENERIC_ERROR_MESSAGE = "Please try again. If the problem continues, return to the home page or sign in again.";
 
 export function getRouteErrorPresentation(error: unknown): RouteErrorPresentation {
+  if (isDatabaseConnectionError(error) || (isRouteErrorResponse(error) && error.status === 503)) {
+    return { label: "Connection unavailable", title: "We couldn’t connect just now", message: "Your account data is temporarily unavailable. Try again in a moment." };
+  }
   if (!isRouteErrorResponse(error)) {
     return {
       label: "EdiCut error",
@@ -50,6 +54,10 @@ export function getRouteErrorPresentation(error: unknown): RouteErrorPresentatio
 }
 
 export function getRouteErrorDebugDetails(error: unknown) {
+  // Driver errors can contain SQL parameters, account IDs, and credentials.
+  if (isDatabaseConnectionError(error) || (error instanceof Error && /Failed query:|postgres(?:ql)?:\/\//i.test(error.message))) {
+    return "Database request failed. Query details are omitted to protect account information.";
+  }
   if (isRouteErrorResponse(error)) {
     let detail = "";
     if (typeof error.data === "string") {

@@ -1,3 +1,4 @@
+import { safeAdminRedirect, safeRedirectPath } from "./safe-redirect";
 import { createCookie, redirect } from "react-router";
 import { eq } from "drizzle-orm";
 import { existsSync, readFileSync } from "node:fs";
@@ -134,7 +135,7 @@ function getCanonicalLocalOAuthRedirect(requestUrl: URL, appUrlValue: string) {
   return redirect(destination.toString(), { status: 307 });
 }
 
-function readRequiredGoogleEnv(context?: LoaderContext) {
+export function readRequiredGoogleEnv(context?: LoaderContext) {
   const env = readEnv(context);
   const clientId = firstPresent(env.AUTH_GOOGLE_ID, readLocalEnvFile("secrets.json").AUTH_GOOGLE_ID);
   const clientSecret = firstPresent(env.AUTH_GOOGLE_SECRET, readLocalEnvFile("secrets.json").AUTH_GOOGLE_SECRET);
@@ -166,27 +167,32 @@ function randomState() {
 }
 
 function safeUserReturnTo(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/dashboard";
-  }
-
-  if (value.startsWith("/auth/") || value.startsWith("/api/auth/")) {
-    return "/dashboard";
-  }
-
-  return value;
+  const destination = safeRedirectPath(value);
+  const pathname = new URL(destination, "https://redirect.invalid").pathname;
+  return pathname.startsWith("/auth/") || pathname.startsWith("/api/auth/") ? "/dashboard" : destination;
 }
 
-function safeAdminReturnTo(value: string | null) {
-  if (!value || !value.startsWith(ADMIN_BASE_PATH)) {
-    return ADMIN_BASE_PATH;
-  }
+const safeAdminReturnTo = safeAdminRedirect;
 
-  if (value.startsWith(ADMIN_LOGIN_PATH) || value.includes("//")) {
-    return ADMIN_BASE_PATH;
+export async function createGoogleOAuthFailureResponse(request: Request) {
+  let stored;
+  try {
+    stored = await oauthStateCookie.parse(request.headers.get("Cookie"));
+  } catch {
+    stored = null;
   }
-
-  return value;
+  const admin = stored?.mode === "admin";
+  const params = new URLSearchParams({ error: "google-unavailable" });
+  if (typeof stored?.returnTo === "string") {
+    params.set("redirectTo", admin ? safeAdminReturnTo(stored.returnTo) : safeUserReturnTo(stored.returnTo));
+  }
+  const headers = new Headers({
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+    "X-Robots-Tag": "noindex, nofollow, noarchive",
+  });
+  headers.append("Set-Cookie", await oauthStateCookie.serialize("", { maxAge: 0 }));
+  return redirect(`${admin ? ADMIN_LOGIN_PATH : "/signin"}?${params}`, { headers });
 }
 
 function getOAuthMode(requestUrl: URL): GoogleOAuthMode {

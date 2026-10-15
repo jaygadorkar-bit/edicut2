@@ -1,3 +1,5 @@
+import { safeAdminRedirect } from "../lib/safe-redirect";
+import { invalidateAccountSessionsByEmail } from "../lib/account-sessions.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import bcrypt from "bcryptjs";
@@ -38,11 +40,7 @@ function isEmail(value: string) {
 }
 
 function safeAdminReturnTo(value: string | null) {
-  if (!value || !value.startsWith(ADMIN_BASE_PATH) || value.startsWith(ADMIN_LOGIN_PATH) || value.includes("//")) {
-    return ADMIN_BASE_PATH;
-  }
-
-  return value;
+  return safeAdminRedirect(value);
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -135,8 +133,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return { intent: "change-password", error: "Current password is incorrect." };
     }
 
-    if (password.length < 12 || password.length > 128) {
-      return { intent: "change-password", error: "New admin password must be between 12 and 128 characters." };
+    if (password.length < 12 || new TextEncoder().encode(password).byteLength > 72) {
+      return { intent: "change-password", error: "New admin password must be at least 12 characters and no more than 72 bytes." };
     }
 
     if (password !== confirmPassword) {
@@ -152,7 +150,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
           updatedAt: new Date(),
         })
         .where(eq(adminUsers.id, adminUser.id));
-
+      await invalidateAccountSessionsByEmail(db, adminUser.email);
       return { intent: "change-password", success: "Admin password updated." };
     } catch (error) {
       console.error("Admin password update error:", error);
@@ -239,8 +237,8 @@ export default function AdminAccountRoute() {
               <p role="status" className="rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{actionData.success}</p>
             ) : null}
             <Field label="Current password" name="currentPassword" type="password" required defaultValue="" disabled={isSubmitting} />
-            <Field label="New password" name="password" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} maxLength={128} />
-            <Field label="Confirm new password" name="confirmPassword" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} maxLength={128} />
+            <Field label="New password" name="password" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} maxLength={72} />
+            <Field label="Confirm new password" name="confirmPassword" type="password" required defaultValue="" disabled={isSubmitting} minLength={12} maxLength={72} />
             <button disabled={isSubmitting} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-900 text-sm font-black text-white disabled:opacity-50">
               <span className="material-symbols-outlined text-[18px]">lock_reset</span>
               {isSubmitting ? "Updating..." : "Update password"}

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   admin: vi.fn(),
   consumeUsageLimit: vi.fn(),
-  db: { query: { users: { findFirst: vi.fn() }, adminUsers: { findFirst: vi.fn() } }, update: vi.fn(), delete: vi.fn() },
+  db: { query: { users: { findFirst: vi.fn() }, adminUsers: { findFirst: vi.fn() } }, update: vi.fn(), delete: vi.fn(), execute: vi.fn() },
   resetCreatorProfile: vi.fn(),
   deleteSupabaseUsersByEmail: vi.fn(),
   updateSupabaseUserEmailByEmail: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock("../lib/usage-protection.server", () => ({
 import { action } from "./admin-user";
 
 const userId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const admin = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", role: "admin", active: true };
+const admin = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email: "admin@example.test", role: "admin", active: true };
 
 function actionArgs({ origin = "https://edicut.test" } = {}) {
   const request = new Request(`https://edicut.test/site/node-logmin/users/${userId}`, {
@@ -60,6 +60,14 @@ beforeEach(() => {
 });
 
 describe("admin creator profile reset action", () => {
+  it("cannot reset the current admin provider password through a linked customer record", async () => {
+    mocks.db.query.users.findFirst.mockResolvedValue({ email: admin.email });
+    const args = actionArgs();
+    args.request = new Request(args.request.url, { method: "POST", headers: { Origin: "https://edicut.test" }, body: new URLSearchParams({ intent: "reset-password", password: "StrongPassword123!", confirmPassword: "StrongPassword123!" }) });
+    expect(await action(args)).toHaveProperty("error", expect.stringContaining("current password"));
+    expect(mocks.updateSupabaseUserPasswordByEmail).not.toHaveBeenCalled();
+    expect(mocks.db.update).not.toHaveBeenCalled();
+  });
   it("allows an administrator to reset only the selected user's profile", async () => {
     const args = actionArgs();
     await expect(action(args)).resolves.toEqual({

@@ -5,6 +5,10 @@ import { ShieldCheck } from "lucide-react";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { adminUsers, users } from "@edicut/db/schema";
+import { getDbFromContext } from "../lib/db.server";
 
 type UpdatePasswordActionData = {
   error?: string;
@@ -35,8 +39,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const refreshToken = formData.get("refreshToken");
   const code = formData.get("code");
 
-  if (typeof password !== "string" || password.length < 8 || password.length > 120) {
-    return { error: "Your new password must be between 8 and 120 characters long." } satisfies UpdatePasswordActionData;
+  if (typeof password !== "string" || password.length < 12 || new TextEncoder().encode(password).byteLength > 72) {
+    return { error: "Use at least 12 characters and a password no longer than 72 bytes." } satisfies UpdatePasswordActionData;
   }
 
   if (password !== confirmPassword) {
@@ -91,10 +95,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return { error: "This reset link is missing or has expired. Request a new one." } satisfies UpdatePasswordActionData;
     }
 
-    const { error } = await updateClient.auth.updateUser({ password });
-    if (error) {
+    const { data, error } = await updateClient.auth.updateUser({ password });
+    if (error || !data.user?.email_confirmed_at || !data.user.email) {
       return { error: "We could not update your password. Request a new reset link and try again." } satisfies UpdatePasswordActionData;
     }
+    // Keep both application credential stores in sync so old local cookies fail
+    // their credential proof immediately, including Google-created sessions.
+    const passwordHash = await bcrypt.hash(password, 12);
+    const db = getDbFromContext(context);
+    const email = data.user.email.trim().toLowerCase();
+    await Promise.all([
+      db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.email, email)),
+      db.update(adminUsers).set({ passwordHash, updatedAt: new Date() }).where(eq(adminUsers.email, email)),
+    ]);
   } catch {
     return { error: "We could not update your password. Request a new reset link and try again." } satisfies UpdatePasswordActionData;
   }
@@ -174,8 +187,8 @@ export default function UpdatePasswordPage() {
                   name="password"
                   type="password"
                   required
-                  minLength={8}
-                  maxLength={120}
+                  minLength={12}
+                  maxLength={72}
                   placeholder="••••••••"
                   autoComplete="new-password"
                   className="neo-inset h-12 rounded-xl px-3.5 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"
@@ -188,8 +201,8 @@ export default function UpdatePasswordPage() {
                   name="confirmPassword"
                   type="password"
                   required
-                  minLength={8}
-                  maxLength={120}
+                  minLength={12}
+                  maxLength={72}
                   placeholder="••••••••"
                   autoComplete="new-password"
                   className="neo-inset h-12 rounded-xl px-3.5 text-sm font-bold outline-none neo-ink placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20"

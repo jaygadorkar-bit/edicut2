@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("../lib/client-workspace-access.server", () => ({ requireClientWorkspace: mocks.access, clientNavigation: () => [] }));
 vi.mock("../lib/client-workspace.server", () => ({ loadClientWorkspace: mocks.load, saveCreatorProfile: mocks.saveProfile, createPurchasedProject: mocks.create, isMissingClientWorkspaceSchema: (error: unknown) => (error as { code?: string })?.code === "42P01" }));
 vi.mock("../lib/usage-protection.server", () => ({ consumeUsageLimit: mocks.limit }));
-import { action as projectAction, loader as projectLoader } from "./dashboard-projects";
+import { action as projectAction, loader as projectLoader, shouldRevalidate } from "./dashboard-projects";
 import { action as channelAction, loader as channelLoader } from "./dashboard-channel";
 const profile = { channelName: "QA Channel", channelUrl: "https://youtube.com/@qa", brandUrl: "" };
 const brief = { intent: "create-project", requestToken: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", subscriptionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", title: "New video", objective: "Explain a new experiment", videoType: "YouTube video", finishedMinutes: "8", rawMinutes: "60", aspectRatio: "16:9", resolution: "1080p", deadline: "2099-12-01", footageUrl: "https://drive.google.com/drive/folders/qa", instructions: "Keep a steady pace and include captions.", captions: "Burned-in", editingHours: "2" };
@@ -60,6 +60,19 @@ describe("paid client onboarding and project boundaries", () => {
     expect(result).toBeInstanceOf(Response); expect((result as Response).status).toBe(403); expect(mocks.access).not.toHaveBeenCalled();
   });
   it("does not hide non-schema failures", async () => { mocks.load.mockRejectedValueOnce(new Error("DB unavailable")); await expect(projectLoader(args("projects"))).rejects.toThrow("DB unavailable"); });
+  it("recovers a transient database read and reports a safe 503 after a repeated outage", async () => {
+    const outage = new TypeError("fetch failed");
+    mocks.access.mockRejectedValueOnce(outage);
+    expect((await projectLoader(args("projects"))).ready).toBe(true);
+    mocks.access.mockRejectedValueOnce(outage).mockRejectedValueOnce(outage);
+    await expect(projectLoader(args("projects"))).rejects.toMatchObject({ status: 503 });
+  });
+  it("retains answers and the replay token when authentication cannot connect", async () => {
+    mocks.access.mockRejectedValueOnce(new TypeError("fetch failed")).mockRejectedValueOnce(new TypeError("fetch failed"));
+    expect(await projectAction(args("projects", brief))).toMatchObject({ error: expect.stringContaining("connection dropped"), values: { title: brief.title, requestToken: brief.requestToken } });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(shouldRevalidate({ actionResult: { error: "retry" }, defaultShouldRevalidate: true } as Parameters<typeof shouldRevalidate>[0])).toBe(false);
+  });
   it("handles an unapplied migration without opening the project form", async () => { mocks.load.mockRejectedValueOnce({ code: "42P01" }); expect((await projectLoader(args("projects"))).ready).toBe(false); });
   it("preserves submitted channel values and returns field errors", async () => {
     const result = await channelAction(args("channel", { ...profile, intent: "save-channel", channelUrl: "http://bad.example" }));
@@ -76,7 +89,7 @@ describe("paid client onboarding and project boundaries", () => {
   it("submits a complete brief for the authenticated owner with its replay token", async () => {
     const response = await projectAction(args("projects", brief));
     expect((response as Response).headers.get("Location")).toBe("/dashboard/projects?created=saved-project#your-projects");
-    expect(mocks.create).toHaveBeenCalledWith(mocks.db, "owner", brief.subscriptionId, brief.requestToken, expect.objectContaining({ editingMinutes: 120, instructions: brief.instructions }));
+    expect(mocks.create).toHaveBeenCalledWith(mocks.db, "owner", brief.subscriptionId, brief.requestToken, expect.objectContaining({ editingMinutes: 0, instructions: brief.instructions }));
   });
   it("honors rate limiting before accepting a profile or project", async () => { mocks.limit.mockResolvedValue("limited"); expect(await projectAction(args("projects", brief))).toHaveProperty("error"); expect(mocks.create).not.toHaveBeenCalled(); });
   it("bounds the actual request body", async () => { expect(await projectAction(args("projects", { ...brief, instructions: "x".repeat(70000) }))).toHaveProperty("error"); expect(mocks.create).not.toHaveBeenCalled(); });

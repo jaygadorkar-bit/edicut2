@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
     findUserById: vi.fn(async () => ({ id: "owner-1", name: "Client", email: "client@example.com", role: "user", active: true, deletedAt: null, passwordHash: "server-only" })),
     consumeUsageLimit: vi.fn(async () => "allowed"),
     queueTelegramOrderNotice: vi.fn(),
+    loadClientWorkspace: vi.fn(async () => ({ profile: null, purchases: [] })),
   };
 });
 vi.mock("../lib/db.server", () => ({ getDbFromContext: () => mocks.db, hasReturnedRows: (rows: unknown[]) => rows.length > 0 }));
@@ -37,10 +38,10 @@ vi.mock("../lib/role-feature-access", () => ({
 }));
 vi.mock("../lib/usage-protection.server", () => ({ consumeUsageLimit: mocks.consumeUsageLimit, requestBodyExceedsLimit: () => false }));
 vi.mock("../lib/telegram-notifications.server", () => ({ queueTelegramOrderNotice: mocks.queueTelegramOrderNotice }));
-vi.mock("../lib/client-workspace.server", () => ({ loadClientWorkspace: async () => ({ profile: null, purchases: [] }), isMissingClientWorkspaceSchema: () => false }));
+vi.mock("../lib/client-workspace.server", () => ({ loadClientWorkspace: mocks.loadClientWorkspace, isMissingClientWorkspaceSchema: () => false }));
 import { loader as dashboardLoader } from "./dashboard";
 import { loader as sectionLoader, action as sectionAction } from "./dashboard-placeholder";
-import { workspaceProjectColumns } from "../lib/workspace-projects.server";
+import { workspaceProjectColumns, workspaceProjectSummaryColumns } from "../lib/workspace-projects.server";
 
 function args(section?: string, body?: URLSearchParams) {
   const url = new URL(`http://localhost:3002/dashboard${section ? `/${section}` : ""}`);
@@ -72,10 +73,20 @@ describe("workspace reads without the optional marketing migration", () => {
     expect(result.workspaceReady).toBe(true);
     expect(result.projects).toEqual([mocks.project]);
     expect(result).toMatchObject({ projectCount: 2, activeCount: 1, reviewCount: 1, fileCount: 3 });
-    expect(mocks.db.select).toHaveBeenCalledWith(workspaceProjectColumns);
+    expect(mocks.db.select).toHaveBeenCalledWith(workspaceProjectSummaryColumns);
     for (const [filter] of mocks.where.mock.calls) {
       expect(new PgDialect().sqlToQuery(filter).params).toContain("owner-1");
     }
+  });
+
+  it("starts balance reads without waiting for project reads to finish", async () => {
+    let finish!: (rows: unknown[]) => void;
+    const rows = new Promise<unknown[]>(resolve => { finish = resolve; });
+    mocks.db.select.mockImplementationOnce(() => ({ from: () => ({ where: () => ({ orderBy: () => ({ limit: () => rows }) }) }) }) as never);
+    const result = dashboardLoader(args());
+    try { await vi.waitFor(() => expect(mocks.loadClientWorkspace).toHaveBeenCalledOnce()); }
+    finally { finish([mocks.project]); }
+    expect((await result).balanceReady).toBe(true);
   });
 
   it("does not load workspace data or loop redirects when a role has no dashboard pages", async () => {

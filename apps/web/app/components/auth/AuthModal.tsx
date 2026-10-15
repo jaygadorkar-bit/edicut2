@@ -1,3 +1,4 @@
+import { safeRedirectPath } from "../../lib/safe-redirect";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -22,7 +23,7 @@ export function AuthPage() {
   const [searchParams] = useSearchParams();
   const fetcher = useFetcher<AuthActionData>();
   const requestedMode = searchParams.get("mode") || searchParams.get("auth");
-  const redirectTo = sanitizeRedirect(searchParams.get("redirectTo") || "/dashboard");
+  const redirectTo = safeRedirectPath(searchParams.get("redirectTo") || "/dashboard");
   const resetComplete = searchParams.get("reset") === "success";
   const mode: AuthMode = requestedMode === "signup" ? "signup" : "signin";
   const [showPassword, setShowPassword] = useState(false);
@@ -35,13 +36,16 @@ export function AuthPage() {
   const googleStateError = searchParams.get("error") === "google-state"
     ? "Google sign-in expired or could not be verified. Please try again."
     : undefined;
+  const googleUnavailableError = searchParams.get("error") === "google-unavailable"
+    ? "Google sign-in could not be completed. Please start a new sign-in attempt."
+    : undefined;
   const googleCaptchaError = searchParams.get("error") === "recaptcha"
     ? "Security check failed. Please try again."
     : undefined;
   const accountError = searchParams.get("error") === "account-unavailable"
     ? "This account is unavailable. Contact EdiCut support."
     : undefined;
-  const visibleError = securityError || error || googleStateError || googleCaptchaError || accountError;
+  const visibleError = securityError || error || googleStateError || googleUnavailableError || googleCaptchaError || accountError;
   const submitting = fetcher.state !== "idle";
   const busy = submitting || emailChecking;
 
@@ -238,8 +242,9 @@ function PasswordField({
           name={name}
           type={show ? "text" : "password"}
           required
-          minLength={6}
-          placeholder={autoComplete === "new-password" ? "At least 6 characters" : "Enter your password"}
+          minLength={autoComplete === "new-password" ? 12 : 6}
+          maxLength={autoComplete === "new-password" ? 72 : 1024}
+          placeholder={autoComplete === "new-password" ? "At least 12 characters" : "Enter your password"}
           autoComplete={autoComplete}
           className="auth-input"
         />
@@ -249,8 +254,4 @@ function PasswordField({
       </div>
     </div>
   );
-}
-
-function sanitizeRedirect(value: string) {
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
 }

@@ -37,7 +37,7 @@ export function AdminUserDetails({ user, canEdit, returnTo, busy = false, pendin
   const initials = (user.name?.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("") || user.email[0] || "U").toUpperCase();
   const status = user.deletedAt ? "In trash" : user.active ? "Active" : "Disabled";
   const role = adminAccount ? user.role === "admin" ? "Administrator" : formatUserRole(user.role) : isUserRole(user.role) ? formatUserRole(user.role) : `Legacy ${formatUserRole(user.role)}`;
-  const passwordMinimum = adminAccount ? 12 : 8;
+  const passwordMinimum = 12;
 
   return <div className="admin-user">
     <Link to={returnTo} className="admin-user__back"><Icon name="arrow_back" />Back to accounts</Link>
@@ -125,9 +125,9 @@ export function AdminUserDetails({ user, canEdit, returnTo, busy = false, pendin
             <Form method="post" aria-label="Reset account password">
               <input type="hidden" name="intent" value="reset-password" />
               <fieldset disabled={disabled}>
-                <Field label="New password" name="password" type="password" required defaultValue="" minLength={passwordMinimum} maxLength={128} autoComplete="new-password" describedBy="admin-user-password-help" />
-                <Field label="Confirm new password" name="confirmPassword" type="password" required defaultValue="" minLength={passwordMinimum} maxLength={128} autoComplete="new-password" />
-                <p id="admin-user-password-help" className="admin-user__help">Use {passwordMinimum}–128 characters. This replaces the user’s current password.</p>
+                <Field label="New password" name="password" type="password" required defaultValue="" minLength={passwordMinimum} maxLength={72} autoComplete="new-password" describedBy="admin-user-password-help" />
+                <Field label="Confirm new password" name="confirmPassword" type="password" required defaultValue="" minLength={passwordMinimum} maxLength={72} autoComplete="new-password" />
+                <p id="admin-user-password-help" className="admin-user__help">Use at least {passwordMinimum} characters, up to 72 bytes. This replaces the user’s current password.</p>
                 <button disabled={disabled} className="admin-user__button admin-user__button--secondary"><Icon name="lock_reset" />{busy && pendingIntent === "reset-password" ? "Resetting…" : "Reset password"}</button>
               </fieldset>
             </Form>

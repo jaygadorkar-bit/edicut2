@@ -2,6 +2,12 @@
 .vscode
 .vercel
 .codex-screens
+.codex-tmp
+chrome-profile
+scratch
+artifacts
+media
+.edicut-site*.tar.gz
 
 node_modules
 **/node_modules

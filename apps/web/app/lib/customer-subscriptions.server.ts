@@ -46,8 +46,8 @@ export async function getOwnedSubscription(db: DatabaseClient, ownerId: string, 
   return record ?? null;
 }
 
-export function listCustomerSubscriptions(db: DatabaseClient, ownerId: string, page = 1) {
-  return db.select().from(subscriptions).where(and(eq(subscriptions.ownerId, ownerId), visible))
+export function listCustomerSubscriptions(db: DatabaseClient, ownerId: string, page = 1, eventId?: string) {
+  return db.select().from(subscriptions).where(and(eq(subscriptions.ownerId, ownerId), visible, eventId ? eq(subscriptions.id, eventId) : undefined))
     .orderBy(desc(subscriptions.createdAt), desc(subscriptions.id)).limit(26).offset((page - 1) * 25);
 }
 
@@ -58,9 +58,9 @@ export async function getLatestCustomerContact(db: DatabaseClient, ownerId: stri
   return contact ?? null;
 }
 
-export function listAdminSubscriptions(db: DatabaseClient, page = 1, status: SubscriptionPaymentFilter = "unpaid") {
+export function listAdminSubscriptions(db: DatabaseClient, page = 1, status: SubscriptionPaymentFilter = "unpaid", eventId?: string) {
   return db.select({ subscription: subscriptions, name: users.name, email: users.email }).from(subscriptions)
-    .innerJoin(users, eq(subscriptions.ownerId, users.id)).where(and(visible, eq(subscriptions.status, status)))
+    .innerJoin(users, eq(subscriptions.ownerId, users.id)).where(and(visible, eventId ? eq(subscriptions.id, eventId) : eq(subscriptions.status, status)))
     .orderBy(desc(subscriptions.createdAt), desc(subscriptions.id)).limit(26).offset((page - 1) * 25);
 }
 

@@ -1,6 +1,8 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, matchPath, NavLink, useLocation, useNavigation } from "react-router";
 import { useEffect, useRef, useState } from "react";
+import { useChatUnreadCounts, type ChatUnreadCounts } from "../lib/use-chat-unread-counts";
+import { NotificationBell, WorkspaceNotificationsProvider } from "./WorkspaceNotifications";
 
 export type WorkspaceNavItem = {
   label: string;
@@ -46,6 +48,10 @@ type WorkspaceShellProps = {
   startProjectTo?: string | null;
   notificationsTo?: string | null;
   chatTo?: string | null;
+  ticketsTo?: string | null;
+  projectChatTo?: string | null;
+  chatScope?: "client" | "admin";
+  initialChatUnreadCounts?: ChatUnreadCounts;
   notificationCount?: number;
   navigationPanel?: WorkspaceNavigationPanel;
   children: ReactNode;
@@ -71,15 +77,24 @@ export function WorkspaceShell({
   profileNavAtBottom = false,
   settingsTo,
   startProjectTo,
-  notificationsTo = "/dashboard/reviews",
   chatTo = "/dashboard/chat",
-  notificationCount = 0,
+  ticketsTo = "/dashboard/tickets",
+  projectChatTo = "/dashboard/chat",
+  chatScope = "client",
+  initialChatUnreadCounts,
   navigationPanel,
   children,
 }: WorkspaceShellProps) {
-  const navItems = chatTo && !providedNavItems.some(item => item.to === chatTo)
+  const conversationNavItems = chatTo && !providedNavItems.some(item => item.to === chatTo)
     ? [...providedNavItems.slice(0, Math.min(2, providedNavItems.length)), { label: "Chat", icon: "chat", to: chatTo }, ...providedNavItems.slice(Math.min(2, providedNavItems.length))]
     : providedNavItems;
+  const chatCounts = useChatUnreadCounts(chatScope, Boolean(projectChatTo || ticketsTo), initialChatUnreadCounts, Boolean(navigationPanel));
+  const withChatCounts = (item: WorkspaceNavItem): WorkspaceNavItem => item.to === projectChatTo
+    ? { ...item, unreadCount: chatCounts.projects, unreadLabel: "unread chat messages" }
+    : item.to === ticketsTo ? { ...item, unreadCount: chatCounts.tickets, unreadLabel: "unread ticket messages" } : item;
+  const navItems = (ticketsTo && !conversationNavItems.some(item => item.to === ticketsTo)
+    ? [...conversationNavItems.slice(0, 3), { label: "Support tickets", icon: "confirmation_number", to: ticketsTo }, ...conversationNavItems.slice(3)]
+    : conversationNavItems).map(withChatCounts);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -104,7 +119,7 @@ export function WorkspaceShell({
   const accountNavigationPinned = Boolean(profileNavAtBottom && profileTo);
   const defaultPrimaryMobileItems = accountNavigationPinned ? navItems.slice(0, 3) : navItems.slice(0, 4);
   const primaryMobileItems = (mobileBottomNavItems ?? defaultPrimaryMobileItems)
-    .filter((item) => !pinnedAccountNavTo.has(item.to));
+    .filter((item) => !pinnedAccountNavTo.has(item.to)).map(withChatCounts);
   const primaryMobileTo = new Set(primaryMobileItems.map((item) => item.to));
   const moreMobileItems = navItems.filter((item) => !primaryMobileTo.has(item.to) && !pinnedAccountNavTo.has(item.to));
   const showMobileMore = mobileBottomMore ?? moreMobileItems.length > 0;
@@ -216,7 +231,9 @@ export function WorkspaceShell({
   }, [location.pathname, location.search]);
 
   return (
+    <WorkspaceNotificationsProvider scope={chatScope}>
     <div className={`neo-workspace min-h-screen ${showMobileBottomNav ? "neo-workspace--bottom-nav-enabled" : ""} ${hideMobileHeading ? "neo-workspace--hide-mobile-heading" : ""}`}>
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{chatCounts.projects} unread chat messages and {chatCounts.tickets} unread ticket messages.</span>
       <aside className={`neo-workspace__sidebar fixed inset-y-0 left-0 z-40 hidden transition-[width] duration-200 lg:flex lg:flex-col ${isCollapsed ? "w-[78px]" : "w-[238px]"}`}>
         <div className={`flex h-full min-h-0 flex-col py-5 ${isCollapsed ? "px-3" : "px-4"}`}>
           <div className={`flex shrink-0 items-center ${isCollapsed ? "justify-center" : "justify-between gap-3"}`}>
@@ -317,12 +334,7 @@ export function WorkspaceShell({
                   <span className="material-symbols-outlined text-[19px]">settings</span>
                 </Link>
               ) : null}
-              {notificationsTo ? (
-                <Link to={notificationsTo} className="neo-workspace__icon-button relative" aria-label={notificationCount > 0 ? `${notificationCount} cuts waiting for review` : "Open review queue"} title={notificationCount > 0 ? `${notificationCount} cuts waiting for review` : "Open review queue"}>
-                  <span className="material-symbols-outlined text-[19px]">notifications</span>
-                  {notificationCount > 0 ? <span className="neo-workspace__notification-dot absolute right-2.5 top-2" aria-hidden="true" /> : null}
-                </Link>
-              ) : null}
+              <NotificationBell />
               {hideHeaderTitle ? null : mobileMenuButton}
               {startProjectTo ? (
                 <Link to={startProjectTo} className="neo-workspace__start-project text-white" aria-label="Start project" title="Start project">
@@ -485,6 +497,7 @@ export function WorkspaceShell({
         </div>
       ) : null}
     </div>
+    </WorkspaceNotificationsProvider>
   );
 }
 

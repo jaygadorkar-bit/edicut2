@@ -38,8 +38,12 @@ export function isMissingClientWorkspaceSchema(error: unknown) {
 }
 export async function loadClientWorkspace(db: DatabaseClient, ownerId: string, now = new Date()) {
   const [profiles, purchases] = await Promise.all([
-    db.select().from(creatorProfiles).where(eq(creatorProfiles.ownerId, ownerId)).limit(1),
-    db.select({ subscription: customerSubscriptions, entitlement: purchaseEntitlements }).from(customerSubscriptions)
+    db.select({ details: creatorProfiles.details }).from(creatorProfiles).where(eq(creatorProfiles.ownerId, ownerId)).limit(1),
+    db.select({
+      subscription: { id: customerSubscriptions.id, planName: customerSubscriptions.planName, packageSlug: customerSubscriptions.packageSlug,
+        purchaseType: customerSubscriptions.purchaseType, paidAt: customerSubscriptions.paidAt },
+      entitlement: { grantedUnits: purchaseEntitlements.grantedUnits, usedUnits: purchaseEntitlements.usedUnits },
+    }).from(customerSubscriptions)
       .leftJoin(purchaseEntitlements, eq(customerSubscriptions.id, purchaseEntitlements.subscriptionId))
       .where(and(eq(customerSubscriptions.ownerId, ownerId), eq(customerSubscriptions.status, "paid"), isNull(customerSubscriptions.deletedAt)))
       .orderBy(desc(customerSubscriptions.paidAt)),
@@ -83,12 +87,13 @@ export async function createPurchasedProject(db: DatabaseClient, ownerId: string
   if (!pack) return { error: "Contact us to confirm the allowance for this package." };
   if (pack.packageType === "single") {
     const maxFinished = Number(pack.finishedLength.match(/\d+/)?.[0]);
-    const maxRaw = Number(pack.rawFootageLimit.match(/\d+/)?.[0]);
-    if (brief.finishedMinutes > maxFinished || brief.rawMinutes > maxRaw) return { error: `This package allows ${maxFinished} finished minutes and ${maxRaw} raw minutes. Choose a larger package or request a custom quote.` };
+    // Editors check the footage allowance when reviewing the shared folder.
+    if (brief.finishedMinutes > maxFinished) return { error: `This package allows up to ${maxFinished} finished minutes. Choose a larger package or request a custom quote.` };
   }
-  if (purchase.type === "single") brief = { ...brief, editingMinutes: 0 };
-  const units = purchase.type === "monthly" ? brief.editingMinutes : 1;
-  if (!units || units > purchase.remaining) return { error: "Reserve editing hours within the available package balance." };
+  // Hours are confirmed by the editor, never supplied or charged by intake.
+  brief = { ...brief, editingMinutes: 0 };
+  const units = purchase.type === "monthly" ? 0 : 1;
+  if (units > purchase.remaining) return { error: "Choose a package with an available balance." };
   // Initialize once. Concurrent requests converge on this same balance row.
   await db.execute(sql`INSERT INTO purchase_entitlements (subscription_id, granted_units)
     SELECT id, ${purchase.granted} FROM customer_subscriptions
@@ -108,12 +113,12 @@ export async function createPurchasedProject(db: DatabaseClient, ownerId: string
         UPDATE purchase_entitlements e SET used_units = used_units + ${units}
         FROM eligible s
         WHERE e.subscription_id = s.id
-          AND e.used_units + ${units} <= e.granted_units
+          AND e.used_units < e.granted_units AND e.used_units + ${units} <= e.granted_units
         RETURNING s.package_slug
       ), project AS (
         INSERT INTO workspace_projects (id, owner_id, title, channel_name, package_slug, category, cadence, deadline, notes, billing_status)
         SELECT ${id}::uuid, ${ownerId}::uuid, ${brief.title}, ${state.profile.channelName}, package_slug,
-        NULL::varchar, NULL::varchar, ${brief.deadline}, ${`Purchase: ${subscriptionId}\n\n${projectBriefNotes(state.profile, brief)}`}, 'paid'
+        NULL::varchar, NULL::varchar, ${brief.deadline}, ${`Purchase: ${subscriptionId}\n\n${projectBriefNotes(state.profile, brief, purchase.type)}`}, 'paid'
         FROM charged RETURNING id
       ), intake AS (
         INSERT INTO project_intakes (project_id, owner_id, subscription_id, request_token, reserved_units, brief, channel_snapshot)
@@ -129,6 +134,9 @@ export async function createPurchasedProject(db: DatabaseClient, ownerId: string
     const seen = new Set<object>();
     while (cause && typeof cause === "object" && !seen.has(cause)) {
       seen.add(cause);
+      if ((cause as { code?: string; constraint?: string }).code === "23514" && (cause as { constraint?: string }).constraint === "project_intakes_reserved_check") {
+        return { error: "Monthly project submission is temporarily unavailable while setup is updated. Your balance was not charged. Your brief is still here." };
+      }
       if ((cause as { code?: string }).code === "23505") {
         const replay = await db.select({ id: projectIntakes.projectId }).from(projectIntakes)
           .where(and(eq(projectIntakes.ownerId, ownerId), eq(projectIntakes.requestToken, token))).limit(1);

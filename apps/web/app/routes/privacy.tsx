@@ -12,7 +12,7 @@ const sections = [
   {
     icon: "database",
     title: "1. Information We Collect",
-    copy: "We store account details, channel and project briefs, source-file sharing links, review decisions, billing details, and invoice links submitted through the workspace. The workspace stores sharing links, not the raw files themselves.",
+    copy: "We store account details, channel and project briefs, source-file sharing links, review-version metadata, timestamped feedback, review decisions, billing details, and invoice links submitted through the workspace. Review exports are stored with the configured video provider; source footage stays with the provider you choose.",
   },
   {
     icon: "handshake",
@@ -31,7 +31,12 @@ const sections = [
   },
   {
     icon: "support_agent",
-    title: "5. Contact & Privacy Inquiries",
+    title: "5. YouTube Review Videos",
+    copy: <>When an administrator connects a YouTube channel, EdiCut requests permission to upload videos and read channel/video details. We store the channel identifier/name, video identifiers, and an encrypted refresh token to operate this connection. We never request or store your Google password. Review exports are uploaded as unlisted videos; anyone with the link may watch them. YouTube embeds may collect playback/device information under the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="underline">Google Privacy Policy</a>. Administrators can disconnect storage in Video storage and revoke access in <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="underline">Google account permissions</a>. Disconnecting removes EdiCut’s stored credential; channel owners manage or delete the actual videos in YouTube Studio. Contact privacy@edicut.com to request deletion of stored project or connection information.</>,
+  },
+  {
+    icon: "support_agent",
+    title: "6. Contact & Privacy Inquiries",
     copy: "For questions about privacy, data rights, or custom security requirements, contact privacy@edicut.com.",
   },
 ];

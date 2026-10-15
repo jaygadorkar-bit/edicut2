@@ -4,15 +4,22 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: edicut-web
+    init: true
     restart: "no"
     working_dir: /app
-    # Uses the live database and Cloudinary configuration for local development.
+    # Uses Neon for account/billing authorization and the live D1 chat database.
+    # The management token stays server-side in this local development container.
     env_file:
       - .env.cloudflare
     environment:
       NODE_ENV: development
       CI: "true"
       DEBUG_MODE: "true"
+      CHAT_BACKEND: d1
+      CHAT_D1_REMOTE: "true"
+      CHAT_D1_DATABASE_ID: "248da0e0-8360-4d6d-9d06-83e1504f332f"
+      CLOUDFLARE_ACCOUNT_ID: "f2c46bb116722bcb7dc4be44e500154b"
+      CLOUDFLARE_CHAT_DEV_API_TOKEN: ${CLOUDFLARE_MASTER_API_TOKEN:?Set CLOUDFLARE_MASTER_API_TOKEN in the local .env}
       APP_URL: http://localhost:3002
       AUTH_URL: http://localhost:3002/api/auth
       NEXT_PUBLIC_APP_URL: http://localhost:3002
@@ -26,22 +33,33 @@ services:
       SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       CHOKIDAR_USEPOLLING: "true"
-    command: >
-      sh -c "pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store &&
-      pnpm --filter @edicut/shared build &&
-      pnpm --filter @edicut/db build &&
-      pnpm --filter @edicut/web exec react-router dev --host 0.0.0.0 --port 3002"
+      CHOKIDAR_INTERVAL: "1000"
+      DEV_CACHE_DIR: /var/cache/edicut/vite
+    command:
+      - sh
+      - -c
+      - node scripts/docker-dev.mjs && exec pnpm --filter @edicut/web exec react-router dev --host 0.0.0.0 --port 3002
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health', { signal: AbortSignal.timeout(4000) }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      start_interval: 3s
+      retries: 3
     ports:
       - "127.0.0.1:3002:3002"
     volumes:
       - .:/app
       - edicut_web_node_modules:/app/node_modules
       - /app/apps/web/node_modules
+      - /app/apps/node-api/node_modules
       - /app/packages/db/node_modules
       - /app/packages/platform-core/node_modules
       - /app/packages/shared/node_modules
       - edicut_web_pnpm_store:/pnpm/store
+      - edicut_web_dev_cache:/var/cache/edicut
 
 volumes:
   edicut_web_node_modules:
   edicut_web_pnpm_store:
+  edicut_web_dev_cache:

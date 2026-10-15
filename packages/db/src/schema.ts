@@ -2,11 +2,13 @@ import { relations, sql } from "drizzle-orm";
 import type { CustomQuoteOptions } from "@edicut/shared/contracts/custom-quotes";
 import {
   boolean,
+  bigint,
   check,
   index,
   integer,
   jsonb,
   pgTable,
+  serial,
   text,
   timestamp,
   uniqueIndex,
@@ -15,6 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
+  sessionVersion: uuid("session_version").defaultRandom().notNull(),
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull(),
   name: text("name"),
@@ -30,6 +33,7 @@ export const users = pgTable("users", {
 });
 
 export const adminUsers = pgTable("admin_users", {
+  sessionVersion: uuid("session_version").defaultRandom().notNull(),
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name"),
@@ -73,7 +77,8 @@ export const chatRooms = pgTable("chat_rooms", {
   createdAt: timestamp("created_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
 }, table => [
-  uniqueIndex("chat_rooms_client_kind_idx").on(table.clientId, table.kind),
+  uniqueIndex("chat_rooms_manager_client_idx").on(table.clientId).where(sql`${table.kind} = 'manager'`),
+  index("chat_rooms_client_updated_idx").on(table.clientId, table.updatedAt),
   index("chat_rooms_manager_updated_idx").on(table.managerId, table.updatedAt),
   index("chat_rooms_updated_idx").on(table.updatedAt),
   check("chat_rooms_kind_check", sql`${table.kind} IN ('manager', 'support') AND (${table.kind} = 'manager' OR ${table.managerId} IS NULL)`),
@@ -105,6 +110,25 @@ export const chatReads = pgTable("chat_reads", {
   lastReadAt: timestamp("last_read_at", { withTimezone: true, precision: 3 }).notNull(),
   lastReadId: uuid("last_read_id"),
 }, table => [uniqueIndex("chat_reads_room_actor_idx").on(table.roomId, table.actorKey)]);
+
+export const supportTickets = pgTable("support_tickets", {
+  roomId: uuid("room_id").primaryKey().references(() => chatRooms.id, { onDelete: "cascade" }),
+  number: serial("ticket_number").notNull().unique(),
+  subject: varchar("subject", { length: 160 }).notNull(),
+  category: varchar("category", { length: 32 }).notNull(),
+  priority: varchar("priority", { length: 16 }).notNull().default("normal"),
+  status: varchar("status", { length: 24 }).notNull().default("waiting_support"),
+  closedAt: timestamp("closed_at", { withTimezone: true, precision: 3 }),
+  closedBy: varchar("closed_by", { length: 48 }),
+  updatedAt: timestamp("updated_at", { withTimezone: true, precision: 3 }).defaultNow().notNull(),
+}, table => [
+  index("support_tickets_status_updated_idx").on(table.status, table.updatedAt),
+  check("support_tickets_subject_check", sql`char_length(btrim(${table.subject})) BETWEEN 3 AND 160`),
+  check("support_tickets_category_check", sql`${table.category} IN ('billing', 'subscription', 'project', 'technical', 'account', 'other')`),
+  check("support_tickets_priority_check", sql`${table.priority} IN ('low', 'normal', 'high')`),
+  check("support_tickets_status_check", sql`${table.status} IN ('waiting_support', 'waiting_customer', 'closed')`),
+  check("support_tickets_closed_check", sql`(${table.status} = 'closed' AND ${table.closedAt} IS NOT NULL AND ${table.closedBy} IS NOT NULL) OR (${table.status} <> 'closed' AND ${table.closedAt} IS NULL AND ${table.closedBy} IS NULL)`),
+]).enableRLS();
 
 export const marketingAffiliates = pgTable("marketing_affiliates", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -239,6 +263,7 @@ export const purchaseEntitlements = pgTable("purchase_entitlements", {
 }, table => [check("purchase_entitlements_balance_check", sql`${table.grantedUnits} > 0 AND ${table.usedUnits} >= 0 AND ${table.usedUnits} <= ${table.grantedUnits}`)]);
 
 export const workspaceProjects = pgTable("workspace_projects", {
+  reviewRevision: integer("review_revision").notNull().default(0),
   id: uuid("id").defaultRandom().primaryKey(),
   ownerId: uuid("owner_id")
     .notNull()
@@ -286,7 +311,7 @@ export const projectIntakes = pgTable("project_intakes", {
 }, table => [
   uniqueIndex("project_intakes_owner_token_idx").on(table.ownerId, table.requestToken),
   index("project_intakes_subscription_idx").on(table.subscriptionId),
-  check("project_intakes_reserved_check", sql`${table.reservedUnits} > 0`),
+  check("project_intakes_reserved_check", sql`${table.reservedUnits} >= 0`),
 ]);
 
 export const workspaceProjectFiles = pgTable("workspace_project_files", {
@@ -319,6 +344,86 @@ export const workspaceProjectReviews = pgTable("workspace_project_reviews", {
 }, (table) => [
   index("workspace_project_reviews_owner_project_idx").on(table.ownerId, table.projectId, table.createdAt),
 ]);
+
+export const projectReviewMembers = pgTable("project_review_members", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id").notNull().references(() => workspaceProjects.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [uniqueIndex("project_review_members_project_user_idx").on(table.projectId, table.userId), index("project_review_members_user_idx").on(table.userId)]).enableRLS();
+
+export const projectReviewVersions = pgTable("project_review_versions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id").notNull().references(() => workspaceProjects.id, { onDelete: "cascade" }),
+  actorKey: varchar("actor_key", { length: 64 }).notNull(),
+  authorName: varchar("author_name", { length: 120 }).notNull(),
+  title: varchar("title", { length: 160 }).notNull(),
+  note: text("note").notNull().default(""),
+  publicId: varchar("public_id", { length: 240 }).notNull(),
+  mime: varchar("mime", { length: 40 }).notNull(),
+  bytes: bigint("bytes", {mode:"number"}).notNull(),
+  provider: varchar("provider",{length:20}).notNull().default("cloudinary"),
+  youtubeId: varchar("youtube_id",{length:11}),
+  driveFileId: varchar("drive_file_id",{length:240}),
+  durationMs: integer("duration_ms").notNull(),
+  decision: varchar("decision", { length: 24 }).notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index("project_review_versions_project_created_idx").on(table.projectId, table.createdAt, table.id),
+  uniqueIndex("project_review_versions_public_id_idx").on(table.publicId),
+  check("project_review_versions_media_check", sql`${table.mime} IN ('video/mp4', 'video/webm') AND ${table.bytes} BETWEEN 1 AND 10737418240 AND ${table.durationMs} BETWEEN 1 AND 21600000`),
+  check("project_review_versions_provider_check",sql`(${table.provider}='cloudinary' AND ${table.youtubeId} IS NULL AND ${table.driveFileId} IS NULL AND ${table.bytes}<=52428800) OR (${table.provider}='youtube' AND ${table.youtubeId} IS NOT NULL AND ${table.driveFileId} IS NULL AND ${table.youtubeId} ~ '^[A-Za-z0-9_-]{11}$') OR (${table.provider}='google_drive' AND ${table.youtubeId} IS NULL AND ${table.driveFileId} ~ '^[A-Za-z0-9_-]{10,240}$')`),
+  check("project_review_versions_decision_check", sql`${table.decision} IN ('pending', 'approved', 'changes_requested')`),
+]).enableRLS();
+
+export const videoStorageConnections = pgTable("video_storage_connections",{
+  provider:varchar("provider",{length:20}).primaryKey(),
+  channelId:varchar("channel_id",{length:32}).notNull(),
+  channelName:varchar("channel_name",{length:160}).notNull(),
+  refreshToken:text("refresh_token").notNull(),
+  connectedBy:uuid("connected_by").references(()=>adminUsers.id,{onDelete:"set null"}),
+  connectedAt:timestamp("connected_at",{withTimezone:true}).defaultNow().notNull(),
+},table=>[check("video_storage_connections_provider_check",sql`${table.provider} IN ('youtube','google_drive')`)]).enableRLS();
+
+export const projectReviewUploads = pgTable("project_review_uploads",{
+  id:uuid("id").primaryKey(),projectId:uuid("project_id").notNull().references(()=>workspaceProjects.id,{onDelete:"cascade"}),
+  actorKey:varchar("actor_key",{length:64}).notNull(),title:varchar("title",{length:100}).notNull(),note:text("note").notNull().default(""),
+  mime:varchar("mime",{length:40}).notNull(),bytes:bigint("bytes",{mode:"number"}).notNull(),durationMs:integer("duration_ms").notNull(),
+  channelId:varchar("channel_id",{length:32}),sessionUri:text("session_uri"),videoId:varchar("video_id",{length:11}),
+  provider:varchar("provider",{length:20}).notNull().default("youtube"),driveFileId:varchar("drive_file_id",{length:240}),
+  receivedBytes:bigint("received_bytes",{mode:"number"}).notNull().default(0),status:varchar("status",{length:16}).notNull().default("starting"),
+  leaseUntil:timestamp("lease_until",{withTimezone:true}),expiresAt:timestamp("expires_at",{withTimezone:true}).notNull().default(sql`now()+interval '1 day'`),
+  createdAt:timestamp("created_at",{withTimezone:true}).defaultNow().notNull(),
+},table=>[index("project_review_uploads_actor_expiry_idx").on(table.actorKey,table.expiresAt),index("project_review_uploads_project_idx").on(table.projectId),
+  check("project_review_uploads_media_check",sql`${table.mime} IN ('video/mp4','video/webm') AND ${table.bytes} BETWEEN 16 AND 10737418240 AND ${table.durationMs} BETWEEN 1 AND 21600000 AND ${table.receivedBytes} BETWEEN 0 AND ${table.bytes}`),
+  check("project_review_uploads_status_check",sql`${table.status} IN ('starting','uploading','uploaded','saved','failed')`),
+  check("project_review_uploads_provider_check",sql`${table.provider} IN ('youtube','google_drive')`),
+]).enableRLS();
+
+export const projectReviewComments = pgTable("project_review_comments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  versionId: uuid("version_id").notNull().references(() => projectReviewVersions.id, { onDelete: "cascade" }),
+  parentId: uuid("parent_id"),
+  actorKey: varchar("actor_key", { length: 64 }).notNull(),
+  authorName: varchar("author_name", { length: 120 }).notNull(),
+  authorRole: varchar("author_role", { length: 24 }).notNull(),
+  body: text("body").notNull(),
+  timestampMs: integer("timestamp_ms"),
+  endMs: integer("end_ms"),
+  annotation: jsonb("annotation").$type<{ x: number; y: number; width: number; height: number } | null>(),
+  category: varchar("category", { length: 16 }).notNull().default("change"),
+  priority: varchar("priority", { length: 16 }).notNull().default("normal"),
+  resolved: boolean("resolved").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index("project_review_comments_version_created_idx").on(table.versionId, table.createdAt, table.id),
+  index("project_review_comments_parent_idx").on(table.parentId),
+  check("project_review_comments_body_check", sql`length(${table.body}) BETWEEN 1 AND 4000`),
+  check("project_review_comments_time_check", sql`(${table.timestampMs} IS NULL AND ${table.endMs} IS NULL AND ${table.annotation} IS NULL) OR (${table.timestampMs} IS NOT NULL AND ${table.timestampMs} BETWEEN 0 AND 21600000 AND (${table.endMs} IS NULL OR ${table.endMs} BETWEEN ${table.timestampMs} AND 21600000))`),
+  check("project_review_comments_category_check", sql`${table.category} IN ('change', 'question', 'praise') AND ${table.priority} IN ('normal', 'high')`),
+]).enableRLS();
 
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),

@@ -44,6 +44,10 @@ Start the web-only local container. It reads the live database and Cloudinary co
 docker compose up --build web
 ```
 
+For subsequent starts, use `docker compose up -d --wait web` (or start the existing container in Docker Desktop). Dependency installation and shared/database builds are skipped when their inputs and outputs are unchanged. Changes to the lockfile, package manifests, source, or TypeScript configuration invalidate the relevant cache automatically. Restart the container after changing a shared/database package, as before.
+
+Vite's dependency cache lives in a persistent Docker volume rather than on the Windows bind mount. Source files still reload automatically; Docker polls once per second and excludes generated files and local tooling artifacts. The container reports healthy when `/health` responds. The first start or a dependency update takes longer while caches populate; rebuild the image after changing the Dockerfile or its tooling.
+
 The Docker development profile disables the production-domain reCAPTCHA keys for `localhost`; production re-enables them through its Cloudflare environment.
 
 Docker exposes:

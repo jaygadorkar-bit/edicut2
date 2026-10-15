@@ -6,6 +6,7 @@ import { getDbFromContext } from "./db.server";
 import { verifyRecaptchaToken } from "./recaptcha.server";
 import { queueTelegramContactInquiryNotice } from "./telegram-notifications.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "./usage-protection.server";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "./mutation-request.server";
 
 type ContactReturnPath = "/" | "/contact";
 
@@ -18,16 +19,13 @@ export async function submitContactInquiry({
   context: ActionFunctionArgs["context"];
   returnTo: ContactReturnPath;
 }) {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return redirect(`${returnTo}?error=invalid#contact`);
   }
 
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
-    return redirect(`${returnTo}?error=invalid#contact`);
-  }
+  const formData = await readMutationForm(request, 64 * 1024);
+  if (!formData) return redirect(`${returnTo}?error=invalid#contact`);
   const parsed = contactIntakeSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),

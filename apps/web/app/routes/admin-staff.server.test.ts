@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ actor: vi.fn(), findFirst: vi.fn(), update: vi.fn(), set: vi.fn(), where: vi.fn(), limit: vi.fn(), photo: vi.fn(), email: vi.fn(), password: vi.fn() }));
-const db = { query: { adminUsers: { findFirst: mocks.findFirst } }, update: mocks.update };
+const db = { query: { adminUsers: { findFirst: mocks.findFirst } }, update: mocks.update, execute: vi.fn() };
 vi.mock("../lib/db.server", () => ({ getDbFromContext: () => db }));
 vi.mock("../lib/session.server", () => ({ requireAdminUser: mocks.actor, isAdminRole: (role: string) => role === "admin" }));
 vi.mock("../lib/admin-profile.server", () => ({ getAdminProfileImage: mocks.photo }));
