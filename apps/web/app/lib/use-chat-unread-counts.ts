@@ -1,10 +1,20 @@
-import { useEffect, useState } from "react";
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
 import { createChatRefreshQueue, startChatSocket } from "./chat-live";
 import type { ChatUnreadCounts } from "./chat";
 
 export type { ChatUnreadCounts } from "./chat";
 const unreadEvent = "edicut:chat-unread";
 const emptyCounts: ChatUnreadCounts = { projects: 0, tickets: 0 };
+const SharedUnreadContext = createContext<{ scope: "client" | "admin"; counts: ChatUnreadCounts } | null>(null);
+
+export function WorkspaceChatUnreadProvider({ scope, managed, children }: {
+  scope: "client" | "admin";
+  managed: boolean;
+  children: ReactNode;
+}) {
+  const counts = useChatUnreadCounts(scope, true, emptyCounts, managed);
+  return createElement(SharedUnreadContext.Provider, { value: { scope, counts } }, children);
+}
 
 export function refreshChatUnreadCounts(scope: string, counts?: ChatUnreadCounts) {
   window.dispatchEvent(new CustomEvent(unreadEvent, { detail: { scope, counts } }));
@@ -14,10 +24,15 @@ const validCounts = (value: Partial<ChatUnreadCounts> | null | undefined): value
 
 /** Chat pages publish counts from their snapshot. Other pages share one live badge feed. */
 export function useChatUnreadCounts(scope: "client" | "admin", enabled: boolean, initialCounts = emptyCounts, managed = false) {
+  const shared = useContext(SharedUnreadContext);
+  const sharedCounts = shared?.scope === scope ? shared.counts : null;
+  const hasSharedCounts = sharedCounts !== null;
   const [counts, setCounts] = useState(initialCounts);
   useEffect(() => {
     setCounts(initialCounts);
-    if (!enabled) return;
+  }, [scope, initialCounts.projects, initialCounts.tickets]);
+  useEffect(() => {
+    if (!enabled || hasSharedCounts) return;
     let controller: AbortController | undefined;
     let disposed = false, stopped = false;
     let stopSocket: (() => void) | undefined;
@@ -57,6 +72,6 @@ export function useChatUnreadCounts(scope: "client" | "admin", enabled: boolean,
       stopSocket?.(); queue.dispose();
       window.removeEventListener(unreadEvent, onChange);
     };
-  }, [scope, enabled, managed, initialCounts.projects, initialCounts.tickets]);
-  return counts;
+  }, [scope, enabled, managed, hasSharedCounts]);
+  return sharedCounts ?? counts;
 }

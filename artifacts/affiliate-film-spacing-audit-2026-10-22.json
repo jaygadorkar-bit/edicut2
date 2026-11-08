@@ -1,0 +1,171 @@
+{
+  "scenes": [
+    {
+      "scene": "0",
+      "images": [
+        "/icons/edicut-logo.svg",
+        "/artwork/affiliate/partner.svg",
+        "/artwork/why-hire-us/manager.svg"
+      ],
+      "tight": [],
+      "minSide": 18.412578582763672
+    },
+    {
+      "scene": "1",
+      "images": [
+        "/icons/edicut-logo.svg",
+        "/artwork/why-hire-us/manager.svg"
+      ],
+      "tight": [],
+      "minSide": 22.992250442504883
+    },
+    {
+      "scene": "2",
+      "images": [
+        "/artwork/affiliate/partner.svg"
+      ],
+      "tight": [],
+      "minSide": 22.992250442504883
+    },
+    {
+      "scene": "3",
+      "images": [
+        "/icons/edicut-logo.svg"
+      ],
+      "tight": [],
+      "minSide": 21
+    },
+    {
+      "scene": "4",
+      "images": [
+        "/icons/edicut-logo.svg"
+      ],
+      "tight": [],
+      "minSide": 12
+    },
+    {
+      "scene": "5",
+      "images": [
+        "/icons/edicut-logo.svg",
+        "/artwork/affiliate/partner.svg",
+        "/artwork/why-hire-us/manager.svg"
+      ],
+      "tight": [],
+      "minSide": 31.050634384155273
+    }
+  ],
+  "captions": [
+    {
+      "width": 320,
+      "minHeight": 176,
+      "maxHeight": 176,
+      "maxNeeded": 170.09375,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 340,
+      "minHeight": 176,
+      "maxHeight": 176,
+      "maxNeeded": 170.09375,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 360,
+      "minHeight": 176,
+      "maxHeight": 176,
+      "maxNeeded": 121.0625,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 361,
+      "minHeight": 138,
+      "maxHeight": 138,
+      "maxNeeded": 121.0625,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 375,
+      "minHeight": 138,
+      "maxHeight": 138,
+      "maxNeeded": 121.0625,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 390,
+      "minHeight": 138,
+      "maxHeight": 138,
+      "maxNeeded": 121.0625,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 540,
+      "minHeight": 138,
+      "maxHeight": 138,
+      "maxNeeded": 93.46875,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 541,
+      "minHeight": 112,
+      "maxHeight": 112,
+      "maxNeeded": 95.59375,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 768,
+      "minHeight": 112,
+      "maxHeight": 112,
+      "maxNeeded": 95.59375,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 861,
+      "minHeight": 140,
+      "maxHeight": 140,
+      "maxNeeded": 87.375,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 900,
+      "minHeight": 140,
+      "maxHeight": 140,
+      "maxNeeded": 87.375,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 1023,
+      "minHeight": 140,
+      "maxHeight": 140,
+      "maxNeeded": 89.796875,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 1024,
+      "minHeight": 118,
+      "maxHeight": 118,
+      "maxNeeded": 89.84375,
+      "overflow": false,
+      "targets": true
+    },
+    {
+      "width": 1280,
+      "minHeight": 118,
+      "maxHeight": 118,
+      "maxNeeded": 92.1875,
+      "overflow": false,
+      "targets": true
+    }
+  ]
+}

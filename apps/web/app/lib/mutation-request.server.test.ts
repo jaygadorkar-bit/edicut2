@@ -15,6 +15,34 @@ describe("panel mutation boundaries", () => {
     expect(isSameSiteMutation(new Request(url, { method: "POST", headers: { "Sec-Fetch-Site": "same-site" } }))).toBe(false);
     expect(isSameSiteMutation(new Request(url, { method: "POST", headers: { Referer: "https://edicut.com/dashboard", "Sec-Fetch-Site": "same-origin" } }))).toBe(true);
   });
+  it("accepts private-browser and loopback-alias local form requests", () => {
+    expect(isSameSiteMutation(new Request("http://localhost:3002/auth/google", {
+      method: "POST",
+      headers: { Origin: "null", Referer: "http://localhost:3002/signin", "Sec-Fetch-Site": "same-origin" },
+    }))).toBe(true);
+    expect(isSameSiteMutation(new Request("http://localhost:3002/auth/google", {
+      method: "POST",
+      headers: { Origin: "http://127.0.0.1:3002", "Sec-Fetch-Site": "same-site" },
+    }))).toBe(true);
+    expect(isSameSiteMutation(new Request("http://localhost:3002/auth/google", {
+      method: "POST",
+      headers: { Origin: "http://127.0.0.1:3001", "Sec-Fetch-Site": "same-site" },
+    }))).toBe(false);
+  });
+  it("uses same-origin Fetch Metadata when a browser sends an opaque Origin without Referer", () => {
+    expect(isSameSiteMutation(new Request("http://localhost:3002/auth/google", {
+      method: "POST",
+      headers: { Origin: "null", "Sec-Fetch-Site": "same-origin" },
+    }))).toBe(true);
+    expect(isSameSiteMutation(new Request("https://edicut.com/auth/google", {
+      method: "POST",
+      headers: { Origin: "null", "Sec-Fetch-Site": "same-site" },
+    }))).toBe(false);
+    expect(isSameSiteMutation(new Request("https://edicut.com/auth/google", {
+      method: "POST",
+      headers: { Origin: "null" },
+    }))).toBe(false);
+  });
   it("reads URL-encoded forms including multilingual text", async () => {
     const form = await readMutationForm(new Request(url, { method: "POST", body: new URLSearchParams({ intent: "save-profile", name: "বাংলা" }) }), 4096);
     expect(form?.get("name")).toBe("বাংলা");

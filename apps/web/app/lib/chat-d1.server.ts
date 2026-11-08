@@ -1,16 +1,16 @@
-import { CHAT_HISTORY_SIZE, CHAT_PAGE_SIZE, chatIsStaff, chatMessagePayloadMatches, chatSenderName, sanitizeChatMessageBody, type ChatActor, type ChatAttachment, type ChatHistory, type ChatMessage, type ChatPerson, type ChatReceipt, type ChatRoom, type ChatView, type TicketCategory, type TicketPriority, type TicketStatus } from "./chat";
+import { CHAT_HISTORY_SIZE, CHAT_PAGE_SIZE, canModerateChat, chatAttachmentIsRemoved, chatIsStaff, chatMessagePayloadMatches, chatSenderName, sanitizeChatMessageBody, type ChatActor, type ChatAttachment, type ChatHistory, type ChatMessage, type ChatPerson, type ChatReceipt, type ChatRoom, type ChatView, type LegacyClientManagerAssignment, type TicketCategory, type TicketPriority, type TicketStatus } from "./chat";
 import type { ChatAuthority } from "./chat-authority.server";
 import type { ChatStore } from "./chat-store.server";
 
 const live = `WITH source AS (SELECT ? AS data),
   live_users AS (SELECT json_extract(value,'$.id') id, json_extract(value,'$.email') email,
     json_extract(value,'$.name') name, json_extract(value,'$.searchName') search_name, json_extract(value,'$.searchEmail') search_email, json_extract(value,'$.role') role,
-    json_extract(value,'$.active') active, json_extract(value,'$.deletedAt') deleted_at, json_extract(value,'$.avatarUrl') avatar_url,
+    json_extract(value,'$.active') active, json_extract(value,'$.deletedAt') deleted_at, json_extract(value,'$.avatarUrl') avatar_url, json_extract(value,'$.projectManagerId') project_manager_id,
     json_extract(value,'$.paid') paid FROM source,json_each(source.data,'$.users')),
   live_admins AS (SELECT json_extract(value,'$.id') id, json_extract(value,'$.email') email,
     json_extract(value,'$.name') name, json_extract(value,'$.searchName') search_name, json_extract(value,'$.searchEmail') search_email, json_extract(value,'$.role') role,
     json_extract(value,'$.active') active, json_extract(value,'$.avatarUrl') avatar_url FROM source,json_each(source.data,'$.admins'))`;
-const joins = "chat_rooms r JOIN live_users c ON c.id=r.client_id LEFT JOIN live_users m ON m.id=r.manager_id LEFT JOIN support_tickets t ON t.room_id=r.id";
+const joins = "chat_rooms r JOIN live_users c ON c.id=r.client_id LEFT JOIN live_users m ON m.id=c.project_manager_id LEFT JOIN support_tickets t ON t.room_id=r.id";
 const uuidSql = "(lower(hex(randomblob(4)))||'-'||lower(hex(randomblob(2)))||'-'||lower(hex(randomblob(2)))||'-'||lower(hex(randomblob(2)))||'-'||lower(hex(randomblob(6))))";
 const eligible = "((r.kind='manager' AND c.paid) OR (r.kind='support' AND t.room_id IS NOT NULL))";
 const writable = "c.active AND c.deleted_at IS NULL AND ((r.kind='manager' AND c.paid) OR (r.kind='support' AND t.status<>'closed'))";
@@ -19,7 +19,10 @@ const messageColumns = `id,room_id AS roomId,actor_key AS actorKey,sender_name A
 const escapeSearch = (value: string) => `%${value.replace(/[\\%_]/g, "\\$&")}%`;
 const preview = (value: string) => Array.from(value).slice(0, 180).join('');
 const fail = (message: string, status: number): never => { throw new Response(message, { status }); };
-const message = (row: ChatMessage & { attachment: string | ChatAttachment | null }): ChatMessage => ({ ...row, senderName: chatSenderName(row.senderRole, row.senderName), body: sanitizeChatMessageBody(row.actorKey, row.body), attachment: typeof row.attachment === "string" ? JSON.parse(row.attachment) : row.attachment });
+const message = (row: ChatMessage & { attachment: string | ChatAttachment | null }, cleanup = false): ChatMessage => {
+  const attachment = typeof row.attachment === "string" ? JSON.parse(row.attachment) : row.attachment;
+  return { ...row, senderName: chatSenderName(row.senderRole, row.senderName), body: sanitizeChatMessageBody(row.actorKey, row.body), attachment: !cleanup && (row.deletedAt || chatAttachmentIsRemoved(attachment)) ? null : attachment };
+};
 const room = (row: ChatRoom & { ticket: string | ChatRoom["ticket"]; participants?: string | ChatRoom["participants"] }, actor?: ChatActor): ChatRoom => {
   const participants = (typeof row.participants === "string" ? JSON.parse(row.participants) : row.participants ?? []) as ChatRoom["participants"];
   return { ...row, clientName: actor && !actor.admin ? chatSenderName("customer", row.clientName) : row.clientName,
@@ -42,7 +45,7 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
       const values = [a.id, a.role];
       const sql = a.admin ? `${eligible} AND EXISTS (SELECT 1 FROM live_admins a WHERE a.id=? AND a.active AND a.role=?)`
         : `c.active AND c.deleted_at IS NULL AND EXISTS (SELECT 1 FROM live_users viewer WHERE viewer.id=? AND viewer.active AND viewer.deleted_at IS NULL AND viewer.role=?) AND ` +
-          (a.role === "project_manager" ? `${eligible} AND r.kind='manager' AND r.manager_id=? AND m.active AND m.deleted_at IS NULL AND m.role='project_manager'`
+          (a.role === "project_manager" ? `${eligible} AND r.kind='manager' AND c.project_manager_id=? AND m.active AND m.deleted_at IS NULL AND m.role='project_manager'`
             : a.role === "customer_support" ? `${eligible} AND r.kind='support'`
               : "r.client_id=? AND (r.kind='manager' OR t.room_id IS NOT NULL)");
       if (!a.admin && a.role !== "customer_support") values.push(a.id);
@@ -53,7 +56,7 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
       const unseen = unread(a);
       const clientParticipant = chatIsStaff(a) ? `UNION ALL SELECT 'user:'||member_client.id,COALESCE(member_client.name,${a.admin ? "member_client.email" : "'Client'"}),member_client.role,member_client.avatar_url FROM live_users member_client WHERE member_client.id=r.client_id AND member_client.active AND member_client.deleted_at IS NULL` : "";
       return { sql: `r.id,r.client_id AS clientId,COALESCE(c.name,${a.admin ? "c.email" : "'Client'"}) AS clientName,CASE WHEN ${a.admin ? 1 : 0}=1 THEN c.email ELSE NULL END AS clientEmail,
-        (c.active AND c.deleted_at IS NULL) AS clientActive,r.kind,r.manager_id AS managerId,m.name AS managerName,
+        (c.active AND c.deleted_at IS NULL) AS clientActive,r.kind,c.project_manager_id AS managerId,m.name AS managerName,
         COALESCE(m.active AND m.deleted_at IS NULL AND m.role='project_manager',0) AS managerActive,
         r.last_message_at AS lastMessageAt,CASE WHEN ${content} THEN r.last_message_preview ELSE NULL END AS lastMessagePreview,
         CASE WHEN ${content} THEN (SELECT latest.actor_key FROM chat_messages latest WHERE latest.room_id=r.id ORDER BY latest.created_at DESC,latest.id DESC LIMIT 1) ELSE NULL END AS lastMessageActorKey,
@@ -64,7 +67,7 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
             AND (receipt.last_read_at,COALESCE(receipt.last_read_id,'00000000-0000-0000-0000-000000000000')) >= (latest.created_at,latest.id)
             AND (receipt.actor_key='user:'||r.client_id
               OR receipt.actor_key IN (SELECT 'admin:'||reader.id FROM live_admins reader WHERE reader.active AND reader.role='admin')
-              OR (r.manager_id IS NOT NULL AND receipt.actor_key='user:'||r.manager_id AND m.active AND m.deleted_at IS NULL AND m.role='project_manager'))
+              OR (c.project_manager_id IS NOT NULL AND receipt.actor_key='user:'||c.project_manager_id AND m.active AND m.deleted_at IS NULL AND m.role='project_manager'))
         ) ELSE 0 END AS lastMessageRead,
         CASE WHEN r.kind='manager' AND c.paid THEN (SELECT COALESCE(json_group_array(json_object('key',member.actor_key,'name',member.name,'role',member.role,'avatarUrl',member.avatar_url,'lastActiveAt',
           CASE WHEN member.actor_key='admin:team' THEN (SELECT max(team_activity.active_at) FROM (
@@ -75,7 +78,7 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
             UNION ALL SELECT msg.created_at FROM chat_messages msg WHERE msg.room_id=r.id AND msg.actor_key=member.actor_key
           ) activity) END)), '[]') FROM (
           SELECT 'admin:team' AS actor_key,'EdiCut Admin' AS name,'admin' AS role,NULL AS avatar_url WHERE EXISTS (SELECT 1 FROM live_admins team WHERE team.active AND team.role='admin')
-          UNION ALL SELECT 'user:'||participant_manager.id,COALESCE(participant_manager.name,${a.admin ? "participant_manager.email" : "'Project manager'"}),'project_manager',participant_manager.avatar_url FROM live_users participant_manager WHERE participant_manager.id=r.manager_id AND participant_manager.active AND participant_manager.deleted_at IS NULL AND participant_manager.role='project_manager'
+          UNION ALL SELECT 'user:'||participant_manager.id,COALESCE(participant_manager.name,${a.admin ? "participant_manager.email" : "'Project manager'"}),'project_manager',participant_manager.avatar_url FROM live_users participant_manager WHERE participant_manager.id=c.project_manager_id AND participant_manager.active AND participant_manager.deleted_at IS NULL AND participant_manager.role='project_manager'
           ${clientParticipant}
         ) member WHERE member.actor_key<>?) ELSE '[]' END AS participants,
         r.updated_at AS updatedAt,c.paid AS projectUnlocked,
@@ -122,7 +125,7 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
         query(`SELECT rd.actor_key AS actorKey,COALESCE(u.name,a.name,'Team member') AS name,CASE WHEN a.id IS NOT NULL THEN 'admin' ELSE u.role END AS role,rd.last_read_at AS lastReadAt,rd.last_read_id AS lastReadId FROM chat_reads rd LEFT JOIN live_users u ON rd.actor_key='user:'||u.id LEFT JOIN live_admins a ON rd.actor_key='admin:'||a.id WHERE rd.room_id=? AND rd.actor_key<>? AND ${receiptAllowed} ORDER BY rd.last_read_at DESC LIMIT 100`, id, a.key, id, ...gate.values),
       ]);
       const rows = result[0].results as ChatMessage[];
-      return { room: selected, messages: rows.slice(0, CHAT_HISTORY_SIZE).map(message).reverse(), hasOlder: rows.length > CHAT_HISTORY_SIZE, receipts: (result[1].results as ChatReceipt[]).map(receipt => ({ ...receipt, name: chatSenderName(receipt.role, receipt.name) })) };
+      return { room: selected, messages: rows.slice(0, CHAT_HISTORY_SIZE).map(row => message(row)).reverse(), hasOlder: rows.length > CHAT_HISTORY_SIZE, receipts: (result[1].results as ChatReceipt[]).map(receipt => ({ ...receipt, name: chatSenderName(receipt.role, receipt.name) })) };
     }
     /** Copies only missing FK identities. Authorization always uses live_* CTEs. */
     function identityStatements() {
@@ -132,9 +135,15 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
       ];
     }
     async function identities() { await d1.batch(identityStatements()); }
-    return { current, query, access, getRoom, listRooms, unreadCounts, history, identityStatements, identities };
+    return { current, query, access, columns, getRoom, listRooms, unreadCounts, history, identityStatements, identities };
   }
   const store: ChatStore = {
+    async listClientChatRooms(actor, clientId) {
+      if (!actor.admin) return fail("Administrator access required.",403);
+      const s=await session(actor),col=s.columns(actor),gate=s.access(actor);
+      const result=await s.query(`SELECT ${col.sql} FROM ${joins} WHERE r.client_id=? AND (${gate.sql}) ORDER BY r.updated_at DESC,r.id DESC LIMIT 21`,...col.values,clientId,...gate.values).all<ChatRoom>();
+      return { rooms: result.results.slice(0,20).map(row=>room(row,actor)), hasMore: result.results.length>20 };
+    },
     async ensureClientChatRooms(actor) {
       if (actor.role === "customer_support") return;
       const s = await session(actor); const at = new Date().toISOString(), gate = s.access(actor);
@@ -153,6 +162,7 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
     },
     async listChatMessages(actor, id, before, search) { return (await session(actor)).history(actor, id, before, search); },
     async findChatMessageByNonce(actor, id, nonce) { const s = await session(actor); await s.getRoom(actor, id); const found = await s.query(`SELECT ${messageColumns} FROM chat_messages WHERE actor_key=? AND client_nonce=?`, actor.key, nonce.toLowerCase()).first<ChatMessage>(); if (found && found.roomId !== id) fail("Message reference already used.", 409); return found ? message(found) : null; },
+    async findChatMessageForUploadCleanup(id, actorKey, nonce) { const found = await d1.prepare(`SELECT ${messageColumns} FROM chat_messages WHERE room_id=? AND actor_key=? AND client_nonce=?`).bind(id, actorKey, nonce.toLowerCase()).first<ChatMessage>(); return found ? message(found) : null; },
     async sendChatMessage(actor, id, body, nonce, attachment = null) {
       const s = await session(actor); const gate = s.access(actor), newId = crypto.randomUUID(), at = new Date().toISOString(), nonceKey = nonce.toLowerCase();
       const results = await d1.batch([...s.identityStatements(),
@@ -178,27 +188,48 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
     },
     async changeChatMessage(actor, id, messageId, body) {
       const s = await session(actor), gate = s.access(actor), at = new Date().toISOString();
+      const moderation = canModerateChat(actor) && body === null;
       const result = await d1.batch([
-        s.query(`UPDATE chat_messages SET body=?,search_body=?,edited_at=CASE WHEN ? IS NULL THEN edited_at ELSE ? END,deleted_at=CASE WHEN ? IS NULL THEN ? ELSE NULL END WHERE id=? AND room_id=? AND actor_key=? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM ${joins} WHERE r.id=? AND (${gate.sql}) AND ${content} AND ${writable}) RETURNING ${messageColumns}`, body ?? "", body?.toLowerCase() ?? "", body, at, body, at, messageId, id, actor.key, id, ...gate.values),
+        s.query(`UPDATE chat_messages SET body=?,search_body=?,edited_at=CASE WHEN ? IS NULL THEN edited_at ELSE ? END,deleted_at=CASE WHEN ? IS NULL THEN COALESCE(deleted_at,?) ELSE NULL END WHERE id=? AND room_id=? AND (actor_key=? OR ?=1) AND (deleted_at IS NULL OR ? IS NULL) AND sender_role<>'system' AND EXISTS (SELECT 1 FROM ${joins} WHERE r.id=? AND (${gate.sql}) AND ${content} AND ${moderation ? "1=1" : writable}) RETURNING ${messageColumns}`, body ?? "", body?.toLowerCase() ?? "", body, at, body, at, messageId, id, actor.key, moderation ? 1 : 0, body, id, ...gate.values),
         d1.prepare(`UPDATE chat_rooms SET last_message_preview=CASE WHEN msg.deleted_at IS NOT NULL THEN 'Message deleted' ELSE substr(COALESCE(NULLIF(msg.body,''),json_extract(msg.attachment,'$.name')),1,180) END,search_preview=CASE WHEN msg.deleted_at IS NOT NULL THEN 'message deleted' ELSE substr(COALESCE(NULLIF(msg.search_body,''),msg.search_attachment),1,180) END,updated_at=max(updated_at,?) FROM chat_messages msg WHERE chat_rooms.id=? AND msg.id=? AND changes()=1 AND msg.id=(SELECT id FROM chat_messages WHERE room_id=chat_rooms.id ORDER BY created_at DESC,id DESC LIMIT 1)`).bind(at, id, messageId),
       ]);
       const saved = result[0].results[0] as ChatMessage | undefined;
-      if (!saved) return fail("Only your own available messages can be changed.", 403);
-      return message(saved);
+      if (!saved) return fail("You cannot change this message.", 403);
+      return message(saved, body === null);
     },
-    async getChatAttachment(actor, id, messageId) { const s = await session(actor), gate = s.access(actor); const saved = await s.query(`SELECT msg.attachment FROM ${joins} JOIN chat_messages msg ON msg.room_id=r.id WHERE msg.id=? AND r.id=? AND msg.deleted_at IS NULL AND msg.attachment IS NOT NULL AND (${gate.sql}) AND ${content}`, messageId, id, ...gate.values).first<{ attachment: string }>(); if (!saved) return fail("Attachment unavailable.", 404); return JSON.parse(saved.attachment) as ChatAttachment; },
+    async removeChatAttachment(actor, id, messageId) {
+      if (!canModerateChat(actor)) return fail("Only administrators can remove attachments.", 403);
+      const s = await session(actor), gate = s.access(actor), at = new Date().toISOString();
+      const target = `id=? AND room_id=? AND attachment IS NOT NULL AND sender_role<>'system' AND (deleted_at IS NULL OR json_extract(attachment,'$.removedAt') IS NOT NULL) AND EXISTS (SELECT 1 FROM ${joins} WHERE r.id=? AND (${gate.sql}) AND ${content})`;
+      const values = [messageId, id, id, ...gate.values];
+      const result = await d1.batch([
+        s.query(`SELECT attachment FROM chat_messages WHERE ${target}`, ...values),
+        s.query(`UPDATE chat_messages SET attachment=json_set(attachment,'$.removedAt',COALESCE(json_extract(attachment,'$.removedAt'),?)),search_attachment='',edited_at=CASE WHEN trim(body)<>'' THEN ? ELSE edited_at END,deleted_at=CASE WHEN trim(body)='' THEN COALESCE(deleted_at,?) ELSE deleted_at END WHERE ${target} RETURNING ${messageColumns}`, at, at, at, ...values),
+        d1.prepare(`UPDATE chat_rooms SET last_message_preview=CASE WHEN msg.deleted_at IS NOT NULL THEN 'Message deleted' ELSE substr(msg.body,1,180) END,search_preview=CASE WHEN msg.deleted_at IS NOT NULL THEN 'message deleted' ELSE substr(msg.search_body,1,180) END,updated_at=max(updated_at,?) FROM chat_messages msg WHERE chat_rooms.id=? AND msg.id=? AND changes()=1 AND msg.id=(SELECT id FROM chat_messages WHERE room_id=chat_rooms.id ORDER BY created_at DESC,id DESC LIMIT 1)`).bind(at, id, messageId),
+      ]);
+      const saved = result[1].results[0] as ChatMessage | undefined;
+      const removed = result[0].results[0] as { attachment: string } | undefined;
+      if (!saved || !removed) return fail("Attachment unavailable.", 404);
+      return { message: message(saved), attachment: JSON.parse(removed.attachment) as ChatAttachment };
+    },
+    async finishChatAttachmentCleanup(id, messageId, attachment) {
+      await d1.prepare(`UPDATE chat_messages SET attachment=NULL WHERE id=? AND room_id=? AND (deleted_at IS NOT NULL OR json_extract(attachment,'$.removedAt') IS NOT NULL) AND COALESCE(json_extract(attachment,'$.driveFileId'),json_extract(attachment,'$.publicId'))=?`).bind(messageId,id,attachment.driveFileId ?? attachment.publicId).run();
+    },
+    async getChatAttachment(actor, id, messageId) { const s = await session(actor), gate = s.access(actor); const saved = await s.query(`SELECT msg.attachment FROM ${joins} JOIN chat_messages msg ON msg.room_id=r.id WHERE msg.id=? AND r.id=? AND msg.deleted_at IS NULL AND msg.attachment IS NOT NULL AND json_extract(msg.attachment,'$.removedAt') IS NULL AND (${gate.sql}) AND ${content}`, messageId, id, ...gate.values).first<{ attachment: string }>(); if (!saved) return fail("Attachment unavailable.", 404); return JSON.parse(saved.attachment) as ChatAttachment; },
+    async getClientLegacyChatAttachmentBytes(clientId) { const row = await d1.prepare(`SELECT COALESCE(SUM(CASE WHEN json_extract(msg.attachment,'$.provider') IS NOT 'google_drive' THEN CAST(json_extract(msg.attachment,'$.bytes') AS INTEGER) ELSE 0 END),0) AS bytes FROM chat_messages msg JOIN chat_rooms r ON r.id=msg.room_id WHERE r.client_id=? AND msg.deleted_at IS NULL AND msg.attachment IS NOT NULL`).bind(clientId).first<{ bytes: number | null }>(); const bytes = Number(row?.bytes ?? 0); return Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : Number.MAX_SAFE_INTEGER; },
     async markChatRead(actor, id, messageId) { const s = await session(actor), gate = s.access(actor); await s.query(`INSERT INTO chat_reads (room_id,actor_key,last_read_at,last_read_id) SELECT r.id,?,msg.created_at,msg.id FROM ${joins} JOIN chat_messages msg ON msg.room_id=r.id WHERE r.id=? AND msg.id=? AND (${gate.sql}) AND ${content} ON CONFLICT(room_id,actor_key) DO UPDATE SET last_read_at=excluded.last_read_at,last_read_id=excluded.last_read_id WHERE (chat_reads.last_read_at,COALESCE(chat_reads.last_read_id,'00000000-0000-0000-0000-000000000000'))<(excluded.last_read_at,excluded.last_read_id)`, actor.key, id, messageId, ...gate.values).run(); },
     async chatPeople(actor, search = "") { const s = await session(actor); if (!actor.admin) return fail("Administrator access required.", 403); const pattern = escapeSearch(search.toLowerCase()); const result = await d1.batch([s.query(`SELECT id,COALESCE(name,email) AS name,email FROM live_users WHERE active AND deleted_at IS NULL AND role='project_manager' ORDER BY name,id LIMIT 200`), s.query(`SELECT id,COALESCE(name,email) AS name,email FROM live_users WHERE active AND deleted_at IS NULL AND role NOT IN ('project_manager','customer_support') AND paid AND (?='' OR search_name LIKE ? ESCAPE '\\' OR search_email LIKE ? ESCAPE '\\') ORDER BY name,id LIMIT 30`, search, pattern, pattern)]); return { managers: result[0].results as ChatPerson[], clients: result[1].results as ChatPerson[] }; },
+    async listLegacyClientManagerAssignments(actor) { const s = await session(actor); if (!actor.admin && actor.role !== "project_manager") return fail("Manager assignment access required.", 403); const gate = actor.admin ? "1=1" : "r.manager_id=?"; const values = actor.admin ? [] : [actor.id]; const result = await s.query(`SELECT r.client_id AS clientId,r.manager_id AS managerId FROM chat_rooms r JOIN live_users c ON c.id=r.client_id JOIN live_users m ON m.id=r.manager_id WHERE r.kind='manager' AND r.manager_id IS NOT NULL AND c.active AND c.deleted_at IS NULL AND c.paid AND c.role NOT IN ('project_manager','customer_support') AND m.active AND m.deleted_at IS NULL AND m.role='project_manager' AND ${gate}`, ...values).all<LegacyClientManagerAssignment>(); return result.results; },
     async createChatRoomsForClient(actor, clientId) { const s = await session(actor); if (!actor.admin) return fail("Administrator access required.", 403); const client = s.current.users.find(user => user.id === clientId); if (!client?.active || client.deletedAt || !client.paid || ["project_manager", "customer_support"].includes(client.role)) return fail("Choose an active client with a paid purchase.", 400); await store.ensureClientChatRooms(actor); return (await d1.prepare(`SELECT id,kind FROM chat_rooms WHERE client_id=? AND kind='manager'`).bind(clientId).all<{ id: string }>()).results; },
-    async assignChatManager(actor, id, managerId, expectedManagerId) {
+    async assignChatManager(actor, id, managerId) {
       const s = await session(actor); if (!actor.admin) return fail("Administrator access required.", 403); await s.identities(); const at = new Date().toISOString(), noticeId = crypto.randomUUID();
       const manager = managerId ? s.current.users.find(user => user.id === managerId && user.role === "project_manager" && user.active && !user.deletedAt) : null;
       if (managerId && !manager) return fail("The assignment changed or this manager is unavailable. Refresh and try again.", 409);
       const body = manager ? `${chatSenderName("project_manager", manager.name)} joined the group as your project manager.` : "Your project manager left the group. Our admin team is here to help while a new manager is assigned.";
-      const gate = s.access(actor), allowed = `r.id=? AND r.kind='manager' AND r.manager_id IS ? AND (${gate.sql}) AND c.active AND c.deleted_at IS NULL`;
+      const gate = s.access(actor), allowed = `r.id=? AND r.kind='manager' AND c.project_manager_id IS ? AND (${gate.sql}) AND c.active AND c.deleted_at IS NULL`;
       const result = await d1.batch([
-        s.query(`INSERT INTO chat_messages (id,room_id,actor_key,sender_name,sender_role,body,client_nonce,created_at,search_body) SELECT ?,r.id,'system:assignment','Project activity','system',?,?,?,? FROM ${joins} WHERE ${allowed} AND r.manager_id IS NOT ?`, noticeId, body, noticeId, at, body.toLowerCase(), id, expectedManagerId, ...gate.values, managerId),
-        s.query(`UPDATE chat_rooms SET manager_id=?,updated_at=CASE WHEN EXISTS(SELECT 1 FROM chat_messages WHERE id=?) THEN max(updated_at,?) ELSE updated_at END,last_message_at=CASE WHEN EXISTS(SELECT 1 FROM chat_messages WHERE id=?) THEN max(COALESCE(last_message_at,?),?) ELSE last_message_at END,last_message_preview=CASE WHEN EXISTS(SELECT 1 FROM chat_messages WHERE id=?) AND (last_message_at IS NULL OR last_message_at<=?) THEN ? ELSE last_message_preview END,search_preview=CASE WHEN EXISTS(SELECT 1 FROM chat_messages WHERE id=?) AND (last_message_at IS NULL OR last_message_at<=?) THEN ? ELSE search_preview END WHERE id IN (SELECT r.id FROM ${joins} WHERE ${allowed}) RETURNING id`, managerId, noticeId, at, noticeId, at, at, noticeId, at, preview(body), noticeId, at, preview(body).toLowerCase(), id, expectedManagerId, ...gate.values),
+        s.query(`INSERT INTO chat_messages (id,room_id,actor_key,sender_name,sender_role,body,client_nonce,created_at,search_body) SELECT ?,r.id,'system:assignment','Project activity','system',?,?,?,? FROM ${joins} WHERE ${allowed} AND r.manager_id IS NOT ?`, noticeId, body, noticeId, at, body.toLowerCase(), id, managerId, ...gate.values, managerId),
+        s.query(`UPDATE chat_rooms SET manager_id=?,updated_at=CASE WHEN EXISTS(SELECT 1 FROM chat_messages WHERE id=?) THEN max(updated_at,?) ELSE updated_at END,last_message_at=CASE WHEN EXISTS(SELECT 1 FROM chat_messages WHERE id=?) THEN max(COALESCE(last_message_at,?),?) ELSE last_message_at END,last_message_preview=CASE WHEN EXISTS(SELECT 1 FROM chat_messages WHERE id=?) AND (last_message_at IS NULL OR last_message_at<=?) THEN ? ELSE last_message_preview END,search_preview=CASE WHEN EXISTS(SELECT 1 FROM chat_messages WHERE id=?) AND (last_message_at IS NULL OR last_message_at<=?) THEN ? ELSE search_preview END WHERE id IN (SELECT r.id FROM ${joins} WHERE ${allowed}) RETURNING id`, managerId, noticeId, at, noticeId, at, at, noticeId, at, preview(body), noticeId, at, preview(body).toLowerCase(), id, managerId, ...gate.values),
       ]);
       if (!result[1].results.length) fail("The assignment changed or this manager is unavailable. Refresh and try again.", 409);
     },
@@ -235,7 +266,7 @@ export function createD1ChatStore(d1: D1Database, authority: (actor?: ChatActor)
       if (!result[0].results.length) return fail("This ticket changed. Refresh it before updating its status.", 409);
       return s.getRoom(actor, id);
     },
-    async chatRecipients(id, previousManagerId) { const s = await session(); const rows = await s.query(`SELECT 'user:'||u.id AS key FROM live_users u JOIN chat_rooms r ON r.id=? WHERE u.active AND u.deleted_at IS NULL AND (u.id=r.client_id OR (r.kind='support' AND u.role='customer_support') OR (r.kind='manager' AND u.role='project_manager' AND (u.id=r.manager_id OR u.id=?))) UNION SELECT 'admin:'||id AS key FROM live_admins WHERE active AND role='admin'`, id, previousManagerId ?? null).all<{ key: string }>(); return rows.results.map(row => row.key); },
+    async chatRecipients(id, previousManagerId) { const s = await session(); const rows = await s.query(`SELECT 'user:'||u.id AS key FROM live_users u JOIN chat_rooms r ON r.id=? LEFT JOIN live_users c ON c.id=r.client_id WHERE u.active AND u.deleted_at IS NULL AND (u.id=r.client_id OR (r.kind='support' AND u.role='customer_support') OR (r.kind='manager' AND u.role='project_manager' AND (u.id=c.project_manager_id OR u.id=?))) UNION SELECT 'admin:'||id FROM live_admins WHERE active AND role='admin'`, id, previousManagerId ?? null).all<{ key: string }>(); return rows.results.map(row => row.key); },
   };
   return store;
 }

@@ -5,6 +5,16 @@ const mocks = vi.hoisted(() => ({
   getDbFromContext: vi.fn(() => ({})),
   getAdminToolbarAccess: vi.fn(async () => "verified"),
   getAdminNavigationCounts: vi.fn(async () => ({ pendingOrderCount: 3, unreadEnquiryCount: 7 })),
+  getAdminSoftwareVersionSnapshot: vi.fn(async () => ({
+    checkedAt: "2026-11-08T00:00:00.000Z",
+    automaticCount: 2,
+    totalCount: 3,
+    versions: [
+      { currentVersion: "2.118.0", latestVersion: "2.119.0", latestStatus: "automatic" },
+      { currentVersion: "8.5.1", latestVersion: "8.5.1", latestStatus: "automatic" },
+      { currentVersion: "17.6", latestVersion: "18.6", latestStatus: "saved-reference" },
+    ],
+  })),
 }));
 vi.mock("../lib/session.server", () => ({
   getSession: vi.fn(async () => ({ get: (key: string) => mocks.session[key] })),
@@ -13,6 +23,7 @@ vi.mock("../lib/session.server", () => ({
 vi.mock("../lib/db.server", () => ({ getDbFromContext: mocks.getDbFromContext }));
 vi.mock("../lib/admin-toolbar-access.server", () => ({ getAdminToolbarAccess: mocks.getAdminToolbarAccess }));
 vi.mock("../lib/admin-navigation-counts.server", () => ({ getAdminNavigationCounts: mocks.getAdminNavigationCounts }));
+vi.mock("../lib/admin-software-versions.server", () => ({ getAdminSoftwareVersionSnapshot: mocks.getAdminSoftwareVersionSnapshot }));
 import { loader } from "./admin-navigation-counts";
 const args = () => ({ request: new Request("http://localhost:3002/site/node-logmin/navigation-counts"), url: new URL("http://localhost:3002/site/node-logmin/navigation-counts"), pattern: "/site/node-logmin/navigation-counts", params: {}, context: {} });
 beforeEach(() => {
@@ -26,7 +37,7 @@ describe("admin notification endpoint", () => {
   it("returns only counts with no-store headers after checking current admin access", async () => {
     const response = await loader(args());
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(await response.json()).toEqual({ pendingOrderCount: 3, unreadEnquiryCount: 7 });
+    expect(await response.json()).toEqual({ pendingOrderCount: 3, unreadEnquiryCount: 7, availableUpdateCount: 1 });
     expect(mocks.getAdminToolbarAccess).toHaveBeenCalledWith(expect.anything(), {
       userId: "user-id", adminUserId: "admin-id", verifiedUserAdminId: "verified-admin",
       userCredentialVersion: undefined, userAccessToken: undefined, adminCredentialVersion: undefined, adminAccessToken: undefined, verifiedUserAdminCredentialVersion: undefined,
@@ -38,6 +49,7 @@ describe("admin notification endpoint", () => {
     expect(response.status).toBe(403);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(mocks.getAdminNavigationCounts).not.toHaveBeenCalled();
+    expect(mocks.getAdminSoftwareVersionSnapshot).not.toHaveBeenCalled();
   });
   it("does not access the database for an anonymous request", async () => {
     mocks.session = {}; mocks.adminSession = {};

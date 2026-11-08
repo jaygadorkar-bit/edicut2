@@ -134,7 +134,10 @@ export default function VideoStorage() {
   const driveMessages: Record<string, string> = {
     connected: "Google Drive connected for private review video storage. New uploads will use Drive.",
     cancelled: "Google Drive connection was cancelled.",
-    invalid: "The connection request expired. Start again from this page.",
+    "invalid-state": "Google could not verify this browser’s connection session. Start again from this page.",
+    "invalid-code": "Google did not return a usable authorization code. Start again from this page.",
+    "inactive-admin": "The administrator who started this connection is no longer active. Sign in again, then retry.",
+    "save-failed": "Google approved Drive access, but EdiCut could not save the new connection. Check the database and try again.",
     account: `Choose ${config.driveAccountEmail || "the configured Drive account"} to connect Drive. No other Google account was saved.`,
     permissions: "Allow EdiCut Studio to access only the Drive files it creates for review storage.",
     unavailable: "Google Drive could not be connected. Check the Google OAuth configuration and try again.",
@@ -192,7 +195,20 @@ export default function VideoStorage() {
               </>
             )}
           </div>
-          {driveStorage.connected ? <Form method="post"><input type="hidden" name="intent" value="disconnect-drive" /><button type="submit" className="review-button">Disconnect Google Drive</button></Form> : null}
+          {driveStorage.connected ? (
+            <div className="flex flex-wrap gap-3">
+              <Form method="post">
+                <input type="hidden" name="intent" value="connect-drive" />
+                <button type="submit" className="review-button review-button--primary">
+                  <HardDrive size={17} /> Reconnect Google Drive
+                </button>
+              </Form>
+              <Form method="post">
+                <input type="hidden" name="intent" value="disconnect-drive" />
+                <button type="submit" className="review-button">Disconnect Google Drive</button>
+              </Form>
+            </div>
+          ) : null}
           <p>Drive files stay private in the connected studio account. EdiCut checks project access before proxying video playback. Keep original masters in your own archive.</p>
           {!schemaReady ? (
             <div className="review-notice">

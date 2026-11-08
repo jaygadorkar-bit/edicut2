@@ -1,0 +1,79 @@
+[
+  {
+    "case": "wide-expanded",
+    "contentLeft": 677.5,
+    "contentRight": 2105.5,
+    "headerLeft": 677.5,
+    "headerRight": 2105.5,
+    "scrollWidth": 2545,
+    "signoutRight": 2105.5,
+    "toolbarLeft": 24,
+    "width": 2545
+  },
+  {
+    "case": "wide-collapsed",
+    "contentLeft": 597.5,
+    "contentRight": 2025.5,
+    "headerLeft": 597.5,
+    "headerRight": 2025.5,
+    "scrollWidth": 2545,
+    "signoutRight": 2025.5,
+    "toolbarLeft": 24,
+    "width": 2545
+  },
+  {
+    "case": "mobile",
+    "contentLeft": 16,
+    "contentRight": 344,
+    "headerLeft": 16,
+    "headerRight": 344,
+    "scrollWidth": 360,
+    "signoutRight": 344,
+    "toolbarLeft": 16,
+    "width": 360
+  },
+  {
+    "case": "tablet",
+    "contentLeft": 28,
+    "contentRight": 725,
+    "headerLeft": 28,
+    "headerRight": 725,
+    "scrollWidth": 753,
+    "signoutRight": 725,
+    "toolbarLeft": 28,
+    "width": 753
+  },
+  {
+    "case": "small-phone",
+    "contentLeft": 16,
+    "contentRight": 289,
+    "headerLeft": 16,
+    "headerRight": 289,
+    "scrollWidth": 305,
+    "signoutRight": 289,
+    "toolbarLeft": 16,
+    "width": 305
+  },
+  {
+    "case": "marketing-wide",
+    "contentLeft": null,
+    "contentRight": null,
+    "headerLeft": null,
+    "headerRight": null,
+    "scrollWidth": 2560,
+    "signoutRight": 1920,
+    "toolbarLeft": 640,
+    "width": 2560
+  },
+  {
+    "case": "desktop",
+    "contentLeft": 274,
+    "contentRight": 1229,
+    "headerLeft": 274,
+    "headerRight": 1229,
+    "scrollWidth": 1265,
+    "signoutRight": 1229,
+    "toolbarLeft": 24,
+    "width": 1265
+  }
+]

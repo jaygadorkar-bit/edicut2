@@ -67,6 +67,18 @@ Checkout validates add-on IDs, computes prices and coupons on the server, and sa
 
 `packages/db/tests/package-add-ons.sql` verifies the empty default, saved price snapshots, discounted totals, and invalid snapshot rejection. Run it only against a disposable PostgreSQL database with the Drizzle migrations applied; it rolls back its fixture data.
 
+## Checkout demo mode
+
+To preview checkout locally without contacting Cryptomus or writing purchase data, set `CHECKOUT_DEMO_MODE=true` before starting `pnpm --filter @edicut/web dev`, or use `?demo=1` on a checkout URL on localhost (for example, `/checkout/creator-pro?step=payment&demo=1`). With Wrangler locally, the flag can go in the ignored `apps/web/.dev.vars` file. A non-local test host requires `CHECKOUT_DEMO_MODE=true` and an exact entry in `CHECKOUT_DEMO_ALLOWED_HOSTS` (comma-separated). `edicut.com` and `www.edicut.com` always disable demo mode. Demo checkout does not save contact details or a subscription, send order notifications, mark a purchase paid, or grant access; its success button only previews the success state.
+
+## Cryptomus test webhooks
+
+The admin page at `/site/node-logmin/cryptomus-test` sends Cryptomus' signed test webhook to an isolated receiver at `/api/cryptomus/test-webhook`. The receiver verifies the signature and logs the test status; it never updates an order, subscription, or access. The sender omits invoice and order IDs so Cryptomus uses its synthetic test invoice. The normal `/api/cryptomus/webhook` remains the only callback that records paid subscriptions.
+
+Enable the feature only on a development or staging deployment by setting `APP_ENV=development` or `APP_ENV=staging`, `CRYPTOMUS_TEST_WEBHOOK_ENABLED=true`, and `CRYPTOMUS_TEST_WEBHOOK_CALLBACK_URL` to the public HTTPS URL ending in `/api/cryptomus/test-webhook`. The callback host must be reachable from Cryptomus; for localhost testing, use a temporary HTTPS tunnel and set that tunnel URL as the callback. Do not target `edicut.com` or `www.edicut.com`. Production configuration explicitly disables this feature. Keep the Cryptomus payment API key server-side as usual.
+
+After sending a test from the admin page, check the development/staging server logs for `Cryptomus test webhook received` to confirm callback delivery. Cryptomus' test endpoint does not create a blockchain payment or save the test event as a real invoice.
+
 ## Telegram notifications
 
 The checkout and project actions send an order summary after saving an unpaid subscription request or new project request. The contact forms save each enquiry to the dashboard Mail Inbox, then send a Telegram notice with its reference and inbox link. Contact notifications do not include the visitor's name, email, or message. Telegram delivery runs in the Worker background and does not block the customer action.

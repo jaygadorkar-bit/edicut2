@@ -1,0 +1,52 @@
+help_outline
+Help
+manage_accounts
+User settings
+	
+notifications
+Messages
+6
+https://edicut.com/
+URL Inspection
+GOOGLE INDEX
+LIVE TEST
+Tested on: Oct 22, 2026, 12:33 AM
+
+error
+URL is not available to Google
+This page cannot be indexed. Pages that aren't indexed can't be served on Google. See the details below to learn why it can't be indexed Learn more
+VIEW TESTED PAGE
+REQUEST INDEXING
+error
+Page availability
+Page cannot be indexed: Excluded by ‘noindex’ tag
+
+URL will be indexed only if certain conditions are met
+Discovery
+Not checked in live tests
+Crawl
+Time
+Oct 22, 2026, 12:33:56 AM
+Crawled as
+Google Inspection Tool smartphone
+Crawl allowed?
+Yes
+Page fetch
+Successful
+Indexing allowed?
+error
+No: 'noindex' detected in 'robots' meta tag
+Indexing
+User-declared canonical
+https://edicut.com/
+Google-selected canonical
+
+Only determined after indexing
+LEARN MORE
+Enhancements & Experience
+Only indexed URLs can have enhancements
+
+URL inspection
+Learn how the Google Index sees your page. Use this to troubleshoot if your page isn't appearing, or isn't appearing properly, in Google Search results.
+Learn more
+Got it

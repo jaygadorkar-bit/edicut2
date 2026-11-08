@@ -1,5 +1,9 @@
 # Why Hire Us hero voiceover
 
+For new narrated projects and browser download recovery, follow the reusable
+[video creation guide](VIDEO_CREATION_GUIDE.md). It documents Google AI Studio,
+the official API generation path, source preservation, cue timing, and validation.
+
 ## Generation setup
 
 - Revised dashboard-focused narration generated in Google AI Studio in Chrome on 2026-10-08.

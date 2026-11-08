@@ -1,0 +1,230 @@
+{
+  "bodyWordCount": 882,
+  "brokenImages": [],
+  "canonicals": [
+    "https://edicut.com/blog/3-reasons-why-you-should-hire-edicut"
+  ],
+  "film": {
+    "background": "rgba(0, 0, 0, 0)",
+    "controls": [
+      {
+        "height": 44,
+        "iconWidth": 17,
+        "name": "Play",
+        "width": 116
+      },
+      {
+        "height": 44,
+        "iconWidth": 18,
+        "name": "Mute film audio",
+        "width": 44
+      }
+    ],
+    "preload": "none",
+    "readyState": 0,
+    "shadow": "none",
+    "source": "/audio/why-hire-us/edicut-why-hire-us-mix-f3907247.wav"
+  },
+  "h1": [
+    "3 reasons why you should hire EdiCut"
+  ],
+  "jsonLd": [
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@id": "https://edicut.com/blog/3-reasons-why-you-should-hire-edicut#article",
+          "@type": "BlogPosting",
+          "author": {
+            "@id": "https://edicut.com/blog#editorial-team",
+            "@type": "Organization",
+            "name": "EdiCut editorial team",
+            "url": "https://edicut.com/blog"
+          },
+          "datePublished": "2026-10-22",
+          "description": "Explore EdiCut’s video editing service: project management, thoughtful craft with human review, and clear single-video or monthly packages for YouTube creators.",
+          "headline": "3 reasons why you should hire EdiCut",
+          "image": [
+            "https://edicut.com/images/blog/3-reasons-hire-edicut.svg"
+          ],
+          "inLanguage": "en",
+          "isPartOf": {
+            "@id": "https://edicut.com/blog#blog",
+            "@type": "Blog",
+            "name": "EdiCut Blog",
+            "url": "https://edicut.com/blog"
+          },
+          "mainEntityOfPage": {
+            "@id": "https://edicut.com/blog/3-reasons-why-you-should-hire-edicut",
+            "@type": "WebPage"
+          },
+          "name": "3 reasons why you should hire EdiCut",
+          "publisher": {
+            "@id": "https://edicut.com/#organization",
+            "@type": "Organization",
+            "alternateName": "edicut.com",
+            "contactPoint": {
+              "@type": "ContactPoint",
+              "availableLanguage": "English",
+              "contactType": "customer support",
+              "email": "edicutstudio@gmail.com",
+              "url": "https://edicut.com/contact"
+            },
+            "description": "EdiCut edits YouTube videos, Shorts, podcasts, and thumbnails for creators, with a clear workflow for footage, reviews, and delivery.",
+            "email": "edicutstudio@gmail.com",
+            "logo": "https://edicut.com/favicon.png",
+            "name": "EdiCut",
+            "url": "https://edicut.com/"
+          },
+          "url": "https://edicut.com/blog/3-reasons-why-you-should-hire-edicut"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "item": "https://edicut.com/",
+              "name": "Home",
+              "position": 1
+            },
+            {
+              "@type": "ListItem",
+              "item": "https://edicut.com/blog",
+              "name": "Blog",
+              "position": 2
+            },
+            {
+              "@type": "ListItem",
+              "item": "https://edicut.com/blog/3-reasons-why-you-should-hire-edicut",
+              "name": "3 reasons why you should hire EdiCut",
+              "position": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "href": "/",
+      "text": "Home"
+    },
+    {
+      "href": "/blog",
+      "text": "Blog"
+    },
+    {
+      "href": "/blog",
+      "text": "By EdiCut editorial team"
+    },
+    {
+      "href": "/services/youtube-video-editing",
+      "text": "Explore our YouTube editing service"
+    },
+    {
+      "href": "/portfolio",
+      "text": "Explore style references"
+    },
+    {
+      "href": "/pricing",
+      "text": "Compare current editing packages"
+    },
+    {
+      "href": "/pricing",
+      "text": "Explore editing packages"
+    },
+    {
+      "href": "/contact",
+      "text": "Talk with the team"
+    },
+    {
+      "href": "/blog/youtube-video-editing-brief-checklist",
+      "text": "Put together your editing brief"
+    },
+    {
+      "href": "/blog/how-to-choose-youtube-video-editing-service",
+      "text": "Compare video editing services"
+    },
+    {
+      "href": "/blog",
+      "text": "All EdiCut guides"
+    }
+  ],
+  "meta": [
+    {
+      "content": "Explore EdiCut’s video editing service: project management, thoughtful craft with human review, and clear single-video or monthly packages for YouTube creators.",
+      "name": "description"
+    },
+    {
+      "content": "noindex, nofollow, noarchive",
+      "name": "robots"
+    },
+    {
+      "content": "EdiCut",
+      "name": "og:site_name"
+    },
+    {
+      "content": "article",
+      "name": "og:type"
+    },
+    {
+      "content": "https://edicut.com/blog/3-reasons-why-you-should-hire-edicut",
+      "name": "og:url"
+    },
+    {
+      "content": "EdiCut Video Editing: 3 Reasons for Creators",
+      "name": "og:title"
+    },
+    {
+      "content": "Explore EdiCut’s video editing service: project management, thoughtful craft with human review, and clear single-video or monthly packages for YouTube creators.",
+      "name": "og:description"
+    },
+    {
+      "content": "https://edicut.com/images/blog/3-reasons-hire-edicut.webp",
+      "name": "og:image"
+    },
+    {
+      "content": "image/webp",
+      "name": "og:image:type"
+    },
+    {
+      "content": "1536",
+      "name": "og:image:width"
+    },
+    {
+      "content": "1024",
+      "name": "og:image:height"
+    },
+    {
+      "content": "Illustration of an editing timeline, a project manager coordinating review, and clear single-video or monthly package choices",
+      "name": "og:image:alt"
+    },
+    {
+      "content": "summary_large_image",
+      "name": "twitter:card"
+    },
+    {
+      "content": "https://edicut.com/images/blog/3-reasons-hire-edicut.webp",
+      "name": "twitter:image"
+    },
+    {
+      "content": "EdiCut Video Editing: 3 Reasons for Creators",
+      "name": "twitter:title"
+    },
+    {
+      "content": "Explore EdiCut’s video editing service: project management, thoughtful craft with human review, and clear single-video or monthly packages for YouTube creators.",
+      "name": "twitter:description"
+    },
+    {
+      "content": "Illustration of an editing timeline, a project manager coordinating review, and clear single-video or monthly package choices",
+      "name": "twitter:image:alt"
+    }
+  ],
+  "overflow": false,
+  "title": "EdiCut Video Editing: 3 Reasons for Creators",
+  "url": "http://localhost:3002/blog/3-reasons-why-you-should-hire-edicut",
+  "viewport": {
+    "height": 720,
+    "width": 1280
+  }
+}

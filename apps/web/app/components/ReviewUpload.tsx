@@ -144,7 +144,7 @@ export function ReviewUpload({
             <p>
               {admin
                 ? "Connect your studio channel once, then your assigned editors can upload from any project."
-                : "An administrator needs to connect the studio’s YouTube channel before you can upload."}
+                : `An administrator needs to connect the studio’s ${storage?.provider === "google_drive" ? "Google Drive" : "YouTube"} before you can upload.`}
             </p>
             {admin ? (
               <Link

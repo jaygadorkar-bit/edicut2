@@ -1,0 +1,63 @@
+{
+  "phone": {
+    "cards": [
+      {
+        "imageLoaded": true,
+        "linkCount": 1,
+        "title": "How to Choose a YouTube Video Editing Service",
+        "titleClipped": false,
+        "width": 333
+      },
+      {
+        "imageLoaded": true,
+        "linkCount": 1,
+        "title": "The YouTube Video Editing Brief Checklist (With a Sample Brief)",
+        "titleClipped": false,
+        "width": 333
+      },
+      {
+        "imageLoaded": true,
+        "linkCount": 1,
+        "title": "How to Repurpose a YouTube Video Into Shorts That Stand Alone",
+        "titleClipped": false,
+        "width": 333
+      },
+      {
+        "imageLoaded": true,
+        "linkCount": 1,
+        "title": "3 reasons why you should hire EdiCut",
+        "titleClipped": false,
+        "width": 333
+      }
+    ],
+    "font": "\"DM Sans\", Arial, Helvetica, sans-serif",
+    "overflow": false,
+    "viewport": 375
+  },
+  "tablet": {
+    "cards": [
+      {
+        "footer": 250.53125,
+        "top": -159.84375,
+        "width": 341
+      },
+      {
+        "footer": 250.53125,
+        "top": -159.84375,
+        "width": 341
+      },
+      {
+        "footer": 816.90625,
+        "top": 406.53125,
+        "width": 341
+      },
+      {
+        "footer": 816.90625,
+        "top": 406.53125,
+        "width": 341
+      }
+    ],
+    "overflow": false,
+    "viewport": 768
+  }
+}

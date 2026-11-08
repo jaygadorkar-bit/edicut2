@@ -1,0 +1,49 @@
+[
+  {
+    "controlSizes": [
+      {
+        "height": 48,
+        "width": 48
+      },
+      {
+        "height": 48,
+        "width": 48
+      }
+    ],
+    "left": 408,
+    "overflow": false,
+    "slides": 5,
+    "uniqueIds": true,
+    "viewport": 1057
+  },
+  {
+    "columns": "calc(46.5116% - 14.8837px)",
+    "overflow": false,
+    "viewport": 768
+  },
+  {
+    "allCoversLoaded": true,
+    "controlSizes": [
+      {
+        "height": 48,
+        "width": 48
+      },
+      {
+        "height": 48,
+        "width": 48
+      }
+    ],
+    "count": "Guides 1–2 of 5",
+    "firstCardWidth": 299.265625,
+    "left": 0,
+    "overflow": false,
+    "trackWidth": 364,
+    "viewport": 390
+  },
+  {
+    "check": "normal card navigation",
+    "h1": "YouTube Audience Retention: A Practical Editing Checklist",
+    "relatedSlides": 5,
+    "url": "http://localhost:3002/blog/youtube-audience-retention-editing-checklist"
+  }
+]

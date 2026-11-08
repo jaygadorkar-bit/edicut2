@@ -6,11 +6,12 @@ Production stores chat/ticket data in Cloudflare D1. The `createChatStore` facto
 in `apps/web/app/lib/chat-store.server.ts` is the storage boundary used by the
 API and all four chat/ticket route loaders. Its exported `ChatStore` type is the
 contract implemented by the D1 adapter. Authentication, current account roles,
-paid eligibility and manager access still use authoritative PostgreSQL data.
+paid eligibility and manager access use authoritative Supabase PostgreSQL data
+through Cloudflare Hyperdrive.
 
 The initial D1 cutover used version `6af5e385-8afc-49fc-b36c-291368f28c68`;
-current production version `e86ebf6b-909f-4a2a-84f2-dede0f58e7bc` uses `CHAT_BACKEND=d1`,
-`CHAT_MAINTENANCE=false` and the native `CHAT_D1` binding. The verified production
+production continues to use `CHAT_BACKEND=d1`, `CHAT_MAINTENANCE=false` and the
+native `CHAT_D1` binding. The verified production
 database is `edicut-chat-production` (`248da0e0-8360-4d6d-9d06-83e1504f332f`);
 staging is `edicut-chat-staging` (`b7a44a27-8995-45a9-8d50-516194c6306d`), both
 APAC/SIN. The unrelated `clanforge` database was not changed.
@@ -19,16 +20,18 @@ The final snapshot's 40 records passed 17 remote parity checks: 15 users, 3
 admins, 15 access projections, 2 rooms, 3 messages, 2 reads and no tickets.
 All table checksums, references, search fields and ticket sequence matched.
 A second read-only source snapshot confirmed source stability during import.
-Source Neon chat records were retained for rollback.
+Source Neon chat records were retained for historical comparison; Neon is no
+longer the live PostgreSQL authority.
 
 Each public store operation fetches fresh current identity and paid eligibility
-from Neon in one query. Copied D1 identity/access fields never authorize access.
-Current manager membership comes from D1. Missing bindings/authority fail closed
-without a PostgreSQL chat fallback. This phase still uses Neon during active
-chat. A source permission check and D1 write cannot form a distributed
-transaction; a revocation can race an already-authorized in-flight operation.
-There is no long-lived permission cache. Versioned permission replication and
-its revocation protocol remain future work before removing these source reads.
+from Supabase PostgreSQL in one query. Copied D1 identity/access fields never
+authorize access. Current manager membership comes from D1. Missing
+bindings/authority fail closed without a PostgreSQL chat fallback. A Supabase
+permission check and D1 write cannot form a distributed transaction; a
+revocation can race an already-authorized in-flight operation. There is no
+long-lived permission cache. Versioned permission replication and its
+revocation protocol remain future work before moving these authorization reads
+into D1.
 
 The full-access token is stored as `CLOUDFLARE_MASTER_API_TOKEN` in ignored root
 `.env`, with the old token retained. `scripts/cloudflare-master.mjs` supplies it
@@ -69,8 +72,8 @@ This multi-provider operation is not a distributed transaction.
 For a quiet, connected chat tab, recurring data requests change from roughly
 **480/hour to 6/hour (98.75% fewer)**. This calculation excludes initial loads,
 read acknowledgements, messages, typing, searches, focus events and retries.
-Ten minutes leaves an idle interval beyond Neon's five-minute autosuspend
-threshold; activity elsewhere on the same database can still keep it awake.
+The ten-minute resync recovers missed socket notices while limiting routine
+requests; it does not depend on a PostgreSQL provider autosuspend interval.
 
 ## D1 schema
 
@@ -146,14 +149,14 @@ bounded batches and mark completion only after all checks pass.
    current manager membership, sender snapshots, read receipts and attachment
    download authorization. Keep primary/session-consistent reads until replicas
    and bookmark propagation have separate coverage.
-3. Initially keep current Neon authorization checks. Moving messages alone does
-   **not** eliminate Neon activity. Before moving permission reads to D1, create
+3. Keep current Supabase authorization checks. Moving messages alone does
+   **not** eliminate Supabase activity. Before moving permission reads to D1, create
    a transactional source outbox and versioned, idempotent projection delivery
    for user/admin roles, activation/deletion and payment changes. Reject stale
    versions and reconcile missing events. WebSocket refresh notices are not a
    reliable replication log.
 4. Define and test revocation guarantees. Asynchronous replication alone cannot
-   preserve immediate revocation across two databases. Keep authoritative Neon
+   preserve immediate revocation across two databases. Keep authoritative Supabase
    checks until a deny-first/write-through flow and fail-closed recovery have
    been implemented and verified. Never authorize with browser metadata, an
    unversioned cache, or a silently expired projection.
@@ -191,10 +194,12 @@ For production:
    tested adapter, then check authorized roles, isolation, live events, private
    attachment downloads, read receipts and ticket lifecycle before reopening
    writes. Avoid unverified dual writes to two authorities.
-4. Keep Neon chat data until the agreed retention/rollback period ends. Once D1
-   has accepted writes, rolling the Worker back alone loses those newer records:
-   pause writes, reconcile/backfill the D1 delta into Neon, verify parity, and only
-   then switch back. Do not delete source tables during the initial cutover.
+4. Keep the Neon chat snapshot until the agreed retention period ends. Neon is no
+   longer the live PostgreSQL authority. A rollback to a pre-Supabase release
+   requires pausing writes and reconciling both Supabase PostgreSQL changes and
+   the D1 chat delta into the rollback target before switching; a Worker rollback
+   alone loses newer records. Do not delete source tables during the initial
+   cutover.
 
 The 2026-10-09 cutover paused writes, imported and checked the final snapshot,
 deployed D1 while paused, then reopened writes after isolated validation and

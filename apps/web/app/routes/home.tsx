@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useSearchParams } from "react-router";
 import { UsersRound } from "lucide-react";
 import {
   ButtonLink,
@@ -8,11 +8,11 @@ import {
   FAQSection,
   PageShell,
   PortfolioSection,
-  TestimonialsSection,
   TrustStrip,
   WhyHireUsSection,
 } from "../components/site/Marketing.js";
 import { HomePricingSection } from "../components/site/PricingPacks";
+import { HomeServicesSection } from "../components/site/HomeServicesSection";
 import { getDbFromContext } from "../lib/db.server";
 import { getPortfolioSections, publicPortfolioSections } from "../lib/portfolio.server";
 import { configuredPublicEditingPackages, getPricingPackages } from "../lib/pricing.server";
@@ -21,10 +21,13 @@ import { submitContactInquiry } from "../lib/contact-intake.server";
 import { createRouteMeta } from "../lib/seo";
 import pricingStyles from "../styles/pricing.css?url";
 import filmStyles from "../styles/why-hire-us-film.css?url";
+import servicesStyles from "../styles/home-services.css?url";
 
 export const links: LinksFunction = () => [
+  { rel: "preload", href: "/fonts/dm-sans-latin-ext-normal.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
   { rel: "stylesheet", href: pricingStyles },
   { rel: "stylesheet", href: filmStyles },
+  { rel: "stylesheet", href: servicesStyles },
 ];
 
 // Clean, Beautiful Modern Classic Lucide SVG Icons in Solid White
@@ -148,7 +151,7 @@ const heroParallax = {
 export const meta: MetaFunction = (args) => {
   return createRouteMeta(
     args,
-    "YouTube Video Editing Services for Creators | EdiCut",
+    "EdiCut | Video Editing for YouTube Creators",
     "EdiCut edits YouTube videos, Shorts, podcasts, and thumbnails for creators, with a clear workflow for footage, reviews, and delivery.",
   );
 };
@@ -157,8 +160,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   return submitContactInquiry({ request, context, returnTo: "/" });
 }
 
-export async function loader({ request, context }: LoaderFunctionArgs) {
-  const url = new URL(request.url);
+export async function loader({ context }: LoaderFunctionArgs) {
   const db = getSupabaseClient(context) ? null : getDbFromContext(context);
   const [packages, portfolioSections] = await Promise.all([
     getPricingPackages(db, context).then(configuredPublicEditingPackages),
@@ -168,19 +170,29 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   return {
     packages,
     portfolioSections,
-    sent: url.searchParams.get("sent") === "1",
-    error: url.searchParams.get("error"),
   };
 }
 
 export default function HomePage() {
-  const { packages, portfolioSections, sent, error } = useLoaderData<typeof loader>();
+  const { packages, portfolioSections } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const sent = searchParams.get("sent") === "1";
+  const error = searchParams.get("error");
+  const authMode = searchParams.get("auth");
   const heroRef = useRef<HTMLElement>(null);
   const contactStatus = sent ? "sent"
     : error === "security" ? "security-error"
       : error === "invalid" ? "invalid-error"
         : error === "delivery" ? "delivery-error"
           : undefined;
+
+  useEffect(() => {
+    if (authMode !== "signin" && authMode !== "signup") return;
+    const params = new URLSearchParams({ mode: authMode });
+    const redirectTo = searchParams.get("redirectTo");
+    if (redirectTo) params.set("redirectTo", redirectTo);
+    window.location.replace(`/signin?${params.toString()}`);
+  }, [authMode, searchParams]);
 
   useEffect(() => {
     const hero = heroRef.current;
@@ -265,11 +277,11 @@ export default function HomePage() {
     <PageShell className="neo-homepage-shell">
       <div className="neo-home neo-homepage">
         {/* Symmetrical Center-Aligned Hero with Organic Floating Solid White Video Objects */}
-        <section ref={heroRef} className="neo-homepage-hero relative overflow-hidden border-b neo-line px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:pb-32 lg:pt-24">
+        <section ref={heroRef} data-analytics-region="hero" className="neo-homepage-hero relative overflow-hidden border-b neo-line px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:pb-32 lg:pt-24">
           {/* Ambient Glows */}
-          <div className="pointer-events-none absolute -left-20 top-10 h-80 w-80 rounded-full bg-[#cbdbe8]/50 blur-3xl" />
-          <div className="pointer-events-none absolute -right-20 top-10 h-80 w-80 rounded-full bg-[#e2c9ce]/40 blur-3xl" />
-          <div className="pointer-events-none absolute left-1/2 -top-24 h-72 w-96 -translate-x-1/2 rounded-full bg-white/60 blur-3xl" />
+          <div className="neo-hero-glow neo-hero-glow--left pointer-events-none absolute -left-20 top-10 h-80 w-80 rounded-full bg-[#cbdbe8]/50 blur-3xl" />
+          <div className="neo-hero-glow neo-hero-glow--right pointer-events-none absolute -right-20 top-10 h-80 w-80 rounded-full bg-[#e2c9ce]/40 blur-3xl" />
+          <div className="neo-hero-glow neo-hero-glow--top pointer-events-none absolute left-1/2 -top-24 h-72 w-96 -translate-x-1/2 rounded-full bg-white/60 blur-3xl" />
 
           {/* Standalone Solid White Neomorphic Floating Icons (Modern Clean Vector Icons) */}
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -391,51 +403,38 @@ export default function HomePage() {
 
             {/* Main Hero Headline */}
             <h1 className="neo-hero-title mt-7 tracking-tight neo-ink">
-              <span className="hidden sm:block">
-                <span className="neo-hero-title-line neo-hero-title-line--one">Publish better</span>
-                <span className="neo-hero-title-line neo-hero-title-line--two">
-                  videos{" "}
-                  <span className="inline-block">without living</span>
-                </span>
-                <span className="neo-hero-title-line neo-hero-title-line--three">in the timeline.</span>
-              </span>
-              <span className="neo-hero-title-mobile sm:hidden">
-                <span>Publish better</span>
-                <span>videos without</span>
-                <span>the timeline.</span>
-              </span>
+              <span className="neo-hero-title-line neo-hero-title-line--one">Video editing</span>{" "}
+              <span className="neo-hero-title-line neo-hero-title-line--two">for your next</span>{" "}
+              <span className="neo-hero-title-line neo-hero-title-line--three">YouTube upload.</span>
             </h1>
 
             {/* Subtitle */}
             <p className="neo-hero-subtitle yt-subtitle mx-auto mt-5 max-w-2xl leading-7 neo-muted sm:mt-6 sm:leading-8">
-              <span className="hidden sm:inline">A calm, creator-first editing pipeline for long-form YouTube, Shorts, thumbnails, and review-ready deliverables.</span>
-              <span className="sm:hidden">YouTube and Shorts edits, ready to publish.</span>
+              YouTube videos, podcast edits, Shorts, and thumbnails with a clear brief and a focused review process.
             </p>
 
             {/* Neomorphic CTA Action Buttons */}
             <div className="neo-hero-actions mt-8 flex flex-col items-center justify-center gap-3 sm:mt-9 sm:flex-row sm:gap-3.5">
               <ButtonLink to="/pricing">
-                <span className="hidden sm:inline">Choose editing plan</span>
-                <span className="sm:hidden">See editing plans</span>
+                See editing plans
               </ButtonLink>
               <ButtonLink to="/portfolio">
-                <span className="hidden sm:inline">View portfolio</span>
-                <span className="sm:hidden">See recent edits</span>
+                Explore editing examples
               </ButtonLink>
             </div>
 
             <p className="neo-hero-proof mx-auto mt-4 flex items-center justify-center gap-2 text-xs font-semibold neo-muted sm:hidden">
               <span><strong>48 hours</strong> first-cut target</span>
               <span aria-hidden="true" className="neo-hero-proof__separator">·</span>
-              <span><strong>500+</strong> videos published</span>
+              <span>Timestamped feedback</span>
             </p>
 
             {/* Key Metrics Neomorphic Badges */}
             <div className="neo-hero-metrics mt-10 grid w-full max-w-md grid-cols-3 items-stretch gap-2 sm:mt-12 sm:flex sm:w-auto sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
               {[
                 ["48 hours", "first-cut target"],
-                ["500+", "videos published"],
-                ["4.9 / 5", "creator satisfaction"],
+                ["Clear scope", "before editing starts"],
+                ["Your feedback", "in one workspace"],
               ].map(([value, label]) => (
                 <div key={label} className="neo-pill min-w-0 rounded-2xl px-2 py-2.5 text-center sm:px-4">
                   <p className="text-lg font-black tracking-tight neo-ink">{value}</p>
@@ -447,7 +446,7 @@ export default function HomePage() {
         </section>
 
         {/* Center-Aligned "Who EdiCut Is For" Section with 3 - 4 - 3 Grid */}
-        <section id="creators" className="border-b neo-line px-5 py-16 sm:px-6 lg:py-24">
+        <section id="creators" data-analytics-region="audience" className="border-b neo-line px-5 py-16 sm:px-6 lg:py-24">
           <div className="mx-auto max-w-7xl text-center">
             {/* Center Header */}
             <div className="mx-auto max-w-2xl">
@@ -457,9 +456,9 @@ export default function HomePage() {
                 <span className="sm:hidden">Who we edit for</span>
               </p>
               <h2 className="yt-title mt-3 neo-ink">
-                <span className="hidden sm:inline">Editing support for every kind of content creator.</span>
-                <span className="sm:hidden">Editing for every content creator.</span>
+                Built around what you create.
               </h2>
+              <p className="mt-4 yt-small leading-6 neo-muted">From gameplay and podcasts to tutorials and property tours, we shape each edit around your audience.</p>
             </div>
 
             {/* 3 - 4 - 3 Centered Rows */}
@@ -509,8 +508,8 @@ export default function HomePage() {
         <WhyHireUsSection />
         <HomePricingSection packages={packages} />
         <PortfolioSection sections={portfolioSections} />
+        <HomeServicesSection />
         <TrustStrip />
-        <TestimonialsSection />
         <FAQSection />
         <ContactSection compact status={contactStatus} />
       </div>

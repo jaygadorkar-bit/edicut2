@@ -20,6 +20,17 @@ describe("authenticated local profile mapping", () => {
   it("returns the original local ID only when the authenticated email matches", async () => {
     expect(await requireUserId(await requestWithSession(), context)).toBe("local-id");
   });
+  it("retries the read-only profile lookup after a transient database socket failure", async () => {
+    const request = await requestWithSession();
+    mocks.profile.mockClear();
+    mocks.profile.mockRejectedValueOnce(new Error("query failed", {
+      cause: { sourceError: new TypeError("fetch failed", { cause: { code: "UND_ERR_SOCKET" } }) },
+    }));
+    mocks.profile.mockResolvedValueOnce({ id: "local-id", email: user.email, active: true, deletedAt: null });
+
+    expect(await requireUserId(request, context)).toBe("local-id");
+    expect(mocks.profile).toHaveBeenCalledTimes(2);
+  });
   it.each([undefined, { id: "local-id", email: "other@example.com" }])("rejects missing or mismatched local profiles: %j", async profile => {
     const request = await requestWithSession();
     mocks.profile.mockResolvedValue(profile);

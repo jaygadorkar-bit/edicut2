@@ -17,8 +17,8 @@ export type RoleFeatureAccess = Record<UserRole, DashboardFeature[]>;
 const featureSet = new Set<DashboardFeature>(DASHBOARD_FEATURES.map((feature) => feature.key));
 
 export const DEFAULT_ROLE_FEATURE_ACCESS: RoleFeatureAccess = {
-  user: ["overview", "projects", "reviews", "uploads", "billing", "settings"],
-  customer: ["overview", "projects", "reviews", "uploads", "billing", "settings"],
+  user: ["overview", "projects", "reviews", "uploads", "billing", "affiliates", "settings"],
+  customer: ["overview", "projects", "reviews", "uploads", "billing", "affiliates", "settings"],
   customer_support: ["overview", "support", "settings"],
   affiliate: ["overview", "affiliates", "billing", "settings"],
   editor: ["overview", "projects", "reviews", "uploads", "settings"],
@@ -38,7 +38,12 @@ export function sanitizeRoleFeatureAccess(value: unknown): RoleFeatureAccess {
       ? rawFeatures.filter((item): item is DashboardFeature => typeof item === "string" && isDashboardFeature(item))
       : DEFAULT_ROLE_FEATURE_ACCESS[role];
 
-    accumulator[role] = Array.from(new Set(features));
+    const uniqueFeatures = Array.from(new Set(features));
+    // Review routes load the project workspace and project detail records.
+    // Keep the saved role matrix consistent with that access dependency.
+    accumulator[role] = uniqueFeatures.includes("projects")
+      ? uniqueFeatures
+      : uniqueFeatures.filter((feature) => feature !== "reviews");
     return accumulator;
   }, {} as RoleFeatureAccess);
 }
@@ -53,6 +58,9 @@ export function roleFeatureAccessFromFormData(formData: FormData): RoleFeatureAc
         !(role === "customer" && feature.key === "support"),
       )
       .map((feature) => feature.key);
+    if (!accumulator[role].includes("projects")) {
+      accumulator[role] = accumulator[role].filter((feature) => feature !== "reviews");
+    }
 
     return accumulator;
   }, {} as RoleFeatureAccess);
@@ -66,7 +74,10 @@ export function roleFeatureAccessFromFormData(formData: FormData): RoleFeatureAc
 export function getAllowedDashboardFeatures(role: string, access: RoleFeatureAccess): DashboardFeature[] {
   const normalizedRole = normalizeUserRole(role);
   const accessRole = normalizedRole === "user" ? "customer" : normalizedRole;
-  const features = access[accessRole] ?? DEFAULT_ROLE_FEATURE_ACCESS[accessRole];
+  const configuredFeatures = access[accessRole] ?? DEFAULT_ROLE_FEATURE_ACCESS[accessRole];
+  const features = configuredFeatures.includes("projects")
+    ? configuredFeatures
+    : configuredFeatures.filter((feature) => feature !== "reviews");
   if (normalizedRole === "user" || normalizedRole === "customer") {
     return features.filter((feature) => feature !== "support");
   }

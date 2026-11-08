@@ -5,9 +5,9 @@ import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 const requireDb = createRequire(new URL("../packages/db/package.json", import.meta.url));
-const { neon } = requireDb("@neondatabase/serverless");
-const connection = process.env.DATABASE_URL;
-if (!connection) throw new Error("DATABASE_URL is required.");
+const postgres = requireDb("postgres");
+const connection = process.env.SUPABASE_DATABASE_URL;
+if (!connection) throw new Error("SUPABASE_DATABASE_URL is required.");
 const target = new URL(connection);
 const args = process.argv.slice(2);
 const argument = name => args[args.indexOf(name) + 1];
@@ -16,14 +16,15 @@ if (apply && (!args.includes("--expected-host") || !args.includes("--expected-da
   || argument("--expected-host") !== target.hostname || argument("--expected-database") !== target.pathname.slice(1))) {
   throw new Error("Applying requires an exact --expected-host and --expected-database match.");
 }
-const query = neon(connection);
+const sql = postgres(connection, { max: 1, connect_timeout: 10, connection: { statement_timeout: 30000, lock_timeout: 5000 } });
 const directory = fileURLToPath(new URL("../packages/db/drizzle/", import.meta.url));
 const journal = JSON.parse(fs.readFileSync(`${directory}/meta/_journal.json`, "utf8"));
 const migrations = journal.entries.map(entry => {
   const source = fs.readFileSync(`${directory}/${entry.tag}.sql`, "utf8");
   return { ...entry, hash: crypto.createHash("sha256").update(source).digest("hex"), statements: source.split("--> statement-breakpoint").map(part => part.trim()).filter(Boolean) };
 });
-const applied = await query("SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at");
+try {
+const applied = await sql.unsafe("SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at");
 for (const existing of applied) {
   if (!migrations.some(item => item.hash === existing.hash && String(item.when) === String(existing.created_at))) {
     throw new Error("Database migration history differs from this checkout. Inspect before applying.");
@@ -35,12 +36,13 @@ if (pending.some(item => !["0007_add_purchase_type", "0008_package_add_ons", "00
 }
 console.log(JSON.stringify({ host: target.hostname, database: target.pathname.slice(1), pending: pending.map(item => item.tag), apply }));
 if (apply && pending.length) {
-  await query.transaction([
-    query("SELECT pg_advisory_xact_lock(1790989172)"),
-    ...pending.flatMap(item => [
-      ...item.statements.map(statement => query(statement)),
-      query("INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)", [item.hash, item.when]),
-    ]),
-  ]);
-  console.log("Database migrations applied atomically.");
+    await sql.begin(async tx => {
+      await tx.unsafe("SELECT pg_advisory_xact_lock(1790989172)");
+      for (const item of pending) {
+        for (const statement of item.statements) await tx.unsafe(statement);
+        await tx.unsafe("INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)", [item.hash, item.when]);
+      }
+    });
+    console.log("Database migrations applied atomically.");
 }
+} finally { await sql.end(); }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { executeInvisibleRecaptcha } from "./recaptcha.client";
+import { executeInvisibleRecaptcha, getRecaptchaSiteKey } from "./recaptcha.client";
 
-function setup() {
+function setup({ apiLoaded = true }: { apiLoaded?: boolean } = {}) {
   const input = { value: "" };
   const container = { dataset: {} };
   let callbacks: Parameters<NonNullable<Window["grecaptcha"]>["render"]>[1];
@@ -10,13 +10,57 @@ function setup() {
     render: vi.fn((_container, parameters) => { callbacks = parameters; return 12; }),
     reset: vi.fn(), execute: vi.fn(),
   };
-  vi.stubGlobal("window", { grecaptcha: captcha, setTimeout, clearTimeout });
-  vi.stubGlobal("document", { querySelector: () => ({ dataset: { edicutRecaptchaSiteKey: "test-key" } }) });
+  const siteKeyElement = { dataset: { edicutRecaptchaSiteKey: "test-key" } };
+  const querySelector = vi.fn((selector: string) =>
+    selector === "[data-edicut-recaptcha-site-key]" ? siteKeyElement : null,
+  );
+  const scriptListeners = new Map<string, () => void>();
+  const script = {
+    dataset: {} as Record<string, string>,
+    addEventListener: (event: string, callback: () => void) => scriptListeners.set(event, callback),
+    removeEventListener: vi.fn(),
+  };
+  const windowMock = {
+    grecaptcha: apiLoaded ? captcha : undefined,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+  };
+  const appendChild = vi.fn(() => {
+    windowMock.grecaptcha = captcha;
+    scriptListeners.get("load")?.();
+  });
+  vi.stubGlobal("window", windowMock);
+  vi.stubGlobal("document", { querySelector, createElement: () => script, head: { appendChild } });
   const form = { querySelector: (selector: string) => selector.includes("input") ? input : container } as unknown as HTMLFormElement;
-  return { input, form, captcha, complete: (token: string) => callbacks.callback(token), fail: () => callbacks["error-callback"]() };
+  return { input, form, captcha, querySelector, appendChild, script, complete: (token: string) => callbacks.callback(token), fail: () => callbacks["error-callback"]() };
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe("invisible CAPTCHA retries", () => {
+  it("reads the site key from a root data attribute, without requiring an eager script", () => {
+    const test = setup();
+    expect(getRecaptchaSiteKey()).toBe("test-key");
+    expect(test.querySelector).toHaveBeenCalledWith("[data-edicut-recaptcha-site-key]");
+  });
+
+  it("loads the CAPTCHA API only when a protected form requests a token", async () => {
+    const test = setup({ apiLoaded: false });
+    const pending = executeInvisibleRecaptcha(test.form, "custom_quote");
+
+    await vi.waitFor(() => expect(test.captcha.execute).toHaveBeenCalledTimes(1));
+    test.complete("lazy-token");
+
+    expect(await pending).toBe("lazy-token");
+    expect(test.appendChild).toHaveBeenCalledTimes(1);
+    expect(test.script).toMatchObject({
+      src: "https://www.google.com/recaptcha/api.js?render=explicit",
+      async: true,
+      defer: true,
+    });
+    expect(test.script.dataset.edicutRecaptchaSiteKey).toBe("test-key");
+  });
+
   it("fails cleanly if the CAPTCHA API never becomes ready", async () => {
     vi.useFakeTimers();
     const test = setup();

@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { ALL_EDITING_PACKAGES, getPackageIndex, getCheckoutUrl, parsePackagePrice, REQUIRED_PACKAGE_STAFFING, SINGLE_VIDEO_PACKAGES, STUDIO_PACKAGE_STAFFING, SUBSCRIPTION_PACKAGES } from "./subscriptions";
+import { ALL_EDITING_PACKAGES, getFinishedLengthLimitSeconds, getPackageIndex, getCheckoutUrl, getProjectFulfillmentPackage, parsePackagePrice, REQUIRED_PACKAGE_STAFFING, SHORT_FORM_PACKAGE_SLUG, SINGLE_VIDEO_PACKAGES, STUDIO_PACKAGE_STAFFING, SUBSCRIPTION_PACKAGES } from "./subscriptions";
 
 describe("editing package catalog", () => {
   it("contains three one-time video edits and three monthly packages", () => {
     expect(ALL_EDITING_PACKAGES).toHaveLength(6);
     expect(SINGLE_VIDEO_PACKAGES).toHaveLength(3);
     expect(SUBSCRIPTION_PACKAGES).toHaveLength(3);
+    expect(SUBSCRIPTION_PACKAGES.map((item) => item.name)).toEqual(["Essential", "Pro", "Max"]);
     expect(new Set(ALL_EDITING_PACKAGES.map((item) => item.slug)).size).toBe(6);
     expect(SUBSCRIPTION_PACKAGES.map((item) => [item.editingHoursPerMonth, item.editingHoursPerWorkday])).toEqual([[88, 4], [110, 5], [110, 5]]);
-    expect(ALL_EDITING_PACKAGES.map((item) => item.basePrice)).toEqual([2149, 2649, 3149, 109, 179, 249]);
-    expect(SINGLE_VIDEO_PACKAGES.map((item) => item.slug)).toEqual(["single-creator", "single-studio", "single-feature"]);
+    expect(ALL_EDITING_PACKAGES.map((item) => item.basePrice)).toEqual([2149, 2649, 3149, 25, 109, 249]);
+    expect(SINGLE_VIDEO_PACKAGES.map((item) => item.slug)).toEqual([SHORT_FORM_PACKAGE_SLUG, "single-creator", "single-feature"]);
+    expect(SINGLE_VIDEO_PACKAGES[0]).toMatchObject({ name: "Short-form Video", finishedLength: "Up to 60 seconds", maxFinishedSeconds: 60, rawFootageLimit: "Up to 15 minutes", revisionRounds: 1, basePrice: 25 });
+    expect(getFinishedLengthLimitSeconds(SINGLE_VIDEO_PACKAGES[0]!)).toBe(60);
+    expect(getFinishedLengthLimitSeconds(SINGLE_VIDEO_PACKAGES[1]!)).toBe(8 * 60);
+    expect(getProjectFulfillmentPackage("single-studio")).toMatchObject({ name: "Studio Video", basePrice: 179, maxFinishedSeconds: 900 });
     expect(SINGLE_VIDEO_PACKAGES[2]).toMatchObject({ name: "Feature Video", finishedLength: "Up to 30 minutes", rawFootageLimit: "Up to 240 minutes", revisionRounds: 3, basePrice: 249 });
   });
 

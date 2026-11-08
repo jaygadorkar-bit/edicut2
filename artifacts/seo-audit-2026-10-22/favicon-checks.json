@@ -1,0 +1,20 @@
+[
+  {
+    "userAgent": "Mozilla/5.0",
+    "status": 200,
+    "contentType": "image/vnd.microsoft.icon",
+    "bytes": 11221
+  },
+  {
+    "userAgent": "Googlebot-Image/1.0",
+    "status": 200,
+    "contentType": "image/vnd.microsoft.icon",
+    "bytes": 11221
+  },
+  {
+    "userAgent": "EdiCut-public-SEO-audit/1.0",
+    "status": 200,
+    "contentType": "image/vnd.microsoft.icon",
+    "bytes": 11221
+  }
+]

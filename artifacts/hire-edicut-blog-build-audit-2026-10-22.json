@@ -1,0 +1,12 @@
+{
+  "productionArticle": "https://edicut.com/blog/3-reasons-why-you-should-hire-edicut",
+  "h1Count": 1,
+  "robots": "index, follow",
+  "canonical": "self",
+  "articleSchema": true,
+  "rasterSocialPreview": true,
+  "indexCard": true,
+  "contextualInboundLink": true,
+  "phantomIndexVideoSchema": false,
+  "referencedMediaPresent": true
+}

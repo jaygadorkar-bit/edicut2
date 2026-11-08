@@ -1,0 +1,49 @@
+{
+  "jsonld": [
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@id": "https://edicut.com/services/youtube-video-editing#service",
+          "@type": "Service",
+          "description": "Looking for a video editor for your YouTube channel? EdiCut edits tutorials, commentary, reviews, educational videos, and vlogs. See the process and current package scope.",
+          "name": "YouTube video editing",
+          "provider": {
+            "@id": "https://edicut.com/#organization"
+          },
+          "serviceType": "YouTube video editing",
+          "url": "https://edicut.com/services/youtube-video-editing"
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "item": "https://edicut.com/",
+              "name": "Home",
+              "position": 1
+            },
+            {
+              "@type": "ListItem",
+              "item": "https://edicut.com/services",
+              "name": "Services",
+              "position": 2
+            },
+            {
+              "@type": "ListItem",
+              "item": "https://edicut.com/services/youtube-video-editing",
+              "name": "YouTube video editing",
+              "position": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "robots": [
+    "noindex, nofollow, noarchive"
+  ],
+  "scrollWidth": 1270,
+  "url": "https://edicut.com/services/youtube-video-editing",
+  "width": 1280
+}

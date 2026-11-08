@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">EdiCut — You create. We handle the edit.</title>
+  <desc id="description">Video editing for YouTube, podcasts, Shorts, gaming, and thumbnails.</desc>
+  <defs>
+    <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#e7edf2"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#526274" flood-opacity=".16"/>
+    </filter>
+    <clipPath id="clip">
+      <rect x="827" y="146" width="300" height="320" rx="28"/>
+    </clipPath>
+  </defs>
+  <rect width="1200" height="630" fill="url(#surface)"/>
+  <circle cx="1090" cy="42" r="250" fill="#dce4eb" opacity=".58"/>
+  <circle cx="95" cy="610" r="250" fill="#f1f4f7"/>
+
+  <svg x="72" y="52" width="182" height="80" viewBox="0 0 1162 506" aria-label="EdiCut logo">
+    <g transform="translate(-309 -178)">
+      <g fill="#C90F20">
+        <path d="M840 378V333c0-19 11-31 30-35l52-8 76 73-158 15Z"/>
+        <path d="m978 279 95-17 79 77-100 15-74-75Z"/>
+        <path d="m1129 252 87-16 79 78-90 14-76-76Z"/>
+        <path d="m1269 225 126-25c19-4 31 3 34 21l8 40c4 17-3 28-20 31l-69 11-79-78Z"/>
+        <path fill-rule="evenodd" d="M840 378h579c18 0 33 15 33 33v221c0 18-15 32-33 32H872c-18 0-32-14-32-32V378Z M1095 488l-69 6c-8-23-25-37-46-37-32 0-55 27-55 63s23 63 55 63c21 0 39-14 47-37l68 7c-14 52-57 88-115 88-70 0-121-50-121-121s51-120 121-120c58 0 101 36 115 88Z M1106 463h62v100c0 17 9 26 26 26s27-12 27-27v-99h62v175h-60l-2-19c-13 15-29 22-49 22-42 0-66-24-66-61V463Z M1314 415h62v48h42v52h-42v53c0 14 7 21 21 21l21-1v51c-14 2-28 2-45 2-39 0-59-18-59-53v-73h-20v-52h20v-48Z"/>
+      </g>
+      <g fill="#000000">
+        <path d="M330 388h186v58H399v42h95v59h-95v42h117v58H330V388Z"/>
+        <path fill-rule="evenodd" d="M661 383h67v264h-66v-23c-14 16-31 24-55 24-52 0-90-40-90-96s38-94 89-94c23 0 41 8 55 23v-98Zm-37 126c-23 0-39 18-39 43s16 44 39 44 39-19 39-44-16-43-39-43Z"/>
+        <path d="M818 404a35 34 0 1 1-70 0 35 34 0 1 1 70 0Z"/>
+        <path d="M748 456h72v192h-72V456Z"/>
+      </g>
+    </g>
+  </svg>
+  <rect x="828" y="72" width="299" height="42" rx="21" fill="#fff" opacity=".82"/>
+  <circle cx="852" cy="93" r="5" fill="#c90f20"/>
+  <text x="869" y="99" fill="#475767" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" letter-spacing="1.5">VIDEO EDITING FOR CREATORS</text>
+
+  <text x="76" y="265" fill="#17202a" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="700" letter-spacing="-2">You create.</text>
+  <text x="76" y="345" fill="#c90f20" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="700" letter-spacing="-2">We handle the edit.</text>
+  <text x="79" y="405" fill="#475767" font-family="Arial, Helvetica, sans-serif" font-size="24">YouTube · Podcasts · Shorts · Gaming · Thumbnails</text>
+
+  <g filter="url(#shadow)">
+    <rect x="827" y="146" width="300" height="320" rx="28" fill="#fff"/>
+    <g clip-path="url(#clip)">
+      <rect x="827" y="146" width="300" height="177" fill="#19232e"/>
+      <path d="M827 297 925 218l61 47 67-79 74 67v70H827Z" fill="#344553"/>
+      <path d="m827 306 99-66 63 37 66-75 72 55v66H827Z" fill="#536879" opacity=".88"/>
+      <circle cx="976" cy="233" r="38" fill="#c90f20"/>
+      <path d="m966 214 28 19-28 19z" fill="#fff"/>
+      <rect x="851" y="349" width="252" height="25" rx="8" fill="#edf2f6"/>
+      <rect x="851" y="349" width="174" height="25" rx="8" fill="#c90f20"/>
+      <path d="M885 349v25m45-25v25m45-25v25m45-25v25m45-25v25" stroke="#fff" stroke-opacity=".8" stroke-width="2"/>
+      <rect x="851" y="390" width="252" height="25" rx="8" fill="#e5ebf0"/>
+      <path d="M862 402h6m8-7v15m10-11v8m11-14v17m11-10v4m10-9v14m10-11v8m10-13v17m10-8v6m10-11v10m10-15v16m10-8v7m10-13v11m10-14v15m10-9v6m10-12v14m10-9v5m10-13v16m10-7v8m10-11v7m10-15v15" fill="none" stroke="#718291" stroke-width="2" stroke-linecap="round"/>
+      <text x="851" y="445" fill="#687583" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2">STORY · PACING · FINISH</text>
+    </g>
+  </g>
+
+  <rect x="77" y="491" width="1050" height="1" fill="#cbd5de"/>
+  <text x="79" y="536" fill="#475767" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="600">A clear workflow from footage to final delivery.</text>
+  <text x="1127" y="536" text-anchor="end" fill="#17202a" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700">edicut.com</text>
+</svg>

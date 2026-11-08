@@ -4,11 +4,11 @@ import { createRequire } from "node:module";
 import type { DatabaseClient } from "../packages/db/src/client";
 import { deleteUnpaidSubscription, markSubscriptionPaid, saveUnpaidSubscription } from "../apps/web/app/lib/customer-subscriptions.server";
 const requireDb = createRequire(new URL("../packages/db/package.json", import.meta.url));
-const { neon } = requireDb("@neondatabase/serverless");
-const { drizzle } = requireDb("drizzle-orm/neon-http");
+const postgres = requireDb("postgres");
+const { drizzle } = requireDb("drizzle-orm/postgres-js");
 const { PgDialect } = requireDb("drizzle-orm/pg-core");
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
-const query = neon(process.env.DATABASE_URL);
+if (!process.env.SUPABASE_DATABASE_URL) throw new Error("SUPABASE_DATABASE_URL is required.");
+const query = postgres(process.env.SUPABASE_DATABASE_URL, { max: 1, connect_timeout: 10 });
 const realDb = drizzle(query);
 const statements: Array<{ sql: string; params: unknown[] }> = [];
 const push = (text: string) => statements.push({ sql: text, params: [] });
@@ -85,5 +85,8 @@ push(`DO $test$ BEGIN
   BEGIN UPDATE pg_temp.customer_subscriptions SET amount_cents = -1 WHERE id = '${id}'; RAISE EXCEPTION 'Invalid price accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
   BEGIN UPDATE pg_temp.customer_subscriptions SET status = 'unpaid' WHERE id = '${id}'; RAISE EXCEPTION 'Invalid payment audit accepted'; EXCEPTION WHEN check_violation THEN NULL; END;
 END $test$`);
-await query.transaction(statements.map(statement => query(statement.sql, statement.params)));
+await query.begin(async tx => {
+  for (const statement of statements) await tx.unsafe(statement.sql, statement.params);
+});
+await query.end();
 console.log("15 Postgres integration assertions passed using temporary tables. No customer data was changed.");

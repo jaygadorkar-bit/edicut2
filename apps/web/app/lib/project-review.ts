@@ -1,20 +1,31 @@
+import { parseAnnotation, type FrameAnnotation } from "./review-annotations";
+export type { FrameAnnotation } from "./review-annotations";
 export const REVIEW_MAX_BYTES = 50 * 1024 * 1024;
+export const REVIEW_VOICE_MAX_BYTES = 2 * 1024 * 1024;
+export const REVIEW_VOICE_MAX_DURATION_MS = 120_000;
+export type ReviewVoiceNote = {
+  mime: string;
+  bytes: number;
+  durationMs: number;
+};
+export type StoredReviewVoiceNote = ReviewVoiceNote & {
+  driveFileId: string;
+  digest: string;
+};
 export const REVIEW_MAX_DURATION_MS = 6 * 60 * 60 * 1000;
 export const YOUTUBE_REVIEW_MAX_BYTES = 10 * 1024 * 1024 * 1024;
 export const REVIEW_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 export type ReviewTeamMember = { id: string; name: string; role?: string };
-export type ReviewEditorOption = ReviewTeamMember & { activeProjects?: number };
+export type ReviewEditorOption = ReviewTeamMember & {
+  activeProjects?: number;
+  dueSoonProjects?: number;
+  overdueProjects?: number;
+};
 export type ReviewStorage = {
   connected: boolean;
   provider: "google_drive" | "youtube";
   channelName?: string;
   maxBytes: number;
-};
-export type FrameAnnotation = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
 };
 export type ReviewVersion = {
   id: string;
@@ -33,6 +44,8 @@ export type ReviewVersion = {
   updatedAt: string;
 };
 export type ReviewComment = {
+  /** Client-only optimistic state; never persisted as comment metadata. */
+  pending?: boolean;
   id: string;
   versionId: string;
   parentId: string | null;
@@ -43,6 +56,7 @@ export type ReviewComment = {
   timestampMs: number | null;
   endMs: number | null;
   annotation: FrameAnnotation | null;
+  voice?: ReviewVoiceNote | null;
   category: "change" | "question" | "praise";
   priority: "normal" | "high";
   resolved: boolean;
@@ -107,30 +121,50 @@ export function parseReviewTime(value: string): number | null {
 export function parseFrameAnnotation(
   value: string,
 ): FrameAnnotation | null | undefined {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-      return undefined;
-    const { x, y, width, height } = parsed;
-    if (
-      ![x, y, width, height].every(
-        (number) =>
-          typeof number === "number" &&
-          Number.isFinite(number) &&
-          number >= 0 &&
-          number <= 1,
-      ) ||
-      width < 0.005 ||
-      height < 0.005 ||
-      x + width > 1.000001 ||
-      y + height > 1.000001
-    )
-      return undefined;
-    return { x, y, width, height };
-  } catch {
-    return undefined;
-  }
+  return parseAnnotation(value);
+}
+
+/** Versioned metadata in the existing JSONB field; legacy rectangles stay valid. */
+export function encodeReviewMetadata(
+  annotation: FrameAnnotation | null,
+  voice?: StoredReviewVoiceNote | null,
+) {
+  return voice ? { format: 2, drawing: annotation, voice } : annotation;
+}
+export function decodeReviewMetadata(raw: unknown): {
+  annotation: FrameAnnotation | null;
+  voice: StoredReviewVoiceNote | null;
+} {
+  const value = raw as {
+    format?: number;
+    drawing?: unknown;
+    voice?: StoredReviewVoiceNote;
+  } | null;
+  if (value?.format !== 2)
+    return {
+      annotation: parseAnnotation(raw ? JSON.stringify(raw) : "") ?? null,
+      voice: null,
+    };
+  const voice = value.voice;
+  const valid =
+    voice &&
+    typeof voice.driveFileId === "string" &&
+    typeof voice.digest === "string" &&
+    /^[A-Za-z0-9_-]{10,240}$/.test(voice.driveFileId) &&
+    /^[a-f0-9]{64}$/.test(voice.digest) &&
+    ["audio/webm", "audio/ogg", "audio/mp4"].includes(voice.mime) &&
+    Number.isSafeInteger(voice.bytes) &&
+    voice.bytes >= 16 &&
+    voice.bytes <= REVIEW_VOICE_MAX_BYTES &&
+    Number.isSafeInteger(voice.durationMs) &&
+    voice.durationMs > 0 &&
+    voice.durationMs <= REVIEW_VOICE_MAX_DURATION_MS;
+  return {
+    annotation:
+      parseAnnotation(value.drawing ? JSON.stringify(value.drawing) : "") ??
+      null,
+    voice: valid ? voice : null,
+  };
 }
 export function validateReviewComment(form: FormData, durationMs: number) {
   const body = String(form.get("body") ?? "").trim();

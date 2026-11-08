@@ -2,7 +2,7 @@ import { createCookie, redirect } from "react-router";
 import { sql } from "drizzle-orm";
 import type { DatabaseClient } from "@edicut/db/client";
 import type { LoaderContext } from "../types";
-import { fetchWithTimeout, UPLOAD_FETCH_TIMEOUT_MS } from "@edicut/shared/server-fetch";
+import { fetchWithHeadersTimeout, fetchWithTimeout, UPLOAD_FETCH_TIMEOUT_MS } from "@edicut/shared/server-fetch";
 import { isWorkspaceRecordId } from "./workspace";
 import { youtubeOAuthConfig } from "./youtube-storage.server";
 
@@ -15,6 +15,7 @@ const rows = <T>(result: unknown): T[] =>
   (Array.isArray(result)
     ? result
     : ((result as { rows?: T[] })?.rows ?? [])) as T[];
+let driveAccessTokenCache: { refreshTokenCiphertext: string; accessToken: string; expiresAt: number } | null = null;
 function secret(context: LoaderContext) {
   const value = context?.cf?.env?.YOUTUBE_TOKEN_SECRET || globalThis.process?.env?.YOUTUBE_TOKEN_SECRET;
   if (!value || value.length < 32 || value === "local-dev-session-secret-change-in-production")
@@ -54,7 +55,8 @@ export type GoogleDriveStorageQuota = {
   limitBytes: number | null;
 };
 export type GoogleDriveStorageQuotaResult =
-  | { status: "not-connected" | "unavailable" }
+  | { status: "not-connected" }
+  | { status: "unavailable"; reason: "configuration" | "encryption" | "authorization" | "permission" | "provider" | "response" }
   | { status: "connected"; quota: GoogleDriveStorageQuota };
 async function connection(db: DatabaseClient) {
   return rows<DriveConnection>(await db.execute(sql`SELECT refresh_token AS "refreshToken",connected_at AS "connectedAt" FROM video_storage_connections WHERE provider='google_drive'`))[0];
@@ -108,12 +110,12 @@ export async function completeGoogleDriveConnection(request: Request, context: L
   try {
     const state = await cookie.parse(request.headers.get("Cookie")), url = new URL(request.url);
     if (!state || state.nonce !== url.searchParams.get("state") || typeof state.expires !== "number" || state.expires < Date.now() || !isWorkspaceRecordId(state.adminId) || typeof state.verifier !== "string" || state.verifier.length < 43)
-      return result("invalid");
+      return result("invalid-state");
     if (url.searchParams.has("error")) return result("cancelled");
     const code = url.searchParams.get("code");
-    if (!code || code.length > 4096) return result("invalid");
+    if (!code || code.length > 4096) return result("invalid-code");
     const admin = rows(await db.execute(sql`SELECT id FROM admin_users WHERE id=${state.adminId}::uuid AND active AND role='admin'`));
-    if (!admin.length) return result("invalid");
+    if (!admin.length) return result("inactive-admin");
     const config = googleDriveOAuthConfig(context);
     const response = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -128,21 +130,38 @@ export async function completeGoogleDriveConnection(request: Request, context: L
     const saved = await db.execute(sql`INSERT INTO video_storage_connections(provider,channel_id,channel_name,refresh_token,connected_by,connected_at)
       SELECT 'google_drive','drive','EdiCut Studio Google Drive',${encrypted},a.id,clock_timestamp() FROM admin_users a WHERE a.id=${state.adminId}::uuid AND a.active AND a.role='admin'
       ON CONFLICT(provider) DO UPDATE SET channel_id=excluded.channel_id,channel_name=excluded.channel_name,refresh_token=excluded.refresh_token,connected_by=excluded.connected_by,connected_at=excluded.connected_at RETURNING provider`);
-    return result(rows(saved).length ? "connected" : "invalid");
+    return result(rows(saved).length ? "connected" : "save-failed");
   } catch {
     return result("unavailable");
   }
 }
 export async function googleDriveAccessToken(db: DatabaseClient, context: LoaderContext) {
   const stored = await connection(db);
-  if (!stored) throw new Response("Connect EdiCut Studio Google Drive before uploading review cuts.", { status: 503 });
-  const config = googleDriveOAuthConfig(context), refresh = await decryptGoogleDriveSecret(stored.refreshToken, context);
+  if (!stored) { driveAccessTokenCache = null; throw new Response("Connect EdiCut Studio Google Drive before uploading files.", { status: 503 }); }
+  if (driveAccessTokenCache?.refreshTokenCiphertext === stored.refreshToken && driveAccessTokenCache.expiresAt > Date.now() + 15_000)
+    return driveAccessTokenCache.accessToken;
+  const config = googleDriveOAuthConfig(context);
+  let refresh: string;
+  try {
+    refresh = await decryptGoogleDriveSecret(stored.refreshToken, context);
+  } catch {
+    throw new Response("The saved Google Drive credential could not be decrypted.", { status: 503 });
+  }
   const response = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST", body: new URLSearchParams({ client_id: config.clientId, client_secret: config.clientSecret, grant_type: "refresh_token", refresh_token: refresh }),
   });
-  const value = await response.json() as { access_token?: string; scope?: string };
+  const value = await response.json() as { access_token?: string; scope?: string; expires_in?: number };
   if (!response.ok || !value.access_token) throw new Response("Google Drive authorization expired. An administrator needs to reconnect storage.", { status: 503 });
+  const lifetimeSeconds = Number.isSafeInteger(value.expires_in) && (value.expires_in ?? 0) > 0 ? value.expires_in! : 300;
+  driveAccessTokenCache = {
+    refreshTokenCiphertext: stored.refreshToken,
+    accessToken: value.access_token,
+    expiresAt: Date.now() + Math.max(15, lifetimeSeconds - 60) * 1000,
+  };
   return value.access_token;
+}
+function invalidateGoogleDriveAccessToken(token: string) {
+  if (driveAccessTokenCache?.accessToken === token) driveAccessTokenCache = null;
 }
 function parseGoogleStorageBytes(value: unknown): number | null {
   if (typeof value !== "string" && typeof value !== "number") return null;
@@ -158,14 +177,19 @@ export async function getGoogleDriveStorageQuota(db: DatabaseClient, context: Lo
       "https://www.googleapis.com/drive/v3/about?fields=storageQuota(limit,usage,usageInDrive)",
       { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
     );
-    if (!response.ok) return { status: "unavailable" };
+    if (!response.ok) {
+      const reason = response.status === 401 ? "authorization"
+        : response.status === 403 ? "permission"
+          : response.status === 429 || response.status >= 500 ? "provider" : "response";
+      return { status: "unavailable", reason };
+    }
     const value = await response.json() as {
       storageQuota?: { limit?: unknown; usage?: unknown; usageInDrive?: unknown };
     };
-    if (!value.storageQuota) return { status: "unavailable" };
+    if (!value.storageQuota) return { status: "unavailable", reason: "response" };
     const { limit, usage, usageInDrive } = value.storageQuota;
     const limitBytes = limit === undefined ? null : parseGoogleStorageBytes(limit);
-    if (limit !== undefined && limitBytes === null) return { status: "unavailable" };
+    if (limit !== undefined && limitBytes === null) return { status: "unavailable", reason: "response" };
     return {
       status: "connected",
       quota: {
@@ -174,8 +198,18 @@ export async function getGoogleDriveStorageQuota(db: DatabaseClient, context: Lo
         limitBytes,
       },
     };
-  } catch {
-    return { status: "unavailable" };
+  } catch (error) {
+    if (error instanceof Response) {
+      const message = await error.clone().text().catch(() => "");
+      return {
+        status: "unavailable",
+        reason: /Configure/.test(message) ? "configuration" : /could not be decrypted/i.test(message) ? "encryption" : /authorization|credential|connect EdiCut/i.test(message) ? "authorization" : "response",
+      };
+    }
+    return {
+      status: "unavailable",
+      reason: error instanceof Error && error.name === "OperationError" ? "authorization" : "provider",
+    };
   }
 }
 export function safeGoogleDriveUploadUrl(value: string) {
@@ -184,11 +218,11 @@ export function safeGoogleDriveUploadUrl(value: string) {
     return url.origin === "https://www.googleapis.com" && url.pathname === "/upload/drive/v3/files" && url.searchParams.get("uploadType") === "resumable" && Boolean(url.searchParams.get("upload_id")) && !url.username && !url.password && !url.hash ? url.href : null;
   } catch { return null; }
 }
-export async function beginGoogleDriveUpload(accessToken: string, bytes: number, mime: string, name: string) {
+export async function beginGoogleDriveUpload(accessToken: string, bytes: number, mime: string, name: string, description = "Private EdiCut project review video.") {
   const response = await fetchWithTimeout("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size", {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Length": String(bytes), "X-Upload-Content-Type": mime },
-    body: JSON.stringify({ name, mimeType: mime, description: "Private EdiCut project review video." }),
+    body: JSON.stringify({ name, mimeType: mime, description }),
   });
   const url = safeGoogleDriveUploadUrl(response.headers.get("Location") || "");
   if (!response.ok || !url) throw new Response(response.status === 403 ? "Google Drive could not start this upload. Check the account’s storage quota and Drive API permissions." : "Google Drive upload could not be started. Try again.", { status: 502 });
@@ -197,7 +231,9 @@ export async function beginGoogleDriveUpload(accessToken: string, bytes: number,
 export async function sendGoogleDriveUpload(url: string, token: string, range: string, body: ArrayBuffer | null, mime: string) {
   const safe = safeGoogleDriveUploadUrl(url);
   if (!safe) throw new Error("Invalid stored Google Drive upload URL");
-  return fetchWithTimeout(safe, { method: "PUT", redirect: "manual", headers: { Authorization: `Bearer ${token}`, "Content-Range": range, "Content-Type": mime }, body }, UPLOAD_FETCH_TIMEOUT_MS);
+  const response = await fetchWithTimeout(safe, { method: "PUT", redirect: "manual", headers: { Authorization: `Bearer ${token}`, "Content-Range": range, "Content-Type": mime }, body }, UPLOAD_FETCH_TIMEOUT_MS);
+  if (response.status === 401) invalidateGoogleDriveAccessToken(token);
+  return response;
 }
 
 export function googleDriveUploadStatusRange(bytes: number) {
@@ -210,6 +246,27 @@ export async function verifyGoogleDriveFile(id: string, bytes: number, mime: str
   if (!safeGoogleDriveFileId(id)) throw new Response("Google Drive returned an invalid file identifier.", { status: 502 });
   const response = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,mimeType,size,trashed`, { headers: { Authorization: `Bearer ${token}` } });
   const file = await response.json() as { id?: string; mimeType?: string; size?: string; trashed?: boolean };
+  if (response.status === 401) invalidateGoogleDriveAccessToken(token);
   if (!response.ok || file.id !== id || file.mimeType !== mime || Number(file.size) !== bytes || file.trashed === true)
-    throw new Response("Google Drive could not confirm the uploaded video. Try again.", { status: 502 });
+    throw new Response("Google Drive could not confirm the uploaded file. Try again.", { status: 502 });
+}
+export async function downloadGoogleDriveFile(id: string, token: string, range?: string | null, signal?: AbortSignal) {
+  if (!safeGoogleDriveFileId(id)) throw new Response("Attachment unavailable.", { status: 404 });
+  if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) throw new Response("Unsupported attachment range.", { status: 416 });
+  const headers = new Headers({ Authorization: `Bearer ${token}` });
+  if (range) headers.set("Range", range);
+  const response = await fetchWithHeadersTimeout(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`, {
+    headers, cache: "no-store", signal,
+  });
+  if (response.status === 401) invalidateGoogleDriveAccessToken(token);
+  if (!response.ok && response.status !== 416) throw new Response(response.status === 404 ? "Attachment unavailable." : "Attachment download is temporarily unavailable.", { status: response.status === 404 ? 404 : 502 });
+  return response;
+}
+export async function deleteGoogleDriveFile(id: string, token: string) {
+  if (!safeGoogleDriveFileId(id)) throw new Error("Invalid Google Drive file identifier");
+  const response = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`, {
+    method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+  });
+  if (response.status === 401) invalidateGoogleDriveAccessToken(token);
+  if (!response.ok && response.status !== 404) throw new Error("Google Drive chat attachment cleanup failed");
 }

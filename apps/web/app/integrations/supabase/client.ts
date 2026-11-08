@@ -1,13 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
+import { getSupabasePublicConfig } from "./public-config";
 
 let browserClient: SupabaseClient<Database> | null | undefined;
-
-function readBrowserEnv(name: string) {
-  const value = (import.meta.env as Record<string, string | undefined>)[name];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
 
 /**
  * Browser-side Supabase client, matching the sksports integration. It is lazy
@@ -17,8 +13,7 @@ function readBrowserEnv(name: string) {
 export function getSupabaseBrowserClient() {
   if (browserClient !== undefined) return browserClient;
 
-  const url = readBrowserEnv("VITE_SUPABASE_URL");
-  const publishableKey = readBrowserEnv("VITE_SUPABASE_PUBLISHABLE_KEY");
+  const { url, publishableKey } = getSupabasePublicConfig();
 
   if (!url || !publishableKey) {
     browserClient = null;

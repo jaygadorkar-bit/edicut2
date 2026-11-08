@@ -1,0 +1,58 @@
+{
+  "pages": [
+    {
+      "path": "/blog",
+      "h1": 1,
+      "canonical": true,
+      "indexable": true,
+      "videoSchema": true
+    },
+    {
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "h1": 1,
+      "canonical": true,
+      "indexable": true,
+      "videoSchema": false
+    },
+    {
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "h1": 1,
+      "canonical": true,
+      "indexable": true,
+      "videoSchema": false
+    },
+    {
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "h1": 1,
+      "canonical": true,
+      "indexable": true,
+      "videoSchema": false
+    }
+  ],
+  "media": [
+    {
+      "name": "edicut-blog-intro.mp4",
+      "bytes": 1056762,
+      "sha256": "95f1c1aabfea2cf0397e443c72c201eb3ab2a9a9a2a69661a31fba22efe74735",
+      "buildMatchesSource": true
+    },
+    {
+      "name": "edicut-blog-intro-audio.m4a",
+      "bytes": 637062,
+      "sha256": "4ac454c82defd68a189d06ad76e89c8b890a26626863c4b0d75f3a56961b2f47",
+      "buildMatchesSource": true
+    },
+    {
+      "name": "edicut-blog-intro-poster.webp",
+      "bytes": 27662,
+      "sha256": "2fcc74972d4d537431e0aa40bc17215833e2213bdad4f1c8091c959e5331ff2d",
+      "buildMatchesSource": true
+    },
+    {
+      "name": "edicut-blog-intro-en.vtt",
+      "bytes": 799,
+      "sha256": "c391de01cb9edef6335d92443c553e05d1974723b7faf2e68e63ab9d9c374cb2",
+      "buildMatchesSource": true
+    }
+  ]
+}

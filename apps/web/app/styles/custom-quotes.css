@@ -12,7 +12,7 @@
 .quote-builder { grid-area: fields; min-width: 0; padding: 28px; border-radius: 24px; }
 .quote-form-section { padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--quote-line); }
 .quote-form-section:last-child { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
-.quote-form-section, .quote-builder :is(input, select, textarea, fieldset), .quote-error-summary { scroll-margin-top: 145px; }
+.quote-form-section, .quote-builder :is(input, :is(select, .site-select__trigger), textarea, fieldset), .quote-error-summary { scroll-margin-top: 145px; }
 .quote-form-section h2 { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 23px; font-weight: 750; letter-spacing: -.03em; }
 .quote-form-section h2 svg { color: var(--quote-muted); flex: 0 0 auto; }
 .quote-form-section > p { margin-bottom: 22px; font-size: 13px; color: var(--quote-muted); line-height: 1.7; }
@@ -20,8 +20,8 @@
 .quote-field { display: flex; flex-direction: column; gap: 9px; min-width: 0; margin-bottom: 20px; font-size: 13px; font-weight: 650; }
 .quote-field-grid .quote-field { margin-bottom: 0; }
 .quote-field-grid { margin-bottom: 20px; }
-.quote-field input, .quote-field select, .quote-field textarea { width: 100%; min-width: 0; min-height: 48px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.68); border-radius: 12px; color: var(--quote-ink); background: #e8eef3; font-size: 14px; font-weight: 500; line-height: 1.5; }
-.quote-field select { cursor: pointer; padding-right: 26px; }
+.quote-field input, .quote-field :is(select, .site-select__trigger), .quote-field textarea { width: 100%; min-width: 0; min-height: 48px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.68); border-radius: 12px; color: var(--quote-ink); background: #e8eef3; font-size: 14px; font-weight: 500; line-height: 1.5; }
+.quote-field :is(select, .site-select__trigger) { cursor: pointer; padding-right: 26px; }
 .quote-field textarea { resize: vertical; }
 .quote-field input::placeholder, .quote-field textarea::placeholder { color: #66798a; opacity: 1; }
 .quote-field small, .quote-optional { color: var(--quote-muted); font-size: 12px; font-weight: 450; line-height: 1.5; }
@@ -29,7 +29,7 @@
 .quote-field-error { color: var(--quote-error); font-size: 12px; font-weight: 550; line-height: 1.5; }
 .quote-field-error:empty { display: none; }
 .quote-field [aria-invalid="true"] { border-color: #ba7480; }
-.quote-field :is(input, textarea, select):focus-visible, .quote-option:focus-within, .quote-choices:focus-visible, .quote-text-link:focus-visible, .quote-admin-list a:focus-visible, .quote-admin-details summary:focus-visible { outline: 2px solid #536f86; outline-offset: 3px; }
+.quote-field :is(input, textarea, :is(select, .site-select__trigger)):focus-visible, .quote-option:focus-within, .quote-choices:focus-visible, .quote-text-link:focus-visible, .quote-admin-list a:focus-visible, .quote-admin-details summary:focus-visible { outline: 2px solid #536f86; outline-offset: 3px; }
 .quote-choices { margin: 24px 0; min-width: 0; }
 .quote-choices legend { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; font-size: 13px; font-weight: 650; }
 .quote-choices legend span { color: var(--quote-muted); font-size: 12px; font-weight: 450; }
@@ -147,8 +147,8 @@
   .quote-summary dl > div { display: block; }
   .quote-summary dd { margin-top: 5px; text-align: left; }
   .quote-summary-services { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .custom-quote-page .quote-field :is(input, select, textarea) { font-size: 16px; }
-  .quote-form-section, .quote-builder :is(input, select, textarea, fieldset), .quote-error-summary { scroll-margin-top: 125px; }
+  .custom-quote-page .quote-field :is(input, :is(select, .site-select__trigger), textarea) { font-size: 16px; }
+  .quote-form-section, .quote-builder :is(input, :is(select, .site-select__trigger), textarea, fieldset), .quote-error-summary { scroll-margin-top: 125px; }
 }
 @media (max-width: 600px) {
   .quote-page-container { padding: 20px 16px 48px; }

@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, redirect, useActionData, useFetcher, useLoaderData, useNavigation } from "react-router";
+import { Form, Link, redirect, useActionData, useFetcher, useLoaderData, useLocation, useNavigation } from "react-router";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CreditCard, LockKeyhole, Construction } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Wallet } from "lucide-react";
 import { eq } from "drizzle-orm";
 import { users as usersTable } from "@edicut/db/schema";
 import { CountrySelect } from "../components/CountrySelect";
@@ -10,10 +10,15 @@ import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { requireUserId } from "../lib/session.server";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { findAffiliateByCode, findCouponForQuote, isMissingMarketingSchema, normalizeMarketingCode } from "../lib/marketing.server";
+import { readAffiliateReferral, isReferralWithinWindow } from "../lib/affiliate-referral.server";
+import { loadAffiliateProgram, attributeAffiliateSubscription, isMissingAffiliateSchema } from "../lib/affiliate-program.server";
 import { getCheckoutTotal, REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING, type EditingPackage } from "../lib/subscriptions";
 import { configuredEditingPackage, getPricingPackages } from "../lib/pricing.server";
 import { countryCallingCode, countryName, updatePhoneForCountryChange, validateCheckoutContact } from "../lib/checkout-contact";
-import { getLatestCustomerContact, getOwnedSubscription, isSameSiteMutation, readSubscriptionForm, saveUnpaidSubscription } from "../lib/customer-subscriptions.server";
+import { isCheckoutDemoMode } from "../lib/checkout-demo.server";
+import { claimCryptomusInvoice, getLatestCustomerContact, getOwnedSubscription, getUnpaidSubscriptionForPackage, isSameSiteMutation, readSubscriptionForm, saveCryptomusInvoice, saveUnpaidSubscription } from "../lib/customer-subscriptions.server";
+import { createCryptomusInvoice, getCryptomusConfig } from "../lib/cryptomus.server";
+import { isActiveCryptomusInvoice } from "../lib/cryptomus";
 import { queueTelegramOrderNotice } from "../lib/telegram-notifications.server";
 import { PackageAddOns } from "../components/site/PackageAddOns";
 import { packageAddOnQuery, packageAddOnTotal, parsePackageAddOns, savedPackageAddOns, selectedPackageAddOns } from "../lib/package-addons";
@@ -22,9 +27,15 @@ import addOnStyles from "../styles/package-addons.css?url";
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: addOnStyles }];
 
 type CouponPreview = { code: string; subtotalCents: number; discountCents: number; discountedTotalCents: number };
-type CheckoutActionData = { error?: string; couponCode?: string; couponError?: string; couponPreview?: CouponPreview };
+type CheckoutActionData = { error?: string; couponCode?: string; couponError?: string; couponPreview?: CouponPreview; demoResult?: "success" };
+type CouponAffiliate = { id: string; userId: string; code: string; commissionRateBps: number };
+type ResolvedCouponActionData = CheckoutActionData & { affiliate: CouponAffiliate | null };
 const COUPON_UNAVAILABLE_NOTICE = "Coupons are temporarily unavailable. Remove the code to continue, or try again later.";
-const PAYMENT_UNAVAILABLE_NOTICE = "Payment gateway under construction. Card payments are not available yet.";
+const PAYMENT_UNAVAILABLE_NOTICE = "Cryptocurrency payment is temporarily unavailable. Please try again shortly.";
+
+function publicCouponActionData({ error, couponCode, couponError, couponPreview }: ResolvedCouponActionData): CheckoutActionData {
+  return { error, couponCode, couponError, couponPreview };
+}
 
 async function getCheckoutPackage(slug: string | undefined, context: LoaderFunctionArgs["context"]): Promise<EditingPackage | null> {
   if (!slug) return null;
@@ -37,40 +48,51 @@ function purchaseLabel(packageType: EditingPackage["packageType"]) {
   return packageType === "monthly" ? "Monthly editing package" : "Single video edit";
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: data?.editingPackage ? `${data.editingPackage.name} ${data.paymentStep ? "checkout" : "package review"} | EdiCut` : "Checkout | EdiCut" },
+function cryptomusCardPaymentNotice(countryCode: string, amountCents: number) {
+  if (countryCode.trim().toUpperCase() === "BD") {
+    return "Cryptomus does not currently support card payments for customers in Bangladesh. Cryptocurrency payment is still available.";
+  }
+  if (amountCents < 2500) {
+    return "Cryptomus card payments require a $25 minimum, so this invoice must be paid with cryptocurrency.";
+  }
+  return "If available in your country, choose Pay by Card on the Cryptomus page. First-time card payments require provider authorization and KYC.";
+}
+
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => [
+  { title: loaderData?.editingPackage ? `${loaderData.editingPackage.name} ${loaderData.paymentStep ? "checkout" : "package review"} | EdiCut` : "Checkout | EdiCut" },
   { name: "description", content: "Review your EdiCut video-editing package and payment details." },
   { name: "robots", content: "noindex, nofollow, noarchive" },
 ];
 
 export function headers() { return { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" }; }
 
-async function quoteCoupon(context: LoaderFunctionArgs["context"], code: string, subtotalCents: number, userId: string): Promise<CheckoutActionData> {
+async function quoteCoupon(context: LoaderFunctionArgs["context"], code: string, subtotalCents: number, userId: string): Promise<ResolvedCouponActionData> {
   const normalized = normalizeMarketingCode(code);
-  if (!normalized) return { couponCode: code.trim().toUpperCase(), couponError: "Enter a valid coupon code." };
+  if (!normalized) return { couponCode: code.trim().toUpperCase(), couponError: "Enter a valid coupon code.", affiliate: null };
   try {
     const quote = await findCouponForQuote(getDbFromContext(context), normalized, subtotalCents, userId);
-    if ("error" in quote) return { couponCode: normalized, couponError: quote.error };
+    if ("error" in quote) return { couponCode: normalized, couponError: quote.error, affiliate: null };
     return { couponCode: quote.coupon.code, couponPreview: {
       code: quote.coupon.code, subtotalCents, discountCents: quote.discountCents, discountedTotalCents: quote.discountedTotalCents,
-    } };
+    }, affiliate: quote.affiliate ?? null };
   } catch (error) {
     if (!isMissingMarketingSchema(error)) console.error("Checkout coupon validation failed");
-    return { couponCode: normalized, couponError: COUPON_UNAVAILABLE_NOTICE };
+    return { couponCode: normalized, couponError: COUPON_UNAVAILABLE_NOTICE, affiliate: null };
   }
 }
 
 export async function loader({ request, params, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  const demoMode = isCheckoutDemoMode(context, request.url);
   const editingPackage = await getCheckoutPackage(params.slug, context);
   if (!editingPackage) throw new Response("Package not found", { status: 404 });
   const userId = await requireUserId(request, context, `${url.pathname}${url.search}`);
   const paymentStep = url.searchParams.get("step") === "payment";
-  const savedSubscription = paymentStep || url.searchParams.has("subscription")
+  const savedSubscription = !demoMode && (paymentStep || url.searchParams.has("subscription"))
     ? await getOwnedSubscription(getDbFromContext(context), userId, url.searchParams.get("subscription") || "", editingPackage.slug)
     : null;
   let customerContact: { country: string; phone: string } | null = null;
-  if (!paymentStep && !savedSubscription) {
+  if (!demoMode && !paymentStep && !savedSubscription) {
     try {
       customerContact = await getLatestCustomerContact(getDbFromContext(context), userId);
     } catch {
@@ -78,30 +100,34 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
       console.error("Unable to load saved checkout contact");
     }
   }
-  if (paymentStep && !savedSubscription) {
+  if (paymentStep && !savedSubscription && !demoMode) {
     const review = new URLSearchParams(url.searchParams);
-    review.delete("step"); review.delete("subscription");
+    review.delete("step"); review.delete("subscription"); review.delete("demo"); review.delete("demo_result");
     throw redirect(`/checkout/${editingPackage.slug}${review.size ? `?${review}` : ""}`);
   }
   if (savedSubscription?.status === "paid") throw redirect("/dashboard/projects");
   const reviewAddOnIds = url.searchParams.has("addon") ? url.searchParams.getAll("addon")
-    : selectedPackageAddOns(savedPackageAddOns(savedSubscription?.addOns).map(item => item.id), editingPackage.packageType).map(item => item.id);
-  const addOns = paymentStep ? savedPackageAddOns(savedSubscription?.addOns)
-    : parsePackageAddOns(reviewAddOnIds, editingPackage.packageType);
+    : selectedPackageAddOns(savedPackageAddOns(savedSubscription?.addOns).map(item => item.id), editingPackage.packageType, editingPackage.slug).map(item => item.id);
+  const addOns = paymentStep && savedSubscription ? savedPackageAddOns(savedSubscription.addOns)
+    : parsePackageAddOns(reviewAddOnIds, editingPackage.packageType, editingPackage.slug);
   if (!addOns) throw new Response("Invalid package add-ons", { status: 400 });
   const total = paymentStep && savedSubscription?.subtotalCents != null ? savedSubscription.subtotalCents / 100
     : getCheckoutTotal(editingPackage) + packageAddOnTotal(addOns) / 100;
   const couponCode = (url.searchParams.get("coupon") || (paymentStep ? savedSubscription?.couponCode : "") || "").trim().toUpperCase().slice(0, 32);
   let coupon: CheckoutActionData = {};
-  if (couponCode && !paymentStep) {
-    const limit = await consumeUsageLimit({ context, request, bindingName: "USER_ACTION_LIMITER", key: `user:${userId}`, localLimit: 60, localPeriodSeconds: 60 });
-    coupon = limit === "allowed" ? await quoteCoupon(context, couponCode, total * 100, userId)
+  if (couponCode && (!paymentStep || demoMode)) {
+    const limit = await consumeUsageLimit({ context, request, bindingName: "USER_ACTION_LIMITER", key: `${demoMode ? "demo" : "user"}:${userId}`, localLimit: 60, localPeriodSeconds: 60 });
+    coupon = limit === "allowed" ? publicCouponActionData(await quoteCoupon(context, couponCode, total * 100, userId))
       : { couponCode, couponError: limit === "limited" ? "You have made several requests. Wait a minute and try again." : "Usage protection is temporarily unavailable. Please try again shortly." };
   }
+  const referral = demoMode ? null : await readAffiliateReferral(request, context);
+  const referralSettings = referral ? await loadAffiliateProgram(getDbFromContext(context)) : null;
+  const rememberedCode = referral && referralSettings && isReferralWithinWindow(referral, referralSettings.settings.attributionDays) ? referral.code : "";
   return {
     editingPackage, total, addOns, coupon, couponCode, customerContact,
-    paymentStep, savedSubscription,
-    affiliateCode: normalizeMarketingCode(url.searchParams.get("ref") || savedSubscription?.affiliateCode || "") || "",
+    paymentStep, savedSubscription, demoMode,
+    gatewayError: url.searchParams.get("gateway") === "unavailable",
+    affiliateCode: normalizeMarketingCode(url.searchParams.get("ref") || savedSubscription?.affiliateCode || rememberedCode) || "",
   };
 }
 
@@ -109,30 +135,116 @@ export async function action({ request, params, context }: ActionFunctionArgs): 
   const userId = await requireUserId(request, context);
   if (!isSameSiteMutation(request)) return Response.json({ error: "Please submit checkout from this site." }, { status: 403 });
   if (requestBodyExceedsLimit(request, 64 * 1024)) return { error: "Checkout request is too large." };
-  const actionLimit = await consumeUsageLimit({ context, request, bindingName: "USER_ACTION_LIMITER", key: `user:${userId}`, localLimit: 60, localPeriodSeconds: 60 });
+  const demoMode = isCheckoutDemoMode(context, request.url);
+  const actionLimit = await consumeUsageLimit({ context, request, bindingName: "USER_ACTION_LIMITER", key: `${demoMode ? "demo" : "user"}:${userId}`, localLimit: 60, localPeriodSeconds: 60 });
   if (actionLimit !== "allowed") return { error: actionLimit === "limited"
     ? "You have made several requests. Wait a minute and try again."
     : "Usage protection is temporarily unavailable. Please try again shortly." };
   const formData = await readSubscriptionForm(request, 64 * 1024);
   if (!formData) return { error: "Submit a valid checkout form under 64 KB." };
   const intent = formData.get("intent");
+  if (intent === "simulate-demo-payment") {
+    if (!demoMode) {
+      return Response.json({ error: "Demo checkout is unavailable." }, { status: 403 });
+    }
+    const editingPackage = await getCheckoutPackage(params.slug, context);
+    if (!editingPackage || formData.get("packageSlug") !== editingPackage.slug) {
+      return { error: "Choose a valid package before simulating payment." };
+    }
+    return { demoResult: "success" };
+  }
+  if (intent === "create-cryptomus-invoice" && demoMode) {
+    return Response.json({ error: "Live Cryptomus payments are disabled in demo mode." }, { status: 403 });
+  }
+  if (intent === "create-cryptomus-invoice") {
+    const editingPackage = await getCheckoutPackage(params.slug, context);
+    const subscriptionId = String(formData.get("subscriptionId") || "");
+    if (!editingPackage || formData.get("packageSlug") !== editingPackage.slug || !subscriptionId) {
+      return { error: PAYMENT_UNAVAILABLE_NOTICE };
+    }
+    const db = getDbFromContext(context);
+    const saved = await getOwnedSubscription(db, userId, subscriptionId, editingPackage.slug);
+    if (!saved || saved.status !== "unpaid") return { error: PAYMENT_UNAVAILABLE_NOTICE };
+    if (saved.cryptomusInvoiceUuid && isActiveCryptomusInvoice(saved.cryptomusPaymentUrl, saved.cryptomusInvoiceExpiresAt)) {
+      return redirect(saved.cryptomusPaymentUrl!);
+    }
+    let config: ReturnType<typeof getCryptomusConfig>;
+    try {
+      config = getCryptomusConfig(context);
+    } catch {
+      return { error: PAYMENT_UNAVAILABLE_NOTICE };
+    }
+    if (!config) return { error: PAYMENT_UNAVAILABLE_NOTICE };
+    try {
+      if (saved.paymentProvider !== "cryptomus") {
+        const claimed = await claimCryptomusInvoice(db, saved.id, saved.amountCents);
+        if (!claimed) {
+          const latest = await getOwnedSubscription(db, userId, saved.id, editingPackage.slug);
+          if (!latest || latest.status !== "unpaid" || latest.paymentProvider !== "cryptomus") return { error: PAYMENT_UNAVAILABLE_NOTICE };
+          if (latest.cryptomusInvoiceUuid && isActiveCryptomusInvoice(latest.cryptomusPaymentUrl, latest.cryptomusInvoiceExpiresAt)) return redirect(latest.cryptomusPaymentUrl!);
+        }
+      }
+      const savedExpiry = saved.cryptomusInvoiceExpiresAt ? new Date(saved.cryptomusInvoiceExpiresAt).valueOf() : null;
+      const refresh = saved.paymentProvider === "cryptomus" && (savedExpiry !== null
+        ? savedExpiry <= Date.now()
+        : new Date(saved.updatedAt).valueOf() <= Date.now() - 60 * 60 * 1000);
+      const invoice = await createCryptomusInvoice({
+        config, orderId: saved.id, amountCents: saved.amountCents, packageSlug: editingPackage.slug,
+        refresh,
+      });
+      const stored = await saveCryptomusInvoice(db, {
+        id: saved.id, amountCents: saved.amountCents, invoiceUuid: invoice.uuid,
+        paymentUrl: invoice.url, expiresAt: invoice.expiresAt, refresh,
+      });
+      if (!stored) {
+        const latest = await getOwnedSubscription(db, userId, saved.id, editingPackage.slug);
+        if (latest?.cryptomusInvoiceUuid === invoice.uuid && isActiveCryptomusInvoice(latest.cryptomusPaymentUrl, latest.cryptomusInvoiceExpiresAt)) return redirect(latest.cryptomusPaymentUrl!);
+        return { error: "The payment link was created but could not be saved. Refresh this page to retry safely." };
+      }
+      return redirect(invoice.url);
+    } catch {
+      console.error("Cryptomus invoice creation failed");
+      return { error: "The crypto payment page could not be created. Please try again." };
+    }
+  }
   // Saving an unpaid selection never creates an editing order or records payment.
   if (intent !== "validate-coupon" && intent !== "start-checkout") return Response.json({ error: PAYMENT_UNAVAILABLE_NOTICE }, { status: 503 });
   const code = String(formData.get("couponCode") || "").trim();
   const editingPackage = await getCheckoutPackage(params.slug, context);
   if (!editingPackage || formData.get("packageSlug") !== editingPackage.slug) return { couponCode: code.toUpperCase(), couponError: "Choose a valid package before applying a coupon." };
-  const addOns = parsePackageAddOns(formData.getAll("addon"), editingPackage.packageType);
+  const addOns = parsePackageAddOns(formData.getAll("addon"), editingPackage.packageType, editingPackage.slug);
   if (!addOns) return { error: "Choose valid package add-ons." };
   const subtotalCents = getCheckoutTotal(editingPackage) * 100 + packageAddOnTotal(addOns);
   if (intent === "start-checkout") {
     const contact = validateCheckoutContact(String(formData.get("country") || ""), String(formData.get("phone") || ""));
     if ("error" in contact) return { error: contact.error };
-    const coupon = code ? await quoteCoupon(context, code, subtotalCents, userId) : {};
-    if (code && !coupon.couponPreview) return { ...coupon, error: coupon.couponError };
+    const coupon: ResolvedCouponActionData = code ? await quoteCoupon(context, code, subtotalCents, userId) : { affiliate: null };
+    if (code && !coupon.couponPreview) return { ...publicCouponActionData(coupon), error: coupon.couponError };
+    if (demoMode) {
+      const query = packageAddOnQuery(addOns.map(item => item.id), editingPackage.packageType, new URLSearchParams(), editingPackage.slug);
+      query.set("step", "payment");
+      query.set("demo", "1");
+      if (coupon.couponPreview) query.set("coupon", coupon.couponPreview.code);
+      const affiliateCode = normalizeMarketingCode(String(formData.get("affiliateCode") || ""));
+      if (affiliateCode) query.set("ref", affiliateCode);
+      return redirect(`/checkout/${editingPackage.slug}?${query}`);
+    }
     try {
       const db = getDbFromContext(context);
-      const requestedAffiliateCode = normalizeMarketingCode(String(formData.get("affiliateCode") || ""));
-      const affiliate = requestedAffiliateCode ? await findAffiliateByCode(db, requestedAffiliateCode) : null;
+      const existing = await getUnpaidSubscriptionForPackage(db, userId, editingPackage.slug);
+      if (existing?.paymentProvider === "cryptomus") {
+        return redirect(`/checkout/${editingPackage.slug}?step=payment&subscription=${existing.id}`);
+      }
+      const referral = await readAffiliateReferral(request, context);
+      const referralSettings = referral ? await loadAffiliateProgram(db) : null;
+      const rememberedCode = referral && referralSettings && isReferralWithinWindow(referral, referralSettings.settings.attributionDays) ? referral.code : "";
+      const requestedAffiliateCode = normalizeMarketingCode(String(formData.get("affiliateCode") || rememberedCode));
+      const referralAffiliate = requestedAffiliateCode ? await findAffiliateByCode(db, requestedAffiliateCode) : null;
+      // An affiliate coupon is an explicit referral choice. Use its owner when
+      // both a referral link and coupon are present; otherwise preserve the
+      // existing referral-link attribution path.
+      const affiliateCandidate = coupon.affiliate ?? referralAffiliate;
+      const affiliate = affiliateCandidate?.userId === userId ? null : affiliateCandidate;
       const saved = await saveUnpaidSubscription(db, {
         ownerId: userId, packageSlug: editingPackage.slug, planName: editingPackage.name, purchaseType: editingPackage.packageType, addOns, ...contact,
         subtotalCents, discountCents: coupon.couponPreview?.discountCents ?? 0,
@@ -142,6 +254,19 @@ export async function action({ request, params, context }: ActionFunctionArgs): 
         affiliateCode: affiliate?.code ?? null,
         affiliateCommissionBps: affiliate?.commissionRateBps ?? 0,
       });
+      if (affiliate) {
+        try {
+          await attributeAffiliateSubscription(db, {
+            subscriptionId: saved.id, userId, affiliateCode: affiliate.code,
+            visitId: referral?.code === affiliate.code ? referral.visitId : null,
+            campaign: referral?.code === affiliate.code ? referral.campaign : null,
+          });
+        } catch (error) {
+          // Order attribution already lives on the checkout record. Campaign
+          // reporting must not block payment during a rolling schema upgrade.
+          if (!isMissingAffiliateSchema(error)) console.error("Affiliate campaign attribution unavailable");
+        }
+      }
       queueTelegramOrderNotice(context, {
         orderId: saved.id,
         kind: editingPackage.packageType === "monthly" ? "subscription" : "single",
@@ -156,11 +281,19 @@ export async function action({ request, params, context }: ActionFunctionArgs): 
       }).where(eq(usersTable.id, userId));
       return redirect(`/checkout/${editingPackage.slug}?step=payment&subscription=${saved.id}`);
     } catch {
+      try {
+        const latest = await getUnpaidSubscriptionForPackage(getDbFromContext(context), userId, editingPackage.slug);
+        if (latest?.paymentProvider === "cryptomus") {
+          return redirect(`/checkout/${editingPackage.slug}?step=payment&subscription=${latest.id}`);
+        }
+      } catch {
+        // Preserve the generic checkout error when a concurrent change cannot be read.
+      }
       console.error("Unable to save unpaid package selection");
       return { error: "Your package selection could not be saved. Please try again shortly." };
     }
   }
-  return quoteCoupon(context, code, subtotalCents, userId);
+  return publicCouponActionData(await quoteCoupon(context, code, subtotalCents, userId));
 }
 
 export default function CheckoutRoute() {
@@ -169,17 +302,19 @@ export default function CheckoutRoute() {
 }
 
 function CheckoutContent() {
-  const { editingPackage, addOns: initialAddOns, coupon: initialCoupon, couponCode, customerContact, paymentStep, affiliateCode, savedSubscription } = useLoaderData<typeof loader>();
+  const { editingPackage, addOns: initialAddOns, coupon: initialCoupon, couponCode, customerContact, paymentStep, affiliateCode, savedSubscription, gatewayError, demoMode } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const location = useLocation();
+  const demoActionUrl = `${location.pathname}${paymentStep ? "?step=payment&demo=1" : "?demo=1"}`;
   const navigation = useNavigation();
   const saving = navigation.state !== "idle";
   const couponFetcher = useFetcher<typeof action>();
   const [couponInput, setCouponInput] = useState(couponCode);
   const [couponRequestCode, setCouponRequestCode] = useState("");
   const [selectedAddOnIds, setSelectedAddOnIds] = useState(initialAddOns.map(item => item.id));
-  const addOns = paymentStep ? initialAddOns : selectedPackageAddOns(selectedAddOnIds, editingPackage.packageType);
+  const addOns = paymentStep ? initialAddOns : selectedPackageAddOns(selectedAddOnIds, editingPackage.packageType, editingPackage.slug);
   const addOnCents = packageAddOnTotal(addOns);
-  const subtotalCents = paymentStep ? savedSubscription!.subtotalCents : editingPackage.basePrice * 100 + addOnCents;
+  const subtotalCents = paymentStep && savedSubscription ? savedSubscription.subtotalCents : editingPackage.basePrice * 100 + addOnCents;
   const [phone, setPhone] = useState(() => savedSubscription?.phone ?? customerContact?.phone ?? (savedSubscription?.country ? `${countryCallingCode(savedSubscription.country)} ` : ""));
   const normalizedCode = couponInput.trim().toUpperCase();
   const couponResult = couponFetcher.data ?? initialCoupon;
@@ -189,7 +324,7 @@ function CheckoutContent() {
   const amountCents = (paymentStep ? savedSubscription?.amountCents : undefined) ?? appliedCoupon?.discountedTotalCents ?? subtotalCents;
   const couponBusy = couponFetcher.state !== "idle";
   const canProceed = !saving && !couponBusy && (!normalizedCode || Boolean(appliedCoupon));
-  const query = packageAddOnQuery(selectedAddOnIds, editingPackage.packageType);
+  const query = packageAddOnQuery(selectedAddOnIds, editingPackage.packageType, new URLSearchParams(), editingPackage.slug);
   if (affiliateCode) query.set("ref", affiliateCode);
   if (appliedCoupon) query.set("coupon", appliedCoupon.code);
   if (paymentStep && savedSubscription) {
@@ -197,7 +332,7 @@ function CheckoutContent() {
     if (savedSubscription.couponCode) query.set("coupon", savedSubscription.couponCode);
   }
   const reviewHref = `/checkout/${editingPackage.slug}${query.size ? `?${query}` : ""}`;
-  const planQuery = packageAddOnQuery(selectedAddOnIds, editingPackage.packageType);
+  const planQuery = packageAddOnQuery(selectedAddOnIds, editingPackage.packageType, new URLSearchParams(), editingPackage.slug);
   if (affiliateCode) planQuery.set("ref", affiliateCode);
   const planHref = `/pricing/${editingPackage.slug}${planQuery.size ? `?${planQuery}` : ""}`;
   const includedTeam = editingPackage.slug === "creator-pro" ? STUDIO_PACKAGE_STAFFING : REQUIRED_PACKAGE_STAFFING;
@@ -207,7 +342,7 @@ function CheckoutContent() {
     const form = new FormData();
     form.set("intent", "validate-coupon"); form.set("packageSlug", editingPackage.slug); form.set("couponCode", couponInput);
     selectedAddOnIds.forEach(id => form.append("addon", id));
-    couponFetcher.submit(form, { method: "post", encType: "application/x-www-form-urlencoded" });
+    couponFetcher.submit(form, { method: "post", encType: "application/x-www-form-urlencoded", action: demoMode ? demoActionUrl : undefined });
   }
 
   function handleCountryChange(nextCountryCode: string, previousCountryCode: string) {
@@ -233,34 +368,39 @@ function CheckoutContent() {
           <ArrowRight size={14} className="neo-muted" aria-hidden="true" />
           <span aria-current={paymentStep ? "step" : undefined} className={paymentStep ? "neo-ink" : "neo-muted"}>Payment</span>
         </nav>
+        {demoMode ? <p role="status" aria-live="polite" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950"><strong>Demo checkout is on.</strong> No Cryptomus request, charge, purchase record, or account access will be created. Contact details entered here are not saved.</p> : null}
         <h1 className={paymentStep ? "text-3xl font-black tracking-tight neo-ink sm:text-4xl" : "sr-only"}>{paymentStep ? "Checkout" : "Plan review"}</h1>
-        {paymentStep ? <p className="mt-3 max-w-xl text-sm leading-6 neo-muted">Pay for your plan, then share your project details when you start an order.</p> : null}
+        {paymentStep ? <p className="mt-3 max-w-xl text-sm leading-6 neo-muted">{demoMode ? "Preview the payment step and simulate its success state without submitting a real payment." : "Pay for your plan, then share your project details when you start an order."}</p> : null}
 
         {actionData?.error ? <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{actionData.error}</p> : null}
-        <Form method="post" id="checkout-form" className="mt-7 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_350px] lg:gap-8">
-          <input type="hidden" name="intent" value="start-checkout" />
+        <Form method="post" action={demoMode ? demoActionUrl : undefined} id="checkout-form" className="mt-7 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_350px] lg:gap-8">
+          <input type="hidden" name="intent" value={paymentStep ? demoMode ? "simulate-demo-payment" : "create-cryptomus-invoice" : "start-checkout"} />
           <input type="hidden" name="packageSlug" value={editingPackage.slug} />
+          {paymentStep && savedSubscription ? <input type="hidden" name="subscriptionId" value={savedSubscription.id} /> : null}
+          {!paymentStep && savedSubscription ? <input type="hidden" name="subscriptionId" value={savedSubscription.id} /> : null}
           <input type="hidden" name="couponCode" value={appliedCoupon?.code ?? ""} />
           <input type="hidden" name="affiliateCode" value={affiliateCode} />
           {paymentStep ? (
             <section className="neo-surface min-w-0 rounded-3xl p-5 sm:p-7" aria-labelledby="payment-title">
-              <h2 id="payment-title" className="text-xl font-black neo-ink">Payment method</h2>
-              <p role="status" className="mt-3 text-sm neo-muted">Your {purchaseLabel(editingPackage.packageType).toLowerCase()} is saved as <strong className="neo-ink">{savedSubscription?.status === "paid" ? "paid" : "unpaid"}</strong>. <Link className="font-bold underline" to="/dashboard/subscriptions">View purchase</Link></p>
-              <p className="mt-2 text-xs neo-muted">{countryName(savedSubscription!.country)} · {savedSubscription!.phone}</p>
-              <fieldset disabled className="mt-5">
-                <legend className="sr-only">Available payment methods</legend>
-                <label className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-300 px-4 py-3">
-                  <input type="radio" name="payment-method" checked readOnly aria-describedby="gateway-notice" className="h-4 w-4 accent-slate-800" />
-                  <CreditCard size={22} className="shrink-0 neo-ink" aria-hidden="true" />
-                  <span className="text-sm font-bold neo-ink">Credit card</span>
-                  <span className="ml-auto text-xs neo-muted">Coming soon</span>
-                </label>
-              </fieldset>
-              <div id="gateway-notice" role="status" className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                <Construction size={24} className="text-amber-800" aria-hidden="true" />
-                <h3 className="mt-3 text-lg font-black text-amber-950">Payment gateway under construction</h3>
-                <p className="mt-2 text-sm leading-6 text-amber-900">Credit-card payments are not available yet. Please check back later to purchase your plan.</p>
-              </div>
+              <h2 id="payment-title" className="text-xl font-black neo-ink">{demoMode ? "Demo payment" : "Payment method"}</h2>
+              {demoMode ? <div className="mt-4 grid gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                <p className="text-sm leading-6 text-amber-950">This preview does not contact Cryptomus or save checkout data. Simulating success only tests the page state; it does not mark a purchase paid or grant access.</p>
+                {actionData?.demoResult === "success" ? <p role="status" aria-live="polite" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">Demo payment succeeded. No real payment or purchase was recorded.</p> : null}
+              </div> : <>
+                <p role="status" className="mt-3 text-sm neo-muted">Your {purchaseLabel(editingPackage.packageType).toLowerCase()} is saved as <strong className="neo-ink">{savedSubscription?.status === "paid" ? "paid" : "awaiting payment"}</strong>. <Link className="font-bold underline" to="/dashboard/subscriptions">View purchase</Link></p>
+                <p className="mt-2 text-xs neo-muted">{countryName(savedSubscription!.country)} · {savedSubscription!.phone}</p>
+                <div id="gateway-notice" className="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
+                  <div className="flex items-center gap-3">
+                    <Wallet size={23} className="shrink-0 neo-ink" aria-hidden="true" />
+                    <div><h3 className="text-base font-black neo-ink">Payment with Cryptomus</h3><p className="mt-1 text-sm leading-6 neo-muted">Choose a supported coin and network, or pay by card through Cryptomus when the option is available. The payment page is valid for one hour.</p></div>
+                  </div>
+                  <p className="mt-4 text-xs leading-5 neo-muted">{cryptomusCardPaymentNotice(savedSubscription!.country, amountCents)}</p>
+                  {gatewayError ? <p role="status" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Cryptomus setup is still being completed. Try again later.</p> : null}
+                  {savedSubscription?.cryptomusInvoiceUuid && isActiveCryptomusInvoice(savedSubscription.cryptomusPaymentUrl, savedSubscription.cryptomusInvoiceExpiresAt) ? (
+                    <a href={savedSubscription.cryptomusPaymentUrl!} target="_blank" rel="noopener noreferrer" className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#19232d] px-4 py-3 text-sm font-bold text-white hover:bg-[#303e4b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">Open payment options <ArrowRight size={17} aria-hidden="true" /></a>
+                  ) : null}
+                </div>
+              </>}
             </section>
           ) : (
             <div className="grid min-w-0 gap-6">
@@ -306,7 +446,7 @@ function CheckoutContent() {
           <aside className="neo-surface min-w-0 rounded-3xl p-5 sm:p-6" aria-labelledby="summary-title">
             <h2 id="summary-title" className="text-lg font-black neo-ink">Order summary</h2>
             <div className="mt-4 flex items-start justify-between gap-3 border-b neo-line pb-5">
-              <div><p className="text-sm font-bold neo-ink">{paymentStep ? savedSubscription?.planName : editingPackage.name}</p><p className="mt-1 text-xs neo-muted">{purchaseLabel(editingPackage.packageType)}</p></div>
+              <div><p className="text-sm font-bold neo-ink">{paymentStep ? savedSubscription?.planName ?? editingPackage.name : editingPackage.name}</p><p className="mt-1 text-xs neo-muted">{purchaseLabel(editingPackage.packageType)}</p></div>
               <span className="text-sm font-bold neo-ink">{formatUsd(subtotalCents - addOnCents)}</span>
             </div>
             {addOns.length ? <ul aria-label="Selected add-ons" className="mt-4 grid gap-3 text-xs neo-muted">{addOns.map(item => <li key={item.id} className="flex justify-between gap-3"><span>{item.label} <span className="text-[10px]">· one time</span></span><strong className="neo-ink">{formatUsd(item.amountCents)}</strong></li>)}</ul> : null}
@@ -337,16 +477,20 @@ function CheckoutContent() {
               </div>
             </div>
             {paymentStep ? (
-              <>
-                <button type="button" disabled aria-describedby="payment-unavailable" className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#19232d] px-4 py-3 text-sm font-bold text-white opacity-50 cursor-not-allowed">
-                  <LockKeyhole size={17} aria-hidden="true" /> Pay {formatUsd(amountCents)}
-                </button>
-                <p id="payment-unavailable" className="mt-3 text-center text-xs leading-5 neo-muted">Payment gateway under construction</p>
+              demoMode ? <button type="submit" disabled={saving}
+                className={`mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#19232d] px-4 py-3 text-sm font-bold text-white hover:bg-[#303e4b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary ${saving ? "cursor-not-allowed opacity-50" : ""}`}>
+                <Check size={17} aria-hidden="true" /> {saving ? "Simulating…" : actionData?.demoResult === "success" ? "Simulate again" : "Simulate successful payment"}
+              </button> : <>
+                {savedSubscription?.cryptomusInvoiceUuid && isActiveCryptomusInvoice(savedSubscription.cryptomusPaymentUrl, savedSubscription.cryptomusInvoiceExpiresAt) ? null : <button type="submit" disabled={saving || savedSubscription?.status !== "unpaid"}
+                  className={`mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#19232d] px-4 py-3 text-sm font-bold text-white hover:bg-[#303e4b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary ${saving || savedSubscription?.status !== "unpaid" ? "cursor-not-allowed opacity-50" : ""}`}>
+                  <Wallet size={17} aria-hidden="true" /> {saving ? "Preparing payment…" : savedSubscription?.cryptomusInvoiceUuid ? `Renew ${formatUsd(amountCents)} on Cryptomus` : `Pay ${formatUsd(amountCents)} on Cryptomus`} <ArrowRight size={17} aria-hidden="true" />
+                </button>}
+                <p className="mt-3 text-center text-xs leading-5 neo-muted">Cryptomus hosts the secure payment page. EdiCut never receives your wallet credentials.</p>
               </>
             ) : (
               <button type="submit" disabled={!canProceed}
                 className={`mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#19232d] px-4 py-3 text-sm font-bold text-white hover:bg-[#303e4b] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary ${!canProceed ? "cursor-not-allowed opacity-50" : ""}`}>
-                {saving ? "Saving…" : "Proceed to checkout"} <ArrowRight size={17} aria-hidden="true" />
+                {saving ? "Saving…" : demoMode ? "Proceed to demo checkout" : "Proceed to checkout"} <ArrowRight size={17} aria-hidden="true" />
               </button>
             )}
           </aside>

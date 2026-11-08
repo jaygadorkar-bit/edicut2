@@ -2,14 +2,15 @@ import type { FormEvent, PointerEvent as ReactPointerEvent } from "react";
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useMatches, useNavigation, useSubmit } from "react-router";
 import { Award, BadgeCheck, CalendarDays, CircleHelp, Film, MessageCircle, Star, Trophy, Workflow, type LucideIcon } from "lucide-react";
-import { authHref } from "../auth/AuthModal";
-import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
+import { authHref } from "../auth/auth-links";
 import { formatPackagePrice, parsePackagePrice, SUBSCRIPTION_PACKAGES } from "../../lib/subscriptions";
-import { faqs, legalLinks, navLinks, testimonials, workflow } from "./data";
+import { faqs, legalLinks, navLinks, workflow } from "./data";
 import { defaultPortfolioSections } from "../../lib/portfolio-demo";
 import { wrapLoopPosition } from "../../lib/portfolio-loop";
 import { FaqSection } from "./FaqSection";
 import { CookieConsent } from "./CookieConsent.js";
+import { SiteAnalyticsTracker } from "./SiteAnalyticsTracker";
+import { AffiliateReferralTracker } from "./AffiliateReferralTracker";
 import { ContactPageIntro } from "./ContactPageIntro";
 import { DEFAULT_CONTACT_EMAIL } from "../../lib/contact-email";
 import { CONTACT_WHATSAPP_DISPLAY_NUMBER, CONTACT_WHATSAPP_URL } from "../../lib/contact-details";
@@ -46,10 +47,16 @@ export function Logo({ className = "h-10" }: { className?: string }) {
 
 export function SiteHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuDialogRef = useRef<HTMLDivElement>(null);
+  const closeMenu = () => {
+    setIsMenuOpen(false);
+    menuButtonRef.current?.focus();
+  };
   const matches = useMatches();
   const location = useLocation();
-  const rootData = matches.find((m) => m.id === "root")?.data as { promoBarSettings?: { enabled: boolean; message: string } } | undefined;
-  const isSignedIn = matches.some((match) => Boolean((match.data as { isSignedIn?: boolean } | undefined)?.isSignedIn));
+  const rootData = matches.find((m) => m.id === "root")?.loaderData as { promoBarSettings?: { enabled: boolean; message: string } } | undefined;
+  const isSignedIn = matches.some((match) => Boolean((match.loaderData as { isSignedIn?: boolean } | undefined)?.isSignedIn));
 
   const promoEnabled = rootData?.promoBarSettings?.enabled;
   const promoMessage = rootData?.promoBarSettings?.message;
@@ -59,9 +66,25 @@ export function SiteHeader() {
 
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsMenuOpen(false);
+      if (event.key === "Escape") closeMenu();
+      if (event.key !== "Tab") return;
+
+      const focusable = menuDialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
+    menuDialogRef.current?.querySelector<HTMLElement>("button")?.focus();
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", closeOnEscape);
 
@@ -83,13 +106,13 @@ export function SiteHeader() {
         </div>
       ) : null}
       
-      <header className="neo-site-header sticky relative top-0 z-50 w-full border-b px-4 transition-all duration-300 sm:px-6">
+      <header data-analytics-region="navigation" className="neo-site-header sticky relative top-0 z-50 w-full border-b px-4 transition-all duration-300 sm:px-6">
         <div className="relative mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 sm:h-[72px] sm:gap-4">
           <Link to="/" aria-label="EdiCut home" className="transition-opacity hover:opacity-80">
             <Logo className="h-9 sm:h-12" />
           </Link>
 
-          <nav className="neo-header-nav hidden items-center gap-0.5 rounded-full border p-1 backdrop-blur-md lg:absolute lg:left-1/2 lg:flex lg:-translate-x-1/2">
+          <nav aria-label="Main navigation" className="neo-header-nav hidden items-center gap-0.5 rounded-full border p-1 backdrop-blur-md lg:absolute lg:left-1/2 lg:flex lg:-translate-x-1/2">
             {navLinks.map((item) => (
               <NavLink
                 key={item.label}
@@ -105,6 +128,7 @@ export function SiteHeader() {
           <div className="hidden items-center gap-3 lg:flex">
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
+              reloadDocument={!isSignedIn}
               className="neo-button neo-button--primary neo-button--compact neo-header-sign-in uppercase tracking-[0.12em]"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/5 text-current transition-colors">
@@ -117,6 +141,7 @@ export function SiteHeader() {
           </div>
 
           <button
+            ref={menuButtonRef}
             type="button"
             aria-label={isMenuOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={isMenuOpen}
@@ -134,20 +159,25 @@ export function SiteHeader() {
 
       <div
         aria-hidden={!isMenuOpen}
+        inert={!isMenuOpen}
         className={`neo-header-drawer-overlay fixed inset-0 z-[100] overflow-hidden lg:hidden ${
             isMenuOpen ? "pointer-events-auto" : "pointer-events-none"
         }`}
       >
-        <div
-          onClick={() => setIsMenuOpen(false)}
-          className={`absolute inset-0 bg-slate-950/25 backdrop-blur-[2px] transition-opacity duration-300 ${
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={closeMenu}
+          className={`absolute inset-0 cursor-default border-0 bg-slate-950/25 p-0 backdrop-blur-[2px] transition-opacity duration-300 ${
             isMenuOpen ? "opacity-100" : "opacity-0"
           }`}
         />
         <div
+          ref={menuDialogRef}
           id="site-mobile-navigation-drawer"
           role="dialog"
           aria-label="Mobile navigation"
+          aria-modal={isMenuOpen ? true : undefined}
           aria-hidden={!isMenuOpen}
             className={`neo-header-drawer absolute right-0 top-0 z-10 flex h-full w-[min(88vw,380px)] flex-col border-l shadow-2xl backdrop-blur-xl transition-transform duration-300 ease-out ${
             isMenuOpen ? "translate-x-0" : "translate-x-full"
@@ -157,7 +187,7 @@ export function SiteHeader() {
             <button
               type="button"
               aria-label="Close navigation"
-              onClick={() => setIsMenuOpen(false)}
+              onClick={closeMenu}
               className="neo-header-menu flex h-10 w-10 items-center justify-center rounded-xl border transition"
             >
               <span className="material-symbols-outlined text-[22px]">close</span>
@@ -171,7 +201,7 @@ export function SiteHeader() {
                 key={item.label}
                 to={item.to}
                 end={item.to === "/"}
-                onClick={() => setIsMenuOpen(false)}
+                onClick={closeMenu}
                 className={({ isActive }) => `neo-header-link type-menu flex min-h-12 items-center justify-between rounded-xl px-4 py-3 transition-colors hover:bg-black/5 ${isActive ? "neo-header-active" : ""}`}
               >
                 {item.label}
@@ -184,7 +214,8 @@ export function SiteHeader() {
             <MobileSupportMenu isMenuOpen={isMenuOpen} />
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
-              onClick={() => setIsMenuOpen(false)}
+              reloadDocument={!isSignedIn}
+              onClick={closeMenu}
               className="neo-button neo-button--primary w-full uppercase tracking-[0.14em]"
             >
               <span className="material-symbols-outlined text-[19px]">
@@ -240,6 +271,7 @@ function LegacySiteFooter() {
     setNewsletterStatus("idle");
 
     try {
+      const { executeInvisibleRecaptcha } = await import("../../lib/recaptcha.client");
       await executeInvisibleRecaptcha(form, "newsletter_signup");
       setNewsletterStatus("verified");
       form.reset();
@@ -267,17 +299,18 @@ function LegacySiteFooter() {
                 <input 
                   type="email" 
                   name="email"
+                  aria-label="Email address"
                   placeholder="Email address" 
                   required
                   autoComplete="email"
                   className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 yt-small font-medium outline-none focus:border-primary"
                 />
-                <button type="submit" className="flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90">
-                  <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                <button type="submit" aria-label="Join the waitlist" className="flex h-11 min-w-11 items-center justify-center rounded-xl bg-primary px-5 text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90">
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">arrow_forward</span>
                 </button>
               </form>
-              {newsletterStatus === "verified" ? <p className="yt-tag font-black text-primary">Security check passed.</p> : null}
-              {newsletterStatus === "error" ? <p className="yt-tag font-black text-[#D90000]">Security check failed. Please try again.</p> : null}
+              {newsletterStatus === "verified" ? <p role="status" className="yt-tag font-black text-primary">Security check passed.</p> : null}
+              {newsletterStatus === "error" ? <p role="alert" className="yt-tag font-black text-[#D90000]">Security check failed. Please try again.</p> : null}
             </div>
           </div>
 
@@ -364,31 +397,16 @@ function LegacySiteFooter() {
 
 export function SiteFooter() {
   const [openSection, setOpenSection] = useState<string | null>(null);
-  const [newsletterStatus, setNewsletterStatus] = useState<"idle" | "verified" | "error">("idle");
-
-  async function handleNewsletterSubmit(event: FormEvent<HTMLFormElement>) {
-    const form = event.currentTarget;
-
-    event.preventDefault();
-    setNewsletterStatus("idle");
-
-    try {
-      await executeInvisibleRecaptcha(form, "newsletter_signup");
-      setNewsletterStatus("verified");
-      form.reset();
-    } catch {
-      setNewsletterStatus("error");
-    }
-  }
 
   const sections = [
     {
       label: "Explore",
       links: [
         { label: "Why Hire Us", to: "/why-hire-us" },
+        { label: "Services", to: "/services" },
         { label: "Pricing", to: "/pricing" },
         { label: "Portfolio", to: "/portfolio" },
-        { label: "FAQ", to: "/faq" },
+        { label: "Blog", to: "/blog" },
       ],
     },
     {
@@ -398,39 +416,23 @@ export function SiteFooter() {
         { label: "FAQ", to: "/faq" },
         { label: "Privacy", to: "/privacy" },
         { label: "Terms", to: "/terms" },
+        { label: "Work with EdiCut", to: "/video-editor-partner" },
       ],
     },
   ];
 
   return (
-    <footer className="neo-footer relative overflow-hidden border-t px-4 sm:px-6">
+    <footer data-analytics-region="footer" className="neo-footer relative overflow-hidden border-t px-4 sm:px-6">
       <div className="neo-footer__inner mx-auto max-w-7xl pb-5 pt-8 sm:pb-7 sm:pt-12 md:pb-10 md:pt-14">
         <div className="grid gap-4 md:grid-cols-[minmax(18rem,1.45fr)_minmax(9rem,1fr)_minmax(11rem,1fr)] md:items-stretch">
         <section className="neo-footer__lead flex flex-col justify-between p-5 md:p-6">
           <div>
-            <h2 className="type-card-title neo-footer-ink">Keep in touch</h2>
+            <h2 className="type-card-title neo-footer-ink">Plan your next video</h2>
             <p className="mt-2 max-w-md text-sm leading-5 neo-footer-muted sm:text-[15px]">
-              Editing support, creator tips, and useful updates for a steadier publishing rhythm.
+              Tell us your video format, footage, and deadline. We will help you choose an editing package.
             </p>
           </div>
-          <form className="mt-6 flex max-w-[440px] flex-wrap items-center gap-2" onSubmit={handleNewsletterSubmit}>
-            <input type="hidden" name="g-recaptcha-response" value="" />
-            <label className="sr-only" htmlFor="footer-email">Your email address</label>
-            <input
-              id="footer-email"
-              type="email"
-              name="email"
-              placeholder="Your email address"
-              required
-              autoComplete="email"
-              className="neo-footer-input h-10 min-w-[180px] flex-1 rounded-full border px-4 text-sm font-medium outline-none"
-            />
-            <button type="submit" className="neo-button neo-button--dark neo-button--compact h-10 min-h-10 shrink-0 rounded-full py-0">
-              Sign Up
-            </button>
-          </form>
-          {newsletterStatus === "verified" ? <p className="mt-2 text-xs font-bold text-[#21825a]">Security check passed.</p> : null}
-          {newsletterStatus === "error" ? <p className="mt-2 text-xs font-bold text-[#a91b27]">Security check failed. Please try again.</p> : null}
+          <Link to="/contact" className="neo-button neo-button--dark neo-button--compact mt-6 w-fit">Discuss your project</Link>
         </section>
 
           {sections.map((section) => {
@@ -489,9 +491,7 @@ export function SiteFooter() {
                 <p className="neo-footer__utility-label">Pay with</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {["VISA", "MasterCard", "AMEX"].map((payment) => (
-                  <span key={payment} className="neo-footer-payment">{payment}</span>
-                ))}
+                <span className="neo-footer-payment">Cryptocurrency via Cryptomus</span>
               </div>
             </div>
           </div>
@@ -645,9 +645,17 @@ export function MessageWidget() {
         aria-hidden={isOpen}
         tabIndex={isOpen ? -1 : 0}
         onClick={() => setIsOpen(true)}
+        data-analytics-region="support"
         className={`neo-support-launcher inline-flex items-center justify-center transition-all duration-200 ease-out ${isOpen ? "pointer-events-none translate-x-2 opacity-0" : "pointer-events-auto translate-x-0 opacity-100"}`}
       >
-        <MessageCircle className="neo-support-launcher__icon" size={30} strokeWidth={2} aria-hidden="true" />
+        <svg className="neo-support-launcher__icon" viewBox="0 0 56 56" aria-hidden="true" focusable="false">
+          <circle cx="28" cy="28" r="28" fill="#050505" />
+          <path
+            d="M28 14.5c-7.46 0-13.5 5.75-13.5 12.85 0 2.44.72 4.72 2.02 6.66l-1.3 4.98 5.08-1.36A14.1 14.1 0 0 0 28 39.91c7.46 0 13.5-5.76 13.5-12.85S35.46 14.5 28 14.5Z"
+            fill="#fff"
+          />
+          <path d="M25 27.5c0 2 1.34 3.5 3 3.5s3-1.5 3-3.5" fill="none" stroke="#050505" strokeLinecap="round" strokeWidth="2.1" />
+        </svg>
       </button>
     </>
   );
@@ -657,10 +665,12 @@ export function PageShell({ children, className = "" }: { children: React.ReactN
   return (
     <div className={`min-h-screen neo-home text-foreground ${className}`}>
       <SiteHeader />
-      <main>{children}</main>
+      <main data-analytics-region="page-content">{children}</main>
       <SiteFooter />
       <MessageWidget />
       <CookieConsent />
+      <SiteAnalyticsTracker />
+      <AffiliateReferralTracker />
     </div>
   );
 }
@@ -691,16 +701,9 @@ export function TrustStrip() {
   return (
     <section className="neo-trust-strip border-b neo-line px-5 py-8 sm:px-6">
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 sm:flex-row">
-        <p className="yt-tag neo-section-label"><BadgeCheck size={16} aria-hidden="true" />Trusted creative output, without the production drag</p>
-        <div className="hidden flex-wrap items-center justify-center gap-x-8 gap-y-3 yt-small font-black tracking-[0.22em] neo-muted sm:flex">
-          {["TECHRIVA", "VOGUE", "APEX", "LUXE", "NEON"].map((logo) => <span key={logo}>{logo}</span>)}
-        </div>
-        <div className="neo-trust-strip-mobile-logos sm:hidden">
-          <PortfolioScroller className="neo-trust-strip-scroller" ariaLabel="Client logos" mobileOnly>
-            {["TECHRIVA", "VOGUE", "APEX", "LUXE", "NEON"].map((logo) => (
-              <span key={logo} className="neo-trust-logo yt-small font-black tracking-[0.22em] neo-muted">{logo}</span>
-            ))}
-          </PortfolioScroller>
+        <p className="yt-tag neo-section-label"><BadgeCheck size={16} aria-hidden="true" />A clear process for your next upload</p>
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 yt-small font-bold neo-muted">
+          {["Defined editing scope", "Timestamped feedback", "Final export approval"].map((benefit) => <span key={benefit}>{benefit}</span>)}
         </div>
       </div>
     </section>
@@ -715,7 +718,7 @@ export function WorkflowSection() {
   ];
 
   return (
-    <section id="workflow" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20 lg:py-24">
+    <section id="workflow" data-analytics-region="workflow" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20 lg:py-24">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
           <div>
@@ -776,6 +779,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   const [isDraggingTabList, setIsDraggingTabList] = useState(false);
   const [tabIndicator, setTabIndicator] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const activeSection = portfolioSections.find((section) => section.slug === displayedTab) || portfolioSections[0];
+  const hasReferenceExamples = portfolioSections.some((section) => section.videos.some((video) => video.uniqueSellingPoint === "YouTube sample"));
   const displayPortfolio = useMemo(() => buildPortfolioLayout(activeSection?.videos || []), [activeSection]);
 
   const startTabListDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -922,7 +926,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
   }, [playingItem]);
 
   return (
-    <section id="portfolio" className={`border-b neo-line px-5 py-14 sm:px-6 sm:py-20 ${className}`}>
+    <section id="portfolio" data-analytics-region="portfolio" className={`border-b neo-line px-5 py-14 sm:px-6 sm:py-20 ${className}`}>
       <div className="mx-auto max-w-7xl">
         {full ? (
           <div className="portfolio-gallery-intro">
@@ -932,7 +936,8 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
             </div>
             <span className="portfolio-gallery-note"><Film size={17} aria-hidden="true" /> Watch the full videos</span>
           </div>
-        ) : <SectionIntro eyebrow="Selected work" eyebrowIcon={Film} title="Edits built to keep viewers watching." />}
+        ) : <SectionIntro eyebrow={hasReferenceExamples ? "Editing references" : "Selected work"} eyebrowIcon={Film} title="Explore video editing styles and formats." />}
+        {hasReferenceExamples ? <p className="mx-auto mt-4 max-w-3xl text-center yt-small leading-6 neo-muted">Videos marked “Reference example” are public videos from the credited channels, shared to illustrate editing styles. Their production and results belong to those creators.</p> : null}
 
         <div
           ref={tabListRef}
@@ -1003,11 +1008,11 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
             <div className="portfolio-video-grid">
               {displayPortfolio.map((item) => (
                 <article className={`portfolio-video ${item.orientation === "vertical" ? "portfolio-video-vertical" : ""}`} key={item.id}>
-                  <PortfolioCard item={item} variant="wide" onPlay={playPortfolioItem} showCaption={false} />
+                  <PortfolioCard item={item} variant="wide" onPlay={playPortfolioItem} showCaption={false} responsiveThumbnail />
                   <div className="portfolio-video-caption">
                     <p>{item.creatorName}</p>
                     <h3>{item.title}</h3>
-                    <span>{item.uniqueSellingPoint === "YouTube sample" ? "YouTube sample" : item.tag || activeSection?.name}</span>
+                    <span>{item.uniqueSellingPoint === "YouTube sample" ? "Reference example" : item.tag || activeSection?.name}</span>
                   </div>
                 </article>
               ))}
@@ -1027,7 +1032,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
             </div>
           ) : null}
         </div>
-        {!full ? <div className="neo-portfolio-view-all mt-6 hidden justify-center">
+        {!full ? <div className="neo-portfolio-view-all mt-6 flex justify-center">
           <ButtonLink to="/portfolio">
             View more
             <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
@@ -1062,6 +1067,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
                   controls
                   autoPlay
                   playsInline
+                  preload="metadata"
                   onCanPlay={() => setIsPlayerLoading(false)}
                   onError={() => {
                     setIsPlayerLoading(false);
@@ -1120,6 +1126,7 @@ function PortfolioScroller({
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const firstSegmentRef = useRef<HTMLDivElement>(null);
+  const loopWidthRef = useRef(0);
   const autoFrameRef = useRef<number | null>(null);
   const momentumFrameRef = useRef<number | null>(null);
   const resumeAutoRef = useRef<number | null>(null);
@@ -1136,7 +1143,7 @@ function PortfolioScroller({
   });
   const [isDragging, setIsDragging] = useState(false);
 
-  const getLoopWidth = () => firstSegmentRef.current?.offsetWidth || 0;
+  const getLoopWidth = () => loopWidthRef.current;
 
   const advanceScroll = (movement: number) => {
     const scroller = scrollerRef.current;
@@ -1315,8 +1322,14 @@ function PortfolioScroller({
       scheduleAutoScroll();
     };
     scroller?.addEventListener("wheel", handleWheel, { passive: false });
-    const resizeObserver = new ResizeObserver(() => advanceScroll(0));
-    if (firstSegmentRef.current) resizeObserver.observe(firstSegmentRef.current);
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      const nextWidth = entry?.borderBoxSize[0]?.inlineSize ?? entry?.contentRect.width ?? 0;
+      if (nextWidth <= 0 || Math.abs(nextWidth - loopWidthRef.current) < 0.5) return;
+      loopWidthRef.current = nextWidth;
+      advanceScroll(0);
+    });
+    if (firstSegmentRef.current) resizeObserver.observe(firstSegmentRef.current, { box: "border-box" });
     updateMotionPreference();
     motionPreference.addEventListener("change", updateMotionPreference);
     document.addEventListener("visibilitychange", updateMotionPreference);
@@ -1398,12 +1411,14 @@ function PortfolioCard({
   featured = false,
   onPlay,
   showCaption = true,
+  responsiveThumbnail = false,
 }: {
   item: PortfolioVideo;
   variant: "hero" | "slider" | "wide" | "reel";
   featured?: boolean;
   onPlay: (item: PortfolioVideo) => void;
   showCaption?: boolean;
+  responsiveThumbnail?: boolean;
 }) {
   const isCopy = useContext(PortfolioCopyContext);
   const sizeClass = {
@@ -1421,18 +1436,41 @@ function PortfolioCard({
       className={`group relative block overflow-hidden rounded-[28px] border border-white bg-black text-left shadow-none ${sizeClass}`}
       aria-label={`Watch ${item.title} video`}
     >
-      <img
-        src={item.thumbnailUrl}
-        alt={showCaption ? `${item.title} ${item.creatorName} video` : ""}
-        loading="lazy"
-        decoding="async"
-        onError={(event) => {
-          if (item.videoProvider !== "youtube" || !item.thumbnailUrl.endsWith("/maxresdefault.jpg")) return;
-          const fallback = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
-          if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
-        }}
-        className="h-full w-full object-cover opacity-90 transition duration-300 group-hover:scale-[1.03] group-hover:opacity-100"
-      />
+      {responsiveThumbnail && item.videoProvider === "youtube" ? (
+        <picture className="block h-full w-full">
+          <source media="(max-width: 767px)" srcSet={`https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`} />
+          <img
+            src={item.thumbnailUrl}
+            alt={showCaption ? `${item.title} ${item.creatorName} video` : ""}
+            width={item.orientation === "vertical" ? 720 : 1280}
+            height={item.orientation === "vertical" ? 1280 : 720}
+            loading="lazy"
+            decoding="async"
+            onError={(event) => {
+              if (!item.thumbnailUrl.endsWith("/maxresdefault.jpg")) return;
+              const fallback = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+              event.currentTarget.removeAttribute("srcset");
+              if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+            }}
+            className="h-full w-full object-cover opacity-90 transition duration-300 group-hover:scale-[1.03] group-hover:opacity-100"
+          />
+        </picture>
+      ) : (
+        <img
+          src={item.thumbnailUrl}
+          alt={showCaption ? `${item.title} ${item.creatorName} video` : ""}
+          width={item.orientation === "vertical" ? 720 : 1280}
+          height={item.orientation === "vertical" ? 1280 : 720}
+          loading="lazy"
+          decoding="async"
+          onError={(event) => {
+            if (item.videoProvider !== "youtube" || !item.thumbnailUrl.endsWith("/maxresdefault.jpg")) return;
+            const fallback = `https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`;
+            if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+          }}
+          className="h-full w-full object-cover opacity-90 transition duration-300 group-hover:scale-[1.03] group-hover:opacity-100"
+        />
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
 
       <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white shadow-md ring-1 ring-white/20" aria-hidden="true">
@@ -1445,6 +1483,7 @@ function PortfolioCard({
       {showCaption ? <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
         <p className="yt-tag font-black uppercase text-white/70">{item.creatorName}</p>
         <h3 className="type-card-title mt-1 text-white">{item.title}</h3>
+        {item.uniqueSellingPoint === "YouTube sample" ? <p className="mt-1 text-xs font-semibold text-white/85">Reference example</p> : null}
       </div> : <span className="portfolio-video-play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M8 5v14l11-7z" /></svg></span>}
     </button>
   );
@@ -1469,7 +1508,7 @@ export function PricingSection({ comparison = false, plans }: { comparison?: boo
   }), plans);
 
   return (
-    <section id="pricing" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
+    <section id="pricing" data-analytics-region="pricing" className="border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
         <div className="neo-pricing-intro text-center">
           <p className="yt-tag neo-section-label"><CalendarDays size={16} aria-hidden="true" />Choose a monthly package</p>
@@ -1659,31 +1698,6 @@ function FeatureValue({ value }: { value: string }) {
   return <span>{value}</span>;
 }
 
-export function TestimonialsSection() {
-  return (
-    <section className="neo-testimonials border-b neo-line px-5 py-14 sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-7xl">
-        <PortfolioScroller className="neo-testimonial-scroller">
-          {testimonials.map(([quote, name, role]) => (
-            <div key={name} className="neo-testimonial-slide">
-              <article className="neo-card flex h-full min-h-[270px] flex-col items-center rounded-2xl p-7 text-center">
-                <div className="flex items-center justify-center gap-1" aria-label="5 out of 5 stars">
-                  {[1, 2, 3, 4, 5].map((star) => <span key={star} className="neo-rating-star material-symbols-outlined text-[17px]">star</span>)}
-                </div>
-                <p className="mt-5 w-full flex-1 yt-subtitle font-bold leading-8 neo-ink">"{quote}"</p>
-                <div className="mt-6 w-full text-center">
-                  <p className="font-black neo-ink">{name}</p>
-                  <p className="mt-1 yt-small font-bold neo-muted">{role}</p>
-                </div>
-              </article>
-            </div>
-          ))}
-        </PortfolioScroller>
-      </div>
-    </section>
-  );
-}
-
 export function FAQSection() {
   return <FaqSection id="faq" items={faqs.map(([question, answer]) => ({ question, answer }))} />;
 }
@@ -1722,6 +1736,7 @@ export function ContactSection({ compact = false, page = false, status, action =
     setSecurityError(null);
 
     try {
+      const { executeInvisibleRecaptcha } = await import("../../lib/recaptcha.client");
       await executeInvisibleRecaptcha(form, "contact_inquiry");
       await submit(form, { method: "post", action });
     } catch (error) {
@@ -1732,7 +1747,7 @@ export function ContactSection({ compact = false, page = false, status, action =
   }
 
   return (
-    <section id="contact" className={`px-5 py-14 sm:px-6 sm:py-20 ${page ? "contact-main" : ""}`} aria-label="Contact inquiry">
+    <section id="contact" data-analytics-region="contact" className={`px-5 py-14 sm:px-6 sm:py-20 ${page ? "contact-main" : ""}`} aria-label="Contact inquiry">
       <div className="neo-contact-layout mx-auto grid max-w-7xl gap-8 lg:grid-cols-[1fr_0.75fr]">
         {!page ? <div className="neo-surface flex flex-col justify-center rounded-[2rem] p-7 sm:p-10">
           <p className="yt-tag neo-section-label"><MessageCircle size={16} aria-hidden="true" />Contact us</p>
@@ -1747,7 +1762,7 @@ export function ContactSection({ compact = false, page = false, status, action =
             <p className="text-sm font-bold leading-6 neo-ink">Tell us your format, volume, and deadline. We will recommend the cleanest lane to start.</p>
           </div>
         </div> : null}
-        <form method="post" action={action} className="neo-card contact-form grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit} aria-busy={submitting || navigation.state !== "idle"}>
+        <form method="post" action={action} data-analytics-form="contact_inquiry" className="neo-card contact-form grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit} aria-busy={submitting || navigation.state !== "idle"}>
           <input type="hidden" name="g-recaptcha-response" value="" />
           {page ? <div className="contact-form-heading"><h2>What are you working on?</h2><p>Tell us a little about your project. We&apos;ll take it from here.</p></div> : null}
           <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -1760,7 +1775,7 @@ export function ContactSection({ compact = false, page = false, status, action =
             {page ? <span id={messageHelpId} className="contact-field-help">20–1,200 characters. Include your editing needs and timeline.</span> : null}
           </label>
           <button type="submit" disabled={submitting || navigation.state !== "idle"} className="neo-button neo-button--primary w-full">{submitting || navigation.state !== "idle" ? "Sending inquiry…" : "Send inquiry"}{page ? <span className="material-symbols-outlined text-[19px]" aria-hidden="true">arrow_forward</span> : null}</button>
-          {status === "sent" ? <p role="status" className="neo-inset rounded-xl px-4 py-3 yt-small font-black text-primary">Message sent. We will reply shortly.</p> : null}
+          {status === "sent" ? <p role="status" data-analytics-event="contact_inquiry" className="neo-inset rounded-xl px-4 py-3 yt-small font-black text-primary">Message sent. We will reply shortly.</p> : null}
           {securityError || status === "security-error" ? <p role="alert" className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">{securityError || "Security check failed. Please try again."}</p> : null}
           {status === "invalid-error" ? <p role="alert" className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">Enter a name, valid email, and a message of 20–1,200 characters, then try again.</p> : null}
           {status === "delivery-error" ? <p role="alert" className="rounded-xl bg-[#f6dfe2] px-4 py-3 yt-small font-black text-[#a91b27]">We couldn&apos;t save your inquiry. Please try again or email <a className="underline underline-offset-2" href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p> : null}

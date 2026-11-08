@@ -11,14 +11,14 @@ const questions = [
   { question: "Are unused monthly hours carried over?", answer: "No. Each package is a monthly capacity reservation, so unused hours expire at the end of that package month. We’ll help prioritize the work that fits your available time." },
   { question: "How is a single-video package different?", answer: "A single-video package is priced per deliverable, with a finished-length limit, raw-footage limit, and revision allowance. Open its package page for the full scope and first-cut target. Choose one when you have a specific edit rather than recurring monthly work." },
   { question: "Can I ask for work outside the listed scope?", answer: "Yes. Longer edits, extra source footage, custom VFX, project files, and work beyond reserved monthly hours can be quoted separately. We confirm any added price and timing before work begins." },
-  { question: "Can I pay online today?", answer: "The checkout currently saves your selection and contact details, but card payments are not enabled yet. Contact us if you’d like to discuss a package or confirm the next step." },
+  { question: "Can I pay online today?", answer: "Yes. Checkout accepts cryptocurrency through Cryptomus. You can choose a supported coin and network on the hosted payment page." },
 ];
 
 type PackageKind = EditingPackage["packageType"];
 
 const packageIcons: Record<string, LucideIcon> = {
+  "short-form-video-editing": Clapperboard,
   "single-creator": Scissors,
-  "single-studio": SlidersHorizontal,
   "single-feature": Film,
   creator: Scissors,
   "creator-plus": SlidersHorizontal,
@@ -104,7 +104,7 @@ function PricingPackageOptions({ packages, packageKind, onPackageKindChange, id 
   const isMonthly = packageKind === "monthly";
   const titleId = `${id}-title`;
 
-  return <section id={id} className="pack-options pack-container" aria-labelledby={titleId}>
+  return <section id={id} data-analytics-region="pricing" className="pack-options pack-container" aria-labelledby={titleId}>
     <div className="pack-options-intro">
       <div>
         <h2 id={titleId}>{isMonthly ? "Reserve editing time for your month." : "Choose the edit you need."}</h2>

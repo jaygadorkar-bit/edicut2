@@ -1,0 +1,150 @@
+{
+  "canonical": [
+    "https://edicut.com/"
+  ],
+  "frames": [],
+  "h1": [
+    "Video editing\nfor your next\nYouTube upload."
+  ],
+  "icon": [
+    "<link rel=\"icon\" href=\"/favicon.ico?v=ec4\" type=\"image/x-icon\" sizes=\"16x16 32x32 48x48 256x256\">",
+    "<link rel=\"icon\" href=\"/favicon.svg?v=ec4\" type=\"image/svg+xml\" sizes=\"any\">"
+  ],
+  "images": [
+    {
+      "alt": "EdiCut",
+      "height": 48,
+      "loading": "auto",
+      "nh": 506,
+      "nw": 1162,
+      "src": "https://edicut.com/icons/edicut-logo.svg",
+      "width": 110
+    },
+    {
+      "alt": "The Ridge Northline Films video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 598
+    },
+    {
+      "alt": "Neon Pulse Mira Lane video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 358
+    },
+    {
+      "alt": "Apex Drive Apex Motors video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 598
+    },
+    {
+      "alt": "Product Review Tech Table video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 598
+    },
+    {
+      "alt": "Founder Interview Build Room video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 598
+    },
+    {
+      "alt": "The Ridge Northline Films video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 598
+    },
+    {
+      "alt": "Neon Pulse Mira Lane video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 358
+    },
+    {
+      "alt": "Apex Drive Apex Motors video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 598
+    },
+    {
+      "alt": "Product Review Tech Table video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 598
+    },
+    {
+      "alt": "Founder Interview Build Room video",
+      "height": 338,
+      "loading": "lazy",
+      "nh": 0,
+      "nw": 0,
+      "src": "",
+      "width": 598
+    }
+  ],
+  "jsonld": [],
+  "links": [
+    {
+      "href": "https://edicut.com/services/youtube-video-editing",
+      "text": "YouTube video editing"
+    },
+    {
+      "href": "https://edicut.com/services/podcast-video-editing",
+      "text": "Podcast video editing"
+    },
+    {
+      "href": "https://edicut.com/services/short-form-video-editing",
+      "text": "Short-form video editing"
+    },
+    {
+      "href": "https://edicut.com/services/gaming-video-editing",
+      "text": "Gaming video editing"
+    },
+    {
+      "href": "https://edicut.com/services/youtube-thumbnail-design",
+      "text": "YouTube thumbnail design"
+    },
+    {
+      "href": "https://edicut.com/services",
+      "text": "Services"
+    }
+  ],
+  "robots": [
+    "<meta name=\"robots\" content=\"noindex, nofollow, noarchive\">"
+  ],
+  "title": "EdiCut | Video Editing for YouTube Creators",
+  "url": "https://edicut.com/",
+  "viewport": {
+    "scroll": 1270,
+    "w": 1280
+  }
+}

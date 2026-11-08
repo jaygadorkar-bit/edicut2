@@ -1,9 +1,10 @@
 /**
  * Material Symbols used by the frontend and workspace UI.
  *
- * Keep this list alphabetically sorted and update it whenever a new ligature is
- * added to a `.material-symbols-outlined` element or an icon data source. The
- * Google Fonts `icon_names` parameter subsets the downloaded font to this list.
+ * Keep this list alphabetically sorted and in sync with the versioned local font
+ * subset whenever a new ligature is added to a `.material-symbols-outlined`
+ * element or icon data source. Regenerate the subset through Google Fonts and
+ * update the versioned local CSS/font paths when the list changes.
  */
 export const materialSymbolNames = [
   "add",
@@ -17,7 +18,9 @@ export const materialSymbolNames = [
   "assignment",
   "auto_awesome",
   "auto_awesome_mosaic",
+  "block",
   "bolt",
+  "bug_report",
   "build",
   "calendar_month",
   "campaign",
@@ -30,6 +33,7 @@ export const materialSymbolNames = [
   "chevron_right",
   "close",
   "cloud",
+  "cloud_alert",
   "cloud_upload",
   "compare_arrows",
   "confirmation_number",
@@ -46,6 +50,7 @@ export const materialSymbolNames = [
   "download",
   "edit",
   "edit_note",
+  "error",
   "event_available",
   "expand_less",
   "expand_more",
@@ -64,6 +69,7 @@ export const materialSymbolNames = [
   "hub",
   "image",
   "inbox",
+  "language",
   "lock",
   "lock_reset",
   "login",
@@ -93,6 +99,7 @@ export const materialSymbolNames = [
   "play_arrow",
   "play_circle",
   "podcasts",
+  "policy",
   "radio_button_unchecked",
   "rate_review",
   "receipt_long",
@@ -100,12 +107,14 @@ export const materialSymbolNames = [
   "remove_circle",
   "reply",
   "restore_from_trash",
+  "route",
   "save",
   "schedule",
   "school",
   "sd_storage",
   "search",
   "search_off",
+  "security",
   "self_improvement",
   "sell",
   "send",
@@ -114,14 +123,18 @@ export const materialSymbolNames = [
   "shield",
   "shield_person",
   "smart_display",
+  "smart_toy",
   "space_dashboard",
   "speed",
   "sports_esports",
   "star",
   "support_agent",
+  "system_update_alt",
+  "task_alt",
   "timer",
   "travel_explore",
   "trending_up",
+  "tune",
   "unfold_more",
   "upload_file",
   "verified_user",
@@ -133,7 +146,4 @@ export const materialSymbolNames = [
   "workspace_premium",
 ] as const;
 
-export function getMaterialSymbolsStylesheetUrl() {
-  const icons = materialSymbolNames.join(",");
-  return `https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&icon_names=${icons}&display=block`;
-}
+export const MATERIAL_SYMBOLS_FONT_URL = "/assets/material-symbols-v383.woff2";

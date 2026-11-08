@@ -26,6 +26,23 @@
     padding: 2rem 1.25rem 2.5rem;
   }
 
+  .neo-homepage .neo-hero-glow {
+    filter: none;
+    background-color: transparent;
+  }
+
+  .neo-homepage .neo-hero-glow--left {
+    background-image: radial-gradient(circle, rgb(203 219 232 / 38%), rgb(203 219 232 / 12%) 48%, transparent 72%);
+  }
+
+  .neo-homepage .neo-hero-glow--right {
+    background-image: radial-gradient(circle, rgb(226 201 206 / 32%), rgb(226 201 206 / 10%) 48%, transparent 72%);
+  }
+
+  .neo-homepage .neo-hero-glow--top {
+    background-image: radial-gradient(circle, rgb(255 255 255 / 44%), rgb(255 255 255 / 14%) 48%, transparent 72%);
+  }
+
   .neo-homepage .neo-hero-title {
     margin-top: 1.5rem;
     line-height: var(--type-leading-heading);

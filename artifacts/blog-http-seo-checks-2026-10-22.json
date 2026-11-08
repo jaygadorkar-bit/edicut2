@@ -1,0 +1,85 @@
+{
+  "localHttp": [
+    {
+      "path": "/blog",
+      "status": 200,
+      "h1Count": 1,
+      "noindex": true
+    },
+    {
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "status": 200,
+      "h1Count": 1,
+      "noindex": true
+    },
+    {
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "status": 200,
+      "h1Count": 1,
+      "noindex": true
+    },
+    {
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "status": 200,
+      "h1Count": 1,
+      "noindex": true
+    },
+    {
+      "path": "/blog/not-a-published-article",
+      "status": 404,
+      "h1Count": 1,
+      "noindex": true
+    }
+  ],
+  "productionBuild": [
+    {
+      "path": "/blog",
+      "title": "Video Editing Tips for YouTube Creators | EdiCut Blog",
+      "canonical": "https://edicut.com/blog",
+      "h1Count": 1,
+      "indexable": true,
+      "schemaTypes": [
+        "Blog",
+        "ItemList",
+        "BreadcrumbList"
+      ],
+      "publisher": "EdiCut"
+    },
+    {
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "title": "How to Choose a YouTube Video Editing Service | EdiCut",
+      "canonical": "https://edicut.com/blog/how-to-choose-youtube-video-editing-service",
+      "h1Count": 1,
+      "indexable": true,
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList"
+      ],
+      "publisher": "EdiCut"
+    },
+    {
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "title": "YouTube Video Editing Brief Checklist + Sample | EdiCut",
+      "canonical": "https://edicut.com/blog/youtube-video-editing-brief-checklist",
+      "h1Count": 1,
+      "indexable": true,
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList"
+      ],
+      "publisher": "EdiCut"
+    },
+    {
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "title": "How to Repurpose YouTube Videos Into Shorts | EdiCut",
+      "canonical": "https://edicut.com/blog/repurpose-youtube-videos-into-shorts",
+      "h1Count": 1,
+      "indexable": true,
+      "schemaTypes": [
+        "BlogPosting",
+        "BreadcrumbList"
+      ],
+      "publisher": "EdiCut"
+    }
+  ]
+}

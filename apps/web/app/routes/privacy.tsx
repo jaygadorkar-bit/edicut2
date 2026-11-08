@@ -35,8 +35,13 @@ const sections = [
     copy: <>When an administrator connects a YouTube channel, EdiCut requests permission to upload videos and read channel/video details. We store the channel identifier/name, video identifiers, and an encrypted refresh token to operate this connection. We never request or store your Google password. Review exports are uploaded as unlisted videos; anyone with the link may watch them. YouTube embeds may collect playback/device information under the <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="underline">Google Privacy Policy</a>. Administrators can disconnect storage in Video storage and revoke access in <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="underline">Google account permissions</a>. Disconnecting removes EdiCut’s stored credential; channel owners manage or delete the actual videos in YouTube Studio. Contact privacy@edicut.com to request deletion of stored project or connection information.</>,
   },
   {
+    icon: "analytics",
+    title: "6. Optional Analytics",
+    copy: "Cloudflare provides sampled, aggregate traffic, country, page-view, and bot estimates for the admin dashboard. Separately, if you accept optional analytics in the cookie notice, EdiCut counts hover, click, and dwell totals for named page areas, grouped by day and page path. The on-site interaction tracker does not collect cursor coordinates, query strings, names, or typed content. Choosing essential cookies keeps this optional interaction tracking off.",
+  },
+  {
     icon: "support_agent",
-    title: "6. Contact & Privacy Inquiries",
+    title: "7. Contact & Privacy Inquiries",
     copy: "For questions about privacy, data rights, or custom security requirements, contact privacy@edicut.com.",
   },
 ];
@@ -59,7 +64,7 @@ export default function PrivacyPage() {
           <p className="yt-subtitle mx-auto mt-6 max-w-2xl leading-8 neo-muted">
             How EdiCut protects creator footage, project assets, and confidential account information.
           </p>
-          <p className="mt-4 yt-small font-black neo-muted">Effective Date: October 1, 2026</p>
+          <p className="mt-4 yt-small font-black neo-muted">Effective Date: October 16, 2026</p>
         </div>
       </section>
 

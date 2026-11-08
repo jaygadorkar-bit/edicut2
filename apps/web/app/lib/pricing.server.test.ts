@@ -42,7 +42,7 @@ describe("configured public editing catalog", () => {
     await expect(getPricingPackages(null, undefined, { failOnError: true })).rejects.toThrow("empty");
   });
 
-  it("rejects unexpected invalid package entries while preserving the retired package migration", async () => {
+  it("rejects unexpected invalid package entries while preserving retired package migrations", async () => {
     mocks.getSiteSetting.mockResolvedValue(JSON.stringify([{ slug: "corrupt", galleryImages: ["https://example.test/image.jpg"] }]));
     await expect(getPricingPackages(null, undefined, { failOnError: true })).rejects.toThrow("read safely");
 
@@ -53,7 +53,30 @@ describe("configured public editing catalog", () => {
     await expect(getPricingPackages(null, undefined, { failOnError: true })).resolves.toHaveLength(6);
   });
 
-  it("migrates saved legacy package settings and adds the three single-video offers", async () => {
+  it("replaces the retired Studio package with the new short-form offer", async () => {
+    const legacyStudio = {
+      ...defaultPricingPackages.find(item => item.slug === "single-creator")!,
+      name: "Studio Video", slug: "single-studio", price: "$179", sortOrder: 5,
+    };
+    const saved = [
+      ...defaultPricingPackages.filter(item => item.slug !== "short-form-video-editing").map(item => item.slug === "single-creator" ? { ...item, sortOrder: 0 } : item),
+      legacyStudio,
+    ];
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify(saved));
+
+    const packages = await getPricingPackages(null, undefined, { failOnError: true });
+
+    expect(packages).toHaveLength(6);
+    expect(packages.map(item => item.slug)).not.toContain("single-studio");
+    expect(packages.map(item => item.slug)).toContain("short-form-video-editing");
+    expect(packages.find(item => item.slug === "short-form-video-editing")).toMatchObject({ price: "$25", active: true });
+    expect(defaultPricingPackages.find(item => item.slug === "short-form-video-editing")?.sortOrder).toBe(4);
+    expect(packages.filter(item => item.packageType === "single").map(item => item.slug)).toEqual([
+      "short-form-video-editing", "single-creator", "single-feature",
+    ]);
+  });
+
+  it("migrates saved legacy package settings and adds the current single-video offers", async () => {
     const previousPrices = new Map([["creator", "$249"], ["creator-plus", "$549"], ["creator-pro", "$1,099"]]);
     const saved = defaultPricingPackages.slice(0, 3).map((item) => ({
       ...item,
@@ -67,15 +90,49 @@ describe("configured public editing catalog", () => {
     const packages = await getPricingPackages(null);
 
     expect(packages).toHaveLength(6);
-    expect(packages.map((item) => item.slug)).toEqual(["creator", "creator-plus", "creator-pro", "single-creator", "single-studio", "single-feature"]);
-    expect(packages.map((item) => item.price)).toEqual(["$2,149", "$2,649", "$3,149", "$109", "$179", "$249"]);
+    expect(packages.map((item) => item.slug)).toEqual(["creator", "creator-plus", "creator-pro", "short-form-video-editing", "single-creator", "single-feature"]);
+    expect(packages.map((item) => item.price)).toEqual(["$2,149", "$2,649", "$3,149", "$25", "$109", "$249"]);
     expect(packages[0]).toMatchObject({ packageType: "monthly", editingHoursPerMonth: 88, editingHoursPerWorkday: 4 });
     expect(packages.find((item) => item.slug === "creator-plus")?.active).toBe(false);
     expect(packages.find((item) => item.slug === "creator-plus")?.features).not.toContain("Old package feature");
   });
 
+  it("renames saved Basic, Medium, and Pro plans to Essential, Pro, and Max without changing their prices", async () => {
+    const legacyNames = ["Basic", "Medium", "Pro"];
+    const legacySlugs = ["basic", "medium", "pro"];
+    const legacyPrices = ["$500", "$999", "$1,899"];
+    const saved = defaultPricingPackages.slice(0, 3).map((item, index) => ({
+      ...item,
+      name: legacyNames[index]!,
+      slug: legacySlugs[index]!,
+      price: legacyPrices[index]!,
+    }));
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify(saved));
+
+    const packages = await getPricingPackages(null, undefined, { failOnError: true });
+
+    expect(packages.slice(0, 3).map(({ name, slug, price }) => ({ name, slug, price }))).toEqual([
+      { name: "Essential", slug: "creator", price: "$500" },
+      { name: "Pro", slug: "creator-plus", price: "$999" },
+      { name: "Max", slug: "creator-pro", price: "$1,899" },
+    ]);
+    expect(packages).toHaveLength(6);
+  });
+
+  it("migrates prior catalog tier labels but preserves custom monthly package names", async () => {
+    const saved = defaultPricingPackages.slice(0, 3).map((item) => ({
+      ...item,
+      name: item.slug === "creator" ? "Starter" : item.slug === "creator-plus" ? "Growth" : "Custom Studio",
+    }));
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify(saved));
+
+    const packages = await getPricingPackages(null);
+
+    expect(packages.slice(0, 3).map(({ name }) => name)).toEqual(["Essential", "Pro", "Custom Studio"]);
+  });
+
   it("only migrates a complete historical monthly price set and preserves custom prices and ordering", async () => {
-    const order = ["single-studio", "single-feature", "single-creator", "creator-pro", "creator-plus", "creator"];
+    const order = ["short-form-video-editing", "single-feature", "single-creator", "creator-pro", "creator-plus", "creator"];
     const oldMonthlyPrices = new Map([["creator", "$249"], ["creator-plus", "$549"], ["creator-pro", "$1,099"]]);
     const saved = defaultPricingPackages.map((item) => ({
       ...item,
@@ -119,7 +176,7 @@ describe("configured public editing catalog", () => {
     const saved = defaultPricingPackages.filter((item) => item.slug !== "single-feature").map((item) => ({
       ...item,
       ...(item.slug === "single-creator" ? { sortOrder: 5 } : {}),
-      ...(item.slug === "single-studio" ? { sortOrder: 6 } : {}),
+      ...(item.slug === "short-form-video-editing" ? { sortOrder: 1 } : {}),
     }));
     saved.splice(3, 0, {
       ...defaultPricingPackages.find((item) => item.slug === "single-creator")!,

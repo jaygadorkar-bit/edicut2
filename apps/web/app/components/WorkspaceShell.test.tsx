@@ -9,7 +9,8 @@ import { ChatWorkspace, chatReadMessageId, mergeVisibleChatMessages } from "./Ch
 import type { ChatMessage, ChatRoom } from "../lib/chat";
 
 const account = { name: "Client", detail: "Client" };
-it("places Projects third in the administrator navigation",()=>{expect(adminPanelNavItems.slice(0,3).map(item=>item.label)).toEqual(["Dashboard","Orders","Projects"]);});
+it("keeps Clients and Orders as separate navigation pages",()=>{expect(adminPanelNavItems.slice(0,4).map(item=>item.label)).toEqual(["Dashboard","Clients","Orders","Projects"]);});
+it("places the Error Log and Threat Log after Analytics in the administrator navigation",()=>{const analytics=adminPanelNavItems.findIndex(item=>item.tab==="analytics");expect(analytics).toBeGreaterThanOrEqual(0);expect(adminPanelNavItems.slice(analytics,analytics+4).map(item=>item.label)).toEqual(["Analytics","Error log","Threat log","Infrastructure"]);});
 const navItems: WorkspaceNavItem[] = [{ label: "Dashboard", icon: "dashboard_customize", to: "/dashboard" }];
 
 function render(element: ReactNode) {
@@ -117,8 +118,9 @@ describe("chat navigation placement", () => {
     expect(html).toContain('src="https://cdn.example.test/admin.png"');
     expect(html).toContain("EdiCut Admin");
     expect(html).toContain("Admin · Active 5m ago");
-    expect(html).toContain("2 Members");
-    expect(html).toContain("chat-room-member-dot has-recent-activity");
+    expect(html).toContain('aria-label="3 members"');
+    expect(html).not.toContain("2 Members");
+    expect(html).not.toContain("chat-room-member-dot");
     expect(html).toContain("MB");
     expect(html).toContain("Project manager · No activity yet");
 
@@ -148,6 +150,11 @@ describe("chat navigation placement", () => {
 });
 
 describe("admin navigation notifications", () => {
+  it("links the Error Log and Threat Log to their dedicated admin pages", () => {
+    const html = render(<AdminPanelShell title="Error log" activeTab="error-log" account={account}>Logs</AdminPanelShell>);
+    expect(html).toContain('href="/site/node-logmin/error-log"');
+    expect(html).toContain('href="/site/node-logmin/threat-log"');
+  });
   it("uses Discounts while preserving the existing coupon route", () => {
     const html = render(<AdminPanelShell title="Discounts" activeTab="marketing" account={account}>Discounts</AdminPanelShell>);
     expect(html).toContain('href="/site/node-logmin?tab=marketing"');
@@ -158,26 +165,27 @@ describe("admin navigation notifications", () => {
     expect(renderAdminProfile({ email: "ADMIN@example.test", imageUrl: "https://lh3.googleusercontent.com/test-avatar" })).toContain('src="https://lh3.googleusercontent.com/test-avatar"');
     expect(renderAdminProfile({ email: "different@example.test", imageUrl: "https://lh3.googleusercontent.com/other-avatar" })).not.toContain('src="https://lh3.googleusercontent.com/other-avatar"');
   });
-  it("places Orders below Dashboard, omits Audit Logs, and gives each badge an accurate accessible label", () => {
+  it("places Orders beside Clients and does not use unpaid orders for its notification badge", () => {
     const html = render(<AdminPanelShell title="Users" activeTab="users" account={account} pendingOrderCount={3} unreadEnquiryCount={7}><p>Users</p></AdminPanelShell>);
     const navigation = html.split('aria-label="Workspace navigation"')[1].split("</nav>")[0];
-    expect(navigation.indexOf(">Dashboard</span>")).toBeLessThan(navigation.indexOf(">Orders</span>"));
-    expect(navigation.indexOf(">Orders</span>")).toBeLessThan(navigation.indexOf(">Users</span>"));
+    expect(navigation.indexOf(">Dashboard</span>")).toBeLessThan(navigation.indexOf(">Clients</span>"));
+    expect(navigation.indexOf(">Clients</span>")).toBeLessThan(navigation.indexOf(">Orders</span>"));
+    expect(navigation.indexOf(">Clients</span>")).toBeLessThan(navigation.indexOf(">Role manager</span>"));
     expect(navigation).not.toContain("Purchases");
     expect(navigation).not.toContain("Audit Logs");
     expect(navigation).toContain(">Support tickets</span>");
     expect(navigation).not.toContain(">Tickets</span>");
-    expect(navigation).toContain('class="neo-workspace__nav-count">3</span>');
+    expect(navigation).not.toContain('class="neo-workspace__nav-count">3</span>');
     expect(navigation).toContain('class="neo-workspace__nav-count">7</span>');
-    expect(navigation).toContain("3 orders awaiting payment confirmation");
+    expect(navigation).not.toContain("orders awaiting payment confirmation");
     expect(navigation).toContain("7 unread enquiries");
   });
-  it("hides empty badges and caps large visual counts while preserving the full accessible count", () => {
+  it("hides empty badges and does not use the unpaid order total as an unread count", () => {
     const empty = render(<AdminPanelShell title="Users" activeTab="users" account={account}><p>Users</p></AdminPanelShell>);
     expect(empty).not.toContain('class="neo-workspace__nav-count');
     const html = render(<AdminPanelShell title="Users" activeTab="users" account={account} pendingOrderCount={105}><p>Users</p></AdminPanelShell>);
-    expect(html).toContain('neo-workspace__nav-count--large">99+</span>');
-    expect(html).toContain("105 orders awaiting payment confirmation");
+    expect(html).not.toContain('neo-workspace__nav-count--large">99+</span>');
+    expect(html).not.toContain("orders awaiting payment confirmation");
   });
 });
 

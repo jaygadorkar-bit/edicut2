@@ -148,6 +148,7 @@ describe("affiliate commission reporting", () => {
     const query = (rows: unknown[]) => {
       const builder = {
         from: vi.fn(() => builder),
+        leftJoin: vi.fn(() => builder),
         innerJoin: vi.fn(() => builder),
         where: vi.fn(() => builder),
         orderBy: vi.fn(() => builder),
@@ -179,6 +180,7 @@ describe("affiliate commission reporting", () => {
   it("does not load orders if the signed-in account has no affiliate profile", async () => {
     const builder = {
       from: vi.fn(() => builder),
+      leftJoin: vi.fn(() => builder),
       innerJoin: vi.fn(() => builder),
       where: vi.fn(() => builder),
       limit: vi.fn(async () => []),

@@ -1,6 +1,7 @@
-import { Form, Link } from "react-router";
-import { LayoutDashboard, LogOut, ShieldCheck } from "lucide-react";
+import { Link } from "react-router";
+import { Handshake, LayoutDashboard, LogOut, ShieldCheck } from "lucide-react";
 import { ADMIN_BASE_PATH, adminAccessPath } from "../../lib/admin-paths";
+import { ConfirmSignOutButton } from "../ConfirmSignOutButton";
 
 const toolbarLink = {
   label: "Admin panel",
@@ -32,12 +33,20 @@ export function AdminToolbar() {
           <LayoutDashboard size={16} strokeWidth={1.75} aria-hidden="true" />
           <span>Client dashboard</span>
         </Link>
-        <Form method="post" action="/signout" className="neo-admin-toolbar__signout">
-          <button type="submit" className="neo-admin-toolbar__action">
-            <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
-            <span>Sign out</span>
-          </button>
-        </Form>
+        <Link
+          to="/affiliate-signup"
+          reloadDocument
+          title="Open the affiliate program signup page"
+          aria-label="Open the affiliate program signup page"
+          className="neo-admin-toolbar__action neo-admin-toolbar__affiliate-signup"
+        >
+          <Handshake size={16} strokeWidth={1.75} aria-hidden="true" />
+          <span>Affiliate signup</span>
+        </Link>
+        <ConfirmSignOutButton wrapperClassName="neo-admin-toolbar__signout" buttonClassName="neo-admin-toolbar__action">
+          <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
+          <span>Sign out</span>
+        </ConfirmSignOutButton>
       </div>
     </nav>
   );

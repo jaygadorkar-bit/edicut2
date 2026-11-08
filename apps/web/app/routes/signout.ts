@@ -1,6 +1,6 @@
 import { redirect, type ActionFunctionArgs } from "react-router";
-import { destroyAdminSession, destroySession, getAdminSession, getSession, revokeAuthenticatedSessions } from "../lib/session.server";
-import { forbiddenMutation, isSameSiteMutation } from "../lib/mutation-request.server";
+import { destroyAdminSession, destroySession, getAdminSession, getSession, revokeAuthenticatedSessions, verifySignOutCsrfToken } from "../lib/session.server";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 
 // Visiting a link must never sign someone out; only the submitted form does.
 export function loader() {
@@ -12,9 +12,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return new Response("Method not allowed", { status: 405, headers: { Allow: "POST" } });
   }
 
-  if (!isSameSiteMutation(request)) return forbiddenMutation();
-
   const cookie = request.headers.get("Cookie");
+  if (request.headers.get("Sec-Fetch-Site") === "cross-site") return forbiddenMutation();
+  if (!isSameSiteMutation(request)) {
+    const form = await readMutationForm(request, 4096);
+    if (!await verifySignOutCsrfToken(form?.get("_csrf"), cookie, context)) return forbiddenMutation();
+  }
+
   const [session, adminSession] = await Promise.all([
     getSession(cookie, context),
     getAdminSession(cookie, context),

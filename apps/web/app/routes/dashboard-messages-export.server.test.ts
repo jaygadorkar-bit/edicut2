@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 const mocks = vi.hoisted(() => {
   const limit = vi.fn(async () => [] as Record<string, unknown>[]);
-  const where = vi.fn(() => ({ orderBy: () => ({ limit }) }));
+  const where = vi.fn((_condition: unknown) => ({ orderBy: () => ({ limit }) }));
   const db = { select: vi.fn(() => ({ from: () => ({ where }) })) };
   return { db, limit, where, access: vi.fn(async () => ({ db })) };
 });
@@ -28,7 +30,13 @@ describe("enquiry CSV download", () => {
     expect(result.headers.get("Cache-Control")).toBe("no-store");
     expect(await result.text()).toBe("id,name,email,projectType,monthlyVolume,message,status,lastReply,repliedAt,createdAt,updatedAt");
     expect(mocks.where).toHaveBeenCalledWith(expect.anything());
+    expectNoPartnerApplications(mocks.where.mock.calls[0][0]);
     expect(mocks.limit).toHaveBeenCalledWith(1001);
+  });
+
+  it.each(["all", "replied", "unreplied"])("excludes partner applications from the %s CSV export", async (filter) => {
+    await loader(args(filter));
+    expectNoPartnerApplications(mocks.where.mock.calls[0][0]);
   });
 
   it("bounds exports and rejects oversized results", async () => {
@@ -46,6 +54,14 @@ describe("enquiry CSV download", () => {
     expect(csv).toContain('"Alex ""Morgan"""');
     expect(csv).toContain(`"'=HYPERLINK(""https://example.com"")"`);
     expect(csv).toContain('"2026-10-04T00:00:00.000Z"');
-    expect(mocks.where).toHaveBeenCalledWith(undefined);
+    expectNoPartnerApplications(mocks.where.mock.calls[0][0]);
   });
 });
+
+function expectNoPartnerApplications(condition: unknown) {
+  const query = new PgDialect().sqlToQuery(condition as SQL);
+  const normalizedSql = query.sql.toLowerCase();
+  expect(normalizedSql).toContain('"contact_messages"."project_type" is null');
+  expect(normalizedSql).toContain('"contact_messages"."project_type" <>');
+  expect(query.params).toContain("Video editor partner application");
+}

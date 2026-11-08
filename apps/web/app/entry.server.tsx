@@ -1,6 +1,11 @@
-import type { EntryContext } from "react-router";
+import type { EntryContext, HandleErrorFunction } from "react-router";
 import { ServerRouter } from "react-router";
 import { renderToReadableStream } from "react-dom/server";
+import { scheduleApplicationErrorCapture } from "./lib/application-error-log.server";
+
+export const handleError: HandleErrorFunction = (error, { request, context }) => {
+  scheduleApplicationErrorCapture(context, request, error);
+};
 
 export default async function handleRequest(
   request: Request,
@@ -11,9 +16,8 @@ export default async function handleRequest(
   const body = await renderToReadableStream(
     <ServerRouter context={routerContext} url={request.url} />,
     {
-      onError(error: unknown) {
+      onError() {
         responseStatusCode = 500;
-        console.error(error);
       },
     }
   );

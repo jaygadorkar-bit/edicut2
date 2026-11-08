@@ -5,6 +5,7 @@ import { creatorProfiles } from "@edicut/db/schema";
 import type { DatabaseClient } from "@edicut/db/client";
 import { createPurchasedProject, resetCreatorProfile, saveCreatorProfile } from "./client-workspace.server";
 import type { CreatorProfile, ProjectBrief } from "./client-intake";
+import { SHORT_FORM_PACKAGE_SLUG } from "./subscriptions";
 
 const ownerId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const subscriptionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -18,6 +19,30 @@ const brief: ProjectBrief = {
   captions: "Burned-in", editingMinutes: 15,
 };
 
+function purchasedProjectDb(packageSlug: string) {
+  const selectResults = [
+    [{ details: profile }],
+    [{
+      subscription: {
+        id: subscriptionId, ownerId, packageSlug, planName: packageSlug, purchaseType: "single",
+        status: "paid", paidAt: new Date(Date.now() - 1_000), deletedAt: null,
+      },
+      entitlement: { grantedUnits: 1, usedUnits: 0 },
+    }],
+    [],
+  ];
+  let index = 0;
+  const select = vi.fn(() => {
+    const rows = selectResults[index++] ?? [];
+    return {
+      from: vi.fn().mockReturnThis(), leftJoin: vi.fn().mockReturnThis(), where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(rows), limit: vi.fn().mockResolvedValue(rows),
+    };
+  });
+  const execute = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ project_id: "project-id" }]);
+  return { db: { select, execute } as unknown as DatabaseClient, execute };
+}
+
 describe("purchased project concurrency", () => {
   it.each([
     { purchaseType: "monthly", pendingMigration: false },
@@ -29,7 +54,7 @@ describe("purchased project concurrency", () => {
       [{
         subscription: {
           id: subscriptionId, ownerId, packageSlug: purchaseType === "monthly" ? "creator-pro" : "single-creator", planName: "Studio", purchaseType,
-          status: "paid", paidAt: new Date("2026-10-01T00:00:00.000Z"), deletedAt: null,
+          status: "paid", paidAt: new Date(Date.now() - 1_000), deletedAt: null,
         },
         entitlement: { grantedUnits: 6600, usedUnits: 0 },
       }],
@@ -61,6 +86,22 @@ describe("purchased project concurrency", () => {
     const savedBrief = compiled.params.find(value => typeof value === "string" && value.startsWith('{"title":'));
     expect(JSON.parse(String(savedBrief))).toMatchObject({ editingMinutes: 0 });
     expect(compiled.params.some(value => typeof value === "string" && value.includes(purchaseType === "monthly" ? "no hours deducted at submission" : "Uses one purchased video credit"))).toBe(true);
+  });
+  it("rejects a short-form brief longer than 60 seconds before consuming a video credit", async () => {
+    const { db, execute } = purchasedProjectDb(SHORT_FORM_PACKAGE_SLUG);
+    const shortBrief = { ...brief, finishedMinutes: 1.01, aspectRatio: "9:16" };
+
+    await expect(createPurchasedProject(db, ownerId, subscriptionId, "dddddddd-dddd-4ddd-8ddd-dddddddddddd", shortBrief))
+      .resolves.toEqual({ error: expect.stringContaining("up to 60 seconds") });
+    expect(execute).not.toHaveBeenCalled();
+  });
+  it("keeps already-paid retired Studio orders fulfillable at their original limit", async () => {
+    const { db, execute } = purchasedProjectDb("single-studio");
+    const legacyBrief = { ...brief, finishedMinutes: 15 };
+
+    await expect(createPurchasedProject(db, ownerId, subscriptionId, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", legacyBrief))
+      .resolves.toEqual({ id: expect.any(String) });
+    expect(execute).toHaveBeenCalledTimes(2);
   });
   it("preserves legacy channel fields when saving the reduced profile", async () => {
     const execute = vi.fn().mockResolvedValue([{ owner_id: ownerId }]);

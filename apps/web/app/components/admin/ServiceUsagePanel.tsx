@@ -1,5 +1,6 @@
-import { Activity, Cloud, Database, HardDrive, Rocket, Shield } from "lucide-react";
+import { Cloud, Database, HardDrive, Rocket, Shield } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import type { getProviderUsageOverview } from "../../lib/provider-usage.server";
 
 type ProviderUsage = Awaited<ReturnType<typeof getProviderUsageOverview>>;
@@ -15,8 +16,7 @@ const providerIcons = {
   cloudflare: Shield,
   "cloudflare-d1": Database,
   vercel: Rocket,
-  neon: Database,
-  supabase: Activity,
+  supabase: Database,
   cloudinary: Cloud,
   "google-drive": HardDrive,
 } as const;
@@ -83,6 +83,15 @@ export function ServiceUsagePanel({ providers }: { providers: ProviderUsage }) {
                     {provider.statusLabel}
                   </span>
                 </div>
+
+                {provider.id === "google-drive" && provider.statusLabel === "Reconnect required" ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2.5">
+                    <p className="text-[11px] font-medium leading-4 text-amber-900">Google rejected the saved Drive authorization. Reconnect it to restore live storage usage.</p>
+                    <Link to="/site/node-logmin/video-storage" className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-full bg-slate-900 px-3.5 text-[11px] font-bold text-white transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700">
+                      Reconnect Drive
+                    </Link>
+                  </div>
+                ) : null}
 
                 <div className="mt-3 grid gap-3">
                   {cardGroups.map((group, groupIndex) => (

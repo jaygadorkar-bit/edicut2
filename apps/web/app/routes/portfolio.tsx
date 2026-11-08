@@ -11,8 +11,8 @@ import { configuredPublicEditingPackages, getPricingPackages } from "../lib/pric
 import "../styles/portfolio.css";
 
 export const meta: MetaFunction = (args) => createRouteMeta(args,
-  "Video Editing Portfolio: YouTube, Podcasts, and More | EdiCut",
-  "Explore EdiCut video editing examples across YouTube, podcasts, gaming, commercial, review, and health content.",
+  "Video Editing Portfolio and Style References | EdiCut",
+  "Explore video editing styles for YouTube, podcasts, gaming, and more. Browse EdiCut's gallery with credited reference examples and editing package options.",
 );
 
 export async function loader({ context }: LoaderFunctionArgs) {
@@ -33,7 +33,7 @@ export default function PortfolioPage() {
 
   return (
     <PageShell className="portfolio-page">
-      <section className="portfolio-hero" aria-labelledby="portfolio-title">
+      <section data-analytics-region="portfolio" className="portfolio-hero" aria-labelledby="portfolio-title">
         <div className="portfolio-hero-objects" aria-hidden="true">
           <Clapperboard className="portfolio-hero-object portfolio-hero-object--clapper" strokeWidth={1.5} />
           <Scissors className="portfolio-hero-object portfolio-hero-object--scissors" strokeWidth={1.5} />
@@ -41,11 +41,11 @@ export default function PortfolioPage() {
         </div>
         <div className="portfolio-container portfolio-hero-layout">
           <div className="portfolio-hero-copy">
-            <p className="portfolio-kicker neo-section-label"><Film size={18} aria-hidden="true" /> Our portfolio</p>
-            <h1 id="portfolio-title">A better cut.<br />A better story.</h1>
+            <p className="portfolio-kicker neo-section-label"><Film size={18} aria-hidden="true" /> Video editing examples</p>
+            <h1 id="portfolio-title">Video editing styles.<br />Ideas for your next cut.</h1>
             <p className="portfolio-description">
-              A strong hook. The right pace. A finish that feels like you.
-              Explore editing styles for your next video.
+              Explore YouTube, podcast, gaming, and commercial video formats.
+              Reference examples are credited to their original channels.
             </p>
             <div className="portfolio-actions">
               <a href="#portfolio" className="neo-button portfolio-button portfolio-button-primary">
@@ -59,7 +59,7 @@ export default function PortfolioPage() {
         </div>
       </section>
       <PortfolioSection full sections={portfolioSections} />
-      <section className="portfolio-packs" aria-labelledby="portfolio-packs-title">
+      <section data-analytics-region="pricing" className="portfolio-packs" aria-labelledby="portfolio-packs-title">
         <div className="portfolio-container">
           <div className="portfolio-packs-panel">
             <div className="portfolio-packs-copy">

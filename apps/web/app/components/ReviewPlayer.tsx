@@ -1,15 +1,24 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { ReviewPlaybackMenu } from "./ReviewPlaybackMenu";
+import { ReviewCanvas } from "./ReviewCanvas";
+import {
+  reviewFrameTimecode,
+  stepReviewFrame,
+} from "../lib/review-annotations";
+import {
+  formatReviewFrameRate,
+  reviewFrameRateOptions,
+  type ReviewSourceFrameRate,
+} from "../lib/review-frame-rate";
 import {
   Expand,
-  Flag,
+  Minimize,
   Keyboard,
-  MessageSquarePlus,
   Pause,
   Play,
   RotateCcw,
-  SkipBack,
-  SkipForward,
-  SquareDashed,
+  StepBack,
+  StepForward,
   Volume2,
   VolumeX,
   X,
@@ -25,6 +34,7 @@ import {
 } from "./YouTubeReviewVideo";
 
 export type ReviewPlayerHandle = {
+  currentTime: () => number;
   seek: (milliseconds: number, annotation?: FrameAnnotation | null) => void;
   pause: () => void;
 };
@@ -32,41 +42,56 @@ export function ReviewPlayer({
   src,
   title,
   durationMs,
+  mediaBytes,
   comments,
   onTime,
   onMark,
   onAddComment,
   onAnnotation,
-  onRange,
   onSelectComment,
   playerRef,
   draftAnnotation,
   readOnly = false,
   youtubeId,
+  draftBody,
+  setDraftBody,
+  onPost,
+  busy,
+  draftTime,
 }: {
   src: string;
   title: string;
   durationMs: number;
+  mediaBytes: number;
   comments: ReviewComment[];
   onTime: (milliseconds: number) => void;
   onMark: (milliseconds: number) => void;
   onAddComment: () => void;
-  onAnnotation: (annotation: FrameAnnotation) => void;
-  onRange: (start: number, end: number) => void;
+  onAnnotation: (annotation: FrameAnnotation | null) => void;
   onSelectComment: (id: string) => void;
   playerRef: React.RefObject<ReviewPlayerHandle | null>;
   draftAnnotation?: FrameAnnotation | null;
   readOnly?: boolean;
   youtubeId?: string | null;
+  draftBody: string;
+  setDraftBody: (value: string) => void;
+  onPost: () => void;
+  busy: boolean;
+  draftTime: number | null;
 }) {
   const video = useRef<ReviewMediaHandle | null>(null),
     container = useRef<HTMLElement>(null),
     frame = useRef<HTMLDivElement>(null),
-    surface = useRef<HTMLDivElement>(null);
+    toolbarHost = useRef<HTMLDivElement>(null),
+    scrubber = useRef<HTMLDivElement>(null),
+    previewVideo = useRef<HTMLVideoElement>(null),
+    previewSeekTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    requestedPreviewTime = useRef<number | null>(null);
   const [time, setTime] = useState(0),
     [duration, setDuration] = useState(durationMs);
-  const [playing, setPlaying] = useState(false),
-    [drawing, setDrawing] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [buffering, setBuffering] = useState(false);
+  const [drawing, setDrawing] = useState(false);
   const [annotation, setAnnotation] = useState<FrameAnnotation | null>(null);
   const [error, setError] = useState(false),
     [speed, setSpeed] = useState("1");
@@ -74,11 +99,89 @@ export function ReviewPlayer({
   const [reload, setReload] = useState(0);
   const [loaded, setLoaded] = useState(false),
     [fullscreen, setFullscreen] = useState(false),
-    [volume, setVolume] = useState(1),
-    [rangeStart, setRangeStart] = useState<number | null>(null);
+    [volume, setVolume] = useState(1);
   const lastVolume = useRef(1);
-  const drag = useRef<{ x: number; y: number } | null>(null);
+  const [fps, setFps] = useState(30),
+    [zoom, setZoom] = useState(1);
+  const [sourceFrameRate, setSourceFrameRate] =
+    useState<ReviewSourceFrameRate | null>(null);
+  const [frameRatePending, setFrameRatePending] = useState(!youtubeId);
+  const frameRateOptions = reviewFrameRateOptions(sourceFrameRate?.fps ?? null);
+  const timecode = sourceFrameRate
+    ? reviewFrameTimecode(time, fps)
+    : formatReviewTime(time);
   const [videoAspect, setVideoAspect] = useState(16 / 9);
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLElement | null>(null);
+  const [scrubPreview, setScrubPreview] = useState<{
+    time: number;
+    position: number;
+  } | null>(null);
+  const [previewInitialized, setPreviewInitialized] = useState(false);
+  const [previewReady, setPreviewReady] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  function readMetadata(media: HTMLVideoElement) {
+    setDuration(
+      Number.isFinite(media.duration)
+        ? Math.round(media.duration * 1000)
+        : durationMs,
+    );
+    if (media.videoWidth && media.videoHeight)
+      setVideoAspect(media.videoWidth / media.videoHeight);
+    setError(false);
+    setLoaded(true);
+  }
+  useEffect(() => {
+    // A cached video can finish loading before React attaches its media handlers.
+    const media = video.current;
+    if (
+      !youtubeId &&
+      media instanceof HTMLVideoElement &&
+      media.readyState >= 1
+    )
+      readMetadata(media);
+  }, [src, youtubeId, durationMs, reload]);
+  useEffect(() => {
+    setToolbarTarget(toolbarHost.current);
+  }, []);
+  useEffect(() => {
+    setSourceFrameRate(null);
+    if (youtubeId || !loaded || error) {
+      setFrameRatePending(!youtubeId && !error);
+      return;
+    }
+    const controller = new AbortController();
+    setFrameRatePending(true);
+    void import("../lib/review-frame-rate.client")
+      .then(({ detectReviewFrameRate }) =>
+        detectReviewFrameRate(src, mediaBytes, controller.signal),
+      )
+      .then((detected) => {
+        if (controller.signal.aborted) return;
+        setSourceFrameRate(detected);
+        if (detected) setFps(detected.fps);
+      })
+      .catch(() => {
+        // A failed bounded probe must not interrupt playback or invent a source FPS.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setFrameRatePending(false);
+      });
+    return () => controller.abort();
+  }, [src, mediaBytes, youtubeId, loaded, error]);
+  useEffect(() => {
+    setScrubPreview(null);
+    setPreviewInitialized(false);
+    setPreviewReady(false);
+    setPreviewFailed(false);
+    requestedPreviewTime.current = null;
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+  }, [src]);
+  useEffect(
+    () => () => {
+      if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+    },
+    [],
+  );
   useEffect(() => {
     setAnnotation(draftAnnotation ?? null);
   }, [draftAnnotation]);
@@ -88,14 +191,68 @@ export function ReviewPlayer({
     if (!video.current) return;
     video.current.pause();
     setPlaying(false);
-    const nextTime = Math.round(Math.max(0, Math.min(duration, milliseconds)));
+    const nextTime = Math.max(0, Math.min(duration, milliseconds));
     video.current.currentTime = nextTime / 1000;
     setAnnotation(mark ?? null);
     setTime(nextTime);
     onTime(nextTime);
   }
+  function seekPreview() {
+    const media = previewVideo.current,
+      target = requestedPreviewTime.current;
+    if (!media || target === null || media.readyState < 1) return;
+    if (media.seeking) return;
+    if (media.readyState >= 2 && Math.abs(media.currentTime - target) < 0.15) {
+      setPreviewReady(true);
+      return;
+    }
+    setPreviewReady(false);
+    try {
+      media.currentTime = target;
+    } catch {
+      setPreviewReady(false);
+    }
+  }
+  function showScrubPreview(position: number) {
+    if (youtubeId || duration <= 0) return;
+    setPreviewInitialized(true);
+    const normalizedPosition = Math.max(0, Math.min(1, position));
+    const nextTime = normalizedPosition * duration;
+    const scrubberWidth = scrubber.current?.getBoundingClientRect().width ?? 0;
+    const edgePercent = scrubberWidth
+      ? Math.min(49, (84 / scrubberWidth) * 100)
+      : 9;
+    requestedPreviewTime.current = nextTime / 1000;
+    setScrubPreview({
+      time: nextTime,
+      position: Math.max(
+        edgePercent,
+        Math.min(100 - edgePercent, normalizedPosition * 100),
+      ),
+    });
+    const media = previewVideo.current;
+    if (
+      !media ||
+      media.readyState < 2 ||
+      Math.abs(media.currentTime - nextTime / 1000) >= 0.15
+    )
+      setPreviewReady(false);
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+    previewSeekTimer.current = setTimeout(seekPreview, 70);
+  }
+  function previewScrubberPointer(clientX: number) {
+    const bounds = scrubber.current?.getBoundingClientRect();
+    if (!bounds?.width) return;
+    showScrubPreview((clientX - bounds.left) / bounds.width);
+  }
+  function hideScrubPreview() {
+    setScrubPreview(null);
+    requestedPreviewTime.current = null;
+    if (previewSeekTimer.current) clearTimeout(previewSeekTimer.current);
+  }
   useEffect(() => {
     playerRef.current = {
+      currentTime: current,
       seek: (milliseconds, mark) => {
         seek(milliseconds, mark);
         frame.current?.scrollIntoView({ block: "nearest" });
@@ -107,7 +264,8 @@ export function ReviewPlayer({
     };
   });
   useEffect(() => {
-    const changed = () => setFullscreen(document.fullscreenElement === container.current);
+    const changed = () =>
+      setFullscreen(document.fullscreenElement === container.current);
     document.addEventListener("fullscreenchange", changed);
     return () => document.removeEventListener("fullscreenchange", changed);
   }, []);
@@ -130,7 +288,6 @@ export function ReviewPlayer({
   function toggle() {
     if (!video.current || !loaded || error) return;
     if (video.current.paused) {
-      setDrawing(false);
       setAnnotation(null);
       setPlayerNotice("");
       video.current.play().catch((reason: unknown) => {
@@ -139,62 +296,66 @@ export function ReviewPlayer({
       });
     } else video.current.pause();
   }
-  function point(event: PointerEvent<HTMLDivElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)),
-      y: Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height)),
-    };
-  }
   const fittedWidth = Math.min(stageSize.width, stageSize.height * videoAspect);
   const fittedHeight = fittedWidth / videoAspect;
   return (
-    <section ref={container} className="review-player" aria-label="Video player"
-        onKeyDown={(event) => {
-          const key = event.key.toLowerCase();
-          const target = event.target as HTMLElement;
-          if (target.closest("input, textarea, select, a, summary, [role='combobox']") ||
-              (target.closest("button") && [" ", "enter", "arrowleft", "arrowright"].includes(key))) return;
-          if (
-            [
-              " ",
-              "k",
-              "j",
-              "l",
-              "arrowleft",
-              "arrowright",
-              "m",
-              "escape",
-            ].includes(key)
-          )
-            event.preventDefault();
-          if (key === " " || key === "k") toggle();
-          else if (["j", "l", "arrowleft", "arrowright"].includes(key))
-            seek(
-              current() +
-                (key === "j"
-                  ? -5000
-                  : key === "l"
-                    ? 5000
-                    : key === "arrowleft"
-                      ? -1000 / 30
-                      : 1000 / 30),
-            );
-          else if (key === "m" && !readOnly && loaded && !error) {
-            video.current?.pause();
-            onMark(current());
-            setRangeStart(null);
-            focusComposer();
-          } else if (key === "escape") {
-            setDrawing(false);
-            setAnnotation(null);
-            setRangeStart(null);
-          }
-        }}
-      >
+    <section
+      ref={container}
+      className="review-player"
+      aria-label="Video player"
+      onKeyDown={(event) => {
+        const key = event.key.toLowerCase();
+        const target = event.target as HTMLElement;
+        if (
+          target.closest(
+            "input, textarea, select, a, summary, [role='combobox']",
+          ) ||
+          (target.closest("button") &&
+            [" ", "enter", "arrowleft", "arrowright"].includes(key))
+        )
+          return;
+        if (
+          [
+            " ",
+            "k",
+            "j",
+            "l",
+            "arrowleft",
+            "arrowright",
+            "m",
+            "escape",
+          ].includes(key)
+        )
+          event.preventDefault();
+        if (key === " " || key === "k") toggle();
+        else if (
+          ["j", "l", "arrowleft", "arrowright"].includes(key) &&
+          (key === "j" || key === "l" || sourceFrameRate)
+        )
+          seek(
+            key === "j" || key === "l"
+              ? current() + (key === "j" ? -5000 : 5000)
+              : stepReviewFrame(
+                  current(),
+                  fps,
+                  key === "arrowleft" ? -1 : 1,
+                  duration,
+                ),
+          );
+        else if (key === "m" && !readOnly && loaded && !error) {
+          video.current?.pause();
+          onMark(current());
+          focusComposer();
+        } else if (key === "escape") {
+          setAnnotation(null);
+        }
+      }}
+    >
+      <div ref={toolbarHost} className="review-player__canvas-toolbar" />
       <div
         ref={frame}
         className={`review-player__stage ${youtubeId ? "review-player__stage--youtube" : ""}`}
+        style={{ "--review-zoom": zoom } as CSSProperties}
         tabIndex={0}
         aria-label="Video preview. Focus this area for Space to play or pause, J and L to seek, and M to comment."
       >
@@ -227,25 +388,26 @@ export function ReviewPlayer({
             preload="metadata"
             controls={false}
             aria-label={title}
-            onLoadedMetadata={(event) => {
-              const media = event.currentTarget;
-              setDuration(
-                Number.isFinite(media.duration)
-                  ? Math.round(media.duration * 1000)
-                  : durationMs,
-              );
-              if (media.videoWidth && media.videoHeight)
-                setVideoAspect(media.videoWidth / media.videoHeight);
-              setError(false);
-              setLoaded(true);
+            onLoadedMetadata={(event) => readMetadata(event.currentTarget)}
+            onCanPlay={(event) => {
+              readMetadata(event.currentTarget);
+              setBuffering(false);
             }}
+            onWaiting={() => setBuffering(true)}
+            onPlaying={() => setBuffering(false)}
             onTimeUpdate={() => {
               const milliseconds = current();
               setTime(milliseconds);
               onTime(milliseconds);
             }}
             onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
+            onPause={() => {
+              setPlaying(false);
+              setBuffering(false);
+              const value = current();
+              setTime(value);
+              onTime(value);
+            }}
             onVolumeChange={(event) => setVolume(event.currentTarget.volume)}
             onEnded={() => setPlaying(false)}
             onError={() => setError(true)}
@@ -272,7 +434,17 @@ export function ReviewPlayer({
             </button>
           </div>
         ) : null}
-        {!youtubeId && !playing && !drawing && !annotation && !error ? (
+        {!youtubeId && !error && (!loaded || buffering) ? (
+          <span className="review-player__loading" role="status">
+            {loaded ? "Buffering…" : "Loading video…"}
+          </span>
+        ) : null}
+        {!youtubeId &&
+        loaded &&
+        !playing &&
+        !drawing &&
+        !annotation &&
+        !error ? (
           <button
             type="button"
             className="review-player__big-play"
@@ -282,77 +454,35 @@ export function ReviewPlayer({
             <Play size={30} fill="currentColor" aria-hidden="true" />
           </button>
         ) : null}
-        {!youtubeId ? (
-          <div
-            ref={surface}
-            className={`review-player__annotation ${drawing ? "is-drawing" : ""}`}
-            style={{
-              width: fittedWidth || "100%",
-              height: fittedHeight || "100%",
-            }}
-            aria-hidden="true"
-            onPointerDown={(event) => {
-              if (!drawing) return;
-              event.preventDefault();
-              video.current?.pause();
-              event.currentTarget.setPointerCapture(event.pointerId);
-              drag.current = point(event);
-              setAnnotation(null);
-            }}
-            onPointerMove={(event) => {
-              if (!drag.current) return;
-              const end = point(event),
-                start = drag.current;
-              setAnnotation({
-                x: Math.min(start.x, end.x),
-                y: Math.min(start.y, end.y),
-                width: Math.abs(end.x - start.x),
-                height: Math.abs(end.y - start.y),
-              });
-            }}
-            onPointerCancel={() => {
-              drag.current = null;
-              setDrawing(false);
-              setAnnotation(null);
-            }}
-            onPointerUp={(event) => {
-              if (!drag.current) return;
-              const end = point(event),
-                start = drag.current;
-              const box = {
-                x: Math.min(start.x, end.x),
-                y: Math.min(start.y, end.y),
-                width: Math.abs(end.x - start.x),
-                height: Math.abs(end.y - start.y),
-              };
-              drag.current = null;
-              setDrawing(false);
-              if (box.width >= 0.005 && box.height >= 0.005) {
-                setAnnotation(box);
-                onMark(current());
-                onAnnotation(box);
-                focusComposer();
-              } else setAnnotation(null);
-            }}
-          >
-            {annotation ? (
-              <div
-                className="review-player__box"
-                style={{
-                  left: `${annotation.x * 100}%`,
-                  top: `${annotation.y * 100}%`,
-                  width: `${annotation.width * 100}%`,
-                  height: `${annotation.height * 100}%`,
-                }}
-              />
-            ) : null}
-          </div>
-        ) : null}
-        {drawing ? (
-          <span className="review-player__hint">
-            Drag a box around the area to change. Escape cancels.
-          </span>
-        ) : null}
+        <ReviewCanvas
+          width={fittedWidth}
+          height={fittedHeight}
+          annotation={annotation}
+          draftAnnotation={draftAnnotation}
+          onAnnotation={(value) => {
+            setAnnotation(value);
+            onAnnotation(value);
+          }}
+          onMark={() => {
+            const value = current();
+            setTime(value);
+            onTime(value);
+            onMark(value);
+          }}
+          onPause={() => video.current?.pause()}
+          time={time}
+          readOnly={readOnly}
+          disabled={!loaded || error}
+          draftBody={draftBody}
+          setDraftBody={setDraftBody}
+          onPost={onPost}
+          busy={busy}
+          zoom={zoom}
+          onZoom={setZoom}
+          draftTime={draftTime}
+          onToolChange={setDrawing}
+          toolbarTarget={toolbarTarget}
+        />
       </div>
       {error && youtubeId ? (
         <div className="review-notice" role="alert">
@@ -376,126 +506,295 @@ export function ReviewPlayer({
         </div>
       ) : null}
       <div className="review-player__controls">
-        <div className="review-player__scrubber">
-          <input type="range" min={0} max={duration || 1}
-            value={Math.min(time, duration)} step={100} disabled={!loaded || error}
+        <div
+          ref={scrubber}
+          className="review-player__scrubber"
+          onPointerMove={(event) => previewScrubberPointer(event.clientX)}
+          onPointerLeave={hideScrubPreview}
+          onFocusCapture={() =>
+            showScrubPreview(duration ? time / duration : 0)
+          }
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node))
+              hideScrubPreview();
+          }}
+        >
+          {!youtubeId ? (
+            <div
+              className={`review-player__scrub-preview ${scrubPreview ? "is-visible" : ""}`}
+              style={{ left: `${scrubPreview?.position ?? 50}%` }}
+              aria-hidden="true"
+            >
+              {previewInitialized ? (
+                <video
+                  key={src}
+                  ref={previewVideo}
+                  src={src}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  onLoadedMetadata={() => {
+                    setPreviewFailed(false);
+                    seekPreview();
+                  }}
+                  onLoadedData={() => {
+                    const target = requestedPreviewTime.current;
+                    const media = previewVideo.current;
+                    if (
+                      target !== null &&
+                      media &&
+                      Math.abs(media.currentTime - target) < 0.15
+                    ) {
+                      setPreviewFailed(false);
+                      setPreviewReady(true);
+                    }
+                  }}
+                  onSeeked={() => {
+                    setPreviewReady(true);
+                    seekPreview();
+                  }}
+                  onError={() => {
+                    setPreviewReady(false);
+                    setPreviewFailed(true);
+                  }}
+                  style={{ opacity: previewReady ? 1 : 0 }}
+                />
+              ) : null}
+              {!previewReady ? (
+                <span>
+                  {previewFailed ? "Preview unavailable" : "Loading preview…"}
+                </span>
+              ) : null}
+              <time>{formatReviewTime(scrubPreview?.time ?? 0)}</time>
+            </div>
+          ) : null}
+          <input
+            type="range"
+            min={0}
+            max={duration || 1}
+            value={Math.min(time, duration)}
+            step={sourceFrameRate ? 1000 / fps : "any"}
+            disabled={!loaded || error}
             aria-label="Video timeline"
             aria-valuetext={`${formatReviewTime(time)} of ${formatReviewTime(duration)}`}
-            onChange={(event) => seek(Number(event.target.value))} />
+            onChange={(event) => seek(Number(event.target.value))}
+            onKeyUp={(event) => {
+              if (event.currentTarget === document.activeElement)
+                showScrubPreview(duration ? time / duration : 0);
+            }}
+          />
           <div className="review-player__markers">
-            {comments.filter((comment) => comment.parentId === null && comment.timestampMs !== null).map((comment) => (
-              <button key={comment.id} type="button"
-                className={`review-player__marker ${comment.resolved ? "is-resolved" : ""}`}
-                style={{ left: `${Math.min(100, (comment.timestampMs! / (duration || 1)) * 100)}%` }}
-                aria-label={`Comment at ${formatReviewTime(comment.timestampMs!)}: ${comment.body.slice(0, 65)}`}
-                title={`${formatReviewTime(comment.timestampMs!)} · ${comment.body.slice(0, 65)}`}
-                onClick={() => {
-                  seek(comment.timestampMs!, comment.annotation);
-                  onSelectComment(comment.id);
-                  const target = document.getElementById(`comment-${comment.id}`);
-                  target?.focus({ preventScroll: true });
-                  target?.scrollIntoView({ block: "nearest" });
-                }} />
-            ))}
+            {comments
+              .filter(
+                (comment) =>
+                  comment.parentId === null && comment.timestampMs !== null,
+              )
+              .map((comment) => (
+                <button
+                  key={comment.id}
+                  type="button"
+                  className={`review-player__marker ${comment.resolved ? "is-resolved" : ""}`}
+                  style={{
+                    left: `${Math.min(100, (comment.timestampMs! / (duration || 1)) * 100)}%`,
+                  }}
+                  aria-label={`Comment at ${formatReviewTime(comment.timestampMs!)}: ${comment.body.slice(0, 65)}`}
+                  title={`${formatReviewTime(comment.timestampMs!)} · ${comment.body.slice(0, 65)}`}
+                  onClick={() => {
+                    seek(comment.timestampMs!, comment.annotation);
+                    onSelectComment(comment.id);
+                    const target = document.getElementById(
+                      `comment-${comment.id}`,
+                    );
+                    target?.focus({ preventScroll: true });
+                    target?.scrollIntoView({ block: "nearest" });
+                  }}
+                />
+              ))}
           </div>
         </div>
         <div className="review-player__transport">
           <div className="review-player__transport-main">
-            <button type="button" className="review-icon-button" disabled={!loaded || error}
-              onClick={toggle} aria-label={playing ? "Pause video" : "Play video"} title={playing ? "Pause (Space)" : "Play (Space)"}>
-              {playing ? <Pause size={19} /> : <Play size={19} />}
-            </button>
-            <button type="button" className="review-icon-button" disabled={!loaded || error}
-              onClick={() => seek(current() - 5000)} aria-label="Back five seconds" title="Back 5 seconds (J)"><SkipBack size={17} /></button>
-            <button type="button" className="review-icon-button" disabled={!loaded || error}
-              onClick={() => seek(current() + 5000)} aria-label="Forward five seconds" title="Forward 5 seconds (L)"><SkipForward size={17} /></button>
-            <span className="review-player__time">{formatReviewTime(time)} <span>/ {formatReviewTime(duration)}</span></span>
-          </div>
-          <div className="review-player__transport-extra">
-            <label className="review-player__speed">
-              <span className="sr-only">Playback speed</span>
-              <select value={speed} disabled={!loaded || error} onChange={(event) => {
-                setSpeed(event.target.value);
-                if (video.current) video.current.playbackRate = Number(event.target.value);
-              }}>
-                {[0.5, 0.75, 1, 1.25, 1.5, 2].map(value => <option key={value} value={value}>{value}×</option>)}
-              </select>
-            </label>
-            <button type="button" className="review-icon-button" disabled={!loaded || error}
-              aria-label={volume === 0 ? "Unmute video" : "Mute video"} title={volume === 0 ? "Unmute" : "Mute"}
+            <button
+              type="button"
+              className="review-icon-button review-player__mute"
+              disabled={!loaded || error}
+              aria-label={volume === 0 ? "Unmute video" : "Mute video"}
+              title={volume === 0 ? "Unmute" : "Mute"}
               onClick={() => {
                 const next = volume === 0 ? lastVolume.current : 0;
                 if (volume > 0) lastVolume.current = volume;
                 if (video.current) video.current.volume = next;
                 setVolume(next);
-              }}>{volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
+              }}
+            >
+              {volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
+            </button>
             <label className="review-player__volume">
               <span className="sr-only">Volume</span>
-              <input type="range" min="0" max="1" step="0.05" value={volume} disabled={!loaded || error} aria-label="Volume"
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={volume}
+                disabled={!loaded || error}
+                aria-label="Volume"
                 onChange={(event) => {
                   const next = Number(event.target.value);
                   if (video.current) video.current.volume = next;
                   if (next > 0) lastVolume.current = next;
                   setVolume(next);
-                }} />
+                }}
+              />
             </label>
-            <button type="button" className="review-icon-button" aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen video"} title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            <button
+              type="button"
+              className="review-icon-button review-player__transport-play"
+              disabled={!loaded || error}
+              onClick={toggle}
+              aria-label={playing ? "Pause video" : "Play video"}
+              title={playing ? "Pause (Space)" : "Play (Space)"}
+            >
+              {playing ? <Pause size={19} /> : <Play size={19} />}
+            </button>
+            <button
+              type="button"
+              className="review-icon-button review-player__frame-step--previous"
+              disabled={!loaded || error || !sourceFrameRate}
+              onClick={() =>
+                seek(stepReviewFrame(current(), fps, -1, duration))
+              }
+              aria-label="Previous frame"
+              title="Previous frame (←)"
+            >
+              <StepBack size={17} />
+            </button>
+            <button
+              type="button"
+              className="review-icon-button review-player__frame-step--next"
+              disabled={!loaded || error || !sourceFrameRate}
+              onClick={() => seek(stepReviewFrame(current(), fps, 1, duration))}
+              aria-label="Next frame"
+              title="Next frame (→)"
+            >
+              <StepForward size={17} />
+            </button>
+            <span
+              className="review-player__time"
+              aria-label={`Timecode ${timecode}`}
+              title={
+                sourceFrameRate
+                  ? "Hours : minutes : seconds : frames"
+                  : "Playback time"
+              }
+            >
+              <span className="review-player__timecode">
+                <span className="review-player__timecode-full">{timecode}</span>
+                <span
+                  className="review-player__timecode-mobile"
+                  aria-hidden="true"
+                >
+                  {formatReviewTime(time)}
+                </span>
+              </span>{" "}
+              <span className="review-player__duration">
+                / {formatReviewTime(duration)}
+              </span>
+            </span>
+          </div>
+          <div className="review-player__transport-extra">
+            <ReviewPlaybackMenu
+              label="Source frame rate"
+              value={sourceFrameRate ? String(fps) : ""}
+              disabled={!loaded || error || !sourceFrameRate}
+              placeholder={frameRatePending ? "FPS…" : "— fps"}
+              title={
+                sourceFrameRate
+                  ? `${sourceFrameRate.variable ? "Estimated variable-rate source" : "Source"}: ${formatReviewFrameRate(sourceFrameRate.fps)} fps`
+                  : "Source frame rate is unavailable. Frame stepping is disabled."
+              }
+              options={frameRateOptions.map((rate) => ({
+                value: String(rate),
+                label: `${formatReviewFrameRate(rate)} fps`,
+              }))}
+              onChange={(value) => {
+                const next = Number(value);
+                if (frameRateOptions.includes(next)) setFps(next);
+              }}
+            />
+            <ReviewPlaybackMenu
+              label="Playback speed"
+              value={speed}
+              disabled={!loaded || error}
+              options={[0.5, 0.75, 1, 1.25, 1.5, 2].map((value) => ({
+                value: String(value),
+                label: `${value}×`,
+              }))}
+              onChange={(value) => {
+                setSpeed(value);
+                if (video.current) video.current.playbackRate = Number(value);
+              }}
+            />
+            <details className="review-shortcuts">
+              <summary
+                aria-label="Keyboard shortcuts"
+                title="Keyboard shortcuts"
+              >
+                <Keyboard size={18} />
+              </summary>
+              <div>
+                <strong>Focus the video area or playback toolbar</strong>
+                <p>
+                  <kbd>Space</kbd> / <kbd>K</kbd> play or pause
+                  <br />
+                  <kbd>J</kbd> / <kbd>L</kbd> seek 5 seconds
+                  <br />
+                  <kbd>←</kbd> / <kbd>→</kbd> step a frame at the selected fps
+                  <br />
+                  <kbd>M</kbd> add a comment
+                </p>
+                <p>
+                  In the comment field: <kbd>Ctrl</kbd> / <kbd>⌘</kbd> +{" "}
+                  <kbd>Enter</kbd> to post.
+                </p>
+              </div>
+            </details>
+            <button
+              type="button"
+              className="review-icon-button review-player__fullscreen"
+              aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen video"}
+              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
               onClick={() => {
                 setPlayerNotice("");
-                if (!container.current?.requestFullscreen || !document.exitFullscreen) {
+                if (
+                  !container.current?.requestFullscreen ||
+                  !document.exitFullscreen
+                ) {
                   setPlayerNotice("Fullscreen is unavailable in this browser.");
                   return;
                 }
-                const action = fullscreen ? document.exitFullscreen() : container.current?.requestFullscreen();
-                void action?.catch(() => setPlayerNotice("Fullscreen is unavailable in this browser."));
-              }}><Expand size={18} /></button>
+                const action = fullscreen
+                  ? document.exitFullscreen()
+                  : container.current?.requestFullscreen();
+                void action?.catch(() =>
+                  setPlayerNotice("Fullscreen is unavailable in this browser."),
+                );
+              }}
+            >
+              {fullscreen ? <Minimize size={18} /> : <Expand size={18} />}
+            </button>
           </div>
         </div>
-        <div className="review-player__tools">
-          <button type="button" className="review-button review-button--primary" disabled={readOnly || !loaded || error}
-            title={`Add a comment at ${formatReviewTime(time)} (M)`}
-            onClick={() => {
-              video.current?.pause();
-              setRangeStart(null);
-              onMark(current());
-              focusComposer();
-            }}><MessageSquarePlus size={16} />Comment</button>
-          <button type="button" className={`review-button review-button--quiet ${rangeStart !== null ? "is-selected" : ""}`}
-            disabled={readOnly || !loaded || error} aria-pressed={rangeStart !== null}
-            title={rangeStart === null ? "Set a start, move the playhead, then mark the end" : "Use this playhead position as the range end"}
-            onClick={() => {
-              video.current?.pause();
-              const now = current();
-              if (rangeStart === null) {
-                setRangeStart(now);
-                onMark(now);
-              } else {
-                onRange(Math.min(rangeStart, now), Math.max(rangeStart, now));
-                setRangeStart(null);
-                focusComposer();
-              }
-            }}><Flag size={16} />{rangeStart === null ? "Mark range" : "End range"}</button>
-          {!youtubeId ? <button type="button" className={`review-icon-button ${drawing ? "is-selected" : ""}`}
-            aria-label="Draw a frame area" title="Draw a frame area" aria-pressed={drawing} disabled={readOnly || !loaded || error}
-            onClick={() => {
-              video.current?.pause();
-              onMark(current());
-              setDrawing(!drawing);
-              setAnnotation(null);
-            }}><SquareDashed size={17} /></button> : null}
-          <details className="review-shortcuts">
-            <summary aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><Keyboard size={18} /></summary>
-            <div><strong>Focus the video area or playback toolbar</strong><p><kbd>Space</kbd> / <kbd>K</kbd> play or pause<br />
-              <kbd>J</kbd> / <kbd>L</kbd> seek 5 seconds<br />
-              <kbd>←</kbd> / <kbd>→</kbd> step a frame (approx.)<br />
-              <kbd>M</kbd> add a comment</p><p>In the comment field: <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Enter</kbd> to post.</p></div>
-          </details>
-        </div>
-        {rangeStart !== null ? <div className="review-player__range-status" role="status">
-          Start {formatReviewTime(rangeStart)}. Move the playhead, then choose End range.
-          <button type="button" className="review-icon-button" aria-label="Cancel range" onClick={() => setRangeStart(null)}><X size={15} /></button>
-        </div> : null}
-        {playerNotice ? <p className="review-player__notice" role="status">{playerNotice}</p> : null}
+        {youtubeId ? (
+          <p className="review-player__notice">
+            Source FPS is unavailable for embedded YouTube previews.
+          </p>
+        ) : null}
+        {playerNotice ? (
+          <p className="review-player__notice" role="status">
+            {playerNotice}
+          </p>
+        ) : null}
       </div>
     </section>
   );

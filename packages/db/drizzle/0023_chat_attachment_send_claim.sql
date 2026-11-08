@@ -1,0 +1,3 @@
+ALTER TABLE "chat_attachment_uploads" DROP CONSTRAINT "chat_attachment_uploads_status_check";--> statement-breakpoint
+ALTER TABLE "chat_attachment_uploads" ADD COLUMN "client_nonce" uuid;--> statement-breakpoint
+ALTER TABLE "chat_attachment_uploads" ADD CONSTRAINT "chat_attachment_uploads_status_check" CHECK ("chat_attachment_uploads"."status" IN ('starting','uploading','uploaded','sending','saved','failed','deleted'));

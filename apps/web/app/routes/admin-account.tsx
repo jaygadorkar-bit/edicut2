@@ -15,9 +15,9 @@ import { AdminPanelShell } from "../components/AdminPanelShell";
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { updateSupabaseUserEmailByEmail, updateSupabaseUserPasswordByEmail } from "../integrations/supabase/client.server";
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   return [
-    { title: data?.adminUser ? "Admin account - EdiCut" : "Admin account" },
+    { title: loaderData?.adminUser ? "Admin account - EdiCut" : "Admin account" },
     { name: "robots", content: "noindex,nofollow" },
   ];
 };

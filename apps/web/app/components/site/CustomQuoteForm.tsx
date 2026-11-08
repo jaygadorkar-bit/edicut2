@@ -1,9 +1,9 @@
+import { Select } from "../Select";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Form, Link, useNavigation, useSubmit } from "react-router";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, FileText, Film, Layers, SlidersHorizontal, UserRound } from "lucide-react";
 import { quoteBudgets, quoteCadences, quoteDurations, quoteFootage, quotePlatforms, quoteProjectTypes, quoteRatios, quoteRequestTypes, quoteRevisions, quoteServices, quoteStyles, quoteUrgencies, quoteOptionLabel, type CustomQuoteInput, type CustomQuoteOptions } from "@edicut/shared/contracts/custom-quotes";
 import { PageShell } from "./Marketing";
-import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
 import { validateQuoteDraft } from "../../lib/custom-quote-validation";
 import type { QuoteActionResult } from "../../routes/custom-quote";
 import type { MonthlyAddOnQuotePrefill } from "../../lib/package-addons";
@@ -14,7 +14,7 @@ const fieldLabels: Record<string, string> = { title: "Project name", projectType
 
 export function CustomQuoteForm({ data, result }: { data: QuotePageData; result?: QuoteActionResult }) {
   return <PageShell className="custom-quote-page">
-    {data.submitted ? <section className="quote-confirmation neo-surface" aria-labelledby="quote-confirmation-title">
+    {data.submitted ? <section data-analytics-event="quote_request" className="quote-confirmation neo-surface" aria-labelledby="quote-confirmation-title">
       <span className="quote-confirmation-icon neo-icon-badge"><CheckCircle2 size={32} aria-hidden="true" /></span>
       <h1 id="quote-confirmation-title">Quote request received.</h1>
       <p className="quote-confirmation-message" role="status">We’ll contact you shortly.</p>
@@ -53,15 +53,15 @@ function QuoteBuilder({ data, result }: { data: QuotePageData; result?: QuoteAct
     locked.current = true;
     setChecking(true);
     const form = event.currentTarget;
-    try { await executeInvisibleRecaptcha(form, "custom_quote"); await submit(form, { method: "post", action: "/custom-quote" }); }
+    try { const { executeInvisibleRecaptcha } = await import("../../lib/recaptcha.client"); await executeInvisibleRecaptcha(form, "custom_quote"); await submit(form, { method: "post", action: "/custom-quote" }); }
     catch (cause) { setSecurityError(cause instanceof Error ? cause.message : "Your request could not be sent. Please try again."); }
     finally { locked.current = false; setChecking(false); }
   }
 
   const select = (name: keyof QuoteDraft, options: Record<string, string>) => <label className="quote-field" htmlFor={name}>
-    <span>{fieldLabels[name]}</span><select id={name} name={name} value={String(values[name])} onChange={event => update(name, event.target.value)} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `${name}-error` : undefined} className="neo-inset">
+    <span>{fieldLabels[name]}</span><Select id={name} name={name} value={String(values[name])} onChange={event => update(name, event.target.value)} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `${name}-error` : undefined} className="neo-inset">
       {Object.entries(options).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-    </select><FieldError name={name} error={errors[name]} />
+    </Select><FieldError name={name} error={errors[name]} />
   </label>;
   const choices = (name: "platforms" | "aspectRatios" | "services", options: Record<string, string>) => <fieldset className={`quote-choices${name === "services" ? " quote-choices--services" : ""}`} id={name} tabIndex={-1} aria-invalid={!!errors[name]} aria-describedby={errors[name] ? `${name}-error` : undefined}>
     <legend>{fieldLabels[name]} <span>Choose all that apply</span></legend>
@@ -78,7 +78,7 @@ function QuoteBuilder({ data, result }: { data: QuotePageData; result?: QuoteAct
   return <div className="quote-page-container">
     <Link to="/pricing" className="quote-text-link quote-back"><ArrowLeft size={16} aria-hidden="true" />All packages</Link>
     <header className="quote-hero"><p className="neo-section-label"><SlidersHorizontal size={16} aria-hidden="true" />Custom quote</p><h1>An edit built around your project.</h1><p>Choose what you need. We’ll put together a scope and price that fit.</p><span className="quote-hero-note">No payment required. We’ll contact you shortly.</span></header>
-    <Form id="custom-quote-form" method="post" action="/custom-quote" onSubmit={handleSubmit} className="quote-builder-layout" aria-busy={busy}>
+    <Form id="custom-quote-form" method="post" action="/custom-quote" data-analytics-form="quote_request" onSubmit={handleSubmit} className="quote-builder-layout" aria-busy={busy}>
         <input type="hidden" name="requestToken" value={data.requestToken} /><input type="hidden" name="g-recaptcha-response" defaultValue="" />
       <div className="quote-builder neo-surface">
         {error ? <div ref={alertRef} role="alert" tabIndex={-1} className="quote-error-summary"><h2>Check your request</h2><p>{error}</p>{Object.keys(errors).length ? <ul>{Object.entries(errors).map(([name, message]) => <li key={name}><a href={`#${name}`} onClick={event => { event.preventDefault(); const target = document.getElementById(name); target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: "start" }); }}>{fieldLabels[name] || name}: {message}</a></li>)}</ul> : null}</div> : null}

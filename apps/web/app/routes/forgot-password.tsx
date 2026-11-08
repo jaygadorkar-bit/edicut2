@@ -7,7 +7,6 @@ import { KeyRound } from "lucide-react";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { resolveWebEnv } from "../lib/context.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
-import { executeInvisibleRecaptcha } from "../lib/recaptcha.client";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 
@@ -99,6 +98,7 @@ export default function ForgotPasswordPage() {
     setSecurityError(null);
     setSecurityPending(true);
     try {
+      const { executeInvisibleRecaptcha } = await import("../lib/recaptcha.client");
       await executeInvisibleRecaptcha(form, "password_reset");
       await submit(form, { method: "post", action: "/forgot-password" });
     } catch (error) {

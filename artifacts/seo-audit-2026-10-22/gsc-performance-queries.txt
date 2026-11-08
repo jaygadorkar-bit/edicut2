@@ -1,0 +1,145 @@
+help_outline
+Help
+manage_accounts
+User settings
+	
+notifications
+Messages
+6
+
+home
+Overview
+lightbulb_2
+Insights
+trending_up
+Performance
+keyboard_arrow_down
+search
+URL inspection
+Indexing
+keyboard_arrow_up
+file_copy
+Pages
+account_tree
+Sitemaps
+visibility_off
+Removals
+Experience
+keyboard_arrow_up
+speed
+Core Web Vitals
+lock
+HTTPS
+Enhancements
+keyboard_arrow_up
+layers
+Breadcrumbs
+Security & Manual Actions
+keyboard_arrow_down
+link_2
+Links
+trophy
+Achievements
+settings
+Settings
+feedback
+Submit feedback
+info
+About Search Console
+PrivacyTerms
+Performance
+
+EXPORT
+24 hours
+7 days
+28 days
+3 months
+More
+arrow_drop_down
+Search type: Web
+arrow_drop_down
+Search type: Web
+Page: Custom (regex)
+Page: Custom (regex)
+close
+add
+Add filter
+Add filter
+filter_list_spark
+Customize your Performance report using AI
+Reset filters
+Reset filters
+Last update: 5.5 hours ago
+
+Total clicks
+2
+
+
+Total impressions
+839
+
+Average CTR
+0.2%
+
+Average position
+4.3
+
+Daily
+
+Chart totals and table results might be partial when filters are applied. Learn more
+Clicks
+Impressions
+9/30/26
+10/3/26
+10/6/26
+10/9/26
+10/12/26
+10/15/26
+10/18/26
+3
+2
+1
+0
+90
+60
+30
+0
+Chart, containing counts of Total clicks, Total impressions, Average CTR, and Average position from September 30, 2026 to October 19, 2026
+info
+Get more details on your site’s performance in generative AI features on Google Search
+Open report
+chevron_forward
+QUERIES
+PAGES
+COUNTRIES
+DEVICES
+SEARCH APPEARANCE
+DAYS
+
+Top queries
+	
+Clicks
+	
+Impressions
+
+edicut	2	786
+ediqut	0	1
+editstock price	0	1
+ikhedut portal	0	1
+Rows per page:
+5
+10
+25
+50
+100
+250
+500
+1-4 of 4
+Previous page
+Next page
+
+Performance on Search results
+Explore your property's performance on Google Search, including impressions, position, CTR, and top query strings.
+Learn more
+Got it
+Performance on Search results

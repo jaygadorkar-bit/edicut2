@@ -1,9 +1,10 @@
-import { createCookieSessionStorage, redirect } from "react-router";
+import { createCookie, createCookieSessionStorage, redirect } from "react-router";
 import { findAdminUserById } from "@edicut/db/repositories/admin-users";
 import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
 import type { DatabaseClient } from "@edicut/db/client";
 import { findUserById } from "@edicut/db/repositories/users";
 import { getDbFromContext } from "./db.server";
+import { retryDatabaseRead } from "./database-errors";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
 import {
   getSupabaseUserByAccessToken,
@@ -22,8 +23,10 @@ const LOCAL_SESSION_SECRET = "local-dev-session-secret-change-in-production";
 const USER_SESSION_SECONDS = 12 * 60 * 60;
 const REMEMBERED_SESSION_SECONDS = 7 * 24 * 60 * 60;
 const ADMIN_SESSION_SECONDS = 2 * 60 * 60;
+const AUTH_CSRF_TOKEN_SECONDS = 2 * 60 * 60;
 const userStorageCache = new Map<string, ReturnType<typeof createCookieSessionStorage>>();
 const adminStorageCache = new Map<string, ReturnType<typeof createCookieSessionStorage>>();
+const authCsrfCookieCache = new Map<string, ReturnType<typeof createCookie>>();
 
 function readSessionSecret(context?: SessionContext) {
   const secret =
@@ -107,6 +110,36 @@ type SessionKind = "user" | "admin";
 async function credentialKey(context?: SessionContext) {
   return crypto.subtle.importKey("raw", new TextEncoder().encode(readSessionSecret(context)), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
+
+function signOutCsrfData(cookieHeader: string | null) {
+  const authCookies = (cookieHeader ?? "")
+    .split(";")
+    .map(value => value.trim())
+    .filter(value => value.startsWith("_session=") || value.startsWith("_edicut_admin="))
+    .sort();
+  if (!authCookies.length) return null;
+  return new TextEncoder().encode(`edicut-signout-v1\n${authCookies.join(";")}`);
+}
+
+/** Bind the sign-out form token to the signed browser sessions without exposing cookie contents. */
+export async function createSignOutCsrfToken(cookieHeader: string | null, context?: SessionContext) {
+  const data = signOutCsrfData(cookieHeader);
+  if (!data) return null;
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", await credentialKey(context), data));
+  return btoa(String.fromCharCode(...signature)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+export async function verifySignOutCsrfToken(token: unknown, cookieHeader: string | null, context?: SessionContext) {
+  const data = signOutCsrfData(cookieHeader);
+  if (!data || typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
+  try {
+    const signature = Uint8Array.from(atob(token.replaceAll("-", "+").replaceAll("_", "/") + "="), character => character.charCodeAt(0));
+    return await crypto.subtle.verify("HMAC", await credentialKey(context), signature, data);
+  } catch {
+    return false;
+  }
+}
+
 function credentialData(identity: CredentialIdentity, kind: SessionKind) {
   return new TextEncoder().encode(JSON.stringify([kind, identity.id, identity.email?.trim().toLowerCase(), identity.passwordHash ?? null, identity.sessionVersion ?? null]));
 }
@@ -188,6 +221,63 @@ export async function destroyAdminSession(
   return getAdminSessionStorage(context).destroySession(session);
 }
 
+function getAuthCsrfCookie(context?: SessionContext) {
+  const secret = readSessionSecret(context);
+  const secure = isSecureCookie(context);
+  const cacheKey = `${secret}:${secure}`;
+  const cached = authCsrfCookieCache.get(cacheKey);
+  if (cached) return cached;
+
+  const cookie = createCookie("_edicut_auth_csrf", {
+    httpOnly: true,
+    maxAge: AUTH_CSRF_TOKEN_SECONDS,
+    path: "/",
+    sameSite: "strict",
+    secrets: [secret],
+    secure,
+  });
+  authCsrfCookieCache.set(cacheKey, cookie);
+  return cookie;
+}
+
+function isAuthCsrfToken(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+function createAuthCsrfToken() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function issueAuthCsrfToken(request: Request, context?: SessionContext) {
+  const cookie = getAuthCsrfCookie(context);
+  const existing = await cookie.parse(request.headers.get("Cookie"));
+  if (isAuthCsrfToken(existing)) return { token: existing, setCookie: null };
+
+  const token = createAuthCsrfToken();
+  return { token, setCookie: await cookie.serialize(token) };
+}
+
+export async function verifyAuthCsrfToken(
+  request: Request,
+  submittedToken: unknown,
+  context?: SessionContext,
+) {
+  if (request.method !== "POST" || request.headers.get("Sec-Fetch-Site") === "cross-site") return false;
+  if (!isAuthCsrfToken(submittedToken)) return false;
+
+  const cookie = getAuthCsrfCookie(context);
+  const storedToken = await cookie.parse(request.headers.get("Cookie"));
+  if (!isAuthCsrfToken(storedToken) || storedToken.length !== submittedToken.length) return false;
+
+  let difference = 0;
+  for (let index = 0; index < storedToken.length; index += 1) {
+    difference |= storedToken.charCodeAt(index) ^ submittedToken.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
 /** End provider sessions and revoke all application cookies for these identities. */
 export async function revokeAuthenticatedSessions(session: AppSession, adminSession: AppSession, context?: SessionContext) {
   const db = session.has("userId") || adminSession.has("adminUserId") ? getDbFromContext(context ?? {}) : null;
@@ -239,7 +329,8 @@ export async function requireUserId(
       });
     }
     const profileId = typeof userId === "string" ? userId : user.id;
-    const profile = await findUserById(getDbFromContext(context ?? {}), profileId);
+    const db = getDbFromContext(context ?? {});
+    const profile = await retryDatabaseRead(() => findUserById(db, profileId));
     if (!profile?.active || profile.deletedAt || !await hasCurrentSessionCredentials(session.get("authCredentialVersion"), profile, context)) {
       const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
       throw redirect(`/signin?${searchParams}`, {
@@ -262,7 +353,8 @@ export async function requireUserId(
     const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
     throw redirect(`/signin?${searchParams}`);
   }
-  const profile = await findUserById(getDbFromContext(context ?? {}), userId);
+  const db = getDbFromContext(context ?? {});
+  const profile = await retryDatabaseRead(() => findUserById(db, userId));
   if (!profile?.active || profile.deletedAt || !await hasCurrentSessionCredentials(session.get("authCredentialVersion"), profile, context)) {
     const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
     throw redirect(`/signin?${searchParams}`, {

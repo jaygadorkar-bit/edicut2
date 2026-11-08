@@ -9,12 +9,14 @@ import {
 } from "react";
 import { Link, useLocation } from "react-router";
 import { FormSelect } from "./FormSelect";
+import { adminPath } from "../lib/admin-paths";
 import { startAdminNavigationPolling } from "../lib/admin-navigation-live";
+import { subscribeWorkspaceRealtime } from "../lib/workspace-realtime.client";
 import {
-  mergeNotificationReads,
   notificationKinds,
   notificationDayGroup,
   notificationTime,
+  groupNotificationEvents,
   mergeNotificationDismissals,
   validNotificationReads,
   validNotificationDismissals,
@@ -27,23 +29,44 @@ import {
 import "../styles/notifications.css";
 
 type NotificationsContextValue = {
+  scope: "client" | "admin";
   feed: NotificationFeed | null;
   reads: NotificationReads;
   dismissed: NotificationDismissals;
   loading: boolean;
   error: string;
   storageAvailable: boolean;
+  importantKinds: NotificationKind[];
   refresh: () => void;
   mark: (events: WorkspaceEvent[], read: boolean) => void;
-  dismiss: (event: WorkspaceEvent) => void;
+  dismiss: (events: WorkspaceEvent[]) => void;
+  setImportantKinds: (kinds: NotificationKind[]) => void;
   open: (kind?: NotificationKind) => void;
 };
 const NotificationsContext = createContext<NotificationsContextValue | null>(
   null,
 );
+const NotificationsScopeContext = createContext<"client" | "admin" | null>(null);
 const storageKey = (identity: string) => `edicut:notifications:v1:${identity}`;
 const dismissedStorageKey = (identity: string) =>
   `edicut:notifications:dismissed:v1:${identity}`;
+const importanceStorageKey = (identity: string) =>
+  `edicut:notifications:important-kinds:v1:${identity}`;
+const DEFAULT_IMPORTANT_KINDS: NotificationKind[] = ["project"];
+function isNotificationKind(value: unknown): value is NotificationKind {
+  return typeof value === "string" && Object.hasOwn(notificationKinds, value);
+}
+function savedImportantKinds(identity: string) {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(importanceStorageKey(identity)) || "null",
+    );
+    if (!Array.isArray(saved)) return [...DEFAULT_IMPORTANT_KINDS];
+    return [...new Set(saved.filter(isNotificationKind))];
+  } catch {
+    return [...DEFAULT_IMPORTANT_KINDS];
+  }
+}
 function savedReads(identity: string) {
   try {
     return validNotificationReads(
@@ -69,17 +92,38 @@ export function WorkspaceNotificationsProvider({
   scope: "client" | "admin";
   children: ReactNode;
 }) {
+  const existingScope = useContext(NotificationsScopeContext);
+  // Route shells reuse the persistent workspace feed instead of reconnecting.
+  if (existingScope === scope) return <>{children}</>;
+  return (
+    <NotificationsScopeContext.Provider value={scope}>
+      <WorkspaceNotificationsStateProvider scope={scope}>{children}</WorkspaceNotificationsStateProvider>
+    </NotificationsScopeContext.Provider>
+  );
+}
+function WorkspaceNotificationsStateProvider({ scope, children }: {
+  scope: "client" | "admin";
+  children: ReactNode;
+}) {
   const [feed, setFeed] = useState<NotificationFeed | null>(null);
   const [reads, setReads] = useState<NotificationReads>({});
   const [dismissed, setDismissed] = useState<NotificationDismissals>({});
   const [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const [importantKinds, setImportantKindsState] = useState<NotificationKind[]>(
+    [...DEFAULT_IMPORTANT_KINDS],
+  );
   const [isOpen, setOpen] = useState(false);
   const [selectedKind, setSelectedKind] = useState<NotificationKind | "all">(
     "all",
   );
   const active = useRef<AbortController | null>(null);
+  const refreshAfterRead = useRef(false);
+  const liveRefreshTimer = useRef<number | undefined>(undefined);
+  const receiptVersions = useRef(new Map<string, number>());
+  const legacyReadImportInFlight = useRef(false);
+  const ordersVisitAcknowledged = useRef(new Set<string>());
   const identityRef = useRef("");
   const location = useLocation();
   const read = useCallback(
@@ -118,10 +162,66 @@ export function WorkspaceNotificationsProvider({
           throw new Error("Invalid response");
         if (signal.aborted) return;
         identityRef.current = next.identity;
-        setReads(savedReads(next.identity));
+        setImportantKindsState(
+          scope === "admin"
+            ? savedImportantKinds(next.identity)
+            : [...DEFAULT_IMPORTANT_KINDS],
+        );
+        const databaseReads = validNotificationReads(
+          Object.fromEntries(
+            next.events.flatMap((event) => {
+              const readAt = event.readAt ? Date.parse(event.readAt) : NaN;
+              return Number.isFinite(readAt) ? [[event.id, readAt]] : [];
+            }),
+          ),
+        );
+        const legacy = next.readReceiptsAvailable === true
+          ? savedReads(next.identity)
+          : {};
+        const legacyReceipts = next.events.flatMap((event) => {
+          const readAt = legacy[event.id];
+          return Number.isFinite(readAt)
+            ? [{ eventId: event.id, readAt: new Date(readAt).toISOString() }]
+            : [];
+        });
+        setReads(databaseReads);
         setDismissed(savedDismissals(next.identity));
         setFeed(next);
         setError("");
+        if (legacyReceipts.length && !legacyReadImportInFlight.current) {
+          legacyReadImportInFlight.current = true;
+          void fetch(`/api/notifications?scope=${scope}`, {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identity: next.identity, legacyReads: legacyReceipts }),
+          })
+            .then(async (receiptResponse) => {
+              if (!receiptResponse.ok) throw new Error("Legacy receipts could not be imported");
+              const remaining = savedReads(next.identity);
+              for (const { eventId } of legacyReceipts) delete remaining[eventId];
+              try {
+                if (Object.keys(remaining).length)
+                  localStorage.setItem(storageKey(next.identity), JSON.stringify(remaining));
+                else localStorage.removeItem(storageKey(next.identity));
+              } catch {
+                setStorageAvailable(false);
+              }
+              if (identityRef.current === next.identity) {
+                if (active.current) refreshAfterRead.current = true;
+                else window.setTimeout(() => {
+                  if (identityRef.current === next.identity) void read();
+                }, 0);
+              }
+            })
+            .catch(() => {
+              if (identityRef.current === next.identity)
+                setError("Previous read status couldn’t sync. Try again.");
+            })
+            .finally(() => {
+              legacyReadImportInFlight.current = false;
+            });
+        }
       } catch {
         if (active.current === controller && !outerSignal?.aborted)
           setError("Notifications couldn’t refresh. Try again.");
@@ -130,11 +230,26 @@ export function WorkspaceNotificationsProvider({
         if (active.current === controller) {
           active.current = null;
           setLoading(false);
+          if (refreshAfterRead.current) {
+            refreshAfterRead.current = false;
+            liveRefreshTimer.current = window.setTimeout(() => {
+              liveRefreshTimer.current = undefined;
+              if (identityRef.current) void read();
+            }, 0);
+          }
         }
       }
     },
     [scope],
   );
+  const refreshFromRealtime = useCallback(() => {
+    if (liveRefreshTimer.current !== undefined) window.clearTimeout(liveRefreshTimer.current);
+    liveRefreshTimer.current = window.setTimeout(() => {
+      liveRefreshTimer.current = undefined;
+      if (active.current) refreshAfterRead.current = true;
+      else void read();
+    }, 150);
+  }, [read]);
   useEffect(() => {
     setFeed(null);
     setReads({});
@@ -142,51 +257,110 @@ export function WorkspaceNotificationsProvider({
     setError("");
     identityRef.current = "";
     void read();
-    const stop = startAdminNavigationPolling(read);
+    const stopRealtime = subscribeWorkspaceRealtime(scope, refreshFromRealtime);
+    // Keep a visible-tab safety poll for disconnected clients and missed broadcasts.
+    const stopFallback = startAdminNavigationPolling(read, 30_000);
     return () => {
-      stop();
+      stopRealtime();
+      stopFallback?.();
+      if (liveRefreshTimer.current !== undefined) window.clearTimeout(liveRefreshTimer.current);
+      liveRefreshTimer.current = undefined;
+      refreshAfterRead.current = false;
       const controller = active.current;
       active.current = null;
       controller?.abort();
     };
-  }, [read]);
+  }, [read, refreshFromRealtime, scope]);
   useEffect(() => {
     setOpen(false);
   }, [location.pathname, location.search]);
   useEffect(() => {
     const sync = (event: StorageEvent) => {
       if (!identityRef.current) return;
-      if (event.key === storageKey(identityRef.current))
-        setReads(savedReads(identityRef.current));
       if (event.key === dismissedStorageKey(identityRef.current))
         setDismissed(savedDismissals(identityRef.current));
+      if (
+        scope === "admin" &&
+        event.key === importanceStorageKey(identityRef.current)
+      )
+        setImportantKindsState(savedImportantKinds(identityRef.current));
     };
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
-  }, []);
-  const mark = (events: WorkspaceEvent[], value: boolean) => {
+  }, [scope]);
+  const mark = useCallback((events: WorkspaceEvent[], value: boolean) => {
     if (!feed) return;
-    const next = mergeNotificationReads(savedReads(feed.identity), reads);
-    for (const event of events) {
-      if (value) next[event.id] = Date.now();
-      else delete next[event.id];
+    const eventIds = [...new Set(events.map((event) => event.id))].slice(0, 100);
+    const versions = new Map<string, number>();
+    for (const eventId of eventIds) {
+      const version = (receiptVersions.current.get(eventId) ?? 0) + 1;
+      receiptVersions.current.delete(eventId);
+      receiptVersions.current.set(eventId, version);
+      versions.set(eventId, version);
     }
-    const bounded = validNotificationReads(next);
-    setReads(bounded);
-    try {
-      localStorage.setItem(storageKey(feed.identity), JSON.stringify(bounded));
-      setStorageAvailable(true);
-    } catch {
-      setStorageAvailable(false);
+    while (receiptVersions.current.size > 1000) {
+      const oldest = receiptVersions.current.keys().next().value;
+      if (oldest === undefined) break;
+      receiptVersions.current.delete(oldest);
     }
-  };
-  const dismiss = (event: WorkspaceEvent) => {
+    const optimisticAt = Date.now();
+    setReads((current) => {
+      const next = { ...current };
+      for (const eventId of eventIds) {
+        if (value) next[eventId] = optimisticAt;
+        else delete next[eventId];
+      }
+      return validNotificationReads(next);
+    });
+    void fetch(`/api/notifications?scope=${scope}`, {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventIds, read: value }),
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Receipt update failed");
+        const result = (await response.json()) as {
+          eventIds?: unknown;
+          readAt?: unknown;
+        };
+        if (
+          !Array.isArray(result.eventIds) ||
+          result.eventIds.some((id) => typeof id !== "string") ||
+          (value && typeof result.readAt !== "string")
+        )
+          throw new Error("Invalid receipt response");
+        const confirmedAt = value ? Date.parse(result.readAt as string) : NaN;
+        if (value && !Number.isFinite(confirmedAt))
+          throw new Error("Invalid receipt timestamp");
+        setReads((current) => {
+          const next = { ...current };
+          for (const eventId of result.eventIds as string[]) {
+            if (versions.get(eventId) !== receiptVersions.current.get(eventId))
+              continue;
+            if (value) next[eventId] = confirmedAt;
+            else delete next[eventId];
+          }
+          return validNotificationReads(next);
+        });
+        setError("");
+      })
+      .catch(() => {
+        if (!eventIds.some((id) => versions.get(id) === receiptVersions.current.get(id)))
+          return;
+        setError("Read status couldn’t be saved. Try again.");
+        if (active.current) refreshAfterRead.current = true;
+        else void read();
+      });
+  }, [feed, scope, read]);
+  const dismiss = (events: WorkspaceEvent[]) => {
     if (!feed) return;
     const next = mergeNotificationDismissals(
       savedDismissals(feed.identity),
       dismissed,
     );
-    next[event.id] = Date.now();
+    const dismissedAt = Date.now();
+    for (const event of events) next[event.id] = dismissedAt;
     const bounded = validNotificationDismissals(next);
     setDismissed(bounded);
     try {
@@ -199,18 +373,51 @@ export function WorkspaceNotificationsProvider({
       setStorageAvailable(false);
     }
   };
+  const setImportantKinds = (kinds: NotificationKind[]) => {
+    const next = [...new Set(kinds.filter(isNotificationKind))];
+    setImportantKindsState(next);
+    if (scope !== "admin" || !identityRef.current) return;
+    try {
+      localStorage.setItem(
+        importanceStorageKey(identityRef.current),
+        JSON.stringify(next),
+      );
+      setStorageAvailable(true);
+    } catch {
+      setStorageAvailable(false);
+    }
+  };
+  // Visiting Orders acknowledges the current order events for this admin. The
+  // receipts are persisted by the same API used by the notification controls.
+  useEffect(() => {
+    if (scope !== "admin" || location.pathname !== adminPath("/orders")) {
+      ordersVisitAcknowledged.current.clear();
+      return;
+    }
+    if (!feed) return;
+    const orderEvents = feed.events.filter(
+      (event) => event.kind === "order" && !reads[event.id] && !ordersVisitAcknowledged.current.has(event.id),
+    );
+    if (orderEvents.length) {
+      for (const event of orderEvents) ordersVisitAcknowledged.current.add(event.id);
+      mark(orderEvents, true);
+    }
+  }, [feed, location.pathname, mark, reads, scope]);
   const value = {
+    scope,
     feed,
     reads,
     dismissed,
     loading,
     error,
     storageAvailable,
+    importantKinds,
     refresh: () => {
       void read();
     },
     mark,
     dismiss,
+    setImportantKinds,
     open: (kind?: NotificationKind) => {
       setSelectedKind(kind ?? "all");
       setOpen(true);
@@ -275,14 +482,26 @@ export function NotificationBell() {
     </>
   );
 }
+export function useUnreadNotificationCount(kind?: NotificationKind) {
+  const context = useContext(NotificationsContext);
+  if (!context || context.scope !== "admin" || !kind) return 0;
+  return (
+    context.feed?.events.filter(
+      (event) =>
+        event.kind === kind &&
+        !context.reads[event.id] &&
+        !context.dismissed[event.id],
+    ).length ?? 0
+  );
+}
 function EventList({
   events,
   close,
-  unreadOnly = false,
+  prioritize = false,
 }: {
   events: WorkspaceEvent[];
   close?: () => void;
-  unreadOnly?: boolean;
+  prioritize?: boolean;
 }) {
   const context = useContext(NotificationsContext)!;
   const grouped = new Map<string, WorkspaceEvent[]>();
@@ -293,9 +512,32 @@ function EventList({
     dayEvents.push(event);
     grouped.set(day, dayEvents);
   }
+  const priorityRank = { normal: 0, important: 1, action: 2 } as const;
+  const dayGroups = [...grouped].map(([day, dayEvents]) => {
+    const eventGroups = groupNotificationEvents(dayEvents);
+    return {
+      day,
+      events: prioritize
+        ? eventGroups
+        : eventGroups.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
+      priority: eventGroups.reduce<"action" | "important" | "normal">(
+        (highest, group) =>
+          priorityRank[group.priority] > priorityRank[highest]
+            ? group.priority
+            : highest,
+        "normal",
+      ),
+      occurredAt: dayEvents.reduce(
+        (latest, event) => event.occurredAt > latest ? event.occurredAt : latest,
+        "",
+      ),
+    };
+  }).sort((a, b) => prioritize
+    ? priorityRank[b.priority] - priorityRank[a.priority] || b.occurredAt.localeCompare(a.occurredAt)
+    : b.occurredAt.localeCompare(a.occurredAt));
   return (
     <div className="notification-events">
-      {[...grouped].map(([day, dayEvents]) => (
+      {dayGroups.map(({ day, events: dayEventGroups }) => (
         <section
           className="notification-events__group"
           aria-label={day}
@@ -303,136 +545,152 @@ function EventList({
         >
           <h3>{day}</h3>
           <ul>
-            {dayEvents.map((event) => {
-              const unread = !context.reads[event.id];
+            {dayEventGroups.map((group) => {
+              const event = group.events[0];
+              if (!event) return null;
+              const unread = group.events.some((member) => !context.reads[member.id]);
+              const priorityLabel = group.priority === "action"
+                ? "Needs an editor"
+                : group.priority === "important"
+                  ? "Important"
+                  : null;
+              const moveFocusAfterRemoval = (button: HTMLButtonElement) => {
+                const row = button.closest("li");
+                return row?.nextElementSibling?.querySelector<HTMLElement>(
+                  ".notification-event__link",
+                ) ?? row?.parentElement?.parentElement?.nextElementSibling?.querySelector<HTMLElement>(
+                  ".notification-event__link",
+                ) ?? button.closest("dialog")?.querySelector<HTMLElement>(
+                  ".notification-tabs button",
+                );
+              };
+              const markGroupRead = () => context.mark(group.events, true);
               return (
                 <li
-                  key={event.id}
-                  className={`notification-event${unread ? " is-unread" : ""}`}
+                  key={group.id}
+                  className={`notification-event${unread ? " is-unread" : ""}${group.priority !== "normal" ? ` is-${group.priority}` : ""}`}
                 >
-                  <Link
-                    to={event.to}
-                    className="notification-event__link"
-                    onClick={() => {
-                      context.mark([event], true);
-                      close?.();
-                    }}
-                  >
-                    {unread ? (
-                      <span
-                        className="notification-event__unread-dot"
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                    <span
-                      className={`notification-event__icon notification-event__icon--${event.kind}`}
-                    >
-                      <Icon name={notificationKinds[event.kind].icon} />
-                    </span>
-                    <span className="notification-event__copy">
-                      <strong>
-                        {event.title}
-                        {unread ? (
-                          <span className="sr-only">, unread</span>
-                        ) : null}
-                      </strong>
-                      <span>{event.detail}</span>
-                      <time
-                        dateTime={event.occurredAt}
-                        title={new Intl.DateTimeFormat("en", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                          timeZone: "Asia/Dhaka",
-                        }).format(new Date(event.occurredAt))}
-                      >
-                        {notificationTime(event.occurredAt)}
-                      </time>
-                    </span>
-                  </Link>
-                  <details
-                    className="notification-event__menu"
-                    onKeyDown={(key) => {
-                      if (key.key === "Escape") {
-                        key.preventDefault();
-                        key.currentTarget.open = false;
-                        key.currentTarget.querySelector("summary")?.focus();
-                      }
-                    }}
-                  >
-                    <summary
-                      aria-label={`More options for ${event.title}: ${event.detail}`}
-                      title="More options"
-                      onClick={(click) => {
-                        const details = click.currentTarget.parentElement;
-                        const bounds = click.currentTarget.getBoundingClientRect();
-                        const panelHeight = 96;
-                        const panelWidth = Math.min(184, window.innerWidth - 16);
-                        const top = window.innerHeight - bounds.bottom >= panelHeight + 8
-                          ? bounds.bottom + 4
-                          : Math.max(8, bounds.top - panelHeight - 4);
-                        const left = Math.max(
-                          8,
-                          Math.min(window.innerWidth - panelWidth - 8, bounds.right - panelWidth),
-                        );
-                        details?.style.setProperty("--notification-menu-top", `${top}px`);
-                        details?.style.setProperty("--notification-menu-left", `${left}px`);
+                  <div className="notification-event__main">
+                    <Link
+                      to={event.to}
+                      className="notification-event__link"
+                      onClick={() => {
+                        markGroupRead();
+                        close?.();
                       }}
                     >
-                      <Icon name="more_vert" />
-                    </summary>
-                    <div
-                      className="notification-event__menu-panel"
-                      role="group"
-                      aria-label="Notification actions"
-                    >
-                      <button
-                        type="button"
-                        className="notification-event__menu-item"
-                        onClick={(click) => {
-                          const row = click.currentTarget.closest("li");
-                          const next =
-                            row?.nextElementSibling?.querySelector<HTMLElement>(
-                              ".notification-event__link",
-                            ) ??
-                            row?.parentElement?.parentElement?.nextElementSibling?.querySelector<HTMLElement>(
-                              ".notification-event__link",
-                            ) ??
-                            click.currentTarget
-                              .closest("dialog")
-                              ?.querySelector<HTMLElement>(".notification-tabs button");
-                          click.currentTarget.closest("details")!.open = false;
-                          context.mark([event], unread);
-                          if (unread && unreadOnly)
-                            requestAnimationFrame(() => next?.focus());
+                      {unread ? (
+                        <span className="notification-event__unread-dot" aria-hidden="true" />
+                      ) : null}
+                      <span className={`notification-event__icon notification-event__icon--${event.kind}`}>
+                        <Icon name={notificationKinds[event.kind].icon} />
+                      </span>
+                      <span className="notification-event__copy">
+                        <strong>
+                          {event.title}
+                          {group.events.length > 1 ? (
+                            <span className="notification-event__group-count">{group.events.length} updates</span>
+                          ) : null}
+                          {priorityLabel ? (
+                            <span className={`notification-event__priority notification-event__priority--${group.priority}`}>
+                              {priorityLabel}
+                            </span>
+                          ) : null}
+                          {unread ? <span className="sr-only">, unread</span> : null}
+                        </strong>
+                        <span>{event.detail}</span>
+                        {group.events.length > 1 ? (
+                          <span className="notification-event__group-detail">
+                            Latest update shown; open the project to review the full activity.
+                          </span>
+                        ) : null}
+                        <time
+                          dateTime={event.occurredAt}
+                          title={new Intl.DateTimeFormat("en", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                            timeZone: "Asia/Dhaka",
+                          }).format(new Date(event.occurredAt))}
+                        >
+                          {notificationTime(event.occurredAt)}
+                        </time>
+                      </span>
+                    </Link>
+                    <div className="notification-event__actions">
+                      <Link
+                        to={event.actionTo || event.to}
+                        className="notification-event__action"
+                        onClick={() => {
+                          markGroupRead();
+                          close?.();
                         }}
                       >
-                        {unread ? "Mark as read" : "Mark as unread"}
-                      </button>
-                      <button
-                        type="button"
-                        className="notification-event__menu-item notification-event__menu-item--danger"
-                        aria-label={`Delete notification from this browser: ${event.title}`}
-                        title="Removes this notification from this browser only"
-                        onClick={(click) => {
-                          const row = click.currentTarget.closest("li");
-                          const next =
-                            row?.nextElementSibling?.querySelector<HTMLElement>(
-                              ".notification-event__link",
-                            ) ??
-                            row?.parentElement?.parentElement?.nextElementSibling?.querySelector<HTMLElement>(
-                              ".notification-event__link",
-                            ) ??
-                            click.currentTarget
-                              .closest("dialog")
-                              ?.querySelector<HTMLElement>(".notification-tabs button");
-                          context.dismiss(event);
-                          requestAnimationFrame(() => next?.focus());
+                        {event.actionLabel || "Open update"}
+                      </Link>
+                      <details
+                        className="notification-event__menu"
+                        onKeyDown={(key) => {
+                          if (key.key === "Escape") {
+                            key.preventDefault();
+                            key.currentTarget.open = false;
+                            key.currentTarget.querySelector("summary")?.focus();
+                          }
                         }}
                       >
-                        Delete
-                      </button>
+                        <summary
+                          aria-label={`More options for ${event.title}${group.events.length > 1 ? `, ${group.events.length} updates` : ""}: ${event.detail}`}
+                          title="More options"
+                          onClick={(click) => {
+                            const details = click.currentTarget.parentElement;
+                            const bounds = click.currentTarget.getBoundingClientRect();
+                            const panelHeight = 96;
+                            const panelWidth = Math.min(184, window.innerWidth - 16);
+                            const top = window.innerHeight - bounds.bottom >= panelHeight + 8
+                              ? bounds.bottom + 4
+                              : Math.max(8, bounds.top - panelHeight - 4);
+                            const left = Math.max(
+                              8,
+                              Math.min(window.innerWidth - panelWidth - 8, bounds.right - panelWidth),
+                            );
+                            details?.style.setProperty("--notification-menu-top", `${top}px`);
+                            details?.style.setProperty("--notification-menu-left", `${left}px`);
+                          }}
+                        >
+                          <Icon name="more_vert" />
+                        </summary>
+                        <div
+                          className="notification-event__menu-panel"
+                          role="group"
+                          aria-label="Notification actions"
+                        >
+                          <button
+                            type="button"
+                            className="notification-event__menu-item"
+                            onClick={(click) => {
+                              click.currentTarget.closest("details")!.open = false;
+                              context.mark(group.events, unread);
+                            }}
+                          >
+                            {unread ? "Mark as read" : "Mark as unread"}
+                          </button>
+                          <button
+                            type="button"
+                            className="notification-event__menu-item notification-event__menu-item--danger"
+                            aria-label={`Hide ${event.title} from this browser`}
+                            title="Hides these notifications from this browser only"
+                            onClick={(click) => {
+                              const next = moveFocusAfterRemoval(click.currentTarget);
+                              click.currentTarget.closest("details")!.open = false;
+                              context.dismiss(group.events);
+                              requestAnimationFrame(() => next?.focus());
+                            }}
+                          >
+                            Hide here
+                          </button>
+                        </div>
+                      </details>
                     </div>
-                  </details>
+                  </div>
                 </li>
               );
             })}
@@ -454,12 +712,14 @@ function NotificationDialog({
   const context = useContext(NotificationsContext)!;
   const dialog = useRef<HTMLDialogElement>(null),
     trigger = useRef<HTMLElement | null>(null);
-  const [view, setView] = useState("unread"),
+  const [view, setView] = useState<"important" | "all">("important"),
     [kind, setKind] = useState("all");
+  const [showImportanceSettings, setShowImportanceSettings] = useState(false);
   useEffect(() => {
     if (open) {
       setKind(selectedKind);
-      setView("unread");
+      setView(selectedKind === "all" ? "important" : "all");
+      setShowImportanceSettings(false);
     }
   }, [open, selectedKind]);
   useEffect(() => {
@@ -468,6 +728,11 @@ function NotificationDialog({
       return;
     }
     trigger.current = document.activeElement as HTMLElement;
+    const triggerTop = trigger.current?.getBoundingClientRect().top ?? 20;
+    dialog.current?.style.setProperty(
+      "--notification-dialog-top",
+      `${Math.max(8, Math.round(triggerTop))}px`,
+    );
     dialog.current?.showModal();
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -480,7 +745,13 @@ function NotificationDialog({
     (event) => !context.dismissed[event.id],
   );
   const unread = events.filter((event) => !context.reads[event.id]);
-  const visible = (view === "unread" ? unread : events).filter(
+  const important = events.filter(
+    (event) =>
+      context.importantKinds.includes(event.kind) || event.priority === "action",
+  );
+  const importantCount = groupNotificationEvents(important).length;
+  const allCount = groupNotificationEvents(events).length;
+  const visible = (view === "important" ? important : events).filter(
     (event) => kind === "all" || event.kind === kind,
   );
   const sourceUnavailable = context.feed?.unavailableKinds?.includes(
@@ -521,29 +792,89 @@ function NotificationDialog({
       <header className="notification-dialog__header">
         <div>
           <h2 id="notifications-title">Notifications</h2>
+          <p>Take action on project staffing, then catch up on every update.</p>
         </div>
-        <button
-          type="button"
-          className="notification-icon-button"
-          aria-label="Close notifications"
-          onClick={close}
-          autoFocus
-        >
-          <Icon name="close" />
-        </button>
+        <div className="notification-dialog__header-actions">
+          {context.scope === "admin" ? (
+            <button
+              type="button"
+              className="notification-icon-button"
+              aria-label="Important notification settings"
+              aria-controls="notification-importance-settings"
+              aria-expanded={showImportanceSettings}
+              onClick={() => setShowImportanceSettings((current) => !current)}
+            >
+              <Icon name="tune" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="notification-icon-button"
+            aria-label="Refresh notifications"
+            disabled={context.loading}
+            onClick={context.refresh}
+          >
+            <Icon name="refresh" />
+          </button>
+          <button
+            type="button"
+            className="notification-icon-button"
+            aria-label="Close notifications"
+            onClick={close}
+            autoFocus
+          >
+            <Icon name="close" />
+          </button>
+        </div>
       </header>
       <div className="notification-dialog__actions">
-        <div className="notification-tabs" aria-label="Notification view">
-          {["unread", "all"].map((value) => (
+        <div
+          className="notification-tabs"
+          role="group"
+          aria-label="Notification view"
+        >
+          {(["important", "all"] as const).map((value) => (
             <button
               type="button"
               key={value}
               aria-pressed={view === value}
               onClick={() => setView(value)}
             >
-              {value === "unread" ? "Unread" : "All events"}
+              <span>{value === "important" ? "Important" : "All events"}</span>
+              <span className="notification-tabs__count">
+                {value === "important" ? importantCount : allCount}
+              </span>
             </button>
           ))}
+        </div>
+        <div className="notification-dialog__filter">
+          <label
+            className="sr-only"
+            id="notification-kind-label"
+            htmlFor="notification-kind"
+          >
+            Filter notifications by event type
+          </label>
+          <FormSelect
+            id="notification-kind"
+            name="kind"
+            className="notification-type-select"
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: "all", label: "All types" },
+              ...Object.entries(notificationKinds)
+                .filter(
+                  ([key]) =>
+                    !context.feed?.kinds ||
+                    context.feed.kinds.includes(key as NotificationKind),
+                )
+                .map(([key, value]) => ({
+                  value: key,
+                  label: value.label,
+                })),
+            ]}
+          />
         </div>
         <button
           type="button"
@@ -558,40 +889,6 @@ function NotificationDialog({
         >
           Mark all read
         </button>
-        <button
-          type="button"
-          className="notification-icon-button"
-          aria-label="Refresh notifications"
-          disabled={context.loading}
-          onClick={context.refresh}
-        >
-          <Icon name="refresh" />
-        </button>
-      </div>
-      <div className="notification-dialog__filter">
-        <label className="sr-only" id="notification-kind-label" htmlFor="notification-kind">
-          Filter notifications by event type
-        </label>
-        <FormSelect
-          id="notification-kind"
-          name="kind"
-          className="notification-type-select"
-          value={kind}
-          onChange={setKind}
-          options={[
-            { value: "all", label: "All types" },
-            ...Object.entries(notificationKinds)
-              .filter(
-                ([key]) =>
-                  !context.feed?.kinds ||
-                  context.feed.kinds.includes(key as NotificationKind),
-              )
-              .map(([key, value]) => ({
-                value: key,
-                label: value.label,
-              })),
-          ]}
-        />
       </div>
       {context.error ? (
         <p className="notification-notice" role="alert">
@@ -602,6 +899,73 @@ function NotificationDialog({
         </p>
       ) : null}
       <div className="notification-dialog__body" aria-busy={context.loading}>
+        {context.scope === "admin" ? (
+          <section
+            className="notification-importance-settings"
+            id="notification-importance-settings"
+            aria-labelledby="notification-importance-title"
+            hidden={!showImportanceSettings}
+          >
+            <div className="notification-importance-settings__heading">
+              <h3 id="notification-importance-title">
+                Important notification types
+              </h3>
+              <p>
+                Selected types appear in Important. Urgent staffing actions stay
+                there too.
+              </p>
+            </div>
+            <fieldset className="notification-importance-settings__options">
+              <legend className="sr-only">
+                Choose notification types to include in Important
+              </legend>
+              {Object.entries(notificationKinds)
+                .filter(
+                  ([key]) =>
+                    !context.feed?.kinds ||
+                    context.feed.kinds.includes(key as NotificationKind),
+                )
+                .map(([key, definition]) => {
+                  const notificationKind = key as NotificationKind;
+                  const selected =
+                    context.importantKinds.includes(notificationKind);
+                  return (
+                    <label
+                      className={`notification-importance-settings__option${selected ? " is-selected" : ""}`}
+                      key={key}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(event) => {
+                          const next = event.currentTarget.checked
+                            ? [...context.importantKinds, notificationKind]
+                            : context.importantKinds.filter(
+                                (kind) => kind !== notificationKind,
+                              );
+                          context.setImportantKinds(next);
+                        }}
+                      />
+                      <Icon name={definition.icon} />
+                      <span>{definition.label}</span>
+                    </label>
+                  );
+                })}
+            </fieldset>
+            <div className="notification-importance-settings__footer">
+              <span>Saved for this admin in this browser.</span>
+              <button
+                type="button"
+                className="notification-text-button"
+                onClick={() =>
+                  context.setImportantKinds([...DEFAULT_IMPORTANT_KINDS])
+                }
+              >
+                Reset defaults
+              </button>
+            </div>
+          </section>
+        ) : null}
         {context.loading && !context.feed ? (
           <p className="notification-empty" role="status">
             Loading notifications…
@@ -610,7 +974,7 @@ function NotificationDialog({
           <EventList
             events={visible}
             close={close}
-            unreadOnly={view === "unread"}
+            prioritize={view === "important"}
           />
         ) : !context.error ? (
           <div className="notification-empty">
@@ -620,8 +984,8 @@ function NotificationDialog({
                 ? "Updates temporarily unavailable"
                 : context.feed?.partial
                   ? "No available events in this view"
-                  : view === "unread"
-                    ? "You’re up to date"
+                  : view === "important"
+                    ? "Nothing needs your attention"
                     : "No notifications in this view"}
             </h3>
             <p>
@@ -629,32 +993,40 @@ function NotificationDialog({
                 ? "Other event types are still available. Try refreshing later."
                 : kind !== "all"
                   ? "Choose another event type to see more updates."
-                  : view === "unread"
-                    ? "New requests and updates will appear here."
+                  : view === "important"
+                    ? "Selected event types and urgent staffing actions will appear here."
                     : "Workspace activity from the last 90 days will appear here."}
             </p>
-            {view === "unread" && events.length ? (
+            {view === "important" && events.length ? (
               <button
                 type="button"
                 className="notification-text-button"
                 onClick={() => setView("all")}
               >
-                View all events
+                See all events
               </button>
             ) : null}
           </div>
         ) : null}
       </div>
-      {!context.storageAvailable || context.feed?.partial ? (
+      {!context.storageAvailable ||
+      context.feed?.partial ||
+      context.feed?.readReceiptsAvailable === false ? (
         <footer className="notification-dialog__footer">
           {!context.storageAvailable ? (
-            <p>Read status and deleted notifications can’t be saved in this browser and will reset when you leave.</p>
+            <p>Hidden status can’t be saved in this browser and will reset when you leave.</p>
           ) : null}
           {context.feed?.partial ? (
           <p>
             Some event sources are unavailable. Other notifications are still
             shown.
           </p>
+          ) : null}
+          {context.feed?.readReceiptsAvailable === false ? (
+            <p>
+              Read status can’t sync across devices because the database receipts
+              table is unavailable. Contact an administrator if this continues.
+            </p>
           ) : null}
         </footer>
       ) : null}
@@ -663,13 +1035,27 @@ function NotificationDialog({
 }
 export function AdminRecentEvents() {
   const context = useContext(NotificationsContext);
+  const [selectedKind, setSelectedKind] = useState<NotificationKind | "all">(
+    "all",
+  );
   if (!context) return null;
   const events = (context.feed?.events ?? []).filter(
     (event) => !context.dismissed[event.id],
   );
   const unread = events.filter((event) => !context.reads[event.id]);
-  const counts = (kind: NotificationKind) =>
-    unread.filter((event) => event.kind === kind).length;
+  const tabKinds: Array<NotificationKind | "all"> = [
+    "all",
+    ...(Object.keys(notificationKinds) as NotificationKind[]),
+  ];
+  const visibleEvents = events.filter(
+    (event) => selectedKind === "all" || event.kind === selectedKind,
+  );
+  const unreadCount = (kind: NotificationKind | "all") =>
+    unread.filter((event) => kind === "all" || event.kind === kind).length;
+  const selectedSourceUnavailable = Boolean(
+    selectedKind !== "all" &&
+      context.feed?.unavailableKinds?.includes(selectedKind),
+  );
   return (
     <section
       className="notification-overview neo-workspace__panel"
@@ -686,29 +1072,41 @@ export function AdminRecentEvents() {
         <button
           type="button"
           className="notification-text-button"
-          onClick={() => context.open()}
+          onClick={() => context.open(selectedKind === "all" ? undefined : selectedKind)}
         >
-          View notifications <Icon name="arrow_forward" />
+          View all notifications <Icon name="arrow_forward" />
         </button>
       </header>
-      <div className="notification-overview__counts">
-        {(Object.keys(notificationKinds) as NotificationKind[]).map((kind) => (
-          <button type="button" key={kind} onClick={() => context.open(kind)}>
-            <Icon name={notificationKinds[kind].icon} />
-            <span>{notificationKinds[kind].label}</span>
-            <strong>
-              {context.feed && !context.feed.unavailableKinds?.includes(kind)
-                ? counts(kind)
-                : "—"}
-            </strong>
-            <span className="sr-only">
-              {context.feed?.unavailableKinds?.includes(kind)
-                ? "event source unavailable"
-                : "unread in recent events"}
-            </span>
-          </button>
-        ))}
-      </div>
+      <nav className="notification-overview__tabs" aria-label="Event type">
+        {tabKinds.map((kind) => {
+          const count = unreadCount(kind);
+          const total = events.filter(
+            (event) => kind === "all" || event.kind === kind,
+          ).length;
+          const unavailable =
+            kind !== "all" && context.feed?.unavailableKinds?.includes(kind);
+          return (
+            <button
+              type="button"
+              key={kind}
+              aria-pressed={selectedKind === kind}
+              aria-label={`${kind === "all" ? "All events" : notificationKinds[kind].label}: ${unavailable ? "event source unavailable" : `${count} unread of ${total}`}`}
+              onClick={() => setSelectedKind(kind)}
+            >
+              {kind !== "all" ? (
+                <Icon name={notificationKinds[kind].icon} />
+              ) : null}
+              <span>{kind === "all" ? "All events" : notificationKinds[kind].label}</span>
+              <strong
+                className={`notification-overview__tab-count${count ? " is-unread" : ""}`}
+                aria-hidden="true"
+              >
+                {context.feed && !unavailable ? (count || total) : "—"}
+              </strong>
+            </button>
+          );
+        })}
+      </nav>
       {context.error ? (
         <p className="notification-notice" role="alert">
           {context.error}{" "}
@@ -717,15 +1115,19 @@ export function AdminRecentEvents() {
           </button>
         </p>
       ) : null}
-      {events.length ? (
-        <EventList events={events.slice(0, 6)} />
+      {visibleEvents.length ? (
+        <EventList events={visibleEvents.slice(0, 6)} />
       ) : context.loading ? (
         <p className="notification-empty" role="status">
           Loading recent events…
         </p>
       ) : !context.error ? (
         <p className="notification-empty">
-          New requests and workspace updates will appear here.
+          {selectedSourceUnavailable
+            ? `${notificationKinds[selectedKind as NotificationKind].label} are temporarily unavailable.`
+            : selectedKind === "all"
+              ? "New requests and workspace updates will appear here."
+              : `No ${notificationKinds[selectedKind as NotificationKind].label.toLowerCase()} yet.`}
         </p>
       ) : null}
       {context.feed?.partial ? (

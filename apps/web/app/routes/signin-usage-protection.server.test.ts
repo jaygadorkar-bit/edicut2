@@ -25,7 +25,11 @@ describe("sign-in identity protection", () => {
       form.set("intent", attempt % 2 === 0 ? "signin" : "signup");
       form.set("email", "  Limit@Example.com ");
       form.set("password", "not-a-real-password");
-      const request = new Request("http://localhost:3002/signin", { method: "POST", body: form });
+      const request = new Request("https://edicut.com/signin", {
+        method: "POST",
+        headers: { Origin: "https://edicut.com" },
+        body: form,
+      });
 
       results.push(await action({ request, context, params: {} } as Parameters<typeof action>[0]) as Record<string, unknown>);
     }

@@ -36,7 +36,7 @@ function RecordingScene({ x, y, width, height, radius = 12 }: { x: number; y: nu
   const clipId = `recording-scene-${useId().replace(/:/g, "")}`;
   return <g>
     <defs><clipPath id={clipId}><rect x={x} y={y} width={width} height={height} rx={radius} /></clipPath></defs>
-    <image x={x} y={y} width={width} height={height} href="/artwork/why-hire-us/creator-recording-scene-b93b36d3.svg" preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clipId})`} />
+    <image x={x} y={y} width={width} height={height} href="/artwork/why-hire-us/creator-recording-scene-b93b36d3.webp" preserveAspectRatio="xMidYMid slice" clipPath={`url(#${clipId})`} />
   </g>;
 }
 

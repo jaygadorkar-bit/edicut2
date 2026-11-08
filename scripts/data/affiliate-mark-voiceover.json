@@ -1,0 +1,51 @@
+{
+  "voice": "Microsoft Mark",
+  "voiceDescription": "Offline en-US masculine voice from Windows System.Speech",
+  "ratePercent": 90,
+  "sampleRateHz": 24000,
+  "leadInSeconds": 0.8,
+  "tailSeconds": 0.65,
+  "betweenCuesMs": 300,
+  "betweenScenesMs": 600,
+  "scenes": [
+    {
+      "title": "A good recommendation goes further.",
+      "cues": [
+        { "text": "Recommend EdiCut to creators, and earn when they choose their next editing package." }
+      ]
+    },
+    {
+      "title": "Start with a conversation.",
+      "cues": [
+        { "text": "Apply to become a partner." },
+        { "text": "We review your application and confirm your individual terms." }
+      ]
+    },
+    {
+      "title": "Your link. Your coupon.",
+      "cues": [
+        { "text": "Once approved, get your personal referral link and coupon code." }
+      ]
+    },
+    {
+      "title": "A reward for both of you.",
+      "cues": [
+        { "text": "By default, your coupon gives customers ten percent off." },
+        { "text": "Eligible paid orders earn you a ten percent commission." }
+      ]
+    },
+    {
+      "title": "See every step in your dashboard.",
+      "cues": [
+        { "text": "Track referred orders, earnings, and payout requests in your affiliate dashboard." }
+      ]
+    },
+    {
+      "title": "Share good editing. Grow together.",
+      "cues": [
+        { "text": "Your final rates and payout terms are confirmed after review." },
+        { "text": "EdiCut. Share good editing. Grow together." }
+      ]
+    }
+  ]
+}

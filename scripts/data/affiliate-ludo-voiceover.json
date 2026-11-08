@@ -1,0 +1,17 @@
+{
+  "model": "gemini-3.8-flash-tts",
+  "voice": "Ludo",
+  "voiceDescription": "Google AI Studio male voice: confident and clear, low pitch",
+  "style": "Clear, professional male studio narration in neutral American English. Speak at a measured 130 words per minute with crisp consonants and fully articulated words. Warm and approachable, steady volume, no mumbling, no rushed phrases. Use short natural sentence pauses and a clear half-second pause between paragraphs. Pronounce EdiCut as ED-ee-cut. Say referral link, coupon code, commission, payout, and all numbers distinctly. Finish the final tagline with a clear, warm cadence.",
+  "sampleRateHz": 24000,
+  "leadInSeconds": 0.8,
+  "tailSeconds": 0.65,
+  "scenes": [
+    {"title": "A good recommendation goes further.", "cues": [{"text": "Recommend EdiCut to creators, and earn when they choose their next editing package."}]},
+    {"title": "Start with a conversation.", "cues": [{"text": "Apply to become a partner."}, {"text": "We review your application and confirm your individual terms."}]},
+    {"title": "Your link. Your coupon.", "cues": [{"text": "Once approved, get your personal referral link and coupon code."}]},
+    {"title": "A reward for both of you.", "cues": [{"text": "By default, your coupon gives customers ten percent off."}, {"text": "Eligible paid orders earn you a ten percent commission."}]},
+    {"title": "See every step in your dashboard.", "cues": [{"text": "Track referred orders, earnings, and payout requests in your affiliate dashboard."}]},
+    {"title": "Share good editing. Grow together.", "cues": [{"text": "Your final rates and payout terms are confirmed after review."}, {"text": "EdiCut. Share good editing. Grow together."}]}
+  ]
+}

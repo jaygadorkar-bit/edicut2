@@ -31,7 +31,7 @@ let recaptchaApiPromise: Promise<void> | null = null;
 
 export function getRecaptchaSiteKey() {
   return document
-    .querySelector<HTMLScriptElement>("script[data-edicut-recaptcha-site-key]")
+    .querySelector<HTMLElement>("[data-edicut-recaptcha-site-key]")
     ?.dataset.edicutRecaptchaSiteKey ?? "";
 }
 

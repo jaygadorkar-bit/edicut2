@@ -1,6 +1,6 @@
 import type { DatabaseClient } from "@edicut/db/client";
 import { sql, type SQL } from "drizzle-orm";
-import { CHAT_HISTORY_SIZE, CHAT_PAGE_SIZE, chatIsStaff, chatMessagePayloadMatches, chatSenderName, sanitizeChatMessageBody, type ChatActor, type ChatAttachment, type ChatMessage, type ChatPerson, type ChatReceipt, type ChatRoom, type ChatView, type TicketCategory, type TicketPriority, type TicketStatus } from "./chat";
+import { CHAT_HISTORY_SIZE, CHAT_PAGE_SIZE, canModerateChat, chatAttachmentIsRemoved, chatIsStaff, chatMessagePayloadMatches, chatSenderName, sanitizeChatMessageBody, type ChatActor, type ChatAttachment, type ChatMessage, type ChatPerson, type ChatReceipt, type ChatRoom, type ChatView, type LegacyClientManagerAssignment, type TicketCategory, type TicketPriority, type TicketStatus } from "./chat";
 
 export function chatRows<T>(result: unknown): T[] {
   return (Array.isArray(result) ? result : (result as { rows?: T[] })?.rows ?? []) as T[];
@@ -8,7 +8,7 @@ export function chatRows<T>(result: unknown): T[] {
 export function isMissingChatSchema(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const e = error as { code?: string; message?: string; cause?: unknown };
-  return (e.code === "42P01" && /chat_(rooms|messages|reads)|support_tickets/.test(e.message ?? "")) || Boolean(e.cause && isMissingChatSchema(e.cause));
+  return (e.code === "42P01" && /chat_(rooms|messages|reads|attachment_uploads)|support_tickets/.test(e.message ?? "")) || Boolean(e.cause && isMissingChatSchema(e.cause));
 }
 const paidClientSql = (client: SQL = sql`r.client_id`) => sql`EXISTS (SELECT 1 FROM customer_subscriptions purchase WHERE purchase.owner_id = ${client} AND purchase.status = 'paid' AND purchase.deleted_at IS NULL)`;
 // Always check the current database role, including inside writes. A stale session
@@ -17,7 +17,7 @@ export function chatAccessSql(actor: ChatActor): SQL {
   const eligible = sql`((r.kind = 'manager' AND ${paidClientSql()}) OR (r.kind = 'support' AND EXISTS (SELECT 1 FROM support_tickets ticket WHERE ticket.room_id = r.id)))`;
   if (actor.admin) return sql`${eligible} AND EXISTS (SELECT 1 FROM admin_users a WHERE a.id = ${actor.id}::uuid AND a.active AND a.role = 'admin')`;
   const access = actor.role === "project_manager"
-    ? sql`${eligible} AND r.kind = 'manager' AND r.manager_id = ${actor.id}::uuid AND m.active AND m.deleted_at IS NULL AND m.role = 'project_manager'`
+    ? sql`${eligible} AND r.kind = 'manager' AND EXISTS (SELECT 1 FROM client_project_managers assignment JOIN users assigned_manager ON assigned_manager.id=assignment.manager_id WHERE assignment.client_id=r.client_id AND assignment.manager_id=${actor.id}::uuid AND assigned_manager.active AND assigned_manager.deleted_at IS NULL AND assigned_manager.role='project_manager')`
     : actor.role === "customer_support" ? sql`${eligible} AND r.kind = 'support'` : sql`r.client_id = ${actor.id}::uuid AND (r.kind = 'manager' OR EXISTS (SELECT 1 FROM support_tickets ticket WHERE ticket.room_id = r.id))`;
   return sql`c.active AND c.deleted_at IS NULL AND (${access}) AND EXISTS
     (SELECT 1 FROM users viewer WHERE viewer.id = ${actor.id}::uuid AND viewer.active AND viewer.deleted_at IS NULL AND viewer.role = ${actor.role})`;
@@ -27,8 +27,10 @@ const unreadMessageSql = (actor: ChatActor) => sql`msg.deleted_at IS NULL AND ms
   (rd.last_read_at IS NULL OR (msg.created_at, msg.id) > (rd.last_read_at, COALESCE(rd.last_read_id, '00000000-0000-0000-0000-000000000000'::uuid)))`;
 const writableSql = sql`(r.kind = 'manager' AND ${paidClientSql()} OR r.kind = 'support' AND EXISTS (SELECT 1 FROM support_tickets ticket WHERE ticket.room_id = r.id AND ticket.status <> 'closed'))`;
 const roomColumns = (actor: ChatActor) => sql`r.id, r.client_id AS "clientId", COALESCE(c.name, ${actor.admin ? sql`c.email` : sql`'Client'`}) AS "clientName", CASE WHEN ${actor.admin} THEN c.email ELSE NULL END AS "clientEmail",
-  (c.active AND c.deleted_at IS NULL) AS "clientActive", r.kind, r.manager_id AS "managerId", m.name AS "managerName",
-  COALESCE(m.active AND m.deleted_at IS NULL AND m.role = 'project_manager', false) AS "managerActive",
+  (c.active AND c.deleted_at IS NULL) AS "clientActive", r.kind,
+  (SELECT assignment.manager_id FROM client_project_managers assignment WHERE assignment.client_id=r.client_id) AS "managerId",
+  (SELECT assigned_manager.name FROM client_project_managers assignment JOIN users assigned_manager ON assigned_manager.id=assignment.manager_id WHERE assignment.client_id=r.client_id) AS "managerName",
+  EXISTS (SELECT 1 FROM client_project_managers assignment JOIN users assigned_manager ON assigned_manager.id=assignment.manager_id WHERE assignment.client_id=r.client_id AND assigned_manager.active AND assigned_manager.deleted_at IS NULL AND assigned_manager.role='project_manager') AS "managerActive",
   r.last_message_at AS "lastMessageAt", CASE WHEN r.kind = 'support' OR ${paidClientSql()} THEN r.last_message_preview ELSE NULL END AS "lastMessagePreview", r.updated_at AS "updatedAt", ${paidClientSql()} AS "projectUnlocked",
   CASE WHEN r.kind = 'support' OR ${paidClientSql()} THEN (SELECT latest.actor_key FROM chat_messages latest WHERE latest.room_id=r.id ORDER BY latest.created_at DESC,latest.id DESC LIMIT 1) ELSE NULL END AS "lastMessageActorKey",
   CASE WHEN r.kind = 'support' OR ${paidClientSql()} THEN EXISTS (
@@ -38,7 +40,7 @@ const roomColumns = (actor: ChatActor) => sql`r.id, r.client_id AS "clientId", C
       AND (receipt.last_read_at,COALESCE(receipt.last_read_id,'00000000-0000-0000-0000-000000000000'::uuid)) >= (latest.created_at,latest.id)
       AND (receipt.actor_key='user:'||r.client_id
         OR receipt.actor_key IN (SELECT 'admin:'||reader.id FROM admin_users reader WHERE reader.active AND reader.role='admin')
-        OR (r.manager_id IS NOT NULL AND receipt.actor_key='user:'||r.manager_id AND m.active AND m.deleted_at IS NULL AND m.role='project_manager'))
+        OR EXISTS (SELECT 1 FROM client_project_managers assignment JOIN users assigned_manager ON assigned_manager.id=assignment.manager_id WHERE assignment.client_id=r.client_id AND receipt.actor_key='user:'||assignment.manager_id AND assigned_manager.active AND assigned_manager.deleted_at IS NULL AND assigned_manager.role='project_manager'))
   ) ELSE false END AS "lastMessageRead",
   CASE WHEN r.kind = 'manager' AND ${paidClientSql()} THEN (SELECT COALESCE(jsonb_agg(jsonb_build_object('key', member.actor_key, 'name', member.name, 'role', member.role,
       'avatarUrl', member.avatar_url, 'lastActiveAt', CASE WHEN member.actor_key = 'admin:team' THEN (
@@ -57,7 +59,7 @@ const roomColumns = (actor: ChatActor) => sql`r.id, r.client_id AS "clientId", C
       WHERE EXISTS (SELECT 1 FROM admin_users participant WHERE participant.active AND participant.role='admin')
       UNION ALL SELECT 'user:' || manager.id, COALESCE(manager.name, ${actor.admin ? sql`manager.email` : sql`'Project manager'`}), 'project_manager',
         CASE WHEN left(manager.profile_image_url, 8)='https://' AND length(manager.profile_image_url)<=2048 THEN manager.profile_image_url ELSE NULL END
-      FROM users manager WHERE manager.id=r.manager_id AND manager.active AND manager.deleted_at IS NULL AND manager.role='project_manager'
+      FROM users manager WHERE manager.id=(SELECT assignment.manager_id FROM client_project_managers assignment WHERE assignment.client_id=r.client_id) AND manager.active AND manager.deleted_at IS NULL AND manager.role='project_manager'
       ${chatIsStaff(actor) ? sql`UNION ALL SELECT 'user:' || client.id, COALESCE(client.name, ${actor.admin ? sql`client.email` : sql`'Client'`}), client.role,
         CASE WHEN left(client.profile_image_url, 8)='https://' AND length(client.profile_image_url)<=2048 THEN client.profile_image_url ELSE NULL END
         FROM users client WHERE client.id=r.client_id AND client.active AND client.deleted_at IS NULL` : sql``}
@@ -73,7 +75,7 @@ function serializeRoom(room: ChatRoom, actor: ChatActor): ChatRoom {
     participants: room.participants?.map(participant => ({ ...participant, name: chatSenderName(participant.role, participant.name) })),
     updatedAt: new Date(room.updatedAt).toISOString(), lastMessageAt: room.lastMessageAt ? new Date(room.lastMessageAt).toISOString() : null, unreadCount: Number(room.unreadCount), ticket: room.ticket ? { ...room.ticket, updatedAt: new Date(room.ticket.updatedAt).toISOString(), closedAt: room.ticket.closedAt ? new Date(room.ticket.closedAt).toISOString() : null } : null };
 }
-const serializeMessage = (m: ChatMessage): ChatMessage => ({ ...m, senderName: chatSenderName(m.senderRole, m.senderName), body: sanitizeChatMessageBody(m.actorKey, m.body), createdAt: new Date(m.createdAt).toISOString(), editedAt: m.editedAt ? new Date(m.editedAt).toISOString() : null, deletedAt: m.deletedAt ? new Date(m.deletedAt).toISOString() : null });
+const serializeMessage = (m: ChatMessage, cleanup = false): ChatMessage => ({ ...m, attachment: !cleanup && (m.deletedAt || chatAttachmentIsRemoved(m.attachment)) ? null : m.attachment, senderName: chatSenderName(m.senderRole, m.senderName), body: sanitizeChatMessageBody(m.actorKey, m.body), createdAt: new Date(m.createdAt).toISOString(), editedAt: m.editedAt ? new Date(m.editedAt).toISOString() : null, deletedAt: m.deletedAt ? new Date(m.deletedAt).toISOString() : null });
 
 export async function ensureClientChatRooms(db: DatabaseClient, actor: ChatActor) {
   if (actor.role === 'customer_support') return;
@@ -108,6 +110,14 @@ export async function getChatRoom(db: DatabaseClient, actor: ChatActor, id: stri
   if (!room) throw new Response("This conversation is unavailable.", { status: 404 });
   return serializeRoom(room, actor);
 }
+/** Bounded, administrator-only conversation context for a client's operations panel. */
+export async function listClientChatRooms(db: DatabaseClient, actor: ChatActor, clientId: string) {
+  if (!actor.admin) throw new Response("Administrator access required.", { status: 403 });
+  const rooms = chatRows<ChatRoom>(await db.execute(sql`SELECT ${roomColumns(actor)} FROM chat_rooms r
+    JOIN users c ON c.id=r.client_id LEFT JOIN users m ON m.id=r.manager_id LEFT JOIN support_tickets t ON t.room_id=r.id
+    WHERE r.client_id=${clientId}::uuid AND (${chatAccessSql(actor)}) ORDER BY r.updated_at DESC,r.id DESC LIMIT 21`));
+  return { rooms: rooms.slice(0,20).map(row => serializeRoom(row,actor)), hasMore: rooms.length>20 };
+}
 /** Count every authorized conversation, including those outside the current page or filter. */
 export async function getChatUnreadCounts(db: DatabaseClient, actor: ChatActor) {
   const counts = chatRows<{ projects: number; tickets: number }>(await db.execute(sql`SELECT
@@ -139,7 +149,7 @@ export async function listChatMessages(db: DatabaseClient, actor: ChatActor, roo
   const pattern = `%${search.replace(/[\\%_]/g, "\\$&")}%`;
   const messages = chatRows<ChatMessage>(await db.execute(sql`SELECT ${messageColumns} FROM chat_messages
     WHERE room_id = ${roomId}::uuid AND (${before ? sql`(created_at, id) < (${before.at}::timestamptz, ${before.id}::uuid)` : sql`true`})
-    AND (${search} = '' OR (deleted_at IS NULL AND (body ILIKE ${pattern} OR attachment->>'name' ILIKE ${pattern})))
+    AND (${search} = '' OR (deleted_at IS NULL AND (body ILIKE ${pattern} OR (attachment->>'removedAt' IS NULL AND attachment->>'name' ILIKE ${pattern}))))
     AND EXISTS (SELECT 1 FROM chat_rooms r JOIN users c ON c.id = r.client_id LEFT JOIN users m ON m.id = r.manager_id WHERE r.id = ${roomId}::uuid AND (${contentAccessSql(actor)}))
     ORDER BY created_at DESC, id DESC LIMIT ${CHAT_HISTORY_SIZE + 1}`));
   const receipts = chatRows<ChatReceipt>(await db.execute(sql`SELECT rd.actor_key AS "actorKey", COALESCE(u.name, a.name, 'Team member') AS name,
@@ -152,12 +162,18 @@ export async function listChatMessages(db: DatabaseClient, actor: ChatActor, roo
         OR rd.actor_key IN (SELECT 'admin:' || reader.id FROM admin_users reader WHERE reader.active AND reader.role = 'admin')
         OR (r.kind = 'support' AND rd.actor_key IN (SELECT 'user:' || support.id FROM users support WHERE support.active AND support.deleted_at IS NULL AND support.role = 'customer_support'))))
     ORDER BY rd.last_read_at DESC LIMIT 100`)).map(r => ({ ...r, name: chatSenderName(r.role, r.name), lastReadAt: new Date(r.lastReadAt).toISOString() }));
-  return { room, messages: messages.slice(0, CHAT_HISTORY_SIZE).map(serializeMessage).reverse(), hasOlder: messages.length > CHAT_HISTORY_SIZE, receipts };
+  return { room, messages: messages.slice(0, CHAT_HISTORY_SIZE).map(row => serializeMessage(row)).reverse(), hasOlder: messages.length > CHAT_HISTORY_SIZE, receipts };
 }
 export async function findChatMessageByNonce(db: DatabaseClient, actor: ChatActor, roomId: string, nonce: string) {
   await getChatRoom(db, actor, roomId);
   const row = chatRows<ChatMessage>(await db.execute(sql`SELECT ${messageColumns} FROM chat_messages WHERE actor_key = ${actor.key} AND client_nonce = ${nonce}::uuid`))[0];
   if (row && row.roomId !== roomId) throw new Response("Message reference already used.", { status: 409 });
+  return row ? serializeMessage(row) : null;
+}
+/** Server-only lookup used to reconcile a completed upload after an uncertain send commit. */
+export async function findChatMessageForUploadCleanup(db: DatabaseClient, roomId: string, actorKey: string, nonce: string) {
+  const row = chatRows<ChatMessage>(await db.execute(sql`SELECT ${messageColumns} FROM chat_messages
+    WHERE room_id=${roomId}::uuid AND actor_key=${actorKey} AND client_nonce=${nonce}::uuid`))[0];
   return row ? serializeMessage(row) : null;
 }
 export async function sendChatMessage(db: DatabaseClient, actor: ChatActor, roomId: string, body: string, nonce: string, attachment: ChatAttachment | null = null) {
@@ -193,23 +209,59 @@ export async function sendChatMessage(db: DatabaseClient, actor: ChatActor, room
   return serializeMessage(message);
 }
 export async function changeChatMessage(db: DatabaseClient, actor: ChatActor, roomId: string, id: string, body: string | null) {
+  const moderation = canModerateChat(actor) && body === null;
   const message = chatRows<ChatMessage>(await db.execute(sql`WITH changed AS (
     UPDATE chat_messages msg SET body = ${body ?? ''}, edited_at = CASE WHEN ${body}::text IS NULL THEN msg.edited_at ELSE clock_timestamp() END,
-      deleted_at = CASE WHEN ${body}::text IS NULL THEN clock_timestamp() ELSE NULL END
-    WHERE msg.id = ${id}::uuid AND msg.room_id = ${roomId}::uuid AND msg.actor_key = ${actor.key} AND msg.deleted_at IS NULL
-    AND EXISTS (SELECT 1 FROM chat_rooms r JOIN users c ON c.id = r.client_id LEFT JOIN users m ON m.id = r.manager_id WHERE r.id = msg.room_id AND c.active AND c.deleted_at IS NULL AND (${contentAccessSql(actor)}) AND (${writableSql})) RETURNING *
+      deleted_at = CASE WHEN ${body}::text IS NULL THEN COALESCE(msg.deleted_at,clock_timestamp()) ELSE NULL END
+    WHERE msg.id = ${id}::uuid AND msg.room_id = ${roomId}::uuid AND (msg.actor_key = ${actor.key} OR ${moderation}) AND (msg.deleted_at IS NULL OR ${body}::text IS NULL) AND msg.sender_role <> 'system'
+    AND EXISTS (SELECT 1 FROM chat_rooms r JOIN users c ON c.id = r.client_id LEFT JOIN users m ON m.id = r.manager_id WHERE r.id = msg.room_id AND (${contentAccessSql(actor)}) AND (${moderation} OR (c.active AND c.deleted_at IS NULL AND (${writableSql})))) RETURNING *
   ), updated AS (UPDATE chat_rooms r SET last_message_preview = CASE WHEN changed.deleted_at IS NOT NULL THEN 'Message deleted' ELSE left(COALESCE(NULLIF(changed.body, ''), changed.attachment->>'name'), 180) END,
     updated_at = greatest(r.updated_at, clock_timestamp()) FROM changed WHERE r.id = changed.room_id AND changed.id = (SELECT id FROM chat_messages WHERE room_id = r.id ORDER BY created_at DESC, id DESC LIMIT 1) RETURNING r.id)
   SELECT ${messageColumns} FROM changed`))[0];
-  if (!message) throw new Response("Only your own available messages can be changed.", { status: 403 });
-  return serializeMessage(message);
+  if (!message) throw new Response("You cannot change this message.", { status: 403 });
+  return serializeMessage(message, body === null);
+}
+export async function removeChatAttachment(db: DatabaseClient, actor: ChatActor, roomId: string, id: string) {
+  if (!canModerateChat(actor)) throw new Response("Only administrators can remove attachments.", { status: 403 });
+  const row = chatRows<ChatMessage & { removedAttachment: ChatAttachment }>(await db.execute(sql`WITH target AS MATERIALIZED (
+    SELECT msg.id,msg.attachment FROM chat_messages msg JOIN chat_rooms r ON r.id=msg.room_id
+    JOIN users c ON c.id=r.client_id LEFT JOIN users m ON m.id=r.manager_id
+    WHERE msg.id=${id}::uuid AND msg.room_id=${roomId}::uuid AND msg.attachment IS NOT NULL AND msg.sender_role<>'system'
+      AND (msg.deleted_at IS NULL OR msg.attachment->>'removedAt' IS NOT NULL) AND (${contentAccessSql(actor)}) FOR UPDATE OF msg
+  ), changed AS (
+    UPDATE chat_messages msg SET attachment=jsonb_set(msg.attachment,'{removedAt}',to_jsonb(COALESCE(msg.attachment->>'removedAt',clock_timestamp()::text))),
+      edited_at=CASE WHEN btrim(msg.body)<>'' THEN clock_timestamp() ELSE msg.edited_at END,
+      deleted_at=CASE WHEN btrim(msg.body)='' THEN COALESCE(msg.deleted_at,clock_timestamp()) ELSE msg.deleted_at END
+    FROM target WHERE msg.id=target.id RETURNING msg.*,target.attachment AS "removedAttachment"
+  ), updated AS (
+    UPDATE chat_rooms r SET last_message_preview=CASE WHEN changed.deleted_at IS NOT NULL THEN 'Message deleted' ELSE left(changed.body,180) END,
+      updated_at=greatest(r.updated_at,clock_timestamp()) FROM changed WHERE r.id=changed.room_id
+      AND changed.id=(SELECT id FROM chat_messages WHERE room_id=r.id ORDER BY created_at DESC,id DESC LIMIT 1) RETURNING r.id
+  ) SELECT ${messageColumns},"removedAttachment" FROM changed`))[0];
+  if (!row) throw new Response("Attachment unavailable.", { status: 404 });
+  const { removedAttachment, ...saved } = row;
+  return { message: serializeMessage(saved), attachment: removedAttachment };
+}
+export async function finishChatAttachmentCleanup(db: DatabaseClient, roomId: string, messageId: string, attachment: ChatAttachment) {
+  await db.execute(sql`UPDATE chat_messages SET attachment=NULL WHERE id=${messageId}::uuid AND room_id=${roomId}::uuid
+    AND (deleted_at IS NOT NULL OR attachment->>'removedAt' IS NOT NULL)
+    AND COALESCE(attachment->>'driveFileId',attachment->>'publicId')=${attachment.driveFileId ?? attachment.publicId}`);
 }
 export async function getChatAttachment(db: DatabaseClient, actor: ChatActor, roomId: string, messageId: string) {
   const row = chatRows<{ attachment: ChatAttachment }>(await db.execute(sql`SELECT msg.attachment FROM chat_messages msg JOIN chat_rooms r ON r.id = msg.room_id
     JOIN users c ON c.id = r.client_id LEFT JOIN users m ON m.id = r.manager_id WHERE msg.id = ${messageId}::uuid AND r.id = ${roomId}::uuid
-      AND msg.deleted_at IS NULL AND msg.attachment IS NOT NULL AND (${contentAccessSql(actor)})`))[0];
+      AND msg.deleted_at IS NULL AND msg.attachment IS NOT NULL AND msg.attachment->>'removedAt' IS NULL AND (${contentAccessSql(actor)})`))[0];
   if (!row) throw new Response("Attachment unavailable.", { status: 404 });
   return row.attachment;
+}
+export async function getClientLegacyChatAttachmentBytes(db: DatabaseClient, clientId: string) {
+  const row = chatRows<{ bytes: string | number | null }>(await db.execute(sql`SELECT COALESCE(sum(
+    CASE WHEN attachment->>'provider' IS DISTINCT FROM 'google_drive' AND (attachment->>'bytes') ~ '^[0-9]+$'
+      THEN (attachment->>'bytes')::bigint ELSE 0 END), 0)::text AS bytes
+    FROM chat_messages msg JOIN chat_rooms r ON r.id=msg.room_id
+    WHERE r.client_id=${clientId}::uuid AND msg.deleted_at IS NULL AND msg.attachment IS NOT NULL`))[0];
+  const bytes = Number(row?.bytes ?? 0);
+  return Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : Number.MAX_SAFE_INTEGER;
 }
 export async function markChatRead(db: DatabaseClient, actor: ChatActor, roomId: string, messageId: string) {
   await db.execute(sql`INSERT INTO chat_reads (room_id, actor_key, last_read_at, last_read_id)
@@ -229,6 +281,17 @@ export async function chatPeople(db: DatabaseClient, actor: ChatActor, search = 
       AND (${search} = '' OR name ILIKE ${pattern} OR email ILIKE ${pattern}) ORDER BY name, id LIMIT 30`));
   return { managers, clients };
 }
+/** Read the pre-cutover assignment copy so it can seed the canonical Supabase relation once. */
+export async function listLegacyClientManagerAssignments(db: DatabaseClient, actor: ChatActor): Promise<LegacyClientManagerAssignment[]> {
+  if (!actor.admin && actor.role !== "project_manager") throw new Response("Manager assignment access required.", { status: 403 });
+  return chatRows<LegacyClientManagerAssignment>(await db.execute(sql`SELECT r.client_id AS "clientId", r.manager_id AS "managerId"
+    FROM chat_rooms r JOIN users client ON client.id=r.client_id JOIN users manager ON manager.id=r.manager_id
+    WHERE r.kind='manager' AND r.manager_id IS NOT NULL AND client.active AND client.deleted_at IS NULL
+      AND client.role NOT IN ('project_manager','customer_support')
+      AND manager.active AND manager.deleted_at IS NULL AND manager.role='project_manager'
+      AND ${paidClientSql(sql`client.id`)}
+      AND (${actor.admin} OR r.manager_id=${actor.id}::uuid)`));
+}
 export async function createChatRoomsForClient(db: DatabaseClient, actor: ChatActor, clientId: string) {
   if (!actor.admin) throw new Response("Administrator access required.", { status: 403 });
   const rows = chatRows<{ id: string }>(await db.execute(sql`INSERT INTO chat_rooms (client_id, kind)
@@ -241,11 +304,12 @@ export async function createChatRoomsForClient(db: DatabaseClient, actor: ChatAc
   await ensureClientChatRooms(db, actor);
   return rows;
 }
-export async function assignChatManager(db: DatabaseClient, actor: ChatActor, roomId: string, managerId: string | null, expectedManagerId: string | null) {
+export async function assignChatManager(db: DatabaseClient, actor: ChatActor, roomId: string, managerId: string | null) {
   if (!actor.admin) throw new Response("Administrator access required.", { status: 403 });
   const rows = chatRows<{ id: string }>(await db.execute(sql`WITH allowed AS (
     SELECT r.id, r.manager_id FROM chat_rooms r
-    WHERE r.id = ${roomId}::uuid AND r.kind = 'manager' AND r.manager_id IS NOT DISTINCT FROM ${expectedManagerId}::uuid
+    WHERE r.id = ${roomId}::uuid AND r.kind = 'manager'
+    AND EXISTS (SELECT 1 FROM client_project_managers assignment WHERE assignment.client_id=r.client_id AND assignment.manager_id IS NOT DISTINCT FROM ${managerId}::uuid)
     AND ${paidClientSql()}
     AND EXISTS (SELECT 1 FROM users c WHERE c.id = r.client_id AND c.active AND c.deleted_at IS NULL)
     AND EXISTS (SELECT 1 FROM admin_users a WHERE a.id = ${actor.id}::uuid AND a.active AND a.role = 'admin')
@@ -330,6 +394,6 @@ export async function updateSupportTicket(db: DatabaseClient, actor: ChatActor, 
 export async function chatRecipients(db: DatabaseClient, roomId: string, previousManagerId?: string | null) {
   return chatRows<{ key: string }>(await db.execute(sql`SELECT 'user:' || u.id AS key FROM users u JOIN chat_rooms r ON r.id = ${roomId}::uuid
     WHERE u.active AND u.deleted_at IS NULL AND (u.id = r.client_id OR (r.kind = 'support' AND u.role = 'customer_support')
-      OR (r.kind = 'manager' AND u.role = 'project_manager' AND (u.id = r.manager_id OR u.id = ${previousManagerId ?? null}::uuid)))
+      OR (r.kind = 'manager' AND u.role = 'project_manager' AND (u.id = (SELECT assignment.manager_id FROM client_project_managers assignment WHERE assignment.client_id=r.client_id) OR u.id = ${previousManagerId ?? null}::uuid)))
     UNION SELECT 'admin:' || a.id AS key FROM admin_users a WHERE a.active AND a.role = 'admin'`)).map(r => r.key);
 }

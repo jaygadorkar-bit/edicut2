@@ -7,6 +7,9 @@ import { requireClientWorkspace } from "./client-workspace-access.server";
 import { isWorkspaceRecordId, parseWorkspaceShareUrl } from "./workspace";
 import {
   validateReviewComment,
+  decodeReviewMetadata,
+  encodeReviewMetadata,
+  type StoredReviewVoiceNote,
   type ReviewActor,
   type ReviewComment,
   type ReviewData,
@@ -33,7 +36,7 @@ export function isMissingReviewSchema(error: unknown): boolean {
       cause?: unknown;
     };
     context ||=
-      /project_review_(members|versions|comments|uploads)|video_storage_connections/.test(
+      /project_review_(members|versions|comments|uploads)|video_storage_connections|client_project_managers/.test(
         item.message ?? "",
       );
     if (
@@ -103,7 +106,7 @@ export function projectReviewAccessSql(
     (mode === "assign" && actor.role !== "project_manager")
       ? sql`false`
       : actor.role === "project_manager" && mode !== "upload"
-        ? sql`true`
+        ? sql`EXISTS (SELECT 1 FROM client_project_managers assignment JOIN users assigned_manager ON assigned_manager.id=assignment.manager_id JOIN users assigned_client ON assigned_client.id=assignment.client_id WHERE assignment.client_id=p.owner_id AND assignment.manager_id=${actor.id}::uuid AND assigned_manager.active AND assigned_manager.deleted_at IS NULL AND assigned_manager.role='project_manager' AND assigned_client.active AND assigned_client.deleted_at IS NULL AND assigned_client.role IN ('user','customer'))`
         : staff
           ? sql`EXISTS (SELECT 1 FROM project_review_members membership WHERE membership.project_id=p.id AND membership.user_id=${actor.id}::uuid)`
           : sql`p.owner_id=${actor.id}::uuid`;
@@ -115,11 +118,20 @@ export const canAssignReviewTeam = (actor: ReviewActor) =>
   actor.admin || actor.role === "project_manager";
 export async function loadReviewEditorOptions(
   db: DatabaseClient,
+  actor?: ReviewActor,
 ): Promise<ReviewEditorOption[]> {
+  const scope = actor && !actor.admin ? projectReviewAccessSql(actor) : sql`true`;
   return reviewRows<ReviewEditorOption>(
-    await db.execute(sql`SELECT u.id,COALESCE(u.name,'Editor') AS name,u.role,
-    (SELECT count(*)::integer FROM project_review_members m JOIN workspace_projects p ON p.id=m.project_id WHERE m.user_id=u.id AND p.status<>'delivered') AS "activeProjects"
-    FROM users u WHERE u.active AND u.deleted_at IS NULL AND u.role='editor' ORDER BY "activeProjects",name,u.id LIMIT 200`),
+    await db.execute(sql`SELECT u.id,COALESCE(NULLIF(BTRIM(u.name),''),'Editor') AS name,u.role,
+    count(p.id) FILTER (WHERE p.status<>'delivered')::integer AS "activeProjects",
+    count(p.id) FILTER (WHERE p.status<>'delivered' AND p.deadline ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND p.deadline=to_char(to_date(p.deadline,'YYYY-MM-DD'),'YYYY-MM-DD') AND p.deadline BETWEEN CURRENT_DATE::text AND (CURRENT_DATE + 7)::text)::integer AS "dueSoonProjects",
+    count(p.id) FILTER (WHERE p.status<>'delivered' AND p.deadline ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND p.deadline=to_char(to_date(p.deadline,'YYYY-MM-DD'),'YYYY-MM-DD') AND p.deadline<CURRENT_DATE::text)::integer AS "overdueProjects"
+    FROM users u
+    LEFT JOIN project_review_members m ON m.user_id=u.id
+    LEFT JOIN workspace_projects p ON p.id=m.project_id AND ${scope}
+    WHERE u.active AND u.deleted_at IS NULL AND u.role='editor'
+    GROUP BY u.id
+    ORDER BY "activeProjects", "dueSoonProjects", name,u.id LIMIT 200`),
   );
 }
 export async function loadReviewTeamSummaries(
@@ -213,7 +225,7 @@ export async function loadProjectReview(
         )
         .then(reviewRows<ReviewTeamMember>),
       canAssignReviewTeam(actor)
-        ? loadReviewEditorOptions(db)
+        ? loadReviewEditorOptions(db, actor)
         : Promise.resolve([]),
       db
         .execute(
@@ -243,7 +255,10 @@ export async function loadProjectReview(
       versions,
       members,
       editorOptions,
-      comments,
+      comments: comments.map(comment => {
+        const { annotation, voice } = decodeReviewMetadata(comment.annotation);
+        return { ...comment, annotation, voice: voice ? { mime: voice.mime, bytes: voice.bytes, durationMs: voice.durationMs } : null };
+      }),
       ready: true,
       selectedVersionId: selected?.id ?? null,
     };
@@ -267,6 +282,7 @@ export async function mutateProjectReview(
   actor: ReviewActor,
   projectId: string,
   form: FormData,
+  voice?: StoredReviewVoiceNote,
 ): Promise<ReviewResult> {
   const intent = String(form.get("intent") ?? "");
   if (intent === "set-editor") {
@@ -365,12 +381,13 @@ export async function mutateProjectReview(
     )
       return { error: "Refresh the comment form and try again." };
     const value = parsed.value;
+    const metadata = parentId ? null : encodeReviewMetadata(value.annotation, voice);
     const result = await db.execute(sql`WITH eligible AS MATERIALIZED (
       SELECT p.id FROM workspace_projects p WHERE p.id=${projectId}::uuid AND ${projectReviewAccessSql(actor)} FOR UPDATE
     ), writable AS MATERIALIZED (
       SELECT v.id FROM project_review_versions v JOIN eligible p ON p.id=v.project_id WHERE v.id=${versionId}::uuid AND v.decision<>'approved' FOR UPDATE OF v
     ), inserted AS (INSERT INTO project_review_comments (id,version_id,parent_id,actor_key,author_name,author_role,body,timestamp_ms,end_ms,annotation,category,priority)
-      SELECT ${commentId}::uuid,v.id,${parentId || null}::uuid,${actor.key},${actor.name},${actor.role},${value.body},${parentId ? null : value.timestampMs},${parentId ? null : value.endMs},${parentId || !value.annotation ? null : JSON.stringify(value.annotation)}::jsonb,${value.category},${value.priority}
+      SELECT ${commentId}::uuid,v.id,${parentId || null}::uuid,${actor.key},${actor.name},${actor.role},${value.body},${parentId ? null : value.timestampMs},${parentId ? null : value.endMs},${metadata ? JSON.stringify(metadata) : null}::jsonb,${value.category},${value.priority}
       FROM writable v WHERE (SELECT count(*) FROM project_review_comments c WHERE c.version_id=v.id)<1000
         AND (${!parentId} OR EXISTS (SELECT 1 FROM project_review_comments parent WHERE parent.id=${parentId || null}::uuid AND parent.version_id=v.id AND parent.parent_id IS NULL))
       ON CONFLICT (id) DO NOTHING RETURNING id
@@ -383,7 +400,7 @@ export async function mutateProjectReview(
       };
     const replay = reviewRows<{ body: string }>(
       await db.execute(
-        sql`SELECT c.body FROM project_review_comments c JOIN project_review_versions v ON v.id=c.version_id JOIN workspace_projects p ON p.id=v.project_id WHERE c.id=${commentId}::uuid AND c.version_id=${versionId}::uuid AND c.actor_key=${actor.key} AND c.body=${value.body} AND c.parent_id IS NOT DISTINCT FROM ${parentId || null}::uuid AND c.timestamp_ms IS NOT DISTINCT FROM ${parentId ? null : value.timestampMs}::integer AND c.end_ms IS NOT DISTINCT FROM ${parentId ? null : value.endMs}::integer AND c.annotation IS NOT DISTINCT FROM ${parentId || !value.annotation ? null : JSON.stringify(value.annotation)}::jsonb AND c.category=${value.category} AND c.priority=${value.priority} AND p.id=${projectId}::uuid AND ${projectReviewAccessSql(actor)}`,
+        sql`SELECT c.body FROM project_review_comments c JOIN project_review_versions v ON v.id=c.version_id JOIN workspace_projects p ON p.id=v.project_id WHERE c.id=${commentId}::uuid AND c.version_id=${versionId}::uuid AND c.actor_key=${actor.key} AND c.body=${value.body} AND c.parent_id IS NOT DISTINCT FROM ${parentId || null}::uuid AND c.timestamp_ms IS NOT DISTINCT FROM ${parentId ? null : value.timestampMs}::integer AND c.end_ms IS NOT DISTINCT FROM ${parentId ? null : value.endMs}::integer AND c.annotation IS NOT DISTINCT FROM ${metadata ? JSON.stringify(metadata) : null}::jsonb AND c.category=${value.category} AND c.priority=${value.priority} AND p.id=${projectId}::uuid AND ${projectReviewAccessSql(actor)}`,
       ),
     );
     return replay.length
@@ -416,6 +433,45 @@ export async function mutateProjectReview(
             expected === "true" ? "Comment reopened." : "Comment resolved.",
         }
       : { error: "This comment changed. Refresh and try again." };
+  }
+  if (intent === "edit-comment") {
+    const commentId = String(form.get("commentId") ?? ""),
+      body = String(form.get("body") ?? "").trim();
+    if (!isWorkspaceRecordId(commentId) || !body || [...body].length > 4000)
+      return { error: "Keep a comment between 1 and 4,000 characters." };
+    const result = await db.execute(sql`WITH eligible AS MATERIALIZED (
+      SELECT p.id FROM workspace_projects p WHERE p.id=${projectId}::uuid AND ${projectReviewAccessSql(actor)} FOR UPDATE
+    ), writable AS MATERIALIZED (
+      SELECT v.id FROM project_review_versions v JOIN eligible p ON p.id=v.project_id WHERE v.id=${versionId}::uuid AND v.decision<>'approved' FOR UPDATE OF v
+    ), changed AS (
+      UPDATE project_review_comments c SET body=${body},updated_at=clock_timestamp() FROM writable v
+      WHERE c.id=${commentId}::uuid AND c.version_id=v.id AND c.parent_id IS NULL AND c.actor_key=${actor.key} RETURNING c.id
+    ), touched AS (
+      UPDATE workspace_projects p SET review_revision=review_revision+1,updated_at=clock_timestamp() FROM changed c WHERE p.id=${projectId}::uuid RETURNING p.id
+    ) SELECT id FROM changed`);
+    return reviewRows(result).length
+      ? { success: "Comment updated." }
+      : { error: "This comment changed or you can no longer edit it." };
+  }
+  if (intent === "delete-comment") {
+    const commentId = String(form.get("commentId") ?? "");
+    if (!isWorkspaceRecordId(commentId))
+      return { error: "Choose a valid comment." };
+    const result = await db.execute(sql`WITH eligible AS MATERIALIZED (
+      SELECT p.id FROM workspace_projects p WHERE p.id=${projectId}::uuid AND ${projectReviewAccessSql(actor)} FOR UPDATE
+    ), writable AS MATERIALIZED (
+      SELECT v.id FROM project_review_versions v JOIN eligible p ON p.id=v.project_id WHERE v.id=${versionId}::uuid AND v.decision<>'approved' FOR UPDATE OF v
+    ), target AS MATERIALIZED (
+      SELECT c.id FROM project_review_comments c JOIN writable v ON v.id=c.version_id
+      WHERE c.id=${commentId}::uuid AND c.parent_id IS NULL AND c.actor_key=${actor.key} FOR UPDATE OF c
+    ), deleted AS (
+      DELETE FROM project_review_comments c USING target t WHERE c.id=t.id OR c.parent_id=t.id RETURNING c.id
+    ), touched AS (
+      UPDATE workspace_projects p SET review_revision=review_revision+1,updated_at=clock_timestamp() WHERE p.id=${projectId}::uuid AND EXISTS(SELECT 1 FROM deleted) RETURNING p.id
+    ) SELECT id FROM deleted`);
+    return reviewRows(result).length
+      ? { success: "Comment and replies deleted." }
+      : { error: "This comment changed or you can no longer delete it." };
   }
   if (intent === "review-decision") {
     const decision = String(form.get("decision") ?? ""),
@@ -498,6 +554,7 @@ export async function loadAssignedProjects(
   query = "",
   view = "all",
   requestedPage = 1,
+  includeBrief = true,
 ) {
   try {
     const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
@@ -510,15 +567,73 @@ export async function loadAssignedProjects(
       )[0]?.total ?? 0;
     const pageCount = Math.max(1, Math.ceil(count / 25)),
       page = Math.min(requestedPage, pageCount);
+    const columns = includeBrief
+      ? projectColumns
+      : sql`p.id, p.owner_id AS "ownerId", p.title, p.channel_name AS "channelName", p.status, p.deadline, NULL::text AS notes, p.updated_at AS "updatedAt"`;
     const projects = reviewRows<ReviewProject>(
       await db.execute(
-        sql`SELECT ${projectColumns} FROM workspace_projects p WHERE ${filter} ORDER BY p.updated_at DESC LIMIT 25 OFFSET ${(page - 1) * 25}`,
+        sql`SELECT ${columns} FROM workspace_projects p WHERE ${filter} ORDER BY p.updated_at DESC LIMIT 25 OFFSET ${(page - 1) * 25}`,
       ),
     );
     return { projects, count, page, pageCount };
   } catch (error) {
     if (isMissingReviewSchema(error))
       return { projects: [], count: 0, page: 1, pageCount: 1 };
+    throw error;
+  }
+}
+
+export type AssignedProjectSummary = {
+  total: number;
+  active: number;
+  reviews: number;
+  delivered: number;
+  unassigned: number;
+};
+
+const emptyAssignedProjectSummary: AssignedProjectSummary = {
+  total: 0,
+  active: 0,
+  reviews: 0,
+  delivered: 0,
+  unassigned: 0,
+};
+
+/** Aggregate only projects visible to this assigned staff member or manager. */
+export async function loadAssignedProjectSummary(
+  db: DatabaseClient,
+  actor: ReviewActor,
+): Promise<AssignedProjectSummary> {
+  try {
+    const summary = reviewRows<AssignedProjectSummary>(await db.execute(sql`
+      SELECT
+        count(*)::integer AS total,
+        count(*) FILTER (WHERE p.status <> 'delivered')::integer AS active,
+        count(*) FILTER (WHERE p.status IN ('review', 'client_review'))::integer AS reviews,
+        count(*) FILTER (WHERE p.status = 'delivered')::integer AS delivered,
+        count(*) FILTER (
+          WHERE p.status <> 'delivered'
+            AND NOT EXISTS (
+              SELECT 1 FROM project_review_members m
+              JOIN users u ON u.id = m.user_id
+              WHERE m.project_id = p.id
+                AND u.active
+                AND u.deleted_at IS NULL
+                AND u.role = 'editor'
+            )
+        )::integer AS unassigned
+      FROM workspace_projects p
+      WHERE ${projectReviewAccessSql(actor)}
+    `))[0];
+    return summary ? {
+      total: Number(summary.total) || 0,
+      active: Number(summary.active) || 0,
+      reviews: Number(summary.reviews) || 0,
+      delivered: Number(summary.delivered) || 0,
+      unassigned: Number(summary.unassigned) || 0,
+    } : emptyAssignedProjectSummary;
+  } catch (error) {
+    if (isMissingReviewSchema(error)) return emptyAssignedProjectSummary;
     throw error;
   }
 }

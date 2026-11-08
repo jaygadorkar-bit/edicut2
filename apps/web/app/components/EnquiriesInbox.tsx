@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useFetcher, useNavigation, useSearchParams } from "react-router";
 import { AdminPanelShell } from "./AdminPanelShell";
+import { ConfirmSignOutButton } from "./ConfirmSignOutButton";
 import { WorkspaceShell } from "./WorkspaceShell";
 import type { DashboardFeature } from "../lib/role-feature-access";
 import "../styles/enquiries.css";
@@ -139,7 +140,7 @@ export function EnquiriesInbox({ data }: { data: EnquiriesInboxData }) {
     </div>
   );
   return user.role === "admin" ? <AdminPanelShell title="Enquiries" activeTab="messages" account={account} unreadEnquiryCount={unreadCount} headerActions={headerActions}>{content}</AdminPanelShell> : (
-    <WorkspaceShell title="Enquiries" navItems={workspaceItems.filter(item => allowedFeatures.includes(item.feature)).map(item => item.feature === "support" ? { ...item, unreadCount } : item)} account={account} mobileMenu mobileBottomNav={false} headerActions={headerActions} profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null} profileNavAtBottom settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null} startProjectTo={allowedFeatures.includes("projects") ? "/dashboard/projects#new-project" : null} notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null} accountAction={<Form method="post" action="/signout"><button type="submit" aria-label="Sign out"><Icon name="logout" /></button></Form>}>{content}</WorkspaceShell>
+    <WorkspaceShell title="Enquiries" navItems={workspaceItems.filter(item => allowedFeatures.includes(item.feature)).map(item => item.feature === "support" ? { ...item, unreadCount } : item)} account={account} mobileMenu mobileBottomNav={false} headerActions={headerActions} profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null} profileNavAtBottom settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null} startProjectTo={allowedFeatures.includes("projects") ? "/dashboard/projects#new-project" : null} notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null} accountAction={<ConfirmSignOutButton buttonClassName="neo-workspace__signout-trigger"><Icon name="logout" /></ConfirmSignOutButton>}>{content}</WorkspaceShell>
   );
 }
 

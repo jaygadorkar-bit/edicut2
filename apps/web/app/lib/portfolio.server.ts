@@ -7,6 +7,23 @@ import { defaultPortfolioSections } from "./portfolio-demo";
 export { defaultPortfolioSections } from "./portfolio-demo";
 
 const PORTFOLIO_SECTIONS_KEY = "portfolio_sections";
+const TAG_FILTERED_PORTFOLIO_SLUGS = new Set([
+  "podcast",
+  "gaming",
+  "commercial",
+  "health-and-beauty",
+  "review",
+]);
+// These saved YouTube references are unavailable or resolve to videos whose
+// public title/channel do not match the portfolio labels. Keep their admin
+// records editable, but omit them until each URL is replaced and verified.
+const REJECTED_PUBLIC_YOUTUBE_IDS = new Set([
+  "ysz5S6PUM-U",
+  "aqz-KE-bpKQ",
+  "jNQXAC9IVRw",
+  "M7lc1UVf-VE",
+  "ScMzIvxBSi4",
+]);
 
 export type PortfolioVideo = {
   id: string;
@@ -162,10 +179,36 @@ export async function savePortfolioSections(db: DatabaseClient | null | undefine
 }
 
 export function publicPortfolioSections(sections: PortfolioSection[]) {
+  const filteredSections = filterPublicPortfolioSections(sections);
+  const hasActiveSavedVideos = sections.some((section) => section.active && section.videos.length > 0);
+  const hasUsableSavedVideos = filteredSections.some((section) => section.videos.length > 0);
+
+  // The existing built-in sections are explicitly labeled as reference samples
+  // and have verified public channel attribution. Preserve a useful gallery if
+  // every active saved item is a broken or mislabeled placeholder.
+  if (hasActiveSavedVideos && !hasUsableSavedVideos) {
+    return filterPublicPortfolioSections(defaultPortfolioSections);
+  }
+
+  return filteredSections;
+}
+
+function filterPublicPortfolioSections(sections: PortfolioSection[]) {
   return sortPortfolioSections(sections)
     .filter((section) => section.active)
-    .map((section) => ({
-      ...section,
-      videos: sortVideos(section.videos),
-    }));
+    .map((section) => {
+      const videos = sortVideos(section.videos);
+      const shouldFilterByTag = TAG_FILTERED_PORTFOLIO_SLUGS.has(section.slug);
+
+      return {
+        ...section,
+        videos: shouldFilterByTag
+          ? videos.filter((video) => isPublicPortfolioVideo(video) && video.tag.trim() && portfolioSlug(video.tag, video.tag) === section.slug)
+          : videos.filter(isPublicPortfolioVideo),
+      };
+    });
+}
+
+function isPublicPortfolioVideo(video: PortfolioVideo) {
+  return !(video.videoProvider === "youtube" && REJECTED_PUBLIC_YOUTUBE_IDS.has(video.youtubeId));
 }

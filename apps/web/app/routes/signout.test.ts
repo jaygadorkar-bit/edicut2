@@ -3,7 +3,7 @@ vi.mock("@edicut/db/repositories/users", () => ({ findUserById: async () => ({ i
 vi.mock("@edicut/db/repositories/admin-users", () => ({ findAdminUserById: async () => ({ id: "test-admin", sessionVersion: "22222222-2222-4222-8222-222222222222" }) }));
 vi.mock("../lib/db.server", () => ({ getDbFromContext: () => ({ update: () => ({ set: () => ({ where: async () => undefined }) }) }) }));
 import { action, loader } from "./signout";
-import { commitAdminSession, commitSession, getAdminSession, getSession } from "../lib/session.server";
+import { commitAdminSession, commitSession, createSignOutCsrfToken, getAdminSession, getSession } from "../lib/session.server";
 
 const context = { cloudflare: { env: { SESSION_SECRET: "signout-test-only-secret" } } };
 const url = "http://localhost:3002/signout";
@@ -45,6 +45,64 @@ describe("toolbar sign out", () => {
     ["Sec-Fetch-Site", "cross-site"],
   ])("rejects cross-site form submissions: %s = %s", async (name, value) => {
     const response = await action({ request: new Request(url, { method: "POST", headers: { [name]: value } }), ...routeArgs });
+    expect(response.status).toBe(403);
+    expect(response.headers.has("Set-Cookie")).toBe(false);
+  });
+
+  it("accepts a valid signed form token when the browser origin metadata cannot be matched", async () => {
+    const session = await getSession(null, context);
+    session.set("userId", "test-user");
+    session.set("adminUserId", "test-admin");
+    const adminSession = await getAdminSession(null, context);
+    adminSession.set("adminUserId", "test-admin");
+    const cookie = [
+      await commitSession(session, undefined, context),
+      await commitAdminSession(adminSession, undefined, context),
+    ].map(value => value.split(";")[0]).join("; ");
+    const token = await createSignOutCsrfToken(cookie, context);
+    const response = await action({
+      request: new Request(url, {
+        method: "POST",
+        headers: { Cookie: cookie, Origin: "https://edicut.example" },
+        body: new URLSearchParams({ _csrf: token ?? "" }),
+      }),
+      ...routeArgs,
+    });
+    expect(response.status).toBe(302);
+    expect(response.headers.get("Location")).toBe("/signin?mode=signin");
+  });
+
+  it("does not accept a sign-out token after the browser session cookie changes", async () => {
+    const session = await getSession(null, context);
+    session.set("userId", "test-user");
+    const cookie = (await commitSession(session, undefined, context)).split(";")[0];
+    const token = await createSignOutCsrfToken(cookie, context);
+    const changedCookie = `${cookie}x`;
+    const response = await action({
+      request: new Request(url, {
+        method: "POST",
+        headers: { Cookie: changedCookie, Origin: "https://edicut.example" },
+        body: new URLSearchParams({ _csrf: token ?? "" }),
+      }),
+      ...routeArgs,
+    });
+    expect(response.status).toBe(403);
+    expect(response.headers.has("Set-Cookie")).toBe(false);
+  });
+
+  it("rejects a token submitted from a cross-site fetch context", async () => {
+    const session = await getSession(null, context);
+    session.set("userId", "test-user");
+    const cookie = (await commitSession(session, undefined, context)).split(";")[0];
+    const token = await createSignOutCsrfToken(cookie, context);
+    const response = await action({
+      request: new Request(url, {
+        method: "POST",
+        headers: { Cookie: cookie, Origin: new URL(url).origin, "Sec-Fetch-Site": "cross-site" },
+        body: new URLSearchParams({ _csrf: token ?? "" }),
+      }),
+      ...routeArgs,
+    });
     expect(response.status).toBe(403);
     expect(response.headers.has("Set-Cookie")).toBe(false);
   });

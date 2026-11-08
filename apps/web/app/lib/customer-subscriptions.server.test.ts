@@ -90,7 +90,10 @@ describe("subscription persistence protections", () => {
     const { db, chain } = fakeDb([{ id }]);
     expect(await deleteUnpaidSubscription(db, owner, id)).toBe(true);
     const compiled = query(chain.where.mock.calls[0][0]);
-    expect(compiled.params).toEqual([id, owner, "unpaid"]);
+    expect(compiled.params.slice(0, 4)).toEqual([id, owner, "unpaid", "cryptomus"]);
+    expect(compiled.params.slice(4)).toHaveLength(2);
+    expect(compiled.sql).toContain('"cryptomus_invoice_expires_at"');
+    expect(compiled.sql).toContain('"updated_at" <=');
     expect(chain.set.mock.calls[0][0].deletedAt).toBeInstanceOf(Date);
   });
   it("reports a paid, deleted, or foreign record as unavailable", async () => {
@@ -186,6 +189,7 @@ describe("subscription persistence protections", () => {
         country: "BD", phone: "+8801712345678", addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }],
         subtotalCents: 10400, discountCents: 0, amountCents: 10400, currency: "USD", couponCode: null,
         affiliateId: null, affiliateCode: null, affiliateCommissionBps: 0, status: "paid", paidAt: new Date("2026-10-04T00:00:00.000Z"), paidBy: admin,
+        paymentProvider: null, cryptomusInvoiceUuid: null, cryptomusPaymentUrl: null, cryptomusInvoiceExpiresAt: null,
         deletedAt: null, createdAt: new Date("2026-10-03T12:00:00.000Z"), updatedAt: new Date("2026-10-04T00:00:00.000Z"),
       },
       name: 'Ada, "Ace"\nName', email: "ada@example.test",

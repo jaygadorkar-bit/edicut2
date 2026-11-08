@@ -9,9 +9,11 @@ import {
   requestBodyExceedsLimit,
   requestTooLargeResponse,
 } from "../app/lib/usage-protection.server";
-import { shouldServeStaticAsset } from "./static-assets";
+import { shouldServeStaticAsset, shouldServeStaticPublicPage } from "./static-assets";
 import { withSecurityHeaders, withStaticCacheHeaders } from "./security-headers";
 import { authorizeChatSocket } from "../app/lib/chat-socket.server";
+import { getCanonicalSiteRedirect } from "./site-redirects";
+import { scheduleApplicationErrorCapture } from "../app/lib/application-error-log.server";
 export { ChatSocketHub } from "./chat-socket";
 
 type WorkerEnvironment = Record<string, unknown> & {
@@ -39,16 +41,28 @@ export default {
     const url = new URL(request.url);
     const pathname = normalizePathname(url.pathname).toLowerCase();
 
-    if (url.hostname === "www.edicut.com") {
-      url.hostname = "edicut.com";
-      return Response.redirect(url.toString(), 308);
-    }
+    const canonicalRedirect = getCanonicalSiteRedirect(request);
+    if (canonicalRedirect) return canonicalRedirect;
 
     const isStaticAssetRequest = shouldServeStaticAsset(request.method, pathname);
 
     if (isStaticAssetRequest && env.ASSETS) {
       const assetResponse = await env.ASSETS.fetch(request.url, request);
       return withSecurityHeaders(withStaticCacheHeaders(assetResponse, url.pathname), request, true);
+    }
+
+    if (shouldServeStaticPublicPage(request.method, pathname) && env.ASSETS) {
+      const pageResponse = await env.ASSETS.fetch(request.url, request);
+      if (pageResponse.ok) {
+        const response = withStaticCacheHeaders(pageResponse, url.pathname);
+        const headers = new Headers(response.headers);
+        headers.set("Cache-Control", "public, max-age=0, s-maxage=300, stale-while-revalidate=60");
+        return withSecurityHeaders(new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        }), request, true);
+      }
     }
 
     const edgeLimit = await enforceEdgeRequestLimits(request, env);
@@ -89,8 +103,14 @@ export default {
         params: {},
       });
     } catch (error) {
-      if (!boundedRequest.exceeded()) throw error;
-      return withSecurityHeaders(requestTooLargeResponse(), request);
+      if (boundedRequest.exceeded()) return withSecurityHeaders(requestTooLargeResponse(), request);
+      if (error instanceof Response && error.status < 500) return withSecurityHeaders(error, request);
+      const errorContext = createWebLoadContext({ env: env as Record<string, string | undefined>, ctx });
+      scheduleApplicationErrorCapture(errorContext, request, error);
+      return withSecurityHeaders(new Response("The service is temporarily unavailable. Try again shortly.", {
+        status: 500,
+        headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
+      }), request);
     }
 
     if (boundedRequest.exceeded()) {

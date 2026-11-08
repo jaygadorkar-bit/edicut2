@@ -14,10 +14,16 @@ const mocks = vi.hoisted(() => {
   profileUpdateSet,
   findAffiliateByCode: vi.fn(),
   findCouponForQuote: vi.fn(),
+  attributeAffiliateSubscription: vi.fn(async () => true),
   getPricingPackages: vi.fn<() => Promise<PricingPackage[]>>(async () => []),
   getLatestCustomerContact: vi.fn(),
   getOwnedSubscription: vi.fn(),
+  getUnpaidSubscriptionForPackage: vi.fn(),
+  claimCryptomusInvoice: vi.fn(),
+  saveCryptomusInvoice: vi.fn(),
   saveUnpaidSubscription: vi.fn(),
+  createCryptomusInvoice: vi.fn(),
+  getCryptomusConfig: vi.fn(),
   queueTelegramOrderNotice: vi.fn(),
   };
 });
@@ -28,7 +34,18 @@ vi.mock("../lib/customer-subscriptions.server", async importOriginal => ({
   ...await importOriginal<typeof import("../lib/customer-subscriptions.server")>(),
   getLatestCustomerContact: mocks.getLatestCustomerContact,
   getOwnedSubscription: mocks.getOwnedSubscription,
+  getUnpaidSubscriptionForPackage: mocks.getUnpaidSubscriptionForPackage,
+  claimCryptomusInvoice: mocks.claimCryptomusInvoice,
+  saveCryptomusInvoice: mocks.saveCryptomusInvoice,
   saveUnpaidSubscription: mocks.saveUnpaidSubscription,
+}));
+vi.mock("../lib/cryptomus.server", () => ({
+  createCryptomusInvoice: mocks.createCryptomusInvoice,
+  getCryptomusConfig: mocks.getCryptomusConfig,
+}));
+vi.mock("../lib/cryptomus", () => ({
+  isCryptomusPaymentUrl: (value: unknown) => typeof value === "string" && value.startsWith("https://pay.cryptomus.com/"),
+  isActiveCryptomusInvoice: (value: unknown, expiresAt: unknown) => typeof value === "string" && value.startsWith("https://pay.cryptomus.com/") && new Date(expiresAt as string).valueOf() > Date.now(),
 }));
 vi.mock("../lib/telegram-notifications.server", () => ({ queueTelegramOrderNotice: mocks.queueTelegramOrderNotice }));
 vi.mock("../lib/pricing.server", async importOriginal => ({
@@ -40,12 +57,17 @@ vi.mock("../lib/marketing.server", async importOriginal => ({
   findAffiliateByCode: mocks.findAffiliateByCode,
   findCouponForQuote: mocks.findCouponForQuote,
 }));
+vi.mock("../lib/affiliate-program.server", async importOriginal => ({
+  ...await importOriginal<typeof import("../lib/affiliate-program.server")>(),
+  attributeAffiliateSubscription: mocks.attributeAffiliateSubscription,
+}));
 import { defaultPricingPackages } from "../lib/pricing.server";
 import { action, loader } from "./checkout";
 
-function args(query = "", values?: Record<string, string>, slug = "creator-pro") {
+function args(query = "", values?: Record<string, string>, slug = "creator-pro", context: unknown = {}) {
   const body = values ? new URLSearchParams(values) : undefined;
-  return { request: new Request(`http://localhost:3002/checkout/${slug}${query}`, body ? { method: "POST", body } : {}), url: new URL(`http://localhost:3002/checkout/${slug}${query}`), pattern: "/checkout/:slug", params: { slug }, context: {} } as Parameters<typeof loader>[0];
+  const request = new Request(`http://localhost:3002/checkout/${slug}${query}`, body ? { method: "POST", body } : {});
+  return { request, url: new URL(request.url), pattern: "/checkout/:slug", params: { slug }, context } as Parameters<typeof loader>[0];
 }
 
 beforeEach(() => {
@@ -56,12 +78,86 @@ beforeEach(() => {
   mocks.findCouponForQuote.mockResolvedValue({ error: "Coupon not found." });
   mocks.getPricingPackages.mockResolvedValue(defaultPricingPackages);
   mocks.findAffiliateByCode.mockResolvedValue(null);
+  mocks.attributeAffiliateSubscription.mockResolvedValue(true);
   mocks.getLatestCustomerContact.mockResolvedValue(null);
   mocks.getOwnedSubscription.mockResolvedValue({ id: "saved-id", status: "unpaid", amountCents: 314900, country: "BD", phone: "+8801712345678" });
+  mocks.getUnpaidSubscriptionForPackage.mockResolvedValue(null);
+  mocks.claimCryptomusInvoice.mockResolvedValue(true);
+  mocks.saveCryptomusInvoice.mockResolvedValue(true);
+  mocks.getCryptomusConfig.mockReturnValue({ merchantId: "merchant-id", paymentApiKey: "private-test-key", appUrl: "https://edicut.test" });
+  mocks.createCryptomusInvoice.mockResolvedValue({ uuid: "9d4d98aa-f971-4d85-9f21-2b4b2fb99360", url: "https://pay.cryptomus.com/pay/test", expiresAt: new Date(Date.now() + 60_000) });
   mocks.saveUnpaidSubscription.mockResolvedValue({ id: "saved-id", planName: "Studio", amountCents: 314900, currency: "USD" });
 });
 
 describe("payment-first checkout", () => {
+  const demoContext = { cf: { env: { CHECKOUT_DEMO_MODE: "true" } } };
+
+  it("loads a demo payment step without reading a saved purchase", async () => {
+    const result = await loader(args("?step=payment&subscription=existing-id&addon=thumbnail", undefined, "single-creator", demoContext));
+
+    expect(result).toMatchObject({ paymentStep: true, demoMode: true, savedSubscription: null });
+    expect(result.addOns).toEqual([{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }]);
+    expect(mocks.getOwnedSubscription).not.toHaveBeenCalled();
+    expect(mocks.getLatestCustomerContact).not.toHaveBeenCalled();
+  });
+
+  it("loads the explicit localhost demo URL without a saved purchase", async () => {
+    const result = await loader(args("?step=payment&demo=1"));
+
+    expect(result).toMatchObject({ paymentStep: true, demoMode: true, savedSubscription: null });
+    expect(mocks.getOwnedSubscription).not.toHaveBeenCalled();
+  });
+
+  it("starts a demo checkout without saving data or calling payment services", async () => {
+    const response = await action(args("", {
+      intent: "start-checkout", packageSlug: "creator-pro", country: "BD", phone: "+880 1712 345678",
+    }, "creator-pro", demoContext));
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).headers.get("Location")).toBe("/checkout/creator-pro?step=payment&demo=1");
+    expect(mocks.consumeUsageLimit).toHaveBeenCalledWith(expect.objectContaining({ key: "demo:user-1" }));
+    expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
+    expect(mocks.getUnpaidSubscriptionForPackage).not.toHaveBeenCalled();
+    expect(mocks.profileUpdateSet).not.toHaveBeenCalled();
+    expect(mocks.queueTelegramOrderNotice).not.toHaveBeenCalled();
+    expect(mocks.getCryptomusConfig).not.toHaveBeenCalled();
+    expect(mocks.claimCryptomusInvoice).not.toHaveBeenCalled();
+    expect(mocks.createCryptomusInvoice).not.toHaveBeenCalled();
+    expect(mocks.saveCryptomusInvoice).not.toHaveBeenCalled();
+  });
+
+  it("simulates payment only as a UI result and never updates a purchase", async () => {
+    const result = await action(args("", {
+      intent: "simulate-demo-payment", packageSlug: "creator-pro",
+    }, "creator-pro", demoContext));
+
+    expect(result).toEqual({ demoResult: "success" });
+    expect(mocks.getOwnedSubscription).not.toHaveBeenCalled();
+    expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
+    expect(mocks.createCryptomusInvoice).not.toHaveBeenCalled();
+    expect(mocks.queueTelegramOrderNotice).not.toHaveBeenCalled();
+  });
+
+  it("blocks live Cryptomus invoice creation when demo mode is active", async () => {
+    const response = await action(args("?step=payment", {
+      intent: "create-cryptomus-invoice", packageSlug: "creator-pro", subscriptionId: "saved-id",
+    }, "creator-pro", demoContext));
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).status).toBe(403);
+    expect(mocks.getCryptomusConfig).not.toHaveBeenCalled();
+    expect(mocks.createCryptomusInvoice).not.toHaveBeenCalled();
+  });
+
+  it("rejects forged demo payment requests when the server flag is disabled", async () => {
+    const response = await action(args("?step=payment", {
+      intent: "simulate-demo-payment", packageSlug: "creator-pro",
+    }, "creator-pro", { cf: { env: { CHECKOUT_DEMO_MODE: "false" } } }));
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).status).toBe(403);
+  });
+
   it.each(["creator", "creator-plus", "creator-pro"])("rejects per-video add-ons for monthly package %s before pricing or saving", async slug => {
     for (const addon of ["thumbnail", "short-form"]) {
       await expect(loader(args(`?addon=${addon}`, undefined, slug))).rejects.toMatchObject({ status: 400 });
@@ -105,6 +201,17 @@ describe("payment-first checkout", () => {
     const result = await action(args("", { intent: "validate-coupon", packageSlug: "single-creator", couponCode: "SAVE10", addon: "short-form" }, "single-creator"));
     expect(result).toMatchObject({ couponPreview: { subtotalCents: 12900 } });
     expect(mocks.findCouponForQuote).toHaveBeenCalledWith(expect.anything(), "SAVE10", 12900, "user-1");
+  });
+  it("does not expose affiliate account details when validating an affiliate coupon", async () => {
+    mocks.findCouponForQuote.mockResolvedValueOnce({
+      coupon: { code: "EDIT10" }, discountCents: 31490, discountedTotalCents: 283410,
+      affiliate: { id: "affiliate-1", userId: "affiliate-user", code: "PARTNER-1", commissionRateBps: 1000 },
+    });
+
+    const result = await action(args("", { intent: "validate-coupon", packageSlug: "creator-pro", couponCode: "EDIT10" }));
+
+    expect(result).toMatchObject({ couponCode: "EDIT10", couponPreview: { code: "EDIT10", discountCents: 31490 } });
+    expect(result).not.toHaveProperty("affiliate");
   });
   it("loads payment totals and add-ons from the saved snapshot despite URL and catalog price changes", async () => {
     mocks.getOwnedSubscription.mockResolvedValueOnce({ id: "saved-id", status: "unpaid", subtotalCents: 12900, amountCents: 12900, addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }] });
@@ -190,6 +297,23 @@ describe("payment-first checkout", () => {
     }));
   });
 
+  it("saves the standalone short-form edit at $25 with the correct one-video allowance", async () => {
+    mocks.saveUnpaidSubscription.mockResolvedValueOnce({ id: "saved-id", planName: "Short-form Video", amountCents: 2500, currency: "USD" });
+    const response = await action(args("", {
+      intent: "start-checkout", packageSlug: "short-form-video-editing", country: "US", phone: "+12025550123",
+    }, "short-form-video-editing"));
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).headers.get("Location")).toBe("/checkout/short-form-video-editing?step=payment&subscription=saved-id");
+    expect(mocks.saveUnpaidSubscription).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      packageSlug: "short-form-video-editing", planName: "Short-form Video", purchaseType: "single",
+      subtotalCents: 2500, amountCents: 2500, discountCents: 0,
+    }));
+    expect(mocks.queueTelegramOrderNotice).toHaveBeenCalledWith({}, expect.objectContaining({
+      kind: "single", summary: "Single video edit: Short-form Video", amountCents: 2500,
+    }));
+  });
+
   it("saves a Feature Video checkout with its canonical one-time price", async () => {
     mocks.saveUnpaidSubscription.mockResolvedValueOnce({ id: "saved-id", planName: "Feature Video", amountCents: 24900, currency: "USD" });
     const response = await action(args("", { intent: "start-checkout", packageSlug: "single-feature", country: "US", phone: "+12025550123" }, "single-feature"));
@@ -205,9 +329,36 @@ describe("payment-first checkout", () => {
     const response = await action(args("", values));
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).status).toBe(503);
-    expect(await (response as Response).json()).toEqual({ error: "Payment gateway under construction. Card payments are not available yet." });
+    expect(await (response as Response).json()).toEqual({ error: "Cryptocurrency payment is temporarily unavailable. Please try again shortly." });
     expect(mocks.getDbFromContext).not.toHaveBeenCalled();
     expect(mocks.findCouponForQuote).not.toHaveBeenCalled();
+  });
+
+  it("creates a Cryptomus invoice only from the owner's saved unpaid order", async () => {
+    const response = await action(args("?step=payment&subscription=saved-id", {
+      intent: "create-cryptomus-invoice", packageSlug: "creator-pro", subscriptionId: "saved-id",
+    }));
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).headers.get("Location")).toBe("https://pay.cryptomus.com/pay/test");
+    expect(mocks.getOwnedSubscription).toHaveBeenCalledWith(expect.anything(), "user-1", "saved-id", "creator-pro");
+    expect(mocks.claimCryptomusInvoice).toHaveBeenCalledWith(expect.anything(), "saved-id", 314900);
+    expect(mocks.createCryptomusInvoice).toHaveBeenCalledWith(expect.objectContaining({ orderId: "saved-id", amountCents: 314900 }));
+    expect(mocks.saveCryptomusInvoice).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      id: "saved-id", amountCents: 314900, invoiceUuid: "9d4d98aa-f971-4d85-9f21-2b4b2fb99360",
+      paymentUrl: "https://pay.cryptomus.com/pay/test", expiresAt: expect.any(Date), refresh: false,
+    }));
+  });
+
+  it("does not claim or issue an invoice before Cryptomus credentials are configured", async () => {
+    mocks.getCryptomusConfig.mockReturnValueOnce(null);
+    const result = await action(args("?step=payment&subscription=saved-id", {
+      intent: "create-cryptomus-invoice", packageSlug: "creator-pro", subscriptionId: "saved-id",
+    }));
+
+    expect(result).toMatchObject({ error: expect.stringContaining("temporarily unavailable") });
+    expect(mocks.claimCryptomusInvoice).not.toHaveBeenCalled();
+    expect(mocks.createCryptomusInvoice).not.toHaveBeenCalled();
   });
 
   it("revalidates coupon discounts on the payment step using the canonical subtotal", async () => {
@@ -283,6 +434,51 @@ describe("payment-first checkout", () => {
     mocks.findCouponForQuote.mockResolvedValue({ coupon: { code: "SAVE10" }, discountCents: 31490, discountedTotalCents: 283410 });
     await action(args("", { intent: "start-checkout", packageSlug: "creator-pro", country: "US", phone: "+12025550123", couponCode: "save10", discountCents: "100000" }));
     expect(mocks.saveUnpaidSubscription).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ amountCents: 283410, discountCents: 31490, couponCode: "SAVE10", purchaseType: "monthly" }));
+  });
+  it("credits an affiliate coupon when checkout has no referral link", async () => {
+    mocks.findCouponForQuote.mockResolvedValue({
+      coupon: { code: "EDIT10" }, discountCents: 31490, discountedTotalCents: 283410,
+      affiliate: { id: "affiliate-1", userId: "affiliate-user", code: "PARTNER-1", commissionRateBps: 1000 },
+    });
+
+    await action(args("", {
+      intent: "start-checkout", packageSlug: "creator-pro", country: "US", phone: "+12025550123", couponCode: "EDIT10",
+    }));
+
+    expect(mocks.saveUnpaidSubscription).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      couponCode: "EDIT10", discountCents: 31490, amountCents: 283410,
+      affiliateId: "affiliate-1", affiliateCode: "PARTNER-1", affiliateCommissionBps: 1000,
+    }));
+    expect(mocks.attributeAffiliateSubscription).toHaveBeenCalledWith(expect.anything(), {
+      subscriptionId: "saved-id", userId: "user-1", affiliateCode: "PARTNER-1", visitId: null, campaign: null,
+    });
+    expect(mocks.findAffiliateByCode).not.toHaveBeenCalled();
+  });
+  it("lets an affiliate coupon take attribution precedence over another referral code", async () => {
+    mocks.findCouponForQuote.mockResolvedValue({
+      coupon: { code: "EDIT10" }, discountCents: 31490, discountedTotalCents: 283410,
+      affiliate: { id: "affiliate-2", userId: "another-affiliate", code: "PARTNER-2", commissionRateBps: 1000 },
+    });
+
+    await action(args("", {
+      intent: "start-checkout", packageSlug: "creator-pro", country: "US", phone: "+12025550123", couponCode: "EDIT10", affiliateCode: "PARTNER-1",
+    }));
+
+    expect(mocks.findAffiliateByCode).toHaveBeenCalledWith(expect.anything(), "PARTNER-1");
+    expect(mocks.saveUnpaidSubscription).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      affiliateId: "affiliate-2", affiliateCode: "PARTNER-2", affiliateCommissionBps: 1000,
+    }));
+  });
+  it("rejects an affiliate's own coupon before saving checkout", async () => {
+    mocks.findCouponForQuote.mockResolvedValue({ error: "Affiliate coupon codes cannot be used on your own account." });
+
+    const result = await action(args("", {
+      intent: "start-checkout", packageSlug: "creator-pro", country: "US", phone: "+12025550123", couponCode: "EDIT10",
+    }));
+
+    expect(result).toMatchObject({ error: "Affiliate coupon codes cannot be used on your own account." });
+    expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
+    expect(mocks.attributeAffiliateSubscription).not.toHaveBeenCalled();
   });
 
   it("rejects expired or unavailable coupons before saving", async () => {

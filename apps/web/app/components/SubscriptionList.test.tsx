@@ -9,7 +9,8 @@ const subscription: CustomerSubscription = {
   packageSlug: "creator-plus", planName: "Growth", purchaseType: "monthly", country: "BD", phone: "+8801712345678",
   addOns: [],
   subtotalCents: 104900, discountCents: 0, amountCents: 104900, currency: "USD", couponCode: null, affiliateId: null, affiliateCode: null, affiliateCommissionBps: 0,
-  status: "unpaid", paidAt: null, paidBy: null, deletedAt: null, createdAt: new Date("2026-10-03"), updatedAt: new Date("2026-10-03"),
+  status: "unpaid", paidAt: null, paidBy: null, paymentProvider: null, cryptomusInvoiceUuid: null,
+  cryptomusPaymentUrl: null, cryptomusInvoiceExpiresAt: null, deletedAt: null, createdAt: new Date("2026-10-03"), updatedAt: new Date("2026-10-03"),
 };
 function render(record = subscription, admin = false, summary?: SubscriptionSummary, status: SubscriptionPaymentFilter = "unpaid") {
   const router = createMemoryRouter([{ path: "/", element: createElement(SubscriptionList, { rows: [{ subscription: record, email: "customer@example.test" }], admin, summary, status }) }]);

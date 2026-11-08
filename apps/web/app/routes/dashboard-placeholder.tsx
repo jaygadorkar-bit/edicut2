@@ -1,5 +1,6 @@
+import { Select } from "../components/Select";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -10,6 +11,10 @@ import {
 } from "@edicut/db/schema";
 import { findUserById } from "@edicut/db/repositories/users";
 import { WorkspaceShell } from "../components/WorkspaceShell";
+import { ConfirmSignOutButton } from "../components/ConfirmSignOutButton";
+import { AffiliateWorkspace } from "../components/AffiliateWorkspace";
+import { loadPartnerProgram, requestPayout, cancelPayout, saveApplication, isMissingAffiliateSchema } from "../lib/affiliate-program.server";
+import type { PartnerAffiliateProgramView } from "../lib/affiliate-program";
 import { destroySession, getSession, requireUserId } from "../lib/session.server";
 import { getDbFromContext, hasReturnedRows } from "../lib/db.server";
 import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
@@ -28,6 +33,10 @@ import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protect
 import { getAffiliatePortalData, isMissingMarketingSchema, type AffiliatePortalData } from "../lib/marketing.server";
 import { toPublicUser } from "../lib/admin-public";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
+import { projectReviewAccessSql, isMissingReviewSchema, reviewRows } from "../lib/project-review.server";
+import type { ReviewActor } from "../lib/project-review";
+import { createChatStore } from "../lib/chat-store.server";
+import { importMissingClientProjectManagers } from "../lib/client-project-managers.server";
 
 const sectionConfigs = {
   projects: {
@@ -45,10 +54,10 @@ const sectionConfigs = {
     description: "Approve a submitted cut or send one clear revision request to your editor.",
   },
   uploads: {
-    label: "Uploads",
+    label: "Files",
     icon: "upload_file",
     feature: "uploads" as DashboardFeature,
-    title: "File sharing",
+    title: "Files",
     description: "Attach private Drive, Dropbox, OneDrive, or Frame.io links to the right project.",
   },
   billing: {
@@ -75,19 +84,23 @@ const sectionConfigs = {
 } as const;
 
 type PlaceholderSection = keyof typeof sectionConfigs;
+type SectionProjectOption = { id: string; title: string; clientName?: string };
+type SectionFile = typeof workspaceProjectFiles.$inferSelect & { clientName?: string };
 
 export function headers() { return { "Cache-Control": "no-store", "Referrer-Policy": "same-origin" }; }
 
 const userNavItems = [
   { label: "Dashboard", icon: "dashboard_customize", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
+  { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
+  { label: "Files", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
   { label: "Enquiries", icon: "mail", path: "/dashboard/messages", feature: "support" as DashboardFeature },
   { label: "Subscriptions", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
 ];
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: `${data?.config.label ?? "Workspace"} | EdiCut` },
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => [
+  { title: `${loaderData?.config.label ?? "Workspace"} | EdiCut` },
   { name: "robots", content: "noindex,nofollow" },
 ];
 
@@ -124,22 +137,39 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
   }
 
   const requirements = getWorkspaceDataRequirements(section);
+  const reviewsEnabled = allowedFeatures.includes("projects") && allowedFeatures.includes("reviews");
+  const staffFiles = section === "uploads" && ["editor", "project_manager"].includes(user.role);
+  const actor: ReviewActor = {
+    id: userId,
+    key: `user:${userId}`,
+    name: user.name || (user.role === "project_manager" ? "Manager" : "Editor"),
+    role: user.role,
+    admin: false,
+  };
   let projects: WorkspaceProjectView[] = [];
-  let projectOptions: Array<Pick<typeof workspaceProjects.$inferSelect, "id" | "title">> = [];
-  let files: (typeof workspaceProjectFiles.$inferSelect)[] = [];
+  let projectOptions: SectionProjectOption[] = [];
+  let files: SectionFile[] = [];
   let reviews: (typeof workspaceProjectReviews.$inferSelect)[] = [];
   let workspaceReady = true;
   try {
+    if (staffFiles && user.role === "project_manager") {
+      const chat = createChatStore(db, context);
+      await importMissingClientProjectManagers(db, actor, await chat.listLegacyClientManagerAssignments(actor));
+    }
     const ownerFilter = eq(workspaceProjects.ownerId, userId);
-    const [projectRows, projectNameRows, fileRows, reviewRows] = await Promise.all([
+    const [projectRows, projectNameRows, fileRows, reviewHistoryRows] = await Promise.all([
       requirements.projects
         ? db.select(workspaceProjectColumns).from(workspaceProjects).where(ownerFilter).orderBy(desc(workspaceProjects.updatedAt))
         : Promise.resolve([]),
       !requirements.projects && requirements.projectNames
-        ? db.select({ id: workspaceProjects.id, title: workspaceProjects.title }).from(workspaceProjects).where(ownerFilter)
+        ? staffFiles
+          ? db.execute(sql`SELECT p.id,p.title,COALESCE(NULLIF(BTRIM(client.name),''),client.email) AS "clientName" FROM workspace_projects p JOIN users client ON client.id=p.owner_id WHERE ${projectReviewAccessSql(actor)} ORDER BY p.updated_at DESC,p.id`).then(reviewRows<SectionProjectOption>)
+          : db.select({ id: workspaceProjects.id, title: workspaceProjects.title }).from(workspaceProjects).where(ownerFilter)
         : Promise.resolve([]),
       requirements.files
-        ? db.select().from(workspaceProjectFiles).where(eq(workspaceProjectFiles.ownerId, userId)).orderBy(desc(workspaceProjectFiles.createdAt))
+        ? staffFiles
+          ? db.execute(sql`SELECT f.id,f.owner_id AS "ownerId",f.project_id AS "projectId",f.kind,f.file_name AS "fileName",f.share_url AS "shareUrl",f.created_at AS "createdAt",COALESCE(NULLIF(BTRIM(client.name),''),client.email) AS "clientName" FROM workspace_project_files f JOIN workspace_projects p ON p.id=f.project_id JOIN users client ON client.id=p.owner_id WHERE ${projectReviewAccessSql(actor)} AND (${reviewsEnabled} OR f.kind='source') ORDER BY f.created_at DESC,f.id`).then(reviewRows<SectionFile>)
+          : db.select().from(workspaceProjectFiles).where(reviewsEnabled ? eq(workspaceProjectFiles.ownerId, userId) : and(eq(workspaceProjectFiles.ownerId, userId), eq(workspaceProjectFiles.kind, "source"))).orderBy(desc(workspaceProjectFiles.createdAt))
         : Promise.resolve([]),
       requirements.reviews
         ? db.select().from(workspaceProjectReviews).where(eq(workspaceProjectReviews.ownerId, userId)).orderBy(desc(workspaceProjectReviews.createdAt))
@@ -150,9 +180,9 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       ? projectRows.map(({ id, title }) => ({ id, title }))
       : projectNameRows;
     files = fileRows;
-    reviews = reviewRows;
+    reviews = reviewHistoryRows;
   } catch (error) {
-    if (!isMissingWorkspaceSchema(error)) throw error;
+    if (!isMissingWorkspaceSchema(error) && !isMissingReviewSchema(error)) throw error;
     workspaceReady = false;
   }
 
@@ -162,10 +192,12 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     && projects.some((project) => project.id === requestedProjectId);
 
   let affiliateData: AffiliatePortalData | null = null;
+  let affiliateProgram: PartnerAffiliateProgramView | null = null;
   let affiliateSchemaReady = true;
   if (section === "affiliates") {
     try {
-      affiliateData = await getAffiliatePortalData(db, userId, new URL(request.url).origin);
+      affiliateProgram = await loadPartnerProgram(db, userId, new URL(request.url).origin);
+      if (!affiliateProgram.schemaReady) affiliateData = await getAffiliatePortalData(db, userId, new URL(request.url).origin);
     } catch (error) {
       if (!isMissingMarketingSchema(error)) throw error;
       affiliateSchemaReady = false;
@@ -176,7 +208,7 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
     ? configuredPublicEditingPackages(await getPricingPackages(db, context)).filter((item): item is SubscriptionPackage => item.packageType === "monthly")
     : [];
 
-  return { user: toPublicUser(user), allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved, affiliateData, affiliateSchemaReady, pricingPackages };
+  return { user: toPublicUser(user), allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved, affiliateData, affiliateProgram, affiliateSchemaReady, pricingPackages, staffFiles };
 }
 
 export async function action({ params, request, context }: ActionFunctionArgs) {
@@ -228,7 +260,29 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
     throw redirect(getDashboardLandingPath(getAllowedDashboardFeatures(user.role, roleFeatureAccess)));
   }
 
+  const actor: ReviewActor = {
+    id: userId,
+    key: `user:${userId}`,
+    name: user.name || (user.role === "project_manager" ? "Manager" : "Editor"),
+    role: user.role,
+    admin: false,
+  };
+  const staffFiles = section === "uploads" && ["editor", "project_manager"].includes(user.role);
+
   try {
+  if (section === "affiliates") {
+    if (intent === "affiliate-apply") return await saveApplication(db, userId, { whatsappPhone: readText(formData, "whatsappPhone"), socialMedia: readText(formData, "socialMedia"), promotionPlan: readText(formData, "promotionPlan") });
+    if (intent === "affiliate-request-payout") {
+      const method = readText(formData, "method");
+      if (method !== "paypal" && method !== "manual") return { error: "Choose a supported payout method." };
+      return await requestPayout(db, userId, { method, destination: readText(formData, "destination") });
+    }
+    if (intent === "affiliate-cancel-payout") return await cancelPayout(db, userId, readText(formData, "payoutId"));
+  }
+  if (staffFiles && user.role === "project_manager") {
+    const chat = createChatStore(db, context);
+    await importMissingClientProjectManagers(db, actor, await chat.listLegacyClientManagerAssignments(actor));
+  }
   if (section === "projects") throw redirect("/dashboard/projects");
 
   if (section === "uploads" && intent === "add-file-link") {
@@ -239,13 +293,20 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       return { error: "Choose a project, add a file label, and enter a valid HTTPS sharing link." };
     }
 
-    const [project] = await db.select({ id: workspaceProjects.id })
-      .from(workspaceProjects)
-      .where(and(eq(workspaceProjects.id, projectId), eq(workspaceProjects.ownerId, userId)))
-      .limit(1);
-    if (!project) return { error: "That project could not be found in your workspace." };
-
-    await db.insert(workspaceProjectFiles).values({ ownerId: userId, projectId, kind: "source", fileName, shareUrl });
+    if (staffFiles) {
+      const inserted = reviewRows<{ id: string }>(await db.execute(sql`WITH allowed AS MATERIALIZED (
+        SELECT p.id,p.owner_id FROM workspace_projects p WHERE p.id=${projectId}::uuid AND ${projectReviewAccessSql(actor)}
+      ) INSERT INTO workspace_project_files (owner_id,project_id,kind,file_name,share_url)
+        SELECT owner_id,id,'source',${fileName},${shareUrl} FROM allowed RETURNING id`));
+      if (!inserted.length) return { error: "That project is not assigned to your team." };
+    } else {
+      const [project] = await db.select({ id: workspaceProjects.id })
+        .from(workspaceProjects)
+        .where(and(eq(workspaceProjects.id, projectId), eq(workspaceProjects.ownerId, userId)))
+        .limit(1);
+      if (!project) return { error: "That project could not be found in your workspace." };
+      await db.insert(workspaceProjectFiles).values({ ownerId: userId, projectId, kind: "source", fileName, shareUrl });
+    }
     return { success: "File link added to the project." };
   }
 
@@ -253,13 +314,16 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
     const fileId = readText(formData, "fileId");
     if (!isWorkspaceRecordId(fileId)) return { error: "Choose a valid source link to remove." };
 
-    const result = await db.delete(workspaceProjectFiles)
-      .where(and(
-        eq(workspaceProjectFiles.id, fileId),
-        eq(workspaceProjectFiles.ownerId, userId),
-        eq(workspaceProjectFiles.kind, "source"),
-      ))
-      .returning();
+    const result = staffFiles
+      ? reviewRows<{ id: string }>(await db.execute(sql`DELETE FROM workspace_project_files f USING workspace_projects p
+        WHERE f.id=${fileId}::uuid AND f.project_id=p.id AND f.kind='source' AND ${projectReviewAccessSql(actor)} RETURNING f.id`))
+      : await db.delete(workspaceProjectFiles)
+        .where(and(
+          eq(workspaceProjectFiles.id, fileId),
+          eq(workspaceProjectFiles.ownerId, userId),
+          eq(workspaceProjectFiles.kind, "source"),
+        ))
+        .returning();
     if (!hasReturnedRows(result)) return { error: "That source link could not be found in your workspace." };
     return { success: "Source link removed from your workspace. The original file in your storage was not changed." };
   }
@@ -325,24 +389,45 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 
   return { error: "This action is not available in this workspace section." };
   } catch (error) {
-    if (isMissingWorkspaceSchema(error)) return { error: WORKSPACE_MIGRATION_NOTICE };
+    if (isMissingAffiliateSchema(error)) return { error: "Affiliate program upgrades are awaiting their database migration. Please contact the EdiCut team." };
+    if (isMissingWorkspaceSchema(error) || isMissingReviewSchema(error)) return { error: WORKSPACE_MIGRATION_NOTICE };
     throw error;
   }
 }
 
 export default function DashboardWorkspaceSection() {
-  const { user, allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved, affiliateData, affiliateSchemaReady, pricingPackages } = useLoaderData<typeof loader>();
+  const { user, allowedFeatures, section, config, projects, projectOptions, files, reviews, workspaceReady, checkoutRequestSaved, affiliateData, affiliateProgram, affiliateSchemaReady, pricingPackages, staffFiles } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
   const [packageSlug, setPackageSlug] = useState(() => pricingPackages.find((item) => item.slug === "creator")?.slug ?? pricingPackages[0]?.slug ?? "creator");
+  const [fileQuery, setFileQuery] = useState("");
+  const [fileKind, setFileKind] = useState<"all" | "source" | "review">("all");
   const selectedPackage = pricingPackages.find((item) => item.slug === packageSlug) ?? pricingPackages[0] ?? SUBSCRIPTION_PACKAGES[0];
   const estimatedMonthlyTotal = getCheckoutTotal(selectedPackage);
   const displayName = user.name || user.email;
-  const visibleNavItems = userNavItems.filter((item) => allowedFeatures.includes(item.feature));
+  const projectsEnabled = allowedFeatures.includes("projects");
+  const reviewsEnabled = projectsEnabled && allowedFeatures.includes("reviews");
+  const canStartProject = projectsEnabled && ["user", "customer"].includes(user.role);
+  const visibleNavItems = userNavItems.filter((item) => allowedFeatures.includes(item.feature) && (item.feature !== "reviews" || reviewsEnabled));
+  if (user.role === "project_manager" && allowedFeatures.includes("projects")) visibleNavItems.splice(2, 0, { label: "Clients", icon: "group", path: "/dashboard/clients", feature: "projects" });
   const packageNames = new Map(SUBSCRIPTION_PACKAGES.map((item) => [item.slug, item.name]));
-  const projectNames = new Map(projectOptions.map((project) => [project.id, project.title]));
+  const projectNames = useMemo(() => new Map(projectOptions.map((project) => [project.id, project.title])), [projectOptions]);
   const reviewQueue = projects.filter((project) => project.status === "review" || project.status === "client_review");
+  const fileKindCounts = {
+    all: files.length,
+    source: files.filter((file) => file.kind === "source").length,
+    review: reviewsEnabled ? files.filter((file) => file.kind === "review").length : 0,
+  };
+  const visibleFiles = useMemo(() => {
+    const normalized = fileQuery.trim().toLocaleLowerCase();
+    return files.filter((file) => {
+      if (fileKind !== "all" && file.kind !== fileKind) return false;
+      if (!normalized) return true;
+      const projectName = projectNames.get(file.projectId) ?? "Project";
+      return `${file.fileName} ${file.clientName ?? ""} ${projectName} ${file.kind}`.toLocaleLowerCase().includes(normalized);
+    });
+  }, [fileKind, fileQuery, files, projectNames]);
 
   return (
     <WorkspaceShell
@@ -356,16 +441,13 @@ export default function DashboardWorkspaceSection() {
       profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null}
       profileNavAtBottom
       settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null}
-      startProjectTo={allowedFeatures.includes("projects") ? "/dashboard/projects#new-project" : null}
-      notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null}
-      notificationCount={reviewQueue.length}
+      startProjectTo={canStartProject ? "/dashboard/projects#new-project" : null}
+      notificationsTo={reviewsEnabled ? "/dashboard/reviews" : null}
+      notificationCount={reviewsEnabled ? reviewQueue.length : 0}
       accountAction={(
-        <Form method="post">
-          <input type="hidden" name="intent" value="logout" />
-          <button type="submit" className="text-[#687583] transition hover:text-[#17202a]" aria-label="Sign out">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
-          </button>
-        </Form>
+        <ConfirmSignOutButton buttonClassName="neo-workspace__signout-trigger">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
+        </ConfirmSignOutButton>
       )}
     >
       <div className="grid gap-5">
@@ -376,9 +458,9 @@ export default function DashboardWorkspaceSection() {
                 <span className="material-symbols-outlined text-[24px]" aria-hidden="true">{config.icon}</span>
               </span>
               <div>
-                <p className="neo-workspace__eyebrow">Customer workspace</p>
+                <p className="neo-workspace__eyebrow">{staffFiles && section === "uploads" ? "Client project files" : "Customer workspace"}</p>
                 <h2 id="workspace-section-title" className="neo-workspace__module-title mt-1">{config.label}</h2>
-                <p className="neo-workspace__module-copy mt-2 max-w-2xl">{config.description}</p>
+                <p className="neo-workspace__module-copy mt-2 max-w-2xl">{staffFiles && section === "uploads" ? "Manage source and review links for projects assigned to your clients." : config.description}</p>
               </div>
             </div>
             {section === "projects" ? (
@@ -429,9 +511,9 @@ export default function DashboardWorkspaceSection() {
                 <TextField label="Channel name" name="channelName" placeholder="Your channel or brand" maxLength={120} required />
                 <label className="grid gap-2 text-xs font-black text-[#536779]">
                   Editing package
-                  <select name="packageSlug" value={packageSlug} onChange={(event) => setPackageSlug(event.currentTarget.value)} className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
+                  <Select name="packageSlug" value={packageSlug} onChange={(event) => setPackageSlug(event.currentTarget.value)} className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
                     {pricingPackages.map((item) => <option key={item.slug} value={item.slug}>{item.name} · {formatMoney(item.basePrice * 100, "USD")}/month</option>)}
-                  </select>
+                  </Select>
                 </label>
                 <div className="neo-card grid gap-2 rounded-xl p-4 text-xs font-medium text-[#536779] sm:col-span-2">
                   <p className="font-black text-[#17202a]">Included scope</p>
@@ -485,11 +567,11 @@ export default function DashboardWorkspaceSection() {
                     <input type="hidden" name="projectId" value={project.id} />
                     <label className="grid gap-2 text-xs font-black text-[#536779]">
                       Your decision
-                      <select name="decision" defaultValue="" required className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
+                      <Select name="decision" defaultValue="" required className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
                         <option value="" disabled>Choose a decision</option>
                         <option value="approved">Approve this cut</option>
                         <option value="revision_requested">Request revisions</option>
-                      </select>
+                      </Select>
                     </label>
                     <label className="grid gap-2 text-xs font-black text-[#536779]">
                       Review note <span className="font-medium">(required for revisions)</span>
@@ -516,26 +598,67 @@ export default function DashboardWorkspaceSection() {
             <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="add-file-title">
               <p className="neo-workspace__eyebrow">Attach source material</p>
               <h2 id="add-file-title" className="neo-workspace__module-title mt-1">Add a file sharing link</h2>
-              <p className="neo-workspace__module-copy mt-2">Keep large footage in your own Drive, Dropbox, OneDrive, or Frame.io account. EdiCut saves the HTTPS link and label; grant your editor access in that storage service.</p>
-              {projects.length ? (
+              <p className="neo-workspace__module-copy mt-2">{staffFiles ? "Attach source links to projects for clients assigned to you. EdiCut saves the HTTPS link and label; make sure your editor has access in that storage service." : "Keep large footage in your own Drive, Dropbox, OneDrive, or Frame.io account. EdiCut saves the HTTPS link and label; grant your editor access in that storage service."}</p>
+              {projectOptions.length > 0 ? (
                 <Form method="post" className="mt-5 grid gap-4 sm:grid-cols-2">
                   <input type="hidden" name="intent" value="add-file-link" />
                   <label className="grid gap-2 text-xs font-black text-[#536779]">
                     Project
-                    <select name="projectId" required className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
+                    <Select name="projectId" required className="neo-workspace__profile-input h-12 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}>
                       <option value="">Choose a project</option>
-                      {projectOptions.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}
-                    </select>
+                      {projectOptions.map((project) => <option key={project.id} value={project.id}>{project.clientName ? `${project.clientName} — ` : ""}{project.title}</option>)}
+                    </Select>
                   </label>
                   <TextField label="File or folder label" name="fileName" placeholder="Raw footage · episode 4" maxLength={160} required />
                   <div className="sm:col-span-2"><TextField label="HTTPS sharing link" name="shareUrl" placeholder="https://drive.google.com/…" maxLength={2048} required type="url" /></div>
                   <div className="sm:col-span-2 sm:flex sm:justify-end"><button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-5 text-sm font-black disabled:opacity-60 sm:w-auto"><span className="material-symbols-outlined text-[18px]" aria-hidden="true">add_link</span>{isSubmitting ? "Adding link…" : "Add to project"}</button></div>
                 </Form>
-              ) : <p className="mt-4 rounded-xl bg-[#f5f6fa] p-4 text-sm text-[#536779]">Create a project before adding its source files. <Link to="/dashboard/projects#new-project" className="font-black text-[#6d55e8] underline">Start a project</Link></p>}
+              ) : <p className="mt-4 rounded-xl bg-[#f5f6fa] p-4 text-sm text-[#536779]">{staffFiles ? <>No projects are assigned to your team yet. <Link to="/dashboard/projects" className="font-black text-[#6d55e8] underline">Open projects</Link></> : <>Create a project before adding its source files. <Link to="/dashboard/projects#new-project" className="font-black text-[#6d55e8] underline">Start a project</Link></>}</p>}
             </section>
             <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="files-title">
-              <h2 id="files-title" className="text-base font-black text-[#17202a]">Shared files</h2>
-              {files.length ? <ul className="mt-3 divide-y divide-[#edf0f2]">{files.map((file) => <li key={file.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="text-sm font-bold">{file.fileName}</p><p className="mt-1 text-xs text-[#687583]">{file.kind === "review" ? "Review cut" : "Source file"} · {projectNames.get(file.projectId) ?? "Project"} · {new Date(file.createdAt).toLocaleDateString()}</p></div><div className="flex items-center gap-4"><a href={file.shareUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-black text-[#6d55e8] underline">Open shared link</a>{file.kind === "source" ? <Form method="post" onSubmit={(event) => { if (!window.confirm(`Remove “${file.fileName}” from this workspace? The original file will stay in your storage.`)) event.preventDefault(); }}><input type="hidden" name="intent" value="remove-file-link" /><input type="hidden" name="fileId" value={file.id} /><button type="submit" disabled={isSubmitting} className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-black text-red-700 underline disabled:opacity-50" aria-label={`Remove ${file.fileName} source link`}>Remove</button></Form> : null}</div></li>)}</ul> : <p className="mt-3 text-sm text-[#687583]">File links you attach to a project will appear here.</p>}
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 id="files-title" className="text-base font-black text-[#17202a]">Shared files</h2>
+                  <p className="mt-1 text-xs text-[#687583]">Search by file, client, or project.</p>
+                </div>
+                <label className="w-full sm:w-72">
+                  <span className="sr-only">Search shared files</span>
+                  <input type="search" value={fileQuery} onChange={(event) => setFileQuery(event.currentTarget.value)} placeholder="Search shared files…" className="neo-workspace__profile-input h-11 w-full rounded-xl px-3 text-sm" />
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Filter shared files">
+                {([
+                  ["all", "All files"],
+                  ["source", "Source files"],
+                  ...(reviewsEnabled ? [["review", "Review cuts"] as const] : []),
+                ] as const).map(([value, label]) => (
+                  <button key={value} type="button" aria-pressed={fileKind === value} onClick={() => setFileKind(value)} className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-4 text-xs font-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6d55e8] ${fileKind === value ? "border-[#6d55e8] bg-[#f0ecfb] text-[#5141a9]" : "border-[#dce3ea] bg-white text-[#536779] hover:border-[#9e91d8]"}`}>
+                    {label}<span className="rounded-full bg-black/5 px-2 py-0.5 tabular-nums">{fileKindCounts[value]}</span>
+                  </button>
+                ))}
+                <p className="ml-auto text-xs font-semibold text-[#687583]" role="status" aria-live="polite">Showing {visibleFiles.length} of {files.length} files</p>
+              </div>
+              {visibleFiles.length ? (
+                <ul className="mt-3 divide-y divide-[#edf0f2]">
+                  {visibleFiles.map((file) => (
+                    <li key={file.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-bold text-[#17202a]">{file.fileName}</p>
+                        <p className="mt-1 text-xs text-[#687583]">{file.kind === "review" ? "Review cut" : "Source file"} · {file.clientName ? `${file.clientName} · ` : ""}{projectNames.get(file.projectId) ?? "Project"} · {new Date(file.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <a href={file.shareUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-black text-[#6d55e8] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6d55e8]">Open shared link</a>
+                        {file.kind === "source" ? <Form method="post" onSubmit={(event) => { if (!window.confirm(`Remove “${file.fileName}” from this workspace? The original file will stay in your storage.`)) event.preventDefault(); }}><input type="hidden" name="intent" value="remove-file-link" /><input type="hidden" name="fileId" value={file.id} /><button type="submit" disabled={isSubmitting} className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-black text-red-700 underline disabled:opacity-50" aria-label={`Remove ${file.fileName} source link`}>Remove</button></Form> : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mt-3 rounded-xl bg-[#f5f6fa] p-4" role="status">
+                  <p className="text-sm text-[#536779]">{files.length ? "No shared files match these filters. Try another search or file type." : "File links you attach to a project will appear here."}</p>
+                  {files.length ? <button type="button" onClick={() => { setFileQuery(""); setFileKind("all"); }} className="mt-2 inline-flex min-h-10 items-center rounded-lg text-xs font-black text-[#5141a9] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6d55e8]">Clear file filters</button> : null}
+                </div>
+              )}
             </section>
           </>
         ) : null}
@@ -557,7 +680,7 @@ export default function DashboardWorkspaceSection() {
         ) : null}
 
         {section === "affiliates" ? (
-          affiliateSchemaReady
+          affiliateProgram?.schemaReady ? <AffiliateWorkspace program={affiliateProgram} isSubmitting={isSubmitting} /> : affiliateSchemaReady
             ? affiliateData
               ? <AffiliatePortal affiliate={affiliateData} />
               : <section className="neo-workspace__panel rounded-[24px] p-5 sm:p-7" aria-labelledby="affiliate-access-title">

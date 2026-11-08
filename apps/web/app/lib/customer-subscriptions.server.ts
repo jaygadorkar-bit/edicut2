@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { customerSubscriptions as subscriptions, users } from "@edicut/db/schema";
 import type { DatabaseClient } from "@edicut/db/client";
 import { hasReturnedRows } from "./db.server";
@@ -34,7 +34,9 @@ export async function saveUnpaidSubscription(db: DatabaseClient, input: Subscrip
     target: [subscriptions.ownerId, subscriptions.packageSlug],
     targetWhere: sql`${subscriptions.status} = 'unpaid' AND ${subscriptions.deletedAt} IS NULL`,
     set: { ...input, updatedAt: new Date() },
+    setWhere: isNull(subscriptions.paymentProvider),
   }).returning();
+  if (!saved) throw new Error("Cryptomus checkout is already in progress.");
   return saved;
 }
 
@@ -44,6 +46,54 @@ export async function getOwnedSubscription(db: DatabaseClient, ownerId: string, 
     eq(subscriptions.id, id), eq(subscriptions.ownerId, ownerId), eq(subscriptions.packageSlug, packageSlug), visible,
   )).limit(1);
   return record ?? null;
+}
+
+export async function getUnpaidSubscriptionForPackage(db: DatabaseClient, ownerId: string, packageSlug: string) {
+  const [record] = await db.select().from(subscriptions).where(and(
+    eq(subscriptions.ownerId, ownerId), eq(subscriptions.packageSlug, packageSlug),
+    eq(subscriptions.status, "unpaid"), visible,
+  )).limit(1);
+  return record ?? null;
+}
+
+export async function claimCryptomusInvoice(db: DatabaseClient, id: string, amountCents: number) {
+  if (!isWorkspaceRecordId(id) || !Number.isSafeInteger(amountCents) || amountCents < 1) return false;
+  const result = await db.update(subscriptions).set({ paymentProvider: "cryptomus", updatedAt: new Date() }).where(and(
+    eq(subscriptions.id, id), eq(subscriptions.status, "unpaid"), eq(subscriptions.amountCents, amountCents),
+    visible, isNull(subscriptions.paymentProvider), isNull(subscriptions.cryptomusInvoiceUuid),
+  )).returning({ id: subscriptions.id });
+  return hasReturnedRows(result);
+}
+
+export async function saveCryptomusInvoice(db: DatabaseClient, input: {
+  id: string;
+  amountCents: number;
+  invoiceUuid: string;
+  paymentUrl: string;
+  expiresAt: Date;
+  refresh?: boolean;
+}) {
+  const { id, amountCents, invoiceUuid, paymentUrl, expiresAt, refresh = false } = input;
+  if (!isWorkspaceRecordId(id) || !/^[0-9a-f-]{36}$/iu.test(invoiceUuid)
+    || !Number.isSafeInteger(amountCents) || amountCents < 1
+    || !paymentUrl.startsWith("https://pay.cryptomus.com/")
+    || Number.isNaN(expiresAt.valueOf()) || expiresAt.valueOf() <= Date.now()) return false;
+  const result = await db.update(subscriptions).set({
+    cryptomusInvoiceUuid: invoiceUuid,
+    cryptomusPaymentUrl: paymentUrl,
+    cryptomusInvoiceExpiresAt: expiresAt,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(subscriptions.id, id), eq(subscriptions.status, "unpaid"), eq(subscriptions.amountCents, amountCents),
+    eq(subscriptions.paymentProvider, "cryptomus"), visible,
+    refresh
+      ? or(
+        and(eq(subscriptions.cryptomusInvoiceUuid, invoiceUuid), lte(subscriptions.cryptomusInvoiceExpiresAt, new Date())),
+        and(isNull(subscriptions.cryptomusInvoiceUuid), isNull(subscriptions.cryptomusPaymentUrl), isNull(subscriptions.cryptomusInvoiceExpiresAt), lte(subscriptions.updatedAt, new Date(Date.now() - 60 * 60 * 1000))),
+      )
+      : and(isNull(subscriptions.cryptomusInvoiceUuid), isNull(subscriptions.cryptomusPaymentUrl), isNull(subscriptions.cryptomusInvoiceExpiresAt)),
+  )).returning({ id: subscriptions.id });
+  return hasReturnedRows(result);
 }
 
 export function listCustomerSubscriptions(db: DatabaseClient, ownerId: string, page = 1, eventId?: string) {
@@ -58,9 +108,13 @@ export async function getLatestCustomerContact(db: DatabaseClient, ownerId: stri
   return contact ?? null;
 }
 
-export function listAdminSubscriptions(db: DatabaseClient, page = 1, status: SubscriptionPaymentFilter = "unpaid", eventId?: string) {
-  return db.select({ subscription: subscriptions, name: users.name, email: users.email }).from(subscriptions)
-    .innerJoin(users, eq(subscriptions.ownerId, users.id)).where(and(visible, eventId ? eq(subscriptions.id, eventId) : eq(subscriptions.status, status)))
+export function listAdminSubscriptions(db: DatabaseClient, page = 1, status: SubscriptionPaymentFilter | "all" = "unpaid", eventId?: string, ownerId?: string) {
+  return db.select({ subscription: subscriptions, name: users.name, email: users.email,
+    isClient: sql<boolean>`${users.role} IN ('user','customer') AND ${users.deletedAt} IS NULL`,
+  }).from(subscriptions)
+    .innerJoin(users, eq(subscriptions.ownerId, users.id)).where(and(visible,
+      ownerId ? eq(subscriptions.ownerId, ownerId) : undefined,
+      eventId ? eq(subscriptions.id, eventId) : status === "all" ? undefined : eq(subscriptions.status, status)))
     .orderBy(desc(subscriptions.createdAt), desc(subscriptions.id)).limit(26).offset((page - 1) * 25);
 }
 
@@ -98,8 +152,15 @@ export function adminSubscriptionsCsv(rows: AdminSubscriptionExportRow[]) {
 
 export async function deleteUnpaidSubscription(db: DatabaseClient, ownerId: string, id: string) {
   if (!isWorkspaceRecordId(id)) return false;
+  const expiredCryptomus = and(
+    eq(subscriptions.paymentProvider, "cryptomus"),
+    or(
+      lte(subscriptions.cryptomusInvoiceExpiresAt, new Date()),
+      and(isNull(subscriptions.cryptomusInvoiceExpiresAt), lte(subscriptions.updatedAt, new Date(Date.now() - 12 * 60 * 60 * 1000))),
+    ),
+  );
   const result = await db.update(subscriptions).set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(and(eq(subscriptions.id, id), eq(subscriptions.ownerId, ownerId), eq(subscriptions.status, "unpaid"), visible))
+    .where(and(eq(subscriptions.id, id), eq(subscriptions.ownerId, ownerId), eq(subscriptions.status, "unpaid"), or(isNull(subscriptions.paymentProvider), expiredCryptomus), visible))
     .returning();
   return hasReturnedRows(result);
 }
@@ -110,14 +171,14 @@ export async function markSubscriptionPaid(db: DatabaseClient, id: string, admin
   // Compare at millisecond precision because JS Dates cannot retain Postgres's
   // microseconds. This guard prevents confirming a changed contact/price record.
   const unchanged = sql`date_trunc('milliseconds', ${subscriptions.updatedAt}) = ${expected.toISOString()}::timestamptz`;
-  const [record] = await db.select().from(subscriptions).where(and(eq(subscriptions.id, id), eq(subscriptions.status, "unpaid"), unchanged, visible)).limit(1);
+  const [record] = await db.select().from(subscriptions).where(and(eq(subscriptions.id, id), eq(subscriptions.status, "unpaid"), isNull(subscriptions.paymentProvider), unchanged, visible)).limit(1);
   if (!record) return false;
   if (record.couponCode) {
     // Redeem and record payment in one statement. A failed status transition or
     // uniqueness constraint rolls back the coupon counter as well.
     const result = await db.execute(sql`
       WITH target AS MATERIALIZED (
-        SELECT * FROM customer_subscriptions WHERE id = ${id} AND status = 'unpaid' AND deleted_at IS NULL
+        SELECT * FROM customer_subscriptions WHERE id = ${id} AND status = 'unpaid' AND payment_provider IS NULL AND deleted_at IS NULL
           AND date_trunc('milliseconds', updated_at) = ${expected.toISOString()}::timestamptz FOR UPDATE
       ), redeemed AS (
         UPDATE marketing_coupons c SET redemption_count = c.redemption_count + 1, updated_at = now()
@@ -133,8 +194,51 @@ export async function markSubscriptionPaid(db: DatabaseClient, id: string, admin
     return hasReturnedRows(result);
   }
   const result = await db.update(subscriptions).set({ status: "paid", paidAt: new Date(), paidBy: adminId, updatedAt: new Date() })
-    .where(and(eq(subscriptions.id, id), eq(subscriptions.status, "unpaid"), isNull(subscriptions.couponCode), unchanged, visible))
+    .where(and(eq(subscriptions.id, id), eq(subscriptions.status, "unpaid"), isNull(subscriptions.paymentProvider), isNull(subscriptions.couponCode), unchanged, visible))
     .returning();
+  return hasReturnedRows(result);
+}
+
+export async function markSubscriptionPaidByCryptomus(db: DatabaseClient, input: {
+  id: string;
+  invoiceUuid: string;
+  amountCents: number;
+}) {
+  const { id, invoiceUuid, amountCents } = input;
+  if (!isWorkspaceRecordId(id) || !/^[0-9a-f-]{36}$/iu.test(invoiceUuid)
+    || !Number.isSafeInteger(amountCents) || amountCents < 1) return false;
+  const [record] = await db.select().from(subscriptions).where(and(
+    eq(subscriptions.id, id), eq(subscriptions.status, "unpaid"), visible,
+    eq(subscriptions.paymentProvider, "cryptomus"), eq(subscriptions.cryptomusInvoiceUuid, invoiceUuid),
+    eq(subscriptions.amountCents, amountCents),
+  )).limit(1);
+  if (!record) return false;
+
+  if (record.couponCode) {
+    const result = await db.execute(sql`
+      WITH target AS MATERIALIZED (
+        SELECT * FROM customer_subscriptions WHERE id = ${id} AND status = 'unpaid' AND deleted_at IS NULL
+          AND payment_provider = 'cryptomus' AND cryptomus_invoice_uuid = ${invoiceUuid}
+          AND amount_cents = ${amountCents} FOR UPDATE
+      ), redeemed AS (
+        UPDATE marketing_coupons c SET redemption_count = c.redemption_count + 1, updated_at = now()
+        FROM target t WHERE c.code = t.coupon_code AND c.active = true
+          AND (c.starts_at IS NULL OR c.starts_at <= now()) AND (c.expires_at IS NULL OR c.expires_at > now())
+          AND (c.max_redemptions IS NULL OR c.redemption_count < c.max_redemptions)
+          AND NOT EXISTS (SELECT 1 FROM customer_subscriptions p WHERE p.owner_id = t.owner_id AND p.coupon_code = t.coupon_code AND p.status = 'paid')
+          AND NOT EXISTS (SELECT 1 FROM workspace_projects p WHERE p.owner_id = t.owner_id AND p.coupon_id = c.id)
+        RETURNING c.code
+      ) UPDATE customer_subscriptions s SET status = 'paid', paid_at = now(), paid_by = NULL, updated_at = now()
+        FROM target t, redeemed r WHERE s.id = t.id AND s.coupon_code = r.code RETURNING s.id
+    `);
+    return hasReturnedRows(result);
+  }
+  const result = await db.update(subscriptions).set({ status: "paid", paidAt: new Date(), paidBy: null, updatedAt: new Date() })
+    .where(and(
+      eq(subscriptions.id, id), eq(subscriptions.status, "unpaid"), visible,
+      eq(subscriptions.paymentProvider, "cryptomus"), eq(subscriptions.cryptomusInvoiceUuid, invoiceUuid),
+      eq(subscriptions.amountCents, amountCents), isNull(subscriptions.couponCode),
+    )).returning({ id: subscriptions.id });
   return hasReturnedRows(result);
 }
 
@@ -147,7 +251,7 @@ export async function markSubscriptionUnpaid(db: DatabaseClient, id: string, exp
   const result = await db.execute(sql`
     WITH target AS MATERIALIZED (
       SELECT s.id, s.coupon_code FROM customer_subscriptions s
-      WHERE s.id = ${id} AND s.status = 'paid' AND s.deleted_at IS NULL
+      WHERE s.id = ${id} AND s.status = 'paid' AND s.deleted_at IS NULL AND s.payment_provider IS NULL
         AND date_trunc('milliseconds', s.updated_at) = ${expected.toISOString()}::timestamptz
       FOR UPDATE OF s
     ), locked_entitlements AS MATERIALIZED (
@@ -179,7 +283,7 @@ export async function deleteAdminSubscription(db: DatabaseClient, id: string, ex
   const result = await db.execute(sql`
     WITH target AS MATERIALIZED (
       SELECT s.id, s.status, s.coupon_code FROM customer_subscriptions s
-      WHERE s.id = ${id} AND s.deleted_at IS NULL
+      WHERE s.id = ${id} AND s.deleted_at IS NULL AND s.payment_provider IS NULL
         AND date_trunc('milliseconds', s.updated_at) = ${expected.toISOString()}::timestamptz
       FOR UPDATE OF s
     ), locked_entitlements AS MATERIALIZED (

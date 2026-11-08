@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useSearchParams } from "react-router";
 import { ContactSection, PageShell } from "../components/site/Marketing.js";
 import { DEFAULT_CONTACT_EMAIL, getConfiguredContactEmail } from "../lib/contact-email";
 import { submitContactInquiry } from "../lib/contact-intake.server";
@@ -12,11 +12,8 @@ export const meta: MetaFunction = (args) => createRouteMeta(args,
   "Tell EdiCut about your YouTube, podcast, or short-form video project and get matched with an editing plan for your workflow.",
 );
 
-export async function loader({ request, context }: LoaderFunctionArgs) {
-  const url = new URL(request.url);
+export async function loader({ context }: LoaderFunctionArgs) {
   return {
-    sent: url.searchParams.get("sent") === "1",
-    error: url.searchParams.get("error"),
     contactEmail: getConfiguredContactEmail(context) || DEFAULT_CONTACT_EMAIL,
   };
 }
@@ -26,7 +23,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function ContactPage() {
-  const { sent, error, contactEmail } = useLoaderData<typeof loader>();
+  const { contactEmail } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const sent = searchParams.get("sent") === "1";
+  const error = searchParams.get("error");
   const contactStatus = sent ? "sent"
     : error === "security" ? "security-error"
       : error === "invalid" ? "invalid-error"
@@ -35,7 +35,7 @@ export default function ContactPage() {
 
   return (
     <PageShell className="contact-page">
-      <section className="contact-hero" aria-labelledby="contact-page-title">
+      <section data-analytics-region="contact" className="contact-hero" aria-labelledby="contact-page-title">
         <p className="contact-kicker neo-section-label"><MessageCircle size={17} aria-hidden="true" /> Contact EdiCut</p>
         <h1 id="contact-page-title">Let&apos;s talk about<br />your next video.</h1>
         <p>Bring your ideas. We&apos;ll help you find the right editing plan.</p>

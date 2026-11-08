@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { users } from "@edicut/db/schema";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { WorkspaceShell } from "../components/WorkspaceShell";
+import { ConfirmSignOutButton } from "../components/ConfirmSignOutButton";
 import { destroySession, getSession, requireUserId } from "../lib/session.server";
 import { getDbFromContext } from "../lib/db.server";
 import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
@@ -174,7 +175,10 @@ export default function DashboardProfileRoute() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const displayName = user.name || user.email;
-  const visibleNavItems = userNavItems.filter((item) => allowedFeatures.includes(item.feature));
+  const projectsEnabled = allowedFeatures.includes("projects");
+  const reviewsEnabled = projectsEnabled && allowedFeatures.includes("reviews");
+  const canStartProject = projectsEnabled && ["user", "customer"].includes(user.role);
+  const visibleNavItems = userNavItems.filter((item) => allowedFeatures.includes(item.feature) && (item.feature !== "reviews" || reviewsEnabled));
   const channelValues: Record<string, string> = {
     channelName: channelProfile?.channelName ?? "",
     platform: channelProfile?.platform ?? inferCreatorPlatform(channelProfile?.channelUrl ?? ""),
@@ -195,15 +199,12 @@ export default function DashboardProfileRoute() {
       profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null}
       profileNavAtBottom
       settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null}
-      startProjectTo={allowedFeatures.includes("projects") ? "/dashboard/projects#new-project" : null}
-      notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null}
+      startProjectTo={canStartProject ? "/dashboard/projects#new-project" : null}
+      notificationsTo={reviewsEnabled ? "/dashboard/reviews" : null}
       accountAction={(
-        <Form method="post">
-          <input type="hidden" name="intent" value="logout" />
-          <button type="submit" className="text-[#687583] transition hover:text-[#17202a]" aria-label="Sign out">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
-          </button>
-        </Form>
+        <ConfirmSignOutButton buttonClassName="neo-workspace__signout-trigger">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
+        </ConfirmSignOutButton>
       )}
     >
       <div className="mx-auto max-w-4xl">

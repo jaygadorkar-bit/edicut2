@@ -1,0 +1,170 @@
+[
+  {
+    "ctas": [
+      {
+        "rect": {
+          "bottom": 557.78125,
+          "height": 52,
+          "left": 16,
+          "right": 223.3125,
+          "top": 505.78125,
+          "width": 207.3125,
+          "x": 16,
+          "y": 505.78125
+        },
+        "text": "Discuss your project"
+      },
+      {
+        "rect": {
+          "bottom": 613.78125,
+          "height": 44,
+          "left": 16,
+          "right": 193.46875,
+          "top": 569.78125,
+          "width": 177.46875,
+          "x": 16,
+          "y": 569.78125
+        },
+        "text": "Explore editing examples"
+      },
+      {
+        "rect": {
+          "bottom": 5614.625,
+          "height": 48,
+          "left": 37,
+          "right": 249.09375,
+          "top": 5566.625,
+          "width": 212.09375,
+          "x": 37,
+          "y": 5566.625
+        },
+        "text": "Discuss your project"
+      }
+    ],
+    "h1": {
+      "bottom": 309.546875,
+      "height": 115.546875,
+      "left": 16,
+      "right": 294,
+      "top": 194,
+      "width": 278,
+      "x": 16,
+      "y": 194
+    },
+    "scrollWidth": 310,
+    "url": "https://edicut.com/services/youtube-video-editing",
+    "width": 320
+  },
+  {
+    "ctas": [
+      {
+        "rect": {
+          "bottom": 505.5625,
+          "height": 52,
+          "left": 16,
+          "right": 214.703125,
+          "top": 453.5625,
+          "width": 198.703125,
+          "x": 16,
+          "y": 453.5625
+        },
+        "text": "Discuss your project"
+      },
+      {
+        "rect": {
+          "bottom": 561.5625,
+          "height": 44,
+          "left": 16,
+          "right": 193.46875,
+          "top": 517.5625,
+          "width": 177.46875,
+          "x": 16,
+          "y": 517.5625
+        },
+        "text": "Explore editing examples"
+      },
+      {
+        "rect": {
+          "bottom": 5224.375,
+          "height": 48,
+          "left": 37,
+          "right": 240.484375,
+          "top": 5176.375,
+          "width": 203.484375,
+          "x": 37,
+          "y": 5176.375
+        },
+        "text": "Discuss your project"
+      }
+    ],
+    "h1": {
+      "bottom": 285.375,
+      "height": 120.375,
+      "left": 16,
+      "right": 349,
+      "top": 165,
+      "width": 333,
+      "x": 16,
+      "y": 165
+    },
+    "scrollWidth": 365,
+    "url": "https://edicut.com/services/youtube-video-editing",
+    "width": 375
+  },
+  {
+    "ctas": [
+      {
+        "rect": {
+          "bottom": 454.484375,
+          "height": 52,
+          "left": 24,
+          "right": 216.015625,
+          "top": 402.484375,
+          "width": 192.015625,
+          "x": 24,
+          "y": 402.484375
+        },
+        "text": "Discuss your project"
+      },
+      {
+        "rect": {
+          "bottom": 450.484375,
+          "height": 44,
+          "left": 240.015625,
+          "right": 417.484375,
+          "top": 406.484375,
+          "width": 177.46875,
+          "x": 240.015625,
+          "y": 406.484375
+        },
+        "text": "Explore editing examples"
+      },
+      {
+        "rect": {
+          "bottom": 3578.921875,
+          "height": 48,
+          "left": 49,
+          "right": 245.796875,
+          "top": 3530.921875,
+          "width": 196.796875,
+          "x": 49,
+          "y": 3530.921875
+        },
+        "text": "Discuss your project"
+      }
+    ],
+    "h1": {
+      "bottom": 290.390625,
+      "height": 95.3125,
+      "left": 24,
+      "right": 548.71875,
+      "top": 195.078125,
+      "width": 524.71875,
+      "x": 24,
+      "y": 195.078125
+    },
+    "scrollWidth": 758,
+    "url": "https://edicut.com/services/youtube-video-editing",
+    "width": 768
+  }
+]

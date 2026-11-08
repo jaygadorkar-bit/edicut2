@@ -1,0 +1,39 @@
+{
+  "generated_at": "2026-10-21T21:55:18Z",
+  "transcript": "At EdiCut, you get a dedicated editor who understands your style, and a project manager who keeps your videos on track. We handle storytelling, captions, color, and sound, with studio review before your draft reaches you. Your dashboard keeps everything in one place. Start a project, share your brief and footage, and track progress. Communicate with your team, leave feedback on edits, and download your finished videos. Choose a single video or a monthly plan that fits your channel. EdiCut. You create. We handle the edit.",
+  "voice": "Approved existing homepage Google AI Studio Nika narration; no new synthesis",
+  "audio_source": "apps/web/public/audio/why-hire-us/edicut-why-hire-us-mix-f3907247.wav",
+  "audio_sha256": "f39072477122e7c06d0da070769b57afa8834ad47c3feaace415982dda364f96",
+  "music": "Existing approved original local NumPy/SciPy composition mixed under narration; preserved unchanged",
+  "captions_note": "VTT identifies the one-second music-only lead-in; instrumental music continues quietly beneath narration.",
+  "visual_sources": [
+    "video-editing-brief.webp",
+    "youtube-editing-service.webp",
+    "youtube-to-shorts.webp"
+  ],
+  "video": {
+    "path": "apps/web/public/media/blog/edicut-blog-intro.mp4",
+    "duration_seconds": 37.64,
+    "dimensions": [
+      1280,
+      720
+    ],
+    "fps": 24,
+    "codec": "H.264 yuv420p + AAC stereo 128 kb/s, 48 kHz, faststart",
+    "bytes": 1056762
+  },
+  "audio_only": {
+    "path": "apps/web/public/media/blog/edicut-blog-intro-audio.m4a",
+    "duration_seconds": 37.64,
+    "codec": "AAC stereo 128 kb/s, 48 kHz, faststart",
+    "bytes": 637062,
+    "decoded_pcm_sample_peak_dbfs": -1.412,
+    "decoded_pcm_clipped_samples": 0
+  },
+  "source_audio": {
+    "sample_rate_hz": 24000,
+    "channels": 2
+  },
+  "poster": "edicut-blog-intro-poster.webp",
+  "captions": "edicut-blog-intro-en.vtt"
+}

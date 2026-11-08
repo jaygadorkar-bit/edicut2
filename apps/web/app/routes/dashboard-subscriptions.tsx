@@ -1,7 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
+import { Link, redirect, useActionData, useLoaderData } from "react-router";
 import { findUserById } from "@edicut/db/repositories/users";
 import { WorkspaceShell } from "../components/WorkspaceShell";
+import { ConfirmSignOutButton } from "../components/ConfirmSignOutButton";
 import { SubscriptionList, SubscriptionPagination } from "../components/SubscriptionList";
 import { getDbFromContext } from "../lib/db.server";
 import { requireUserId } from "../lib/session.server";
@@ -37,7 +38,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     if (!isMissingCustomerSubscriptionSchema(error)) throw error;
     purchaseHistoryAvailable = false;
   }
-  return { user: { name: user.name, email: user.email, profileImageUrl: user.profileImageUrl }, features, records: records.slice(0, 25), page, hasNext: records.length > 25, purchaseHistoryAvailable, eventId };
+  return { user: { name: user.name, email: user.email, role: user.role, profileImageUrl: user.profileImageUrl }, features, records: records.slice(0, 25), page, hasNext: records.length > 25, purchaseHistoryAvailable, eventId };
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -69,11 +70,13 @@ const nav = [
 export default function SubscriptionsRoute() {
   const { user, features, records, page, hasNext, purchaseHistoryAvailable, eventId } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
+  const reviewsEnabled = features.includes("projects") && features.includes("reviews");
+  const canStartProject = features.includes("projects") && ["user", "customer"].includes(user.role);
   return <WorkspaceShell title="Subscriptions" navItems={nav.filter(item => features.includes(item[3] as DashboardFeature)).map(([label, icon, to]) => ({ label, icon, to, end: to === "/dashboard" }))}
-    account={{ name: user.name || user.email, detail: user.email, imageUrl: user.profileImageUrl }} mobileMenu navigationFeedback hideHeaderTitle profileTo={features.includes("settings") ? "/dashboard/profile" : null} profileNavAtBottom settingsTo={features.includes("settings") ? "/dashboard/settings" : null} startProjectTo={features.includes("projects") ? "/dashboard/projects#new-project" : null} notificationsTo={features.includes("reviews") ? "/dashboard/reviews" : null}
-    accountAction={<Form method="post" action="/signout"><button type="submit" aria-label="Sign out" className="min-h-11 px-2 text-slate-600"><span className="material-symbols-outlined" aria-hidden="true">logout</span></button></Form>}>
+    account={{ name: user.name || user.email, detail: user.email, imageUrl: user.profileImageUrl }} mobileMenu navigationFeedback hideHeaderTitle profileTo={features.includes("settings") ? "/dashboard/profile" : null} profileNavAtBottom settingsTo={features.includes("settings") ? "/dashboard/settings" : null} startProjectTo={canStartProject ? "/dashboard/projects#new-project" : null} notificationsTo={reviewsEnabled ? "/dashboard/reviews" : null}
+    accountAction={<ConfirmSignOutButton buttonClassName="neo-workspace__signout-trigger"><span className="material-symbols-outlined" aria-hidden="true">logout</span></ConfirmSignOutButton>}>
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div><h2 className="text-2xl font-black">Subscriptions</h2><p className="mt-2 max-w-xl text-sm text-slate-600">Review your subscriptions and package selections, including their payment status. Unpaid selections stay here until you pay or remove them.</p></div>
+      <div><h2 className="text-2xl font-black">Subscriptions</h2><p className="mt-2 max-w-xl text-sm text-slate-600">Review your subscriptions and package selections, including their payment status. An issued Cryptomus payment link stays attached to its order until it expires.</p></div>
       <Link to="/pricing" className="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white">Choose a package</Link>
     </div>
     {result ? <p role={result.error ? "alert" : "status"} className={`mb-5 rounded-xl p-4 text-sm ${result.error ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}>{result.error || result.success}</p> : null}

@@ -1,0 +1,21 @@
+{
+  "voice": "Google AI Studio / Ludo",
+  "voiceDescription": "Google AI Studio male voice: confident and clear, low pitch",
+  "model": "gemini-3.8-flash-tts",
+  "style": "Clear, professional male studio narration in neutral American English. Crisp consonants, fully articulated words, steady volume, natural pauses, and deliberate pronunciation of EdiCut and the reward terms.",
+  "sourceSha256": "ced3badb5e1a8a264ddc5db318a48dd5c7b66d51105b81bd0a99f355aba38b2d",
+  "sourceDurationSeconds": 34.52,
+  "sampleRateHz": 24000,
+  "leadInSeconds": 0.8,
+  "tailSeconds": 0.65,
+  "musicUnderVoiceDb": 12,
+  "alignmentMethod": "Whisper base.en word timestamps checked against 10 ms PCM energy windows; scene transitions centered in the measured paragraph pauses.",
+  "scenes": [
+    {"at": 0, "title": "A good recommendation goes further.", "cues": [{"at": 0.27, "copy": "Recommend EdiCut to creators, and earn when they choose their next editing package."}]},
+    {"at": 5.165, "title": "Start with a conversation.", "cues": [{"at": 5.56, "copy": "Apply to become a partner."}, {"at": 7.48, "copy": "We review your application and confirm your individual terms."}]},
+    {"at": 10.86, "title": "Your link. Your coupon.", "cues": [{"at": 11.26, "copy": "Once approved, get your personal referral link and coupon code."}]},
+    {"at": 14.9, "title": "A reward for both of you.", "cues": [{"at": 15.27, "copy": "By default, your coupon gives customers ten percent off."}, {"at": 18.88, "copy": "Eligible paid orders earn you a ten percent commission."}]},
+    {"at": 21.985, "title": "See every step in your dashboard.", "cues": [{"at": 22.51, "copy": "Track referred orders, earnings, and payout requests in your affiliate dashboard."}]},
+    {"at": 27.325, "title": "Share good editing. Grow together.", "cues": [{"at": 27.77, "copy": "Your final rates and payout terms are confirmed after review."}, {"at": 31.44, "copy": "EdiCut. Share good editing. Grow together."}]}
+  ]
+}

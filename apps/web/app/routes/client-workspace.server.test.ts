@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
     projectRows,
     projectCounts,
     projectOffset,
-    access: vi.fn(async () => ({ db, userId: "owner", user: { name: "Client", email: "client@qa.invalid" }, features: ["projects"] })),
+    access: vi.fn(async () => ({ db, userId: "owner", user: { name: "Client", email: "client@qa.invalid", role: "user" }, features: ["projects"] })),
     load: vi.fn(async () => ({ profile: null as unknown, purchases: [] as unknown[] })),
     saveProfile: vi.fn(async () => true), create: vi.fn(async () => ({ id: "saved-project" })), limit: vi.fn(async () => "allowed"),
   };
@@ -38,6 +38,13 @@ describe("paid client onboarding and project boundaries", () => {
     mocks.load.mockResolvedValue({ profile: null, purchases: [{ id: "paid" }] });
     mocks.projectRows.mockResolvedValue([existingProject]);
     await expect(projectLoader(args("projects"))).resolves.toMatchObject({ profile: null, projects: [existingProject], ready: true });
+  });
+  it("does not return project brief notes when Reviews access is disabled", async () => {
+    mocks.projectRows.mockResolvedValue([{ id: "prior-project", title: "Previously submitted edit", notes: "Private project brief" }]);
+
+    const result = await projectLoader(args("projects"));
+
+    expect(result.projects[0]).toMatchObject({ id: "prior-project", notes: null });
   });
   it("paginates long project histories and clamps requests beyond the last page", async () => {
     const existingProject = { id: "prior-project", title: "Older submitted edit" };

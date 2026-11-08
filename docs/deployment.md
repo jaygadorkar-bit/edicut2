@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Last updated: 2026-10-09
+Last updated: 2026-11-02
 
 ## Prerequisites
 
@@ -15,9 +15,86 @@ Last updated: 2026-10-09
 | Provider | Target | Latest result |
 | --- | --- | --- |
 | GitHub | `https://github.com/jaygadorkar-bit/edicut2` | Push local `main` after validation |
-| Cloudflare Workers | `edicut-web` on `https://edicut.com` and `https://www.edicut.com` | Version `32f800c0-fd9c-44ab-beaf-ee94429d2dc2` activated at 100% on 2026-10-09 (local time) in the Jaygadorkar Cloudflare account. Project groups and support tickets enabled; Neon migration 0014 applied with existing support history preserved. |
-| Supabase | Auth + PostgreSQL from `SUPABASE_*` | Hosted `Edicut` project in South Asia (Mumbai); initial migration applied and verified |
+| Cloudflare Workers | `edicut-web` on `https://edicut.com` and `https://www.edicut.com` | Version `884a2429-8c7e-49c8-9407-f91a7fce1bc7` is serving 100% of traffic (2026-11-02 release). The Supabase-backed app uses `SUPABASE_HYPERDRIVE`; native `CHAT_D1` remains attached. |
+| Supabase | Auth + PostgreSQL project `uebqtbydqkdpicdskoej` | Hosted `Edicut` project in South Asia (Mumbai); PostgreSQL is the live app database, accessed by Hyperdrive in production and `SUPABASE_DATABASE_URL` locally. |
+| Cloudflare D1 | `edicut-chat-production` (`248da0e0-8360-4d6d-9d06-83e1504f332f`) | Chat/ticket data remains in D1; database ID and audited row counts match the pre-cutover state. |
 | Cloudinary | Managed image delivery and server-signed uploads | Worker secrets configured |
+
+## Web release — 2026-10-22
+
+- Verified account `f2c46bb116722bcb7dc4be44e500154b`, Worker `edicut-web`,
+  production routes, `APP_URL=https://edicut.com`, and the `edicut-production`
+  profile bound to `E:\development\Edicut`. Built from the current authorized
+  working tree on `main` (base commit `711ce1f`); no Git commit or push was made.
+- Released `35ff4752-260a-465e-b5b7-6f9c3db2e08a` at 100% traffic. Previous
+  production version: `57b30999-9b76-4922-8eaf-3f549d98bcd7`.
+- Checks passed: web typecheck, 73 focused tests in 9 files, the Cloudflare
+  production build, SEO validation for 25 prerendered public pages, and Wrangler
+  deployment dry run. Published with
+  `pnpm --filter @edicut/web exec wrangler deploy --profile edicut-production`.
+- Live verification passed 24 checks: public pages including all four articles
+  and affiliate signup; healthy database connection; sitemap and robots; canonical
+  www redirect; and SHA-256 equality with the build for four SVG covers, four WebP
+  previews, homepage narration, and affiliate narration. The signup page did not
+  show its setup-unavailable notice. Anonymous read-only checks used an explicit
+  `EdiCutReleaseCheck/1.0` user agent; the default Python agent was blocked by
+  Cloudflare's browser integrity check (1010), and no security setting was changed.
+- Live browser checks confirmed current artwork, one H1, self-canonical and
+  index/follow metadata, aligned desktop card footers, no desktop/phone overflow,
+  and actual playback of the custom article's 37.64-second homepage film. No
+  console errors or warnings were reported for that article.
+- Evidence: `artifacts/web-live-{verification,browser-verification,film-verification}-2026-10-22.json`,
+  `artifacts/web-live-{typecheck,build,dry-run,deploy,deployments}-2026-10-22.log`,
+  and live desktop/phone screenshots. The repeatable read-only release probe is
+  `artifacts/verify-web-release-2026-10-22.py`.
+- No database migrations, secret updates, payment transactions, or customer/admin
+  mutations were performed for this web deployment. Authenticated business flows
+  were not exercised against production. Monitor normal application error and
+  threat logs after release; the previous version ID is recorded above for rollback.
+
+## Web release — 2026-11-02
+
+- Verified the `edicut-production` profile, account `f2c46bb116722bcb7dc4be44e500154b`,
+  Worker `edicut-web`, production routes, and `APP_URL=https://edicut.com`. Built
+  from the current working tree on `main`; no Git commit or push was made.
+- Released `884a2429-8c7e-49c8-9407-f91a7fce1bc7` at 100% traffic. Previous
+  production version: `35ff4752-260a-465e-b5b7-6f9c3db2e08a`.
+- Checks passed: Material Symbols regression test, full workspace typecheck,
+  Cloudflare production build with SEO validation for 27 prerendered public pages,
+  Wrangler dry run, live homepage load in Codex Browser, and `/health` (HTTP 200,
+  `database: connected`). The protected Update page redirected to sign-in without
+  a production session; the corrected sidebar icon was visually verified on the
+  authenticated local admin page.
+- The release includes the missing `system_update_alt` font subset entry and the
+  React Router v8 `bin.cjs` path in the Cloudflare build script, alongside the
+  current workspace changes.
+- No database migrations, production data mutations, or secret changes were made.
+
+### Current PostgreSQL cutover verification
+
+On 2026-10-15, a read-only comparison found all 24 Neon source tables in
+Supabase. All 67 source rows matched by business key and value at the
+application's millisecond timestamp precision; the `site_settings` keys and
+values match even though three unreferenced surrogate IDs differ. Supabase has
+68 rows because it also contains the `search_crawling_enabled` setting. The live
+Worker uses the Supabase Hyperdrive binding, and no Neon `DATABASE_URL` secret is
+configured. The Neon URL remains in the ignored local `.env.cloudflare` file for
+comparison; do not route production back to it without reconciling newer writes.
+
+The D1 audit returned the same counts as the pre-cutover check (3 admin users,
+15 users, 2 rooms, 9 messages, 2 read cursors, 15 client-access rows, and no
+tickets). Cloudflare reported `changed_db: false` and `rows_written: 0` for that
+audit.
+
+The Drizzle ledger contains 21 applied schema migrations and the Supabase CLI
+ledger contains 7 applied Data API migrations. All 24 public tables have RLS
+enabled. The `anon` and `authenticated` roles have no public-table grants;
+`service_role` has access only to `site_settings`, which the server uses for
+settings reads and upserts. A live REST smoke test confirmed server access to
+settings and rejected browser-role access. The ACL migration changed no rows.
+The `/health` route now runs a read-only `SELECT 1` through the same database resolver
+used by the application, returns HTTP 503 without exposing connection details on failure,
+and reported `database: connected` on both the live Worker and local site after deployment.
 
 ## Preflight
 
@@ -28,7 +105,7 @@ pnpm typecheck
 pnpm build
 ```
 
-Both commands completed successfully on 2026-05-09 before the latest production deploys.
+Run these commands against the current checkout before any new deployment.
 
 ## GitHub Upload
 
@@ -43,13 +120,20 @@ Do not commit local secret files such as `.env`, `.env.local`, `.env.cloudflare`
 
 ## Deploy to Supabase
 
-Authenticate and link the hosted Supabase project, then push the checked-in migrations:
+The application schema and journal are owned by `@edicut/db` and
+`packages/db/drizzle`. Apply those changes with
+`pnpm --filter @edicut/db db:migrate` after confirming `SUPABASE_DATABASE_URL`
+points to the intended database. The Supabase CLI migration folder contains
+the separate Data API security migrations. The guarded script checks that
+`SUPABASE_DATABASE_URL` identifies `SUPABASE_PROJECT_REF`, then pushes only
+those migrations without requiring a linked CLI profile:
 
 ```bash
-npx supabase login
-npx supabase link --project-ref <project-ref>
-npx supabase db push
+pnpm supabase:push
 ```
+
+Do not use `supabase db push` to apply the Drizzle application schema. The two
+migration journals track different responsibilities.
 
 Do not commit Supabase access tokens or service-role keys. The `SUPABASE_SERVICE_ROLE_KEY` is a Cloudflare Worker secret only.
 
@@ -207,14 +291,14 @@ Latest production result:
 - Verified account `f2c46bb116722bcb7dc4be44e500154b`, Worker `edicut-web`, profile `edicut-production`, branch `main`.
 - Released version `6af5e385-8afc-49fc-b36c-291368f28c68`. Native `CHAT_D1` points to `edicut-chat-production` (`248da0e0-8360-4d6d-9d06-83e1504f332f`); backend is `d1`, maintenance is `false`.
 - Created staging and production chat databases and applied D1 migrations 0001–0003. Forty exported records passed all 17 remote parity checks, including checksums, foreign keys, derived searches and ticket sequence. Source snapshot stability was checked while writes were paused. Source Neon chat records were retained.
-- Authentication, current roles and paid eligibility remain authoritative in Neon per operation. Messages, room assignments, reads and tickets use D1. Socket Durable Objects and private Cloudinary attachments retain their existing roles.
+- At the initial D1 cutover, Neon supplied current roles and paid eligibility while D1 stored messages, room assignments, reads and tickets. After the 2026-10-15 database cutover, Supabase PostgreSQL supplies those current permissions through Hyperdrive; D1 still stores chat and ticket data.
 - Request optimization combines room/history/badge data, removes duplicate badge requests/sockets, debounces refresh bursts, and uses 10-minute connected recovery / 60-second disconnected recovery. Heartbeats do not query the database.
 - Main files: `apps/web/app/lib/{chat-store,chat-authority,chat-d1,chat-d1-remote,chat-cleanup,chat-realtime}.server.ts`, `chat-live.ts`, `ChatWorkspace.tsx`, chat/ticket loaders and API; `wrangler.jsonc`; `docker-compose.yml`; `packages/db/d1/chat`; migration/verification scripts. Full runbook: [chat-d1-migration.md](chat-d1-migration.md).
 - Validation: `pnpm test` (734 tests / 79 files); web typecheck and production build; 78 D1 adapter checks locally and 78 on verified remote staging; 41 actual API checks using disposable PostgreSQL/local D1; 15 local schema checks; 17 production parity checks; existing isolated HTTP/socket suites; JavaScript ESLint; `git diff --check`; Wrangler dry run and deployment.
 - Live authenticated native D1 rooms, sync/history, unread and tickets returned 200 with `no-store`. Imported conversation history is readable. Apex, canonical www and localhost3002 health returned 200. Management credential was absent from 152 release files and from Worker bindings.
 - The user-authorized full-access credential is stored only in ignored local `.env` as `CLOUDFLARE_MASTER_API_TOKEN`; the old token remains. The CLI wrapper and local development REST bridge consume it server-side. Production receives no management token.
-- Rollback: baseline PostgreSQL release was `a5f33454-9391-47a9-bfa2-15c2f9cb0499`; maintenance versions were `87d41a60-e21a-4c53-b6b5-c8b0c8d6fbc4` (PostgreSQL) and `8d46325d-25a9-4e58-86ac-bd2b4a0660ec` (D1). After D1 accepts writes, pause and reconcile its delta into Neon before switching authority; a Worker rollback alone omits newer data.
-- Remaining follow-up: monitor actual D1/Worker/Neon usage, define backup retention, and design versioned permission replication if eliminating Neon chat reads. No production traffic load test or customer mutation/provider-upload probe was performed; mutation/storage behavior used isolated fixtures and mocked storage.
+- Rollback: baseline PostgreSQL release was `a5f33454-9391-47a9-bfa2-15c2f9cb0499`; maintenance versions were `87d41a60-e21a-4c53-b6b5-c8b0c8d6fbc4` (PostgreSQL) and `8d46325d-25a9-4e58-86ac-bd2b4a0660ec` (D1). Those older Worker versions expect Neon. A rollback must first pause writes and reconcile D1 changes with the current Supabase database, then use an explicitly verified compatible database target; reverting Worker code alone can omit newer data.
+- Remaining follow-up: monitor D1, Worker and Supabase usage, define backup retention, and set a retention date for the read-only Neon snapshot. No production traffic load test or customer mutation/provider-upload probe was performed; mutation/storage behavior used isolated fixtures and mocked storage.
 
 ## Project group conversation card — 2026-10-09
 

@@ -1,0 +1,528 @@
+.neo-role-access-page {
+  width: 100%;
+  padding-bottom: 2rem;
+}
+
+.neo-role-access-card {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 1.5rem;
+  background: linear-gradient(145deg, #f8fafc, #e8eef3);
+  box-shadow:
+    9px 10px 24px rgba(132, 148, 163, 0.15),
+    -8px -8px 20px rgba(255, 255, 255, 0.82);
+}
+
+.neo-role-access-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  border-bottom: 1px solid rgba(64, 82, 99, 0.1);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.74), rgba(237, 242, 246, 0.55));
+}
+
+.neo-role-access-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.neo-role-access-icon {
+  display: flex;
+  height: 3rem;
+  width: 3rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+}
+
+.neo-role-access-icon .material-symbols-outlined {
+  font-size: 1.5rem;
+}
+
+.neo-role-access-title {
+  margin: 0.3rem 0 0;
+  color: var(--workspace-ink);
+  font-size: clamp(1.5rem, 2.8vw, 2rem);
+  font-weight: var(--font-weight-black);
+  letter-spacing: var(--type-tracking-heading);
+  line-height: 1.15;
+}
+
+.neo-role-access-description {
+  max-width: 43rem;
+  margin: 0.65rem 0 0;
+  color: var(--workspace-muted);
+  font-size: var(--type-size-small);
+  line-height: var(--type-leading-reading);
+}
+
+.neo-role-access-summary {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.625rem;
+}
+
+.neo-role-access-summary-item {
+  display: grid;
+  min-width: 5.25rem;
+  justify-items: center;
+  gap: 0.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 1rem;
+  padding: 0.7rem 0.85rem;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow:
+    3px 3px 8px rgba(132, 148, 163, 0.1),
+    -3px -3px 8px rgba(255, 255, 255, 0.7);
+}
+
+.neo-role-access-summary-value {
+  color: var(--workspace-ink);
+  font-size: 1.25rem;
+  font-weight: var(--font-weight-black);
+  line-height: 1;
+}
+
+.neo-role-access-summary-label {
+  color: var(--workspace-muted);
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-black);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.neo-role-access-feedback {
+  margin: 1.25rem 1.5rem 0;
+  border: 1px solid transparent;
+  border-radius: 0.875rem;
+  padding: 0.8rem 1rem;
+  font-size: var(--type-size-label);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.5;
+}
+
+.neo-role-access-feedback--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.neo-role-access-feedback--success {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.neo-role-access-form {
+  padding: 1.5rem;
+}
+
+.neo-role-access-table-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.neo-role-access-table-heading h3 {
+  margin: 0;
+  color: var(--workspace-ink);
+  font-size: 1rem;
+  font-weight: var(--font-weight-black);
+}
+
+.neo-role-access-table-heading p {
+  margin: 0.25rem 0 0;
+  color: var(--workspace-muted);
+  font-size: var(--type-size-caption);
+  line-height: 1.5;
+}
+
+.neo-role-access-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--workspace-muted);
+  font-size: var(--type-size-micro);
+  font-weight: var(--font-weight-bold);
+}
+
+.neo-role-access-hint .material-symbols-outlined {
+  color: #718397;
+  font-size: 1rem;
+}
+
+.neo-role-access-matrix {
+  overflow-x: auto;
+  border: 1px solid rgba(64, 82, 99, 0.12);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.64);
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.neo-role-access-grid-row {
+  display: grid;
+  grid-template-columns: minmax(9.5rem, 1.3fr) repeat(5, minmax(6.75rem, 1fr));
+  min-width: 700px;
+}
+
+.neo-role-access-grid-row--heading {
+  min-height: 3.75rem;
+  background: #e9eff4;
+}
+
+.neo-role-access-column-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 0.4rem;
+  color: #647486;
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-black);
+  letter-spacing: 0.045em;
+  line-height: 1.35;
+  text-align: center;
+  text-transform: uppercase;
+  overflow-wrap: normal;
+}
+
+.neo-role-access-row-heading {
+  position: sticky;
+  z-index: 2;
+  left: 0;
+  border-right: 1px solid rgba(64, 82, 99, 0.1);
+  padding-left: 1rem;
+  background: #e9eff4;
+  color: var(--workspace-ink);
+  font-size: var(--type-size-label);
+  font-weight: var(--font-weight-black);
+  text-align: left;
+}
+
+.neo-role-access-column-heading.neo-role-access-row-heading {
+  justify-content: flex-start;
+}
+
+.neo-role-access-table-body .neo-role-access-grid-row {
+  background: rgba(255, 255, 255, 0.74);
+  transition: background-color 160ms ease;
+}
+
+.neo-role-access-table-body .neo-role-access-grid-row:hover {
+  background: #f8fafc;
+}
+
+.neo-role-access-row-heading:not(.neo-role-access-column-heading) {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  border-right: 1px solid rgba(64, 82, 99, 0.1);
+  border-bottom: 1px solid rgba(64, 82, 99, 0.09);
+  padding: 0.85rem 1rem;
+  background: #fff;
+  color: var(--workspace-ink);
+  font-size: var(--type-size-label);
+  font-weight: var(--font-weight-black);
+  line-height: 1.35;
+}
+
+.neo-role-access-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 3.75rem;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(64, 82, 99, 0.09);
+  border-left: 1px solid rgba(64, 82, 99, 0.06);
+  padding: 0.4rem;
+}
+
+.neo-role-access-option {
+  display: flex;
+  min-height: 2.5rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.neo-role-access-option:hover {
+  background: rgba(237, 242, 246, 0.8);
+}
+
+.neo-role-access-option-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.neo-role-access-restricted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  color: #647486;
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-bold);
+  line-height: 1.25;
+  text-align: center;
+}
+
+.neo-role-access-restricted .material-symbols-outlined {
+  font-size: 0.875rem;
+}
+
+.neo-role-access-checkbox {
+  display: grid;
+  height: 1.2rem;
+  width: 1.2rem;
+  flex: 0 0 auto;
+  appearance: none;
+  place-content: center;
+  border: 1.5px solid #9aa9b5;
+  border-radius: 0.38rem;
+  background: #fff;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.neo-role-access-checkbox::before {
+  width: 0.55rem;
+  height: 0.32rem;
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  content: "";
+  transform: translateY(-0.05rem) rotate(-45deg) scale(0);
+  transition: transform 120ms ease;
+}
+
+.neo-role-access-checkbox:checked {
+  border-color: #111827;
+  background: #111827;
+}
+
+.neo-role-access-checkbox:checked::before {
+  transform: translateY(-0.05rem) rotate(-45deg) scale(1);
+}
+
+.neo-role-access-checkbox:focus-visible {
+  outline: 3px solid rgba(17, 24, 39, 0.2);
+  outline-offset: 2px;
+}
+
+.neo-role-access-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.neo-role-access-footer p {
+  margin: 0;
+  color: var(--workspace-muted);
+  font-size: var(--type-size-caption);
+  line-height: 1.5;
+}
+
+.neo-role-access-save {
+  display: inline-flex;
+  min-height: 2.875rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid #17202a;
+  border-radius: 0.875rem;
+  padding: 0.7rem 1.15rem;
+  background: #17202a;
+  color: #fff;
+  font-size: var(--type-size-label);
+  font-weight: var(--font-weight-black);
+  cursor: pointer;
+  transition: transform 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.neo-role-access-save .material-symbols-outlined {
+  font-size: 1.125rem;
+}
+
+.neo-role-access-save:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: #b51f2b;
+  border-color: #b51f2b;
+  box-shadow: 0 6px 14px rgba(181, 31, 43, 0.18);
+}
+
+.neo-role-access-save:focus-visible {
+  outline: 3px solid rgba(181, 31, 43, 0.25);
+  outline-offset: 3px;
+}
+
+.neo-role-access-save:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+@media (max-width: 1023px) {
+  .neo-role-access-header {
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .neo-role-access-summary {
+    align-self: flex-start;
+  }
+
+  .neo-role-access-matrix {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .neo-role-access-table-head {
+    display: none;
+  }
+
+  .neo-role-access-table-body {
+    display: grid;
+    gap: 0.875rem;
+  }
+
+  .neo-role-access-grid-row,
+  .neo-role-access-table-body .neo-role-access-grid-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgba(64, 82, 99, 0.11);
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 5px 14px rgba(31, 47, 61, 0.045);
+  }
+
+  .neo-role-access-row-heading:not(.neo-role-access-column-heading) {
+    position: static;
+    min-height: 3.25rem;
+    border-right: 0;
+    border-bottom: 1px solid rgba(64, 82, 99, 0.1);
+    padding: 0.75rem 1rem;
+    background: #f2f6f9;
+    font-size: var(--type-size-body);
+  }
+
+  .neo-role-access-cell {
+    min-height: 0;
+    justify-content: stretch;
+    border: 0;
+    padding: 0 0.875rem;
+  }
+
+  .neo-role-access-cell:last-child {
+    padding-bottom: 0.5rem;
+  }
+
+  .neo-role-access-option {
+    min-height: 2.875rem;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid rgba(64, 82, 99, 0.08);
+    border-radius: 0;
+    color: #455463;
+    font-size: var(--type-size-label);
+    font-weight: var(--font-weight-bold);
+    text-align: left;
+  }
+
+  .neo-role-access-option:hover {
+    background: transparent;
+  }
+
+  .neo-role-access-option-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .neo-role-access-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .neo-role-access-form {
+    padding: 1rem;
+  }
+
+  .neo-role-access-header {
+    padding: 1.125rem;
+  }
+
+  .neo-role-access-heading {
+    gap: 0.75rem;
+  }
+
+  .neo-role-access-icon {
+    height: 2.625rem;
+    width: 2.625rem;
+    border-radius: 0.875rem;
+  }
+
+  .neo-role-access-description {
+    font-size: var(--type-size-caption);
+  }
+
+  .neo-role-access-feedback {
+    margin-right: 1rem;
+    margin-left: 1rem;
+  }
+
+  .neo-role-access-table-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .neo-role-access-hint {
+    display: none;
+  }
+
+  .neo-role-access-save {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-role-access-grid-row,
+  .neo-role-access-table-body .neo-role-access-grid-row,
+  .neo-role-access-option,
+  .neo-role-access-checkbox,
+  .neo-role-access-checkbox::before,
+  .neo-role-access-save {
+    transition-duration: 0.01ms;
+  }
+
+  .neo-role-access-save:hover:not(:disabled) {
+    transform: none;
+  }
+}

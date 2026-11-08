@@ -6,7 +6,10 @@ vi.mock("./google-auth.server", () => ({
   readRequiredGoogleEnv: () => ({ clientId: "fixture-client", clientSecret: "fixture-secret", appUrl: "https://edicut.test" }),
 }));
 vi.mock("./youtube-storage.server", () => ({
-  youtubeOAuthConfig: () => ({ clientId: "fixture-client", clientSecret: "fixture-secret", appUrl: "https://edicut.test", redirectUri: "https://edicut.test/api/auth/callback/youtube" }),
+  youtubeOAuthConfig: (context: { cf?: { env?: { APP_URL?: string } } }) => {
+    const appUrl = context?.cf?.env?.APP_URL || "https://edicut.test";
+    return { clientId: "fixture-client", clientSecret: "fixture-secret", appUrl, redirectUri: `${appUrl}/api/auth/callback/youtube` };
+  },
 }));
 import {
   beginGoogleDriveUpload,
@@ -26,16 +29,102 @@ const context = { cf: { env: { YOUTUBE_TOKEN_SECRET: "fixture-drive-token-secret
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("Google Drive storage boundaries", () => {
-  it("uses the narrow app-file scope and binds the admin callback to the expected studio account", async () => {
-    const started = await startGoogleDriveConnection(new Request("https://edicut.test/site/node-logmin/video-storage"), context, adminId);
-    const location = new URL(started.headers.get("Location")!);
-    expect(location.searchParams.get("scope")).toBe(`openid email ${GOOGLE_DRIVE_SCOPE}`);
-    expect(location.searchParams.get("scope")).not.toContain("/auth/drive ");
-    expect(location.searchParams.get("login_hint")).toBe("jaygadorkar@gmail.com");
-    expect(location.searchParams.get("redirect_uri")).toBe("https://edicut.test/api/auth/callback/drive");
-    expect(location.searchParams.get("code_challenge_method")).toBe("S256");
-    expect(started.headers.get("Set-Cookie")).toMatch(/HttpOnly/i);
+  it("reports an unverifiable OAuth session without exposing callback data", async () => {
+    const execute = vi.fn();
+    const response = await completeGoogleDriveConnection(
+      new Request("https://edicut.test/api/auth/callback/drive?state=fixture-state&code=fixture-code"),
+      context,
+      { execute } as unknown as DatabaseClient,
+    );
+
+    const body = await response.text();
+    expect(body).toContain("drive=invalid-state");
+    expect(body).not.toContain("fixture-code");
+    expect(execute).not.toHaveBeenCalled();
   });
+
+  it.each(["http://localhost:3002", "https://edicut.com"])(
+    "uses the %s callback and narrow app-file scope",
+    async (appUrl) => {
+      const scopedContext = {
+        cf: { env: { ...context.cf.env, APP_URL: appUrl } },
+      } as unknown as LoaderContext;
+      const started = await startGoogleDriveConnection(
+        new Request(`${appUrl}/site/node-logmin/video-storage`),
+        scopedContext,
+        adminId,
+      );
+      const location = new URL(started.headers.get("Location")!);
+      expect(location.searchParams.get("scope")).toBe(
+        `openid email ${GOOGLE_DRIVE_SCOPE}`,
+      );
+      expect(location.searchParams.get("scope")).not.toContain("/auth/drive ");
+      expect(location.searchParams.get("login_hint")).toBe("jaygadorkar@gmail.com");
+      expect(location.searchParams.get("redirect_uri")).toBe(
+        `${appUrl}/api/auth/callback/drive`,
+      );
+      expect(location.searchParams.get("code_challenge_method")).toBe("S256");
+      expect(started.headers.get("Set-Cookie")).toMatch(/HttpOnly/i);
+    },
+  );
+
+  it.each(["http://localhost:3002", "https://edicut.com"])(
+    "uses the %s callback when exchanging an OAuth code",
+    async (appUrl) => {
+      const scopedContext = {
+        cf: { env: { ...context.cf.env, APP_URL: appUrl } },
+      } as unknown as LoaderContext;
+      const execute = vi
+        .fn()
+        .mockResolvedValueOnce([{ id: adminId }])
+        .mockResolvedValueOnce([{ provider: "google_drive" }]);
+      const started = await startGoogleDriveConnection(
+        new Request(`${appUrl}/site/node-logmin/video-storage`),
+        scopedContext,
+        adminId,
+      );
+      const state = new URL(started.headers.get("Location")!).searchParams.get(
+        "state",
+      );
+      const cookie = started.headers.get("Set-Cookie")!.split(";")[0];
+      const fetch = vi.fn(
+        async (input: string | URL | Request, _init?: RequestInit) => {
+          const url = String(input);
+          if (url.includes("oauth2.googleapis.com/token"))
+            return Response.json({
+              access_token: "fixture-access",
+              refresh_token: "fixture-refresh",
+              scope: `openid email ${GOOGLE_DRIVE_SCOPE}`,
+            });
+          if (url.includes("openidconnect.googleapis.com"))
+            return Response.json({
+              email: "jaygadorkar@gmail.com",
+              email_verified: true,
+            });
+          throw new Error("Unexpected Google endpoint");
+        },
+      );
+      vi.stubGlobal("fetch", fetch);
+
+      const response = await completeGoogleDriveConnection(
+        new Request(
+          `${appUrl}/api/auth/callback/drive?state=${state}&code=fixture`,
+          { headers: { Cookie: cookie } },
+        ),
+        scopedContext,
+        { execute } as unknown as DatabaseClient,
+      );
+
+      expect(await response.text()).toContain("drive=connected");
+      const tokenRequest = new URLSearchParams(
+        String(fetch.mock.calls[0]?.[1]?.body),
+      );
+      expect(tokenRequest.get("redirect_uri")).toBe(
+        `${appUrl}/api/auth/callback/drive`,
+      );
+      expect(JSON.stringify(execute.mock.calls)).not.toContain("fixture-refresh");
+    },
+  );
 
   it("encrypts Drive refresh tokens independently with authenticated encryption", async () => {
     const first = await encryptGoogleDriveSecret("private-drive-refresh", context);
@@ -121,6 +210,20 @@ describe("Google Drive storage boundaries", () => {
     await expect(getGoogleDriveStorageQuota({ execute } as unknown as DatabaseClient, context)).resolves.toEqual({
       status: "connected",
       quota: { accountUsageBytes: 1200, driveUsageBytes: 1000, limitBytes: null },
+    });
+  });
+
+  it("returns a safe, actionable reason when Google denies quota access", async () => {
+    const encrypted = await encryptGoogleDriveSecret("fixture-drive-refresh", context);
+    const execute = vi.fn().mockResolvedValue([{ refreshToken: encrypted, connectedAt: "2026-10-15T00:00:00Z" }]);
+    const fetch = vi.fn(async (input: string | URL | Request) => String(input).includes("oauth2.googleapis.com/token")
+      ? Response.json({ access_token: "fixture-access" })
+      : Response.json({ error: { message: "Private provider detail" } }, { status: 403 }));
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(getGoogleDriveStorageQuota({ execute } as unknown as DatabaseClient, context)).resolves.toEqual({
+      status: "unavailable",
+      reason: "permission",
     });
   });
 

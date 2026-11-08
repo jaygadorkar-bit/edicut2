@@ -6,8 +6,8 @@ const CONTENT_SECURITY_POLICY = [
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.youtube.com",
+  "form-action 'self' https://accounts.google.com",
+  "script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.youtube.com https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
@@ -17,6 +17,21 @@ const CONTENT_SECURITY_POLICY = [
 ].join("; ");
 
 export function withStaticCacheHeaders(response: Response, pathname: string) {
+  if (response.status >= 400) {
+    // ASSETS errors can inherit the /assets/* immutable rule from _headers.
+    // Never persist a transient missing release chunk in the browser or CDN.
+    const headers = new Headers(response.headers);
+    headers.set("Cache-Control", "no-store");
+    for (const name of ["CDN-Cache-Control", "Cloudflare-CDN-Cache-Control"]) {
+      if (headers.has(name)) headers.set(name, "no-store");
+    }
+    headers.delete("Expires");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
   if (!response.ok) {
     return response;
   }
@@ -50,7 +65,11 @@ export function withSecurityHeaders(response: Response, request: Request, static
   if (!["no-referrer", "same-origin", "strict-origin", "strict-origin-when-cross-origin"].includes(headers.get("Referrer-Policy") ?? "")) {
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   }
-  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  // SPA navigation retains the initial document policy, including sign-in and
+  // public entry pages. Permit same-origin microphone requests on HTML only;
+  // browser consent is still required and no embedded origin is delegated access.
+  const htmlDocument = !staticAsset && /^text\/html(?:;|$)/i.test(headers.get("Content-Type") ?? "");
+  headers.set("Permissions-Policy", `camera=(), microphone=${htmlDocument ? "(self)" : "()"}, geolocation=(), payment=(), usb=()`);
 
   const url = new URL(request.url);
   if (url.protocol === "https:") {

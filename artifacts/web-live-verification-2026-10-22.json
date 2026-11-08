@@ -1,0 +1,216 @@
+{
+  "checkedUtc": "2026-10-22T17:46:58.637570+00:00",
+  "version": "35ff4752-260a-465e-b5b7-6f9c3db2e08a",
+  "previousVersion": "57b30999-9b76-4922-8eaf-3f549d98bcd7",
+  "worker": "edicut-web",
+  "account": "f2c46bb116722bcb7dc4be44e500154b",
+  "branch": "main",
+  "checks": [
+    {
+      "path": "/",
+      "status": 200,
+      "url": "https://edicut.com/",
+      "type": "text/html",
+      "bytes": 121135,
+      "h1Count": 1
+    },
+    {
+      "path": "/affiliate-signup",
+      "status": 200,
+      "url": "https://edicut.com/affiliate-signup",
+      "type": "text/html; charset=utf-8",
+      "bytes": 17353,
+      "h1Count": 1,
+      "setupUnavailableNotice": false
+    },
+    {
+      "path": "/audio/affiliate/affiliate-program-275a0ee6.m4a",
+      "status": 200,
+      "url": "https://edicut.com/audio/affiliate/affiliate-program-275a0ee6.m4a",
+      "type": "audio/mp4",
+      "bytes": 593373,
+      "sha256": "275a0ee629a7eae16784d9559871ca2d3e3e502fab0cab55e536be5a45967dc0",
+      "matchesBuild": true
+    },
+    {
+      "path": "/audio/why-hire-us/edicut-why-hire-us-mix-f3907247.wav",
+      "status": 200,
+      "url": "https://edicut.com/audio/why-hire-us/edicut-why-hire-us-mix-f3907247.wav",
+      "type": "audio/wav",
+      "bytes": 3613484,
+      "sha256": "f39072477122e7c06d0da070769b57afa8834ad47c3feaace415982dda364f96",
+      "matchesBuild": true
+    },
+    {
+      "path": "/blog",
+      "status": 200,
+      "url": "https://edicut.com/blog",
+      "type": "text/html",
+      "bytes": 39283,
+      "h1Count": 1,
+      "newCoversPresent": true
+    },
+    {
+      "path": "/blog/3-reasons-why-you-should-hire-edicut",
+      "status": 200,
+      "url": "https://edicut.com/blog/3-reasons-why-you-should-hire-edicut",
+      "type": "text/html",
+      "bytes": 63747,
+      "h1Count": 1
+    },
+    {
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "status": 200,
+      "url": "https://edicut.com/blog/how-to-choose-youtube-video-editing-service",
+      "type": "text/html",
+      "bytes": 55674,
+      "h1Count": 1
+    },
+    {
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "status": 200,
+      "url": "https://edicut.com/blog/repurpose-youtube-videos-into-shorts",
+      "type": "text/html",
+      "bytes": 56897,
+      "h1Count": 1
+    },
+    {
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "status": 200,
+      "url": "https://edicut.com/blog/youtube-video-editing-brief-checklist",
+      "type": "text/html",
+      "bytes": 55586,
+      "h1Count": 1
+    },
+    {
+      "path": "/contact",
+      "status": 200,
+      "url": "https://edicut.com/contact",
+      "type": "text/html",
+      "bytes": 32990,
+      "h1Count": 1
+    },
+    {
+      "path": "/health",
+      "status": 200,
+      "url": "https://edicut.com/health",
+      "type": "application/json",
+      "bytes": 89,
+      "health": {
+        "ok": true,
+        "service": "web",
+        "database": "connected",
+        "timestamp": "2026-10-22T17:46:56.342Z"
+      }
+    },
+    {
+      "path": "/images/blog/choose-editing-partner.svg",
+      "status": 200,
+      "url": "https://edicut.com/images/blog/choose-editing-partner.svg",
+      "type": "image/svg+xml",
+      "bytes": 20728,
+      "sha256": "b8f96670ac296647480878cfdb0bff110c4a114c9a8ec0617bec958b96b011b7",
+      "matchesBuild": true
+    },
+    {
+      "path": "/images/blog/choose-editing-partner.webp",
+      "status": 200,
+      "url": "https://edicut.com/images/blog/choose-editing-partner.webp",
+      "type": "image/webp",
+      "bytes": 33926,
+      "sha256": "eb1d1256c2fad49c1dcf7366aaf3022d7cc864b95fbc963ed702f8469a717987",
+      "matchesBuild": true
+    },
+    {
+      "path": "/images/blog/creator-video-to-shorts.svg",
+      "status": 200,
+      "url": "https://edicut.com/images/blog/creator-video-to-shorts.svg",
+      "type": "image/svg+xml",
+      "bytes": 29044,
+      "sha256": "de100f52fb731a94028a22fca146ea17a56a45fdb5c6c15a2e96430d34a06900",
+      "matchesBuild": true
+    },
+    {
+      "path": "/images/blog/creator-video-to-shorts.webp",
+      "status": 200,
+      "url": "https://edicut.com/images/blog/creator-video-to-shorts.webp",
+      "type": "image/webp",
+      "bytes": 47936,
+      "sha256": "4e07b84b149c0d479a567c0b1e4d0a6e581b70b639eee933460544bae4296b46",
+      "matchesBuild": true
+    },
+    {
+      "path": "/images/blog/edicut-editing-team.svg",
+      "status": 200,
+      "url": "https://edicut.com/images/blog/edicut-editing-team.svg",
+      "type": "image/svg+xml",
+      "bytes": 42571,
+      "sha256": "7d9c47e14648ef49c51c2bb4d38a392bda57e4315944f98a73d2aa40e90461de",
+      "matchesBuild": true
+    },
+    {
+      "path": "/images/blog/edicut-editing-team.webp",
+      "status": 200,
+      "url": "https://edicut.com/images/blog/edicut-editing-team.webp",
+      "type": "image/webp",
+      "bytes": 40240,
+      "sha256": "e11f214a466516bd1401d00f3ba1e3e10a6a02859a9df725ac5bd2b9abca4d93",
+      "matchesBuild": true
+    },
+    {
+      "path": "/images/blog/video-brief-checklist.svg",
+      "status": 200,
+      "url": "https://edicut.com/images/blog/video-brief-checklist.svg",
+      "type": "image/svg+xml",
+      "bytes": 32009,
+      "sha256": "c63689bc9c978dba26e7b46ec53dd9e23674c8323f5aaf1178b38a16a2df1fdc",
+      "matchesBuild": true
+    },
+    {
+      "path": "/images/blog/video-brief-checklist.webp",
+      "status": 200,
+      "url": "https://edicut.com/images/blog/video-brief-checklist.webp",
+      "type": "image/webp",
+      "bytes": 41366,
+      "sha256": "0a49316781c5387d825bb0f290f912016922825a149b9f944b1631a4c0360270",
+      "matchesBuild": true
+    },
+    {
+      "path": "/portfolio",
+      "status": 200,
+      "url": "https://edicut.com/portfolio",
+      "type": "text/html",
+      "bytes": 59917,
+      "h1Count": 1
+    },
+    {
+      "path": "/pricing",
+      "status": 200,
+      "url": "https://edicut.com/pricing",
+      "type": "text/html",
+      "bytes": 70920,
+      "h1Count": 1
+    },
+    {
+      "path": "/robots.txt",
+      "status": 200,
+      "url": "https://edicut.com/robots.txt",
+      "type": "text/plain; charset=utf-8",
+      "bytes": 63
+    },
+    {
+      "path": "/sitemap.xml",
+      "status": 200,
+      "url": "https://edicut.com/sitemap.xml",
+      "type": "application/xml; charset=utf-8",
+      "bytes": 1717,
+      "allBlogPostsPresent": true
+    },
+    {
+      "path": "www health",
+      "status": 308,
+      "location": "https://edicut.com/health",
+      "apexHealthPassed": true
+    }
+  ]
+}

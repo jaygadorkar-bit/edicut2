@@ -1,0 +1,169 @@
+/* Shared dropdowns use the page's existing control classes; menus escape clipped panels. */
+.site-select {
+  display: contents;
+}
+button.site-select__trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #253449;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms,
+    box-shadow 140ms,
+    background-color 140ms;
+}
+button.site-select__trigger:not(:disabled):hover {
+  border-color: #a59acd;
+}
+button.site-select__trigger[aria-expanded="true"],
+button.site-select__trigger:focus-visible {
+  outline: 2px solid #7157ed;
+  outline-offset: 2px;
+  border-color: #a99ce8;
+}
+button.site-select__trigger[aria-invalid="true"] {
+  border-color: #b93e52;
+}
+button.site-select__trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.site-select__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-select__chevron {
+  flex: 0 0 16px;
+  color: currentColor;
+  opacity: 0.65;
+  transition: transform 140ms;
+}
+[aria-expanded="true"] > .site-select__chevron {
+  transform: rotate(180deg);
+}
+/* A real form control preserves browser validation, reset, autofill, and React form events. */
+select.site-select__native {
+  position: fixed !important;
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  clip-path: inset(50%) !important;
+}
+.site-select__menu {
+  position: fixed;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+  border: 1px solid #e1ddef;
+  border-radius: 14px;
+  background: #fff;
+  color: #253449;
+  box-shadow:
+    0 14px 42px -12px #25213c40,
+    0 3px 8px #25213c0a;
+  font-family: var(--font-family-control, sans-serif);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  list-style: none;
+  isolation: isolate;
+  animation: select-menu-in 120ms ease-out;
+}
+.site-select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.site-select__option > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.site-select__option > svg {
+  flex: 0 0 16px;
+}
+.site-select__option[aria-selected="true"] {
+  color: #5141a9;
+  background: #f2effc;
+  font-weight: 650;
+}
+.site-select__option[data-active="true"] {
+  color: #403189;
+  background: #eae4fc;
+}
+.site-select__option[aria-disabled="true"] {
+  color: #7b8490;
+  background: transparent;
+  cursor: not-allowed;
+  font-weight: 400;
+}
+.site-select__group {
+  padding: 10px 12px 4px;
+  color: #6e647f;
+  font-size: 12px;
+  font-weight: 650;
+}
+.site-select__empty {
+  padding: 16px 12px;
+  color: #687583;
+}
+@keyframes select-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 700px) {
+  button.site-select__trigger {
+    min-height: 44px;
+  }
+  .site-select__option {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button.site-select__trigger,
+  .site-select__chevron {
+    transition: none;
+  }
+  .site-select__menu {
+    animation: none;
+  }
+}

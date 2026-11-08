@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   limit: vi.fn(),
   execute: vi.fn(),
+  voice: vi.fn(),
+  voiceStream: vi.fn(),
 }));
 vi.mock("./project-review.server", async (original) => ({
   ...(await original<typeof import("./project-review.server")>()),
@@ -28,6 +30,7 @@ vi.mock("./project-review-media.server", async (original) => ({
 vi.mock("./usage-protection.server", () => ({
   consumeUsageLimit: mocks.limit,
 }));
+vi.mock("./review-voice.server",()=>({addReviewVoiceComment:mocks.voice,streamReviewVoice:mocks.voiceStream}));
 import {
   projectReviewAction,
   projectReviewLoader,
@@ -68,6 +71,19 @@ beforeEach(() => {
   mocks.remove.mockResolvedValue(undefined);
 });
 describe("review route boundaries", () => {
+  it("allows a reviewer to attach voice instructions without granting video-upload permission", async()=>{
+    const form=new FormData();Object.entries({intent:"add-comment",versionId,commentId:"66666666-6666-4666-8666-666666666666",body:"Voice instruction",voiceDurationMs:"2000"}).forEach(([k,v])=>form.set(k,v));
+    form.set("voice",new File(["synthetic recording"],"note.webm",{type:"audio/webm"}));
+    mocks.voice.mockResolvedValue({success:"Comment added."});
+    expect(await projectReviewAction(args(request(form)),false)).toHaveProperty("success");
+    expect(mocks.voice).toHaveBeenCalledOnce();expect(mocks.upload).not.toHaveBeenCalled();
+  });
+  it("rate limits private voice playback before opening storage",async()=>{
+    mocks.limit.mockResolvedValue("limited");
+    const request=new Request(`http://localhost:3002/api/project-reviews/${projectId}?voice=66666666-6666-4666-8666-666666666666`);
+    await expect(projectReviewLoader(args(request),false)).rejects.toMatchObject({status:429});
+    expect(mocks.voiceStream).not.toHaveBeenCalled();
+  });
   it("rejects cross-site requests before authentication or uploads", async () => {
     const result = await projectReviewAction(
       args(

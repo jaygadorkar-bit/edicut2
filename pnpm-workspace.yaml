@@ -7,3 +7,18 @@ allowBuilds:
   sharp: true
   workerd: true
   unrs-resolver: false
+
+peerDependencyRules:
+  allowedVersions:
+    '@react-router/cloudflare>@cloudflare/workers-types': '5'
+
+overrides:
+  'next>@next/swc-linux-x64-gnu': '-'
+  '@babel/core@<8.0.0': 7.29.6
+  'brace-expansion@<1.1.21': 1.1.21
+  'browserslist@<4.28.7': 4.28.7
+  'esbuild@<0.25.0': 0.25.12
+  'js-yaml@<4.3.2': 4.3.2
+  'source-map-js@<1.2.2': 1.2.2
+  'valibot@<1.4.2': 1.4.2
+  'sharp@<0.35.5': 0.35.5

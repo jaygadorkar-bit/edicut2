@@ -1,6 +1,8 @@
+import { Select } from "./Select";
+import { ChatMessageActions } from "./ChatMessageActions";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from 'react-router';
-import { ArrowLeft, Check, CheckCheck, Headphones, LockKeyhole, MessageCircle, MoreHorizontal, Paperclip, Plus, Search, Send, Smile, Ticket, UserRound, Users, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Headphones, LockKeyhole, MessageCircle, Paperclip, Plus, Search, Send, Smile, Ticket, UserRound, Users, X } from "lucide-react";
 import { canSendChatMessage, chatIsStaff, chatRoleLabel, chatRoomTitle, chatSenderName, formatChatLastActive, isChatParticipantRecentlyActive, mergeChatMessages, validateSupportTicket, TICKET_CATEGORIES, TICKET_PRIORITIES, TICKET_STATUSES, type ChatActor, type ChatHistory, type ChatMessage, type ChatParticipant, type ChatPerson, type ChatReceipt, type ChatRoom, type ChatSnapshot, type ChatState, type ChatView } from "../lib/chat";
 import type { WorkspaceNavigationPanel } from "./WorkspaceShell";
 import { refreshChatUnreadCounts } from "../lib/use-chat-unread-counts";
@@ -28,6 +30,22 @@ async function chatRequest<T>(scope: string, operation: string, values: Record<s
   return result as T;
 }
 const makeForm = (values: Record<string, string>) => { const form = new FormData(); for (const [key, value] of Object.entries(values)) form.set(key, value); return form; };
+const CHAT_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  const size = bytes / (1024 * 1024);
+  return size >= 1024 ? `${(size / 1024).toFixed(size >= 10 * 1024 ? 0 : 1)} GB` : `${size.toFixed(size >= 100 ? 0 : 1)} MB`;
+}
+function savedChatUpload(actorKey: string, roomId: string, file: File) {
+  const key = `chat-upload:${actorKey}:${roomId}`;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(key) ?? "null") as { id?: unknown; nonce?: unknown; name?: unknown; type?: unknown; size?: unknown; lastModified?: unknown } | null;
+    return saved && typeof saved.id === "string" && /^[0-9a-f-]{36}$/i.test(saved.id) && typeof saved.nonce === "string" && /^[0-9a-f-]{36}$/i.test(saved.nonce) && saved.name === file.name && saved.type === file.type && saved.size === file.size && saved.lastModified === file.lastModified ? { id: saved.id, nonce: saved.nonce } : null;
+  } catch { return null; }
+}
+function clearSavedChatUpload(actorKey: string, roomId: string) {
+  try { sessionStorage.removeItem(`chat-upload:${actorKey}:${roomId}`); } catch { /* Keep the in-memory upload reference. */ }
+}
 function Initials({ name, support = false }: { name: string; support?: boolean }) {
   return <span className={`chat-avatar ${support ? "chat-avatar--support" : ""}`} aria-hidden="true">{support ? <Headphones size={20} /> : name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase() || <UserRound size={20} />}</span>;
 }
@@ -51,7 +69,10 @@ function useDebounced(value: string) { const [settled, set] = useState(value); u
 export function ChatWorkspace({ actor, initialState, view = 'projects', renderShell }: { actor: ChatActor; initialState: ChatState; view?: ChatView; renderShell: (content: ReactNode, navigation: WorkspaceNavigationPanel) => ReactNode }) {
   const scope = actor.admin ? "admin" : "client";
   const ticketView = view === 'tickets', staff = chatIsStaff(actor), location = useLocation();
-  const [state, setState] = useState(initialState), [selected, setSelected] = useState<string | null>(initialState.rooms[0]?.id ?? null);
+  const [state, setState] = useState(initialState), [selected, setSelected] = useState<string | null>(() => {
+    const requested=new URLSearchParams(location.search).get("room");
+    return initialState.rooms.find(room=>room.id===requested)?.id ?? initialState.rooms[0]?.id ?? null;
+  });
   const [search, setSearch] = useState(""), [filter, setFilter] = useState("all"), [error, setError] = useState("");
   const [typing, setTyping] = useState<{ roomId: string; name: string; expires: number } | null>(null);
   const [historySearch, setHistorySearch] = useState(""), [snapshot, setSnapshot] = useState<{ history: ChatHistory; search: string } | null>(null);
@@ -114,18 +135,28 @@ export function ChatWorkspace({ actor, initialState, view = 'projects', renderSh
       <div className="chat-rooms">
         <div className="chat-rooms-heading"><h2 className={collapsed ? "sr-only" : ""}>{ticketView ? staff ? 'Support queue' : 'Your tickets' : actor.admin ? "Client groups" : staff ? "Conversations" : "Your conversations"}</h2>{(ticketView ? !staff : actor.admin) && !collapsed ? <button className="chat-icon-button" title={ticketView ? 'Start a ticket' : 'Start a conversation'} aria-label={ticketView ? 'Start a ticket' : 'Start a conversation'} disabled={!state.ready} onClick={() => { closeMenu(); setShowNew(true); }}>{ticketView ? <Plus size={19} /> : <Users size={19} />}</button> : null}</div>
         {staff || ticketView ? <label className="chat-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label={ticketView ? 'Search tickets' : 'Search conversations'} placeholder={ticketView ? 'Search tickets' : 'Search conversations'} value={search} maxLength={120} onChange={e => { setSearch(e.target.value); }} /></label> : null}
-        {ticketView && !collapsed ? <label className="ticket-filter"><span>Ticket status</span><select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All tickets ({state.ticketCounts?.all ?? 0})</option><option value="open">Open tickets</option>{Object.entries(TICKET_STATUSES).map(([value, label]) => <option key={value} value={value}>{label} ({state.ticketCounts?.[value as keyof typeof TICKET_STATUSES] ?? 0})</option>)}</select></label> : null}
+        {ticketView && !collapsed ? <label className="ticket-filter"><span>Ticket status</span><Select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All tickets ({state.ticketCounts?.all ?? 0})</option><option value="open">Open tickets</option>{Object.entries(TICKET_STATUSES).map(([value, label]) => <option key={value} value={value}>{label} ({state.ticketCounts?.[value as keyof typeof TICKET_STATUSES] ?? 0})</option>)}</Select></label> : null}
         <div className="chat-room-list">{state.rooms.map(item => {
           const groupParticipants = item.participants ?? [];
-          const hasRecentActivity = groupParticipants.some(participant => actor.admin && participant.role === "admin" || isChatParticipantRecentlyActive(participant.lastActiveAt));
+          const showCurrentManager = item.kind === "manager" && actor.role === "project_manager" && item.managerId === actor.id
+            && !groupParticipants.some(participant => participant.key === actor.key);
+          const visibleGroupParticipants = showCurrentManager
+            ? [...groupParticipants, { key: actor.key, name: chatSenderName(actor.role, actor.name), role: actor.role, avatarUrl: null, lastActiveAt: null }]
+            : groupParticipants;
+          // The room data omits the signed-in manager; add them back for the participant list.
+          const groupMemberCount = groupParticipants.length + (actor.admin ? 0 : 1);
           return <button type="button" key={item.id} className={`chat-room ${item.kind === 'manager' ? 'chat-room--project' : ''} ${selected === item.id ? "is-selected" : ""} ${item.kind === 'manager' && !item.projectUnlocked ? 'is-locked' : ''}`} aria-pressed={selected === item.id} aria-label={collapsed ? `${chatRoomTitle(actor, item)}${item.unreadCount ? `, ${item.unreadCount} unread messages` : ""}` : undefined} title={collapsed ? chatRoomTitle(actor, item) : undefined} onClick={() => { pickRoom(item.id); closeMenu(); }}>
             {item.kind === 'manager' && item.projectUnlocked ? <>
               <span className="chat-room-project-collapsed-avatar"><Initials name={staff ? item.clientName : item.managerName ?? "Project manager"} /></span>
-              <span className="chat-room-project-heading"><span className="chat-room-project-title">{chatRoomTitle(actor, item)}</span></span>
+              <span className="chat-room-project-heading">
+                <span className="chat-room-project-title">{chatRoomTitle(actor, item)}</span>
+                <span className="chat-room-member-count" aria-label={`${groupMemberCount} members`}>
+                  {groupMemberCount}<Users size={12} aria-hidden="true" />
+                </span>
+              </span>
               {item.unreadCount > 0 ? <span className="chat-unread" aria-label={`${item.unreadCount} unread messages`}>{item.unreadCount > 99 ? "99+" : item.unreadCount}</span> : null}
-              <span className="chat-room-member-count"><span className={`chat-room-member-dot ${hasRecentActivity ? "has-recent-activity" : ""}`} aria-hidden="true" />{groupParticipants.length} {groupParticipants.length === 1 ? "Member" : "Members"}</span>
               <span className="chat-room-participants" aria-label="Group participants">
-                {groupParticipants.length ? groupParticipants.map(participant => <ChatRoomParticipant key={participant.key} participant={participant} activeNow={actor.admin && participant.role === "admin"} />) : <span className="chat-room-participants-empty">No other participants yet</span>}
+                {visibleGroupParticipants.length ? visibleGroupParticipants.map(participant => <ChatRoomParticipant key={participant.key} participant={participant} activeNow={participant.key === actor.key || actor.admin && participant.role === "admin"} />) : <span className="chat-room-participants-empty">No other participants yet</span>}
                 {!item.managerActive && !staff ? <span className="chat-room-pending">Manager pending</span> : null}
               </span>
             </> : <>
@@ -169,11 +200,13 @@ function ChatConversation({ actor, roomId, room: initialRoom, scope, snapshot, s
   const [room, setRoom] = useState(initialRoom), [messages, setMessages] = useState<VisibleChatMessage[]>([]), [receipts, setReceipts] = useState<ChatReceipt[]>([]), [hasOlder, setHasOlder] = useState(false);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState(""), [draft, setDraft] = useState(drafts.get(roomId) ?? ""), [file, setFile] = useState<File | null>(null);
   const [search, setSearch] = useState(""), [showSearch, setShowSearch] = useState(false), [emoji, setEmoji] = useState(false), [edit, setEdit] = useState<ChatMessage | null>(null), [editBody, setEditBody] = useState("");
-  const [menu, setMenu] = useState<string | null>(null), [deleteId, setDeleteId] = useState<string | null>(null), [hasNew, setHasNew] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null), [removeAttachmentId, setRemoveAttachmentId] = useState<string | null>(null), [hasNew, setHasNew] = useState(false);
+  const [cleanupPending, setCleanupPending] = useState<{ intent: "delete" | "remove-attachment"; messageId: string } | null>(null);
+  const moderationFocusRef = useRef<HTMLElement | null>(null);
   const [announcement, setAnnouncement] = useState("");
-  const [atBottom, setAtBottom] = useState(true), [loadingOlder, setLoadingOlder] = useState(false), [sending, setSending] = useState(false);
+  const [atBottom, setAtBottom] = useState(true), [loadingOlder, setLoadingOlder] = useState(false), [sending, setSending] = useState(false), [uploadProgress, setUploadProgress] = useState<{ loaded: number; total: number } | null>(null);
   const settledSearch = useDebounced(search), listRef = useRef<HTMLDivElement>(null), composerRef = useRef<HTMLTextAreaElement>(null), fileRef = useRef<HTMLInputElement>(null);
-  const loadedRef = useRef(false), nearBottomRef = useRef(true), messageRef = useRef(messages), latestReadRef = useRef(""), nonceRef = useRef<string | null>(null), typingAtRef = useRef(0);
+  const loadedRef = useRef(false), nearBottomRef = useRef(true), messageRef = useRef(messages), latestReadRef = useRef(""), nonceRef = useRef<string | null>(null), uploadIdRef = useRef<string | null>(null), typingAtRef = useRef(0);
   const searchRef = useRef(settledSearch);
   const currentSearchRef = useRef(settledSearch), mountedRef = useRef(true), unavailableRef = useRef(onUnavailable);
   currentSearchRef.current = settledSearch; unavailableRef.current = onUnavailable;
@@ -228,7 +261,7 @@ function ChatConversation({ actor, roomId, room: initialRoom, scope, snapshot, s
     const timer = setTimeout(() => { if (document.visibilityState !== "visible" || !nearBottomRef.current) return; latestReadRef.current = messageId; void chatRequest(scope, "", {}, makeForm({ intent: "read", roomId, messageId })).then(onChange).catch(() => { latestReadRef.current = ""; }); }, 700);
     return () => clearTimeout(timer);
   }, [messages, settledSearch, scope, roomId, onChange, atBottom, room?.unreadCount]);
-  const updateDraft = (value: string) => { setDraft(value); drafts.set(roomId, value); nonceRef.current = null;
+  const updateDraft = (value: string) => { setDraft(value); drafts.set(roomId, value); if (!uploadIdRef.current) nonceRef.current = null;
     try { if (value) sessionStorage.setItem(`chat-draft:${actor.key}:${roomId}`, value); else sessionStorage.removeItem(`chat-draft:${actor.key}:${roomId}`); } catch { /* Keep the in-memory draft. */ }
     if (value.trim() && room && canSendChatMessage(actor, room) && Date.now() - typingAtRef.current > 6000) { typingAtRef.current = Date.now(); void chatRequest(scope, "", {}, makeForm({ intent: "typing", roomId })).catch(() => {}); }
   };
@@ -236,24 +269,48 @@ function ChatConversation({ actor, roomId, room: initialRoom, scope, snapshot, s
     event?.preventDefault(); if (busy || (!draft.trim() && !file) || !room || !canSendChatMessage(actor, room)) return;
     setBusy(true); setSending(true); setError(""); const nonce = nonceRef.current ?? crypto.randomUUID(); nonceRef.current = nonce;
     const submittedDraft = draft, submittedFile = file;
-    const form = makeForm({ intent: "send", roomId, body: submittedDraft, nonce }); if (submittedFile) form.set("file", submittedFile);
+    let uploadId: string | null = null;
     const pending: VisibleChatMessage = { id: `pending:${nonce}`, roomId, actorKey: actor.key, senderName: chatSenderName(actor.role, actor.name), senderRole: actor.role, body: submittedDraft.trim(), clientNonce: nonce, createdAt: new Date().toISOString(), editedAt: null, deletedAt: null, attachment: submittedFile ? { publicId: "", name: submittedFile.name, mime: submittedFile.type, bytes: submittedFile.size } : null, deliveryState: "sending" };
     setMessages(current => mergeChatMessages(current, [pending])); setDraft(""); drafts.delete(roomId); try { sessionStorage.removeItem(`chat-draft:${actor.key}:${roomId}`); } catch {} setFile(null); setEmoji(false); nearBottomRef.current = true;
     requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; });
     try {
+      if (submittedFile) {
+        uploadId = uploadIdRef.current ?? crypto.randomUUID(); uploadIdRef.current = uploadId;
+        try { sessionStorage.setItem(`chat-upload:${actor.key}:${roomId}`, JSON.stringify({ id: uploadId, nonce, name: submittedFile.name, type: submittedFile.type, size: submittedFile.size, lastModified: submittedFile.lastModified })); } catch { /* Upload still works for this open conversation. */ }
+        await chatRequest(scope, "", {}, makeForm({ intent: "upload-start", roomId, uploadId, name: submittedFile.name, mime: submittedFile.type, bytes: String(submittedFile.size) }));
+        const status = await chatRequest<{ offset: number }>(scope, "", {}, makeForm({ intent: "upload-status", roomId, uploadId }));
+        let offset = status.offset;
+        setUploadProgress({ loaded: offset, total: submittedFile.size });
+        while (offset < submittedFile.size) {
+          const end = Math.min(offset + CHAT_UPLOAD_CHUNK_BYTES, submittedFile.size), chunk = submittedFile.slice(offset, end);
+          const query = new URLSearchParams({ scope, operation: "upload-chunk", roomId, uploadId });
+          const response = await fetch(`/api/chat?${query}`, {
+            method: "POST", body: chunk, cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(120_000),
+            headers: { Accept: "application/json", "Content-Type": "application/octet-stream", "X-Chat-Upload-Offset": String(offset) },
+          });
+          const result = await response.json() as { error?: string; offset?: number };
+          if (!response.ok) throw new ChatRequestError(result.error ?? "The file part could not be uploaded. Retry to resume.", response.status);
+          if (!Number.isSafeInteger(result.offset) || (result.offset as number) <= offset) throw new Error("Google Drive did not confirm file progress. Retry to resume the upload.");
+          offset = result.offset as number; setUploadProgress({ loaded: offset, total: submittedFile.size });
+        }
+      }
+      const form = makeForm({ intent: "send", roomId, body: submittedDraft, nonce, ...(uploadId ? { uploadId } : {}) });
       const result = await chatRequest<{ message: ChatMessage }>(scope, "", {}, form);
       setMessages(current => mergeVisibleChatMessages(current, [result.message]));
       if (nonceRef.current === nonce) nonceRef.current = null;
+      if (uploadId) { uploadIdRef.current = null; clearSavedChatUpload(actor.key, roomId); }
+      setUploadProgress(null);
       onChange(); requestAnimationFrame(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; composerRef.current?.focus({ preventScroll: true }); });
     } catch (e) {
       setMessages(current => current.filter(message => message.clientNonce !== nonce || message.deliveryState !== "sending"));
       setDraft(submittedDraft); drafts.set(roomId, submittedDraft); try { sessionStorage.setItem(`chat-draft:${actor.key}:${roomId}`, submittedDraft); } catch {}
+      if (e instanceof ChatRequestError && e.status === 410) { uploadIdRef.current = null; clearSavedChatUpload(actor.key, roomId); setUploadProgress(null); }
       setFile(submittedFile); setError((e as Error).message);
     } finally { setBusy(false); setSending(false); }
   };
-  const changeMessage = async (intent: "edit" | "delete", messageId: string, body = "") => {
+  const changeMessage = async (intent: "edit" | "delete" | "remove-attachment", messageId: string, body = "") => {
     if (busy) return; setBusy(true); setError("");
-    try { const result = await chatRequest<{ message: ChatMessage }>(scope, "", {}, makeForm({ intent, roomId, messageId, body })); setMessages(current => mergeChatMessages(current, [result.message])); setEdit(null); setDeleteId(null); setMenu(null); onChange(); }
+    try { const result = await chatRequest<{ message: ChatMessage; cleanupPending?: boolean }>(scope, "", {}, makeForm({ intent, roomId, messageId, body })); setMessages(current => mergeChatMessages(current, [result.message])); setEdit(null); setDeleteId(null); setRemoveAttachmentId(null); setCleanupPending(previous => result.cleanupPending && intent !== "edit" ? { intent, messageId } : previous?.messageId === messageId ? null : previous); onChange(); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
   const sendAllowed = Boolean(room && canSendChatMessage(actor, room));
@@ -275,35 +332,37 @@ function ChatConversation({ actor, roomId, room: initialRoom, scope, snapshot, s
           <article className={`chat-message ${own ? "chat-message--own" : ""}`} aria-label={`Message from ${senderName}`}>
             {!own ? <span className="chat-sender">{senderName}<span>{chatRoleLabel(message.senderRole)}</span></span> : null}
             <div className={`chat-bubble ${message.deletedAt ? "chat-bubble--deleted" : ""}`}>
-              {message.deletedAt ? <p>Message deleted</p> : <>{message.body ? <MessageBody body={message.body} /> : null}{message.attachment ? message.deliveryState === "sending" ? <span className="chat-attachment"><Paperclip size={18} aria-hidden="true" /><span>{message.attachment.name}<small>{(message.attachment.bytes / 1024).toFixed(0)} KB · Uploading…</small></span></span> : <a className="chat-attachment" href={download} target="_blank" rel="noopener noreferrer"><Paperclip size={18} aria-hidden="true" /><span>{message.attachment.name}<small>{(message.attachment.bytes / 1024).toFixed(0)} KB · Download</small></span></a> : null}</>}
+              {message.deletedAt ? <p>Message deleted</p> : <>{message.body ? <MessageBody body={message.body} /> : null}{message.attachment ? message.deliveryState === "sending" ? <span className="chat-attachment"><Paperclip size={18} aria-hidden="true" /><span>{message.attachment.name}<small>{formatFileSize(message.attachment.bytes)} · Uploading to Google Drive</small></span></span> : <>{message.attachment.mime.startsWith("image/") ? <a className="chat-attachment-preview" href={download} target="_blank" rel="noopener noreferrer"><img src={download} alt={message.attachment.name} loading="lazy" decoding="async" /></a> : message.attachment.mime.startsWith("video/") ? <video className="chat-attachment-video" src={download} controls preload="metadata" playsInline aria-label={message.attachment.name} /> : null}<a className="chat-attachment" href={download} target="_blank" rel="noopener noreferrer"><Paperclip size={18} aria-hidden="true" /><span>{message.attachment.name}<small>{formatFileSize(message.attachment.bytes)} · Open or download</small></span></a></> : null}</>}
             </div>
-            <div className="chat-message-meta">{message.deliveryState === "sending" ? <span className="chat-message-pending" role="status">Sending…</span> : <time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</time>}{message.editedAt && !message.deletedAt ? <span>Edited</span> : null}{own && !message.deletedAt && message.deliveryState !== "sending" ? <span className={`chat-delivery ${seen.length ? "is-read" : ""}`} title={seen.length ? `Read by ${readerNames.join(", ")}` : "Saved and sent"}>{seen.length ? <CheckCheck size={15} aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}<span className="sr-only">{seen.length ? "Read" : "Sent"}</span></span> : null}
-              {own && !message.deletedAt && message.deliveryState !== "sending" && sendAllowed ? <div className="chat-message-actions"><button className="chat-message-menu-trigger" aria-label="Message options" aria-expanded={menu === message.id} onClick={() => setMenu(menu === message.id ? null : message.id)}><MoreHorizontal size={16} /></button>{menu === message.id ? <div className="chat-message-menu">{message.body ? <button onClick={() => { setEdit(message); setEditBody(message.body); setMenu(null); }}>Edit message</button> : null}<button onClick={() => { setDeleteId(message.id); setMenu(null); }}>Delete message</button><button onClick={() => setMenu(null)}>Close</button></div> : null}</div> : null}
+            <div className="chat-message-meta">{message.deliveryState === "sending" ? <span className="chat-message-pending" role="status">{uploadProgress && uploadProgress.total ? `Uploading to Google Drive · ${Math.min(100, Math.floor(uploadProgress.loaded / uploadProgress.total * 100))}%` : "Sending…"}</span> : <time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</time>}{message.editedAt && !message.deletedAt ? <span>Edited</span> : null}{own && !message.deletedAt && message.deliveryState !== "sending" ? <span className={`chat-delivery ${seen.length ? "is-read" : ""}`} title={seen.length ? `Read by ${readerNames.join(", ")}` : "Saved and sent"}>{seen.length ? <CheckCheck size={15} aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}<span className="sr-only">{seen.length ? "Read" : "Sent"}</span></span> : null}
+              <ChatMessageActions actor={actor} room={room} message={message} pending={message.deliveryState === "sending"} disabled={busy} onEdit={() => { setError(""); setEdit(message); setEditBody(message.body); }} onDelete={trigger => { moderationFocusRef.current = trigger; setError(""); setDeleteId(message.id); }} onRemoveAttachment={trigger => { moderationFocusRef.current = trigger; setError(""); setRemoveAttachmentId(message.id); }} />
             </div>
           </article></div>;
       })}
     </div>
     {hasNew ? <button className="chat-new-messages" onClick={() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; nearBottomRef.current = true; setAtBottom(true); setHasNew(false); }}>New messages ↓</button> : null}
     <p className="chat-typing" role="status" aria-live="polite">{typing ? `${typing} is typing…` : ""}</p>
-    {error ? <div className="chat-conversation-error" role="alert">{error}<button className="chat-text-button" onClick={() => void fetchHistory().catch(e => setError((e as Error).message))}>Refresh conversation</button>{error.includes("unavailable") ? <button className="chat-text-button" onClick={onUnavailable}>Return to inbox</button> : null}</div> : null}
+    {cleanupPending ? <div className="chat-conversation-error" role="status">The attachment is hidden from the conversation. Storage cleanup is still pending.<button type="button" className="chat-text-button" disabled={busy} onClick={() => void changeMessage(cleanupPending.intent, cleanupPending.messageId)}>{busy ? "Retrying…" : "Retry storage cleanup"}</button></div> : null}
+    {error && !deleteId && !removeAttachmentId ? <div className="chat-conversation-error" role="alert">{error}<button className="chat-text-button" onClick={() => void fetchHistory().catch(e => setError((e as Error).message))}>Refresh conversation</button>{error.includes("unavailable") ? <button className="chat-text-button" onClick={onUnavailable}>Return to inbox</button> : null}</div> : null}
     {edit ? <form className="chat-edit-form" onSubmit={e => { e.preventDefault(); void changeMessage("edit", edit.id, editBody); }}><label htmlFor="chat-edit-body">Edit your message</label><textarea id="chat-edit-body" autoFocus value={editBody} maxLength={4000} onChange={e => setEditBody(e.target.value)} /><div><button type="button" className="chat-text-button" onClick={() => setEdit(null)} disabled={busy}>Cancel</button><button className="chat-primary-button" disabled={busy || !editBody.trim()}>Save edit</button></div></form> : <form className="chat-composer" onSubmit={send}>
-      {file ? <div className="chat-file-draft"><Paperclip size={16} aria-hidden="true" /><span>{file.name}</span><button type="button" aria-label="Remove attachment" disabled={busy} onClick={() => { setFile(null); nonceRef.current = null; }}><X size={16} /></button></div> : null}
+      {file ? <div className="chat-file-draft"><Paperclip size={16} aria-hidden="true" /><span>{file.name}<small>{formatFileSize(file.size)} · Uncompressed · shared 10 GB client limit</small></span><button type="button" aria-label="Remove attachment" disabled={busy} onClick={() => { setFile(null); nonceRef.current = null; uploadIdRef.current = null; setUploadProgress(null); clearSavedChatUpload(actor.key, roomId); }}><X size={16} /></button></div> : null}
       {emoji ? <div className="chat-emoji-picker" aria-label="Choose an emoji">{["😊", "👍", "❤️", "🎉", "🙏", "✅", "👋", "🔥"].map(item => <button key={item} type="button" aria-label={`Insert ${item}`} onClick={() => { updateDraft(`${draft}${item}`); setEmoji(false); composerRef.current?.focus(); }}>{item}</button>)}</div> : null}
       <label className="sr-only" htmlFor="chat-draft">{room?.ticket ? 'Ticket reply' : 'Message'}</label><textarea id="chat-draft" ref={composerRef} value={draft} rows={2} maxLength={4000} disabled={busy || !sendAllowed} placeholder={sendAllowed ? room?.ticket ? 'Write a reply…' : "Write a message…" : room?.ticket?.status === 'closed' ? 'This ticket is closed. Reopen it to reply.' : room?.clientActive === false ? "This client account is inactive" : "Project manager is available after purchasing a subscription"} onChange={e => updateDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} />
-      <div className="chat-composer-tools"><div><input type="file" ref={fileRef} hidden accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e => { const candidate = e.target.files?.[0]; e.target.value = ""; if (candidate) { if (!candidate.size || candidate.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(candidate.type)) setError("Choose a non-empty JPG, PNG, WebP, or PDF up to 5 MB."); else { setFile(candidate); nonceRef.current = null; setError(""); } } }} /><button type="button" className="chat-icon-button" aria-label="Attach a file" title="JPG, PNG, WebP, or PDF · up to 5 MB" disabled={busy || !sendAllowed} onClick={() => fileRef.current?.click()}><Paperclip size={19} /></button><button type="button" className="chat-icon-button" aria-label="Choose an emoji" aria-expanded={emoji} disabled={busy || !sendAllowed} onClick={() => setEmoji(v => !v)}><Smile size={19} /></button><span className="chat-composer-hint">Shift + Enter for a new line</span></div><button className="chat-send" disabled={busy || !sendAllowed || (!draft.trim() && !file)}><span>{sending ? "Sending…" : "Send"}</span><Send size={17} aria-hidden="true" /></button></div>
+      <div className="chat-composer-tools"><div><input type="file" ref={fileRef} hidden accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,video/mp4,video/webm" onChange={e => { const candidate = e.target.files?.[0]; e.target.value = ""; if (candidate) { if (!candidate.size || candidate.size > 10 * 1024 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "video/mp4", "video/webm"].includes(candidate.type)) setError("Choose a JPG, PNG, WebP, GIF, PDF, MP4, or WebM up to the 10 GB client limit."); else { setFile(candidate); const savedUpload = savedChatUpload(actor.key, roomId, candidate); nonceRef.current = savedUpload?.nonce ?? null; uploadIdRef.current = savedUpload?.id ?? null; setUploadProgress(null); setError(""); } } }} /><button type="button" className="chat-icon-button" aria-label="Attach a file" title="Images, PDF, MP4, and WebM · original quality · 10 GB per client" disabled={busy || !sendAllowed} onClick={() => fileRef.current?.click()}><Paperclip size={19} /></button><button type="button" className="chat-icon-button" aria-label="Choose an emoji" aria-expanded={emoji} disabled={busy || !sendAllowed} onClick={() => setEmoji(v => !v)}><Smile size={19} /></button><span className="chat-composer-hint">Shift + Enter for a new line</span></div><button className="chat-send" disabled={busy || !sendAllowed || (!draft.trim() && !file)}><span>{uploadProgress ? `${Math.min(100, Math.floor(uploadProgress.loaded / uploadProgress.total * 100))}%` : sending ? "Sending…" : "Send"}</span><Send size={17} aria-hidden="true" /></button></div>
     </form>}
-    {deleteId ? <ChatDialog title="Delete this message?" onClose={() => !busy && setDeleteId(null)}><p>The message and its attachment will be removed for everyone in this conversation.</p><div className="chat-dialog-actions"><button className="chat-text-button" disabled={busy} onClick={() => setDeleteId(null)}>Keep message</button><button className="chat-primary-button" disabled={busy} onClick={() => void changeMessage("delete", deleteId)}>Delete message</button></div></ChatDialog> : null}
+    {deleteId ? <ChatDialog title="Delete this message?" returnFocus={moderationFocusRef.current} onClose={() => !busy && setDeleteId(null)}><p>The message and its attachment will be removed for everyone in this conversation. This cannot be undone.</p>{error ? <p className="chat-dialog-error" role="alert">{error}</p> : null}<div className="chat-dialog-actions"><button type="button" className="chat-text-button" disabled={busy} onClick={() => setDeleteId(null)}>Keep message</button><button type="button" className="chat-primary-button chat-danger-button" disabled={busy} onClick={() => void changeMessage("delete", deleteId)}>{busy ? "Deleting…" : "Delete message"}</button></div></ChatDialog> : null}
+    {removeAttachmentId ? <ChatDialog title="Remove this attachment?" returnFocus={moderationFocusRef.current} onClose={() => !busy && setRemoveAttachmentId(null)}><p>{messages.find(message => message.id === removeAttachmentId)?.attachment?.name ?? "This file"} will be removed for everyone. Message text will stay. If the message only contains this attachment, it will show as deleted. This cannot be undone.</p>{error ? <p className="chat-dialog-error" role="alert">{error}</p> : null}<div className="chat-dialog-actions"><button type="button" className="chat-text-button" disabled={busy} onClick={() => setRemoveAttachmentId(null)}>Keep attachment</button><button type="button" className="chat-primary-button chat-danger-button" disabled={busy} onClick={() => void changeMessage("remove-attachment", removeAttachmentId)}>{busy ? "Removing…" : "Remove attachment"}</button></div></ChatDialog> : null}
   </div>;
 }
 
 function ManagerAssignment({ room, scope, onChange }: { room: ChatRoom; scope: string; onChange: () => void }) {
   const [people, setPeople] = useState<ChatPerson[]>([]), [peopleLoaded, setPeopleLoaded] = useState(false), [manager, setManager] = useState(room.managerId ?? ""), [busy, setBusy] = useState(false), [error, setError] = useState("");
   useEffect(() => { const abort = new AbortController(); void chatRequest<{ managers: ChatPerson[] }>(scope, "people", {}, undefined, abort.signal).then(result => { if (!abort.signal.aborted) { setPeople(result.managers); setPeopleLoaded(true); } }).catch(e => { if (!abort.signal.aborted) { setError((e as Error).message); setPeopleLoaded(true); } }); return () => abort.abort(); }, [scope]);
-  return <form className="chat-assignment" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(""); try { await chatRequest(scope, "", {}, makeForm({ intent: "assign", roomId: room.id, managerId: manager, expectedManagerId: room.managerId ?? "" })); onChange(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}><label htmlFor="chat-manager">Project manager</label><div><select id="chat-manager" value={manager} disabled={busy || !room.clientActive} onChange={e => setManager(e.target.value)}><option value="">Not assigned</option>{room.managerId && !people.some(p => p.id === room.managerId) ? <option value={room.managerId}>{peopleLoaded && !error ? "Previous manager (unavailable)" : room.managerName ?? "Loading manager…"}</option> : null}{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><button disabled={busy || !room.clientActive || manager === (room.managerId ?? "")}>{busy ? "Saving…" : "Assign"}</button></div>{!peopleLoaded ? <p role="status">Loading project managers…</p> : !people.length && !error ? <p>No active project managers are available to assign.</p> : null}{error ? <p role="alert">{error}</p> : null}</form>;
+  return <form className="chat-assignment" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(""); try { await chatRequest(scope, "", {}, makeForm({ intent: "assign", roomId: room.id, managerId: manager, expectedManagerId: room.managerId ?? "" })); onChange(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}><label htmlFor="chat-manager">Project manager</label><div><Select id="chat-manager" value={manager} disabled={busy || !room.clientActive} onChange={e => setManager(e.target.value)}><option value="">Not assigned</option>{room.managerId && !people.some(p => p.id === room.managerId) ? <option value={room.managerId}>{peopleLoaded && !error ? "Previous manager (unavailable)" : room.managerName ?? "Loading manager…"}</option> : null}{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select><button disabled={busy || !room.clientActive || manager === (room.managerId ?? "")}>{busy ? "Saving…" : "Assign"}</button></div>{!peopleLoaded ? <p role="status">Loading project managers…</p> : !people.length && !error ? <p>No active project managers are available to assign.</p> : null}{error ? <p role="alert">{error}</p> : null}</form>;
 }
-function ChatDialog({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+function ChatDialog({ title, children, onClose, returnFocus }: { title: string; children: React.ReactNode; onClose: () => void; returnFocus?: HTMLElement | null }) {
   const ref = useRef<HTMLDialogElement>(null); const closeRef = useRef(onClose); closeRef.current = onClose;
-  useEffect(() => { const previous = document.activeElement as HTMLElement | null; ref.current?.showModal(); return () => { ref.current?.close(); if (previous?.isConnected) previous.focus(); }; }, []);
+  useEffect(() => { const previous = returnFocus ?? document.activeElement as HTMLElement | null; const dialog = ref.current; dialog?.showModal(); return () => { dialog?.close(); if (previous?.isConnected) previous.focus(); else document.querySelector<HTMLTextAreaElement>("#chat-draft:not(:disabled)")?.focus(); }; }, []);
   return <dialog ref={ref} className="chat-dialog" aria-labelledby="chat-dialog-title" onCancel={e => { e.preventDefault(); closeRef.current(); }}><div className="chat-dialog-heading"><h2 id="chat-dialog-title">{title}</h2><button className="chat-icon-button" aria-label="Close dialog" onClick={onClose}><X size={20} /></button></div>{children}</dialog>;
 }
 function TicketControls({ actor, scope, room, onChange }: { actor: ChatActor; scope: string; room: ChatRoom; onChange: (room: ChatRoom) => void }) {
@@ -317,7 +376,7 @@ function TicketControls({ actor, scope, room, onChange }: { actor: ChatActor; sc
   };
   return <div className="ticket-controls">
     <div className="ticket-controls-row"><span className={`ticket-status ticket-status--${ticket.status}`}>{TICKET_STATUSES[ticket.status]}</span>
-      {staff ? <><label><span>Status</span><select value={status} disabled={busy || !room.clientActive} onChange={e => setStatus(e.target.value)}>{Object.entries(TICKET_STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>Priority</span><select value={priority} disabled={busy || !room.clientActive} onChange={e => setPriority(e.target.value)}>{Object.entries(TICKET_PRIORITIES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>{status !== ticket.status || priority !== ticket.priority ? <button className="chat-text-button" disabled={busy || !room.clientActive} onClick={() => status === 'closed' && ticket.status !== 'closed' ? setConfirmClose(true) : void update()}>{busy ? 'Saving…' : 'Save changes'}</button> : null}</> : <span className="ticket-priority">{TICKET_PRIORITIES[ticket.priority]} priority</span>}
+      {staff ? <><label><span>Status</span><Select value={status} disabled={busy || !room.clientActive} onChange={e => setStatus(e.target.value)}>{Object.entries(TICKET_STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label><label><span>Priority</span><Select value={priority} disabled={busy || !room.clientActive} onChange={e => setPriority(e.target.value)}>{Object.entries(TICKET_PRIORITIES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>{status !== ticket.status || priority !== ticket.priority ? <button className="chat-text-button" disabled={busy || !room.clientActive} onClick={() => status === 'closed' && ticket.status !== 'closed' ? setConfirmClose(true) : void update()}>{busy ? 'Saving…' : 'Save changes'}</button> : null}</> : <span className="ticket-priority">{TICKET_PRIORITIES[ticket.priority]} priority</span>}
       <button type="button" className="ticket-state-button" disabled={busy || !room.clientActive} onClick={() => ticket.status === 'closed' ? void update('waiting_support', ticket.priority) : setConfirmClose(true)}>{busy ? 'Saving…' : ticket.status === 'closed' ? 'Reopen ticket' : 'Close ticket'}</button>
     </div>
     {ticket.status === 'closed' ? <p className="ticket-closed-note">Closed {ticket.closedAt ? new Date(ticket.closedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}. Your conversation stays here. Reopen the ticket if you need more help.</p> : null}
@@ -335,10 +394,10 @@ function NewTicket({ scope, onClose, onCreated }: { scope: string; onClose: () =
     try { const result = await chatRequest<{ room: ChatRoom }>(scope, '', {}, makeForm({ intent: 'ticket-create', subject, category, priority, body, nonce: id })); onCreated(result.room); }
     catch (e) { setError((e as Error).message); setBusy(false); }
   }}>
-    <label htmlFor="ticket-category">What do you need help with?</label><select id="ticket-category" value={category} required disabled={busy} onChange={e => { nonce.current = null; setError(''); setCategory(e.target.value); }}><option value="">Choose an issue type</option>{Object.entries(TICKET_CATEGORIES).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
+    <label htmlFor="ticket-category">What do you need help with?</label><Select id="ticket-category" value={category} required disabled={busy} onChange={e => { nonce.current = null; setError(''); setCategory(e.target.value); }}><option value="">Choose an issue type</option>{Object.entries(TICKET_CATEGORIES).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</Select>
     <label htmlFor="ticket-subject">Subject</label><input id="ticket-subject" autoFocus value={subject} required minLength={3} maxLength={160} disabled={busy} placeholder="A brief summary of the issue" onChange={e => { nonce.current = null; setError(''); setSubject(e.target.value); }} />
-    <label htmlFor="ticket-priority">Priority</label><select id="ticket-priority" value={priority} disabled={busy} onChange={e => { nonce.current = null; setError(''); setPriority(e.target.value); }}><option value="low">Low · General question</option><option value="normal">Normal · I need help</option><option value="high">High · My work is blocked</option></select>
-    <label htmlFor="ticket-body">Tell us about the issue</label><textarea id="ticket-body" rows={5} value={body} required maxLength={4000} disabled={busy} placeholder="What happened, what you expected, and any details that will help us" onChange={e => { nonce.current = null; setError(''); setBody(e.target.value); }} /><small>You can add JPG, PNG, WebP, or PDF attachments in the ticket conversation.</small>
+    <label htmlFor="ticket-priority">Priority</label><Select id="ticket-priority" value={priority} disabled={busy} onChange={e => { nonce.current = null; setError(''); setPriority(e.target.value); }}><option value="low">Low · General question</option><option value="normal">Normal · I need help</option><option value="high">High · My work is blocked</option></Select>
+      <label htmlFor="ticket-body">Tell us about the issue</label><textarea id="ticket-body" rows={5} value={body} required maxLength={4000} disabled={busy} placeholder="What happened, what you expected, and any details that will help us" onChange={e => { nonce.current = null; setError(''); setBody(e.target.value); }} /><small>You can add images, PDFs, MP4, or WebM files in the ticket conversation. The client storage limit is 10 GB.</small>
     {error ? <p className="ticket-control-error" role="alert">{error}</p> : null}<div className="chat-dialog-actions"><button type="button" className="chat-text-button" disabled={busy} onClick={onClose}>Cancel</button><button className="chat-primary-button" disabled={busy}>{busy ? 'Opening ticket…' : 'Start ticket'}</button></div>
   </form></ChatDialog>;
 }

@@ -1,20 +1,29 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 import { readEnv } from "../lib/env";
 
 const connectionString =
-  readEnv("DATABASE_URL") ??
+  readEnv("SUPABASE_DATABASE_URL") ??
   (process.env.NEXT_PHASE === "phase-production-build"
     ? "postgresql://build:build@127.0.0.1:5432/edicut_build"
     : undefined);
 
 if (!connectionString) {
-  throw new Error("DATABASE_URL is not defined in the current environment.");
+  throw new Error("SUPABASE_DATABASE_URL is not defined in the current environment.");
 }
 
-export const db = connectionString.includes("neon.tech")
-  ? drizzleNeon(neon(connectionString), { schema })
-  : drizzlePostgres(postgres(connectionString), { schema });
+const isLocalDatabase = ["localhost", "127.0.0.1", "[::1]"].includes(
+  new URL(connectionString).hostname,
+);
+
+export const db = drizzlePostgres(
+  postgres(connectionString, {
+    max: 1,
+    prepare: false,
+    ssl: isLocalDatabase ? false : "require",
+    connect_timeout: 10,
+    idle_timeout: 20,
+  }),
+  { schema },
+);

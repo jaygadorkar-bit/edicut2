@@ -20,7 +20,7 @@ export function pendingHoursMigrationPlan(applied, migrations) {
 }
 
 export async function migrateProjectPendingHours(connection, options = {}) {
-  if (!connection) throw new MigrationSafetyError("DATABASE_URL is required.");
+  if (!connection) throw new MigrationSafetyError("SUPABASE_DATABASE_URL is required.");
   const target = new URL(connection);
   if (!["postgres:", "postgresql:"].includes(target.protocol)) throw new MigrationSafetyError("A PostgreSQL database is required.");
   if (options.apply && (options["expected-host"] !== target.hostname || options["expected-database"] !== target.pathname.slice(1))) {
@@ -59,7 +59,7 @@ export async function migrateProjectPendingHours(connection, options = {}) {
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const { values } = parseArgs({ options: { apply: { type: "boolean", default: false }, "expected-host": { type: "string" }, "expected-database": { type: "string" } } });
-    console.log(JSON.stringify(await migrateProjectPendingHours(process.env.DATABASE_URL, values)));
+    console.log(JSON.stringify(await migrateProjectPendingHours(process.env.SUPABASE_DATABASE_URL, values)));
   } catch (error) {
     console.error(error instanceof MigrationSafetyError ? error.message : "Project migration failed. Inspect the connection and schema privately.");
     process.exitCode = 1;

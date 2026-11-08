@@ -16,8 +16,9 @@ export const MONTHLY_PACKAGE_ADD_ONS = [
 export type MonthlyPackageAddOnId = typeof MONTHLY_PACKAGE_ADD_ONS[number]["id"];
 export type MonthlyAddOnQuotePrefill = Pick<CustomQuoteInput, "title" | "brief" | "requestType" | "cadence" | "services">;
 
-export function packageAddOnsFor(packageType: EditingPackage["packageType"]) {
-  return packageType === "single" ? PACKAGE_ADD_ONS : [];
+export function packageAddOnsFor(packageType: EditingPackage["packageType"], packageSlug?: string) {
+  if (packageType !== "single") return [];
+  return PACKAGE_ADD_ONS.filter(item => !(packageSlug === "short-form-video-editing" && item.id === "short-form"));
 }
 
 export function monthlyAddOnQuoteHref(packageSlug: string, id: MonthlyPackageAddOnId) {
@@ -36,24 +37,24 @@ export function monthlyAddOnQuotePrefill(pack: EditingPackage, id: string): Mont
 }
 
 // Prices and labels always come from the catalog, never from submitted fields.
-export function selectedPackageAddOns(ids: readonly string[], packageType: EditingPackage["packageType"]): PackageAddOn[] {
-  return packageAddOnsFor(packageType).filter(item => ids.includes(item.id)).map(({ id, label, amountCents }) => ({ id, label, amountCents }));
+export function selectedPackageAddOns(ids: readonly string[], packageType: EditingPackage["packageType"], packageSlug?: string): PackageAddOn[] {
+  return packageAddOnsFor(packageType, packageSlug).filter(item => ids.includes(item.id)).map(({ id, label, amountCents }) => ({ id, label, amountCents }));
 }
 
-export function parsePackageAddOns(values: readonly unknown[], packageType: EditingPackage["packageType"]): PackageAddOn[] | null {
-  const options = packageAddOnsFor(packageType);
+export function parsePackageAddOns(values: readonly unknown[], packageType: EditingPackage["packageType"], packageSlug?: string): PackageAddOn[] | null {
+  const options = packageAddOnsFor(packageType, packageSlug);
   if (values.length > options.length || values.some(value => typeof value !== "string" || !options.some(item => item.id === value))) return null;
   if (new Set(values).size !== values.length) return null;
-  return selectedPackageAddOns(values as string[], packageType);
+  return selectedPackageAddOns(values as string[], packageType, packageSlug);
 }
 
 export function packageAddOnTotal(addOns: readonly PackageAddOn[]) {
   return addOns.reduce((total, item) => total + item.amountCents, 0);
 }
 
-export function packageAddOnQuery(ids: readonly string[], packageType: EditingPackage["packageType"], query = new URLSearchParams()) {
+export function packageAddOnQuery(ids: readonly string[], packageType: EditingPackage["packageType"], query = new URLSearchParams(), packageSlug?: string) {
   query.delete("addon");
-  selectedPackageAddOns(ids, packageType).forEach(item => query.append("addon", item.id));
+  selectedPackageAddOns(ids, packageType, packageSlug).forEach(item => query.append("addon", item.id));
   return query;
 }
 

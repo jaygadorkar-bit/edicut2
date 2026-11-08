@@ -1,0 +1,57 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "location": null,
+    "errorBoundary": false
+  },
+  {
+    "path": "/health",
+    "status": 200,
+    "location": null,
+    "errorBoundary": false,
+    "health": {
+      "ok": true,
+      "service": "web",
+      "database": "connected",
+      "timestamp": "2026-10-15T17:43:33.224Z"
+    }
+  },
+  {
+    "path": "/signin",
+    "status": 200,
+    "location": null,
+    "errorBoundary": false
+  },
+  {
+    "path": "/dashboard/projects/508eab87-82fd-4c91-87db-a38d2d91525b?version=e5ff741d-bc84-4f9e-8ea7-4927b3c87164",
+    "status": 302,
+    "location": "/signin?redirectTo=%2Fdashboard%2Fprojects%2F508eab87-82fd-4c91-87db-a38d2d91525b",
+    "errorBoundary": false
+  },
+  {
+    "path": "/assets/player-audit-missing-20261015.js",
+    "status": 404,
+    "expectedStatus": 404,
+    "cacheControl": "no-store",
+    "errorNotCached": true
+  },
+  {
+    "asset": "ProjectReviewPage-BInd0WuQ.js",
+    "status": 200,
+    "bytes": 72940,
+    "sha256MatchesBuild": true
+  },
+  {
+    "asset": "ProjectReviewPage-Cl8FLr5v.css",
+    "status": 200,
+    "bytes": 29208,
+    "sha256MatchesBuild": true
+  },
+  {
+    "asset": "review-frame-rate.client-DOl3BOzt.js",
+    "status": 200,
+    "bytes": 199673,
+    "sha256MatchesBuild": true
+  }
+]

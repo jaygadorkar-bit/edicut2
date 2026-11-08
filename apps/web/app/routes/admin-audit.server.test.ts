@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   admin: { id: "admin-id", email: "admin@example.com", active: true, role: "admin", passwordHash: "private-admin-hash" },
-  directoryCount: 13, offsets: [] as number[], imageList: vi.fn(), imageCount: vi.fn(async () => 0), videoList: vi.fn(), deleteImages: vi.fn(), deleteVideos: vi.fn(),
+  directoryCount: 13, offsets: [] as number[], imageList: vi.fn(), videoList: vi.fn(), deleteImages: vi.fn(), deleteVideos: vi.fn(),
+  analyticsDashboard: vi.fn(async () => ({ status: "unavailable" as const })),
+  interactionSnapshot: vi.fn(async () => ({ status: "not-configured" as const, items: [] })),
+  engagedSessionsSnapshot: vi.fn(async () => ({ status: "not-configured" as const, daily: [] })),
   uploadImage: vi.fn(), uploadVideo: vi.fn(),
   portfolioSections: [] as any[], pricingPackages: [] as any[], portfolioRead: vi.fn(), savePortfolio: vi.fn(), savePricing: vi.fn(),
   events: [] as string[], savedPortfolio: [] as any[], savedPricing: [] as any[], update: vi.fn(), delete: vi.fn(), execute: vi.fn(),
@@ -15,10 +18,14 @@ vi.mock("../lib/session.server", () => ({
 vi.mock("@edicut/db/repositories/admin-users", () => ({ findAdminUserById: async () => mocks.admin }));
 vi.mock("../lib/usage-protection.server", () => ({ consumeUsageLimit: async () => "allowed", requestBodyExceedsLimit: () => false }));
 vi.mock("../integrations/supabase/client.server", () => ({ deleteSupabaseUsersByEmail: mocks.deleteSupabaseUsersByEmail }));
+vi.mock("../lib/provider-usage.server", () => ({ getCloudflareAnalyticsDashboard: mocks.analyticsDashboard }));
+vi.mock("../lib/site-analytics.server", () => ({
+  getSiteInteractionSnapshot: mocks.interactionSnapshot,
+  getSiteEngagedSessionsSnapshot: mocks.engagedSessionsSnapshot,
+}));
 vi.mock("../lib/cloudinary.server", async importOriginal => ({
   ...await importOriginal<typeof import("../lib/cloudinary.server")>(),
   listCloudinaryImages: mocks.imageList, listCloudinaryVideos: mocks.videoList,
-  countCloudinaryImages: mocks.imageCount,
   uploadPackageImageToCloudinary: mocks.uploadImage,
   uploadPortfolioVideoToCloudinary: mocks.uploadVideo,
   deleteCloudinaryImages: mocks.deleteImages, deleteCloudinaryVideos: mocks.deleteVideos,
@@ -56,8 +63,12 @@ vi.mock("../lib/db.server", async importOriginal => {
   }) };
 });
 import { action, loader } from "./admin";
+import { loader as analyticsLoader } from "./admin-analytics";
 async function load(search: string) {
   return loader({ request: new Request(`http://localhost:3002/site/node-logmin${search}`), context: {}, params: {} } as Parameters<typeof loader>[0]);
+}
+async function loadAnalytics() {
+  return analyticsLoader({ request: new Request("http://localhost:3002/site/node-logmin/analytics"), context: {}, params: {} } as Parameters<typeof analyticsLoader>[0]);
 }
 beforeEach(() => {
   vi.clearAllMocks();
@@ -66,7 +77,6 @@ beforeEach(() => {
   mocks.savedPortfolio.length = 0; mocks.savedPricing.length = 0;
   mocks.trashedUsers.length = 0; mocks.adminEmails.length = 0;
   mocks.portfolioRead.mockImplementation(async () => mocks.portfolioSections);
-  mocks.imageCount.mockResolvedValue(0);
   mocks.imageList.mockResolvedValue([]); mocks.videoList.mockResolvedValue([]);
   mocks.uploadImage.mockImplementation(async (file: File) => ({ public_id: `edicut/packages/${file.name}`, secure_url: `https://res.cloudinary.com/edicut/image/upload/edicut/packages/${file.name}`, bytes: file.size }));
   mocks.uploadVideo.mockResolvedValue({ public_id: "edicut/portfolio/uploaded", secure_url: "https://res.cloudinary.com/edicut/video/upload/edicut/portfolio/uploaded.mp4", bytes: 4 });
@@ -78,34 +88,28 @@ beforeEach(() => {
   mocks.deleteSupabaseUsersByEmail.mockImplementation(async (_context: unknown, emails: string[]) => { mocks.events.push("delete-auth"); return emails.length; });
 });
 describe("admin panel audit regressions", () => {
-  it("returns overview metrics before a slow media provider resolves", async () => {
-    const media = Promise.withResolvers<number>();
-    mocks.imageCount.mockReturnValueOnce(media.promise);
-    const result = await load("?tab=overview");
-    expect(result.data.stats.total).toBe(13);
-    expect(result.data.overviewMedia).toBeInstanceOf(Promise);
+  it("streams the traffic dashboard without blocking the analytics page", async () => {
+    const analytics = Promise.withResolvers<{ status: "unavailable" }>();
+    mocks.analyticsDashboard.mockReturnValueOnce(analytics.promise);
+    const result = await loadAnalytics();
+    expect(result.data.analytics).toBeInstanceOf(Promise);
     expect(mocks.imageList).not.toHaveBeenCalled();
-    media.resolve(350);
-    await expect(result.data.overviewMedia).resolves.toEqual({ count: 350, error: null });
+    analytics.resolve({ status: "unavailable" });
+    await expect(result.data.analytics).resolves.toEqual({ status: "unavailable" });
   });
-  it("contains media failures in the streamed metric without exposing provider details", async () => {
-    mocks.imageCount.mockRejectedValueOnce(new Error("private-provider-detail"));
-    const result = await load("?tab=overview");
-    const media = await result.data.overviewMedia;
-    expect(media?.error).toContain("could not be loaded");
-    expect(media?.error).not.toContain("private-provider-detail");
-    expect(result.data.stats.total).toBe(13);
+  it("contains traffic provider failures without exposing provider details", async () => {
+    mocks.analyticsDashboard.mockRejectedValueOnce(new Error("private-provider-detail"));
+    const result = await loadAnalytics();
+    expect(await result.data.analytics).toEqual({ status: "unavailable" });
   });
-  it("fetches a new live count on each overview request and skips it on other tabs", async () => {
-    mocks.imageCount.mockResolvedValueOnce(3).mockResolvedValueOnce(4);
-    const first = await load("?tab=overview"), next = await load("?tab=overview");
-    expect((await first.data.overviewMedia)?.count).toBe(3);
-    expect((await next.data.overviewMedia)?.count).toBe(4);
+  it("keeps traffic metrics off the overview and requests them on the analytics page", async () => {
+    await load("?tab=overview");
     for (const tab of ["users", "packages", "images", "videos", "audit"]) {
-      const result = await load(`?tab=${tab}`);
-      expect(result.data.overviewMedia).toBeNull();
+      await load(`?tab=${tab}`);
+      expect(mocks.analyticsDashboard).not.toHaveBeenCalled();
     }
-    expect(mocks.imageCount).toHaveBeenCalledTimes(2);
+    await loadAnalytics();
+    expect(mocks.analyticsDashboard).toHaveBeenCalledOnce();
   });
   it.each(["active", "admins"])("clamps huge page numbers before querying the %s directory", async view => {
     const result = await load(`?tab=users&view=${view}&page=99999999`);
@@ -285,7 +289,7 @@ describe("admin panel audit regressions", () => {
     expect(mocks.deleteImages).toHaveBeenCalledWith(["edicut/packages/gallery.png"], {});
     spy.mockRestore();
   });
-  it.each([["payments", "/site/node-logmin/subscriptions"], ["messages", "/dashboard/messages"], ["unknown", "/site/node-logmin"]])("redirects obsolete %s views to usable navigation", async (tab, path) => {
+  it.each([["payments", "/site/node-logmin/orders"], ["messages", "/dashboard/messages"], ["unknown", "/site/node-logmin"]])("redirects obsolete %s views to usable navigation", async (tab, path) => {
     try { await load(`?tab=${tab}`); throw new Error("Expected redirect"); }
     catch (error) { expect(error).toBeInstanceOf(Response); expect((error as Response).headers.get("Location")).toBe(path); }
   });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export type ChatLiveEvent = { type: "refresh" } | { type: "typing"; roomId: string; name: string; actorKey: string };
-// Leave an idle interval beyond Neon's five-minute autosuspend threshold.
+// Visible clients resync periodically to recover missed socket notifications.
 export const CHAT_LIVE_RESYNC_MS = 10 * 60_000;
 export const CHAT_FALLBACK_RESYNC_MS = 60_000;
 

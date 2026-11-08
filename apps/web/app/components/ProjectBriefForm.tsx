@@ -4,6 +4,7 @@ import { Form } from "react-router";
 import { FormSelect, type FormSelectOption } from "./FormSelect";
 import { earliestProjectDeliveryDate, validateProjectBrief } from "../lib/client-intake";
 import type { ClientPurchase } from "../lib/client-workspace.server";
+import { SHORT_FORM_PACKAGE_SLUG } from "../lib/subscriptions";
 
 export type BriefResult = { error?: string; errors?: Record<string, string>; values?: Record<string, string> };
 export const BRIEF_STEPS = [
@@ -19,10 +20,16 @@ export function creditLabel(purchase: ClientPurchase) {
 }
 
 export function ProjectBriefForm({ purchases, token, result, minimumDeliveryDate }: { purchases: ClientPurchase[]; token: string; result?: BriefResult; minimumDeliveryDate?: string }) {
-  const [values, setValues] = useState<Record<string, string>>(() => ({
-    aspectRatio: "16:9", resolution: "1080p", captions: "Burned-in",
-    subscriptionId: purchases[0]?.id ?? "", ...result?.values,
-  }));
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const saved = result?.values ?? {};
+    const selected = purchases.find(item => item.id === (saved.subscriptionId || purchases[0]?.id));
+    return {
+      aspectRatio: selected?.slug === SHORT_FORM_PACKAGE_SLUG ? "9:16" : "16:9",
+      resolution: "1080p", captions: "Burned-in", subscriptionId: purchases[0]?.id ?? "",
+      ...saved,
+      ...(selected?.slug === SHORT_FORM_PACKAGE_SLUG ? { aspectRatio: "9:16" } : {}),
+    };
+  });
   const [minimumDate, setMinimumDate] = useState(minimumDeliveryDate ?? earliestProjectDeliveryDate());
   const [step, setStep] = useState(() => briefErrorStep(result?.errors ?? {}));
   const [visited, setVisited] = useState(step);
@@ -60,7 +67,8 @@ export function ProjectBriefForm({ purchases, token, result, minimumDeliveryDate
   }, [step, errors, result]);
 
   function change(name: string, value: string) {
-    setValues(current => ({ ...current, [name]: value }));
+    const selected = name === "subscriptionId" ? purchases.find(item => item.id === value) : undefined;
+    setValues(current => ({ ...current, [name]: value, ...(selected?.slug === SHORT_FORM_PACKAGE_SLUG ? { aspectRatio: "9:16" } : {}) }));
     setErrors(current => {
       const next = { ...current };
       delete next[name];
@@ -71,6 +79,9 @@ export function ProjectBriefForm({ purchases, token, result, minimumDeliveryDate
     const form = new FormData();
     Object.entries(values).forEach(([key, value]) => form.set(key, value));
     const nextErrors = { ...validateProjectBrief(form).errors };
+    if (purchase?.slug === SHORT_FORM_PACKAGE_SLUG && Number(values.finishedMinutes) > 1) {
+      nextErrors.finishedMinutes = "This short-form package allows up to 60 seconds of finished video.";
+    }
     if (!purchase) nextErrors.subscriptionId = "Choose a package with available editing balance.";
     return nextErrors;
   }
@@ -113,6 +124,10 @@ export function ProjectBriefForm({ purchases, token, result, minimumDeliveryDate
     </div>;
   }
   const hasErrors = Object.keys(errors).length > 0;
+  const requestedDuration = Number(values.finishedMinutes);
+  const requestedDurationLabel = purchase?.slug === SHORT_FORM_PACKAGE_SLUG
+    ? `${Math.round(requestedDuration * 60)} seconds`
+    : `${requestedDuration} minutes`;
   return <Form method="post" noValidate onSubmit={submit} autoComplete="off" className="project-brief mt-6">
     <input type="hidden" name="intent" value="create-project" />
     <input type="hidden" name="requestToken" value={result?.values?.requestToken || token} />
@@ -136,7 +151,7 @@ export function ProjectBriefForm({ purchases, token, result, minimumDeliveryDate
     <fieldset disabled={submitting} hidden={enhanced && step !== 0} className="min-w-0 space-y-5">
       <legend className={enhanced ? "sr-only" : "mb-5 text-xl font-bold"}>Your video</legend>
       {field("title", "Give your project a name", { maxLength: 120, placeholder: "e.g. October product launch" })}
-      {field("finishedMinutes", "Finished length (minutes)", { type: "number", min: 0.01, max: 600, step: 0.01, placeholder: "e.g. 8", hint: "An approximate length is fine." })}
+      {field("finishedMinutes", "Finished length (minutes)", { type: "number", min: 0.01, max: purchase?.slug === SHORT_FORM_PACKAGE_SLUG ? 1 : 600, step: 0.01, placeholder: purchase?.slug === SHORT_FORM_PACKAGE_SLUG ? "e.g. 0.5" : "e.g. 8", hint: purchase?.slug === SHORT_FORM_PACKAGE_SLUG ? "One short-form edit can be up to 60 seconds." : "An approximate length is fine." })}
       {field("objective", "What is the video about?", { multiline: true, placeholder: "Introduce our new product to first-time customers and show why it helps.", hint: "Share the main message, who it’s for, and what viewers should do next." })}
     </fieldset>
     <fieldset disabled={submitting} hidden={enhanced && step !== 1} className={`min-w-0 space-y-5 ${!enhanced ? "mt-8" : ""}`}>
@@ -155,7 +170,13 @@ export function ProjectBriefForm({ purchases, token, result, minimumDeliveryDate
     <fieldset disabled={submitting} hidden={enhanced && step !== 2} className={`min-w-0 space-y-5 ${!enhanced ? "mt-8" : ""}`}>
       <legend className={enhanced ? "sr-only" : "mb-5 text-xl font-bold"}>Delivery</legend>
       <div className="grid gap-5 sm:grid-cols-2">
-        {field("aspectRatio", "Video shape", { choices: [["16:9", "Landscape (16:9)"], ["9:16", "Vertical (9:16)"], ["1:1", "Square (1:1)"], ["4:5", "Portrait (4:5)"]].map(([value, label]) => ({ value, label })) })}
+        {purchase?.slug === SHORT_FORM_PACKAGE_SLUG ? <>
+          <input type="hidden" name="aspectRatio" value="9:16" />
+          <div className="min-w-0 rounded-xl border border-[var(--workspace-line)] bg-white/40 p-4">
+            <span className="block text-sm font-bold text-slate-800">Video shape</span>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Vertical (9:16), ready for TikTok, Instagram Reels, and YouTube Shorts.</p>
+          </div>
+        </> : field("aspectRatio", "Video shape", { choices: [["16:9", "Landscape (16:9)"], ["9:16", "Vertical (9:16)"], ["1:1", "Square (1:1)"], ["4:5", "Portrait (4:5)"]].map(([value, label]) => ({ value, label })) })}
         {field("resolution", "Video quality", { choices: ["1080p", "4K"].map(value => ({ value, label: value })), hint: "1080p works well for most videos." })}
         {field("captions", "Captions", { choices: [["None", "No captions"], ["Burned-in", "Visible on the video"], ["Subtitle file", "Separate subtitle file"], ["Both", "Video captions + subtitle file"]].map(([value, label]) => ({ value, label })) })}
         {field("deadline", "Preferred delivery date", { type: "date", min: minimumDate, hint: "Allow at least 48 hours (Bangladesh time). We’ll confirm the date after reviewing your files." })}
@@ -164,7 +185,7 @@ export function ProjectBriefForm({ purchases, token, result, minimumDeliveryDate
         {field("subscriptionId", "Use your editing balance", { choices: purchases.map(p => ({ value: p.id, label: `${p.name} · ${creditLabel(p)}` })) })}
         <p className="mt-3 text-sm leading-6 text-slate-600">{purchase?.type === "monthly" ? `No hours are deducted when you send this brief. Your editor will confirm the hours after reviewing it.${purchase.expiresAt ? ` Your monthly allowance ends ${new Date(purchase.expiresAt).toLocaleDateString("en-GB", { timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric" })}.` : ""}` : "Sending this brief uses one video credit. Your purchased add-ons are included."} We’ll check your footage against the package allowance.</p>
       </div>
-      <div className="rounded-xl bg-white/50 p-4 text-sm leading-6 text-slate-600"><strong className="text-slate-800">Ready for your editor</strong><p className="mt-1">{values.title || "Your video"}{values.finishedMinutes ? ` · about ${values.finishedMinutes} minutes` : ""}. You can go back to change any answer before sending.</p></div>
+      <div className="rounded-xl bg-white/50 p-4 text-sm leading-6 text-slate-600"><strong className="text-slate-800">Ready for your editor</strong><p className="mt-1">{values.title || "Your video"}{values.finishedMinutes ? ` · about ${requestedDurationLabel}` : ""}. You can go back to change any answer before sending.</p></div>
     </fieldset>
     <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--workspace-line)] pt-5">
       {enhanced && step > 0 ? <button type="button" disabled={submitting} onClick={() => move(step - 1)} className="inline-flex min-h-12 items-center gap-2 rounded-full px-3 text-sm font-bold text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-[#7157ed]"><ArrowLeft size={17} aria-hidden="true" />Back</button> : <p className="max-w-64 text-xs leading-5 text-slate-600">Your creator profile is already saved. Just add the details for this video.</p>}

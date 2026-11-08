@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="128" y1="70" x2="1378" y2="970" gradientUnits="userSpaceOnUse"><stop stop-color="#F7FAFC"/><stop offset="1" stop-color="#DDE8F0"/></linearGradient>
+    <linearGradient id="panel" x1="360" y1="292" x2="1152" y2="748" gradientUnits="userSpaceOnUse"><stop stop-color="#FCFDFE"/><stop offset="1" stop-color="#E9F0F5"/></linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F34755"/><stop offset="1" stop-color="#D91F37"/></linearGradient>
+    <filter id="shadow" x="168" y="126" width="1200" height="792" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feGaussianBlur in="SourceAlpha" stdDeviation="20"/><feOffset dy="16"/><feColorMatrix values="0 0 0 0 0.2 0 0 0 0 0.29 0 0 0 0 0.39 0 0 0 0.13 0"/><feBlend in2="SourceGraphic" mode="normal"/></filter>
+  </defs>
+  <rect width="1536" height="1024" rx="42" fill="url(#bg)"/>
+  <circle cx="1296" cy="168" r="172" fill="#E7EFF5"/><circle cx="230" cy="849" r="203" fill="#E4EDF3"/>
+  <path d="M0 804c273-70 479-54 690 7 237 68 470 60 846-25v238H0V804Z" fill="#D3E0E9" opacity=".58"/>
+  <g filter="url(#shadow)">
+    <rect x="265" y="174" width="1006" height="672" rx="40" fill="url(#panel)" stroke="#fff" stroke-width="5"/>
+    <rect x="306" y="214" width="924" height="91" rx="23" fill="#F3F7FA"/>
+    <circle cx="353" cy="259" r="18" fill="#FCE5E8"/><path d="m345 259 6 6 12-14" stroke="url(#red)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="391" y="254" fill="#26384A" font-family="Arial,sans-serif" font-size="21" font-weight="700">Your video, supported by a team</text>
+    <text x="391" y="279" fill="#7B8B99" font-family="Arial,sans-serif" font-size="15">Craft · coordination · clear scope</text>
+    <rect x="306" y="332" width="570" height="307" rx="25" fill="#172635"/>
+    <rect x="328" y="354" width="526" height="218" rx="16" fill="#DCE8EE"/>
+    <path d="M328 521 416 435l78 59 106-105 99 91 79-54 76 42v104H328V521Z" fill="#93A9B8"/>
+    <path d="m328 544 105-58 69 36 91-43 92 51 91-28 78 26v44H328v-28Z" fill="#607D8D"/>
+    <circle cx="761" cy="402" r="27" fill="#F4D9B1"/><path d="m564 420 46 29-46 29v-58Z" fill="#fff"/>
+    <rect x="346" y="371" width="96" height="28" rx="14" fill="#fff" fill-opacity=".92"/><circle cx="363" cy="385" r="5" fill="#E42D40"/><path d="M376 385h48" stroke="#5A7285" stroke-width="4" stroke-linecap="round"/>
+    <rect x="328" y="589" width="526" height="29" rx="9" fill="#E5EDF3"/><rect x="341" y="597" width="66" height="13" rx="4" fill="#9FB4C3"/><rect x="414" y="597" width="99" height="13" rx="4" fill="#D4E1E9"/><rect x="520" y="597" width="128" height="13" rx="4" fill="#E5B8BE"/><rect x="655" y="597" width="86" height="13" rx="4" fill="#ADC5D2"/><rect x="747" y="593" width="4" height="21" rx="2" fill="#E42D40"/>
+    <rect x="912" y="332" width="284" height="138" rx="24" fill="#fff" stroke="#DFE8EF" stroke-width="3"/>
+    <rect x="934" y="354" width="48" height="48" rx="15" fill="#EAF1F6"/><path d="M948 373h20m-20 9h14" stroke="#527086" stroke-width="3.5" stroke-linecap="round"/><circle cx="972" cy="358" r="5" fill="#E42D40"/>
+    <text x="997" y="371" fill="#25384A" font-family="Arial,sans-serif" font-size="18" font-weight="700">Project manager</text><text x="997" y="398" fill="#738596" font-family="Arial,sans-serif" font-size="14">Brief, files, and feedback</text>
+    <rect x="934" y="421" width="238" height="28" rx="12" fill="#EEF3F7"/><circle cx="951" cy="435" r="7" fill="#9FB5C4"/><path d="M969 435h94" stroke="#A9BAC6" stroke-width="5" stroke-linecap="round"/><path d="m1143 433 6 6 12-14" stroke="url(#red)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="912" y="500" width="284" height="139" rx="24" fill="#fff" stroke="#DFE8EF" stroke-width="3"/>
+    <rect x="934" y="522" width="48" height="48" rx="15" fill="#FCE7E9"/><path d="m947 546 7 7 15-17" stroke="url(#red)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="997" y="540" fill="#25384A" font-family="Arial,sans-serif" font-size="18" font-weight="700">Editor + review</text><text x="997" y="567" fill="#738596" font-family="Arial,sans-serif" font-size="14">Human eyes on every draft</text>
+    <path d="M946 600h217" stroke="#D7E2E9" stroke-width="6" stroke-linecap="round"/><path d="M946 600h155" stroke="#7FA0B3" stroke-width="6" stroke-linecap="round"/>
+    <rect x="306" y="674" width="424" height="123" rx="23" fill="#fff" stroke="#DFE8EF" stroke-width="3"/>
+    <rect x="754" y="674" width="442" height="123" rx="23" fill="#fff" stroke="#DFE8EF" stroke-width="3"/>
+    <rect x="328" y="695" width="48" height="48" rx="15" fill="#EAF1F6"/><path d="M342 715h20m-20 9h14" stroke="#527086" stroke-width="3.5" stroke-linecap="round"/>
+    <text x="391" y="709" fill="#748595" font-family="Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.2">ONE-OFF</text><text x="391" y="742" fill="#25384A" font-family="Arial,sans-serif" font-size="20" font-weight="700">Single video</text><text x="328" y="774" fill="#7A8A98" font-family="Arial,sans-serif" font-size="14">Scope and revisions set by package</text>
+    <rect x="776" y="695" width="48" height="48" rx="15" fill="#FCE7E9"/><path d="M790 710v18m9-18v18m9-18v18" stroke="url(#red)" stroke-width="4" stroke-linecap="round"/>
+    <text x="839" y="709" fill="#748595" font-family="Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.2">RECURRING</text><text x="839" y="742" fill="#25384A" font-family="Arial,sans-serif" font-size="20" font-weight="700">Monthly plan</text><text x="776" y="774" fill="#7A8A98" font-family="Arial,sans-serif" font-size="14">Reserved editing time for your schedule</text>
+  </g>
+  <g transform="rotate(-8 1275 715)"><rect x="1171" y="672" width="177" height="95" rx="24" fill="#fff" stroke="#DFE8EF" stroke-width="3"/><circle cx="1203" cy="719" r="17" fill="#FCE7E9"/><path d="m1196 719 5 5 10-12" stroke="url(#red)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><text x="1230" y="714" fill="#25384A" font-family="Arial,sans-serif" font-size="15" font-weight="700">Clear scope</text><text x="1230" y="738" fill="#7A8A98" font-family="Arial,sans-serif" font-size="12">Before work starts</text></g>
+  <path d="M210 341c42-30 64-14 61 17-4 31 19 43 51 11" stroke="url(#red)" stroke-width="8" stroke-linecap="round"/><circle cx="211" cy="341" r="9" fill="#E42D40"/>
+</svg>

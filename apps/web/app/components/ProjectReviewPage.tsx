@@ -11,8 +11,13 @@ import { ProjectReviewWorkspace } from "./ProjectReviewWorkspace";
 import { clientNavigation } from "../lib/client-workspace-navigation";
 import type { DashboardFeature } from "../lib/role-feature-access";
 import type { ReviewData } from "../lib/project-review";
-import { uploadReviewToStorage, sendReviewForm } from "../lib/review-upload-client";
+import { startAdminNavigationPolling } from "../lib/admin-navigation-live";
+import {
+  uploadReviewToStorage,
+  sendReviewForm,
+} from "../lib/review-upload-client";
 import "../styles/project-review.css";
+import "../styles/review-proofing.css";
 
 export function ProjectReviewPage({ admin = false }: { admin?: boolean }) {
   const data = useLoaderData() as ReviewData & {
@@ -35,20 +40,10 @@ export function ProjectReviewPage({ admin = false }: { admin?: boolean }) {
       });
   }, [data.selectedVersionId, location.search, navigate, path]);
   useEffect(() => {
-    const refresh = () => {
-      if (
-        !saving.current &&
-        document.visibilityState === "visible" &&
-        revalidator.state === "idle"
-      )
+    return startAdminNavigationPolling(async () => {
+      if (!saving.current && revalidator.state === "idle")
         void revalidator.revalidate();
-    };
-    const interval = window.setInterval(refresh, 15_000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", refresh);
-    };
+    });
   }, [revalidator]);
   const content = (
     <ProjectReviewWorkspace
@@ -73,7 +68,11 @@ export function ProjectReviewPage({ admin = false }: { admin?: boolean }) {
               await navigate(
                 `${path}?version=${encodeURIComponent(result.versionId)}`,
               );
-            else await revalidator.revalidate();
+            else if (form.get("intent") === "add-comment") {
+              // Persistence is already confirmed. Do not hold the send button for
+              // storage-status queries and a second page-data round trip.
+              void revalidator.revalidate().catch(() => {});
+            } else await revalidator.revalidate();
           }
           return result;
         } finally {
@@ -97,7 +96,7 @@ export function ProjectReviewPage({ admin = false }: { admin?: boolean }) {
     <WorkspaceShell
       title="Project review"
       hideHeaderTitle
-      navItems={clientNavigation(features)}
+      navItems={clientNavigation(features, data.actor.role)}
       account={{
         name: data.actor.name,
         detail:

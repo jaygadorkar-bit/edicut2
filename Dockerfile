@@ -1,11 +1,13 @@
-FROM node:22-alpine AS workspace
+FROM node:26-bookworm-slim AS workspace
 
-RUN apk add --no-cache libc6-compat
-RUN npm install -g pnpm@10.29.2
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libc++1 libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
+RUN npm install -g pnpm@12.18.0
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-ENV PNPM_STORE_PATH=/pnpm/store
+ENV PNPM_STORE_DIR=/pnpm/store
 
 WORKDIR /app
 

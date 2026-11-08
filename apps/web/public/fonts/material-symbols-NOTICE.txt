@@ -1,0 +1,8 @@
+Material Symbols font subset
+
+The font at /assets/material-symbols-v383.woff2 is a 137-icon subset generated
+by the Google Fonts API from the EdiCut icon-name list in app/lib/material-symbols.ts.
+It is hosted locally for performance. The CSS is adapted to use the local font URL.
+
+Copyright Google LLC. Licensed under the Apache License, Version 2.0. The full
+license text is in this directory as material-symbols-Apache-2.0.txt.

@@ -1,8 +1,10 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link, matchPath, NavLink, useLocation, useNavigation } from "react-router";
 import { useEffect, useRef, useState } from "react";
+import type { NotificationKind } from "../lib/notifications";
 import { useChatUnreadCounts, type ChatUnreadCounts } from "../lib/use-chat-unread-counts";
-import { NotificationBell, WorkspaceNotificationsProvider } from "./WorkspaceNotifications";
+import { NotificationBell, WorkspaceNotificationsProvider, useUnreadNotificationCount } from "./WorkspaceNotifications";
+import { useWorkspaceNavigationState } from "./WorkspaceServices";
 
 export type WorkspaceNavItem = {
   label: string;
@@ -14,6 +16,7 @@ export type WorkspaceNavItem = {
   badge?: string;
   unreadCount?: number;
   unreadLabel?: string;
+  notificationKind?: NotificationKind;
 };
 
 export type WorkspaceNavigationPanel = (controls: {
@@ -95,7 +98,7 @@ export function WorkspaceShell({
   const navItems = (ticketsTo && !conversationNavItems.some(item => item.to === ticketsTo)
     ? [...conversationNavItems.slice(0, 3), { label: "Support tickets", icon: "confirmation_number", to: ticketsTo }, ...conversationNavItems.slice(3)]
     : conversationNavItems).map(withChatCounts);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useWorkspaceNavigationState();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [showNavigationPanel, setShowNavigationPanel] = useState(Boolean(navigationPanel));
@@ -232,7 +235,7 @@ export function WorkspaceShell({
 
   return (
     <WorkspaceNotificationsProvider scope={chatScope}>
-    <div className={`neo-workspace min-h-screen ${showMobileBottomNav ? "neo-workspace--bottom-nav-enabled" : ""} ${hideMobileHeading ? "neo-workspace--hide-mobile-heading" : ""}`}>
+    <div className={`neo-workspace min-h-screen ${showMobileBottomNav ? "neo-workspace--bottom-nav-enabled" : ""} ${hideMobileHeading ? "neo-workspace--hide-mobile-heading" : ""}`} data-sidebar-collapsed={isCollapsed}>
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{chatCounts.projects} unread chat messages and {chatCounts.tickets} unread ticket messages.</span>
       <aside className={`neo-workspace__sidebar fixed inset-y-0 left-0 z-40 hidden transition-[width] duration-200 lg:flex lg:flex-col ${isCollapsed ? "w-[78px]" : "w-[238px]"}`}>
         <div className={`flex h-full min-h-0 flex-col py-5 ${isCollapsed ? "px-3" : "px-4"}`}>
@@ -305,8 +308,8 @@ export function WorkspaceShell({
         className={`neo-workspace__main transition-[padding] duration-200 ${isCollapsed ? "lg:pl-[78px]" : "lg:pl-[238px]"}`}
         aria-busy={isNavigationPending}
       >
-        <header ref={headerRef} className="neo-workspace__header sticky top-0 z-30 px-4 py-4 backdrop-blur-xl sm:px-7 lg:px-9">
-          <div className="neo-workspace__header-inner mx-auto flex max-w-[1500px] items-center justify-between gap-4">
+        <header ref={headerRef} className="neo-workspace__header sticky top-0 z-30 py-4 backdrop-blur-xl">
+          <div className="neo-workspace__header-inner neo-workspace__frame flex items-center justify-between gap-4">
             {hideHeaderTitle ? (
               <div className="flex min-w-0 flex-1 items-center">
                 {mobileMenuButton}
@@ -346,7 +349,7 @@ export function WorkspaceShell({
             </div>
           </div>
           {mobileMenu ? null : (
-            <nav className="neo-workspace__mobile-nav mx-auto mt-3 flex max-w-[1500px] gap-2 overflow-x-auto pb-0.5 lg:hidden" aria-label="Mobile workspace navigation">
+            <nav className="neo-workspace__mobile-nav neo-workspace__frame mt-3 flex gap-2 overflow-x-auto pb-0.5 lg:hidden" aria-label="Mobile workspace navigation">
               {navItems.filter((item) => !bottomAccountItems.some((bottomItem) => bottomItem.to === item.to)).slice(0, 5).map((item) => (
                   <WorkspaceNavLink key={`mobile-${item.label}-${item.to}`} item={item} compact onNavigate={event => navigateItem(item, event, true)} />
               ))}
@@ -355,7 +358,7 @@ export function WorkspaceShell({
         </header>
 
         <div
-          className="neo-workspace__content mx-auto max-w-[1500px] px-4 py-5 sm:px-7 sm:py-7 lg:px-9"
+          className="neo-workspace__content neo-workspace__frame py-5 sm:py-7"
         >
           {children}
         </div>
@@ -514,11 +517,15 @@ function WorkspaceNavLink({
   bottom?: boolean;
   onNavigate?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const unreadNotificationCount = useUnreadNotificationCount(item.notificationKind);
+  const navItem = item.notificationKind
+    ? { ...item, unreadCount: unreadNotificationCount }
+    : item;
   const getClassName = (active: boolean) => navClassName(active, compact, collapsed, bottom);
   const className = ({ isActive }: { isActive: boolean }) => getClassName(item.active ?? isActive);
   const contents = (
     <>
-      <NavIcon item={item} collapsed={collapsed} bottom={bottom} />
+      <NavIcon item={navItem} collapsed={collapsed} bottom={bottom} />
     </>
   );
 

@@ -1,14 +1,17 @@
 import type { MetaDescriptor } from "react-router";
+import { DEFAULT_CONTACT_EMAIL } from "./contact-email";
+import { PUBLIC_PAGE_PATHS } from "./public-pages";
 
-export const DEFAULT_SEO_TITLE = "EdiCut | YouTube Video Editing for Creators";
+export const DEFAULT_SEO_TITLE = "EdiCut | Video Editing for YouTube Creators";
 export const DEFAULT_SEO_DESCRIPTION =
   "EdiCut edits YouTube videos, Shorts, podcasts, and thumbnails for creators, with a clear workflow for footage, reviews, and delivery.";
 export const DEFAULT_PUBLIC_SITE_ORIGIN = "https://edicut.com";
-export const SOCIAL_PREVIEW_IMAGE_PATH = "/images/hero-suite.png";
+export const SOCIAL_PREVIEW_IMAGE_PATH = "/images/edicut-social.png";
 
 export type SeoRouteArgs = {
   location: { pathname: string };
-  matches: ReadonlyArray<{ id: string; data?: unknown }>;
+  matches: ReadonlyArray<{ id: string; loaderData?: unknown }>;
+  error?: unknown;
 };
 
 type SeoPageContext = {
@@ -18,15 +21,7 @@ type SeoPageContext = {
   maintenanceModeEnabled?: boolean;
 };
 
-const INDEXABLE_PUBLIC_PATHS = new Set([
-  "/",
-  "/pricing",
-  "/portfolio",
-  "/faq",
-  "/contact",
-  "/privacy",
-  "/terms",
-]);
+const INDEXABLE_PUBLIC_PATHS = new Set(PUBLIC_PAGE_PATHS);
 
 export function normalizePublicPath(pathname: string) {
   const normalized = pathname.replace(/\/+$/, "");
@@ -37,7 +32,7 @@ export function getCanonicalSiteOrigin(_appUrl?: string) {
   return DEFAULT_PUBLIC_SITE_ORIGIN;
 }
 
-function isProductionSiteUrl(appUrl?: string) {
+export function isProductionSiteUrl(appUrl?: string) {
   if (!appUrl) return false;
 
   try {
@@ -65,7 +60,7 @@ export function getCanonicalUrl(appUrl: string | undefined, pathname: string) {
 
 export function isIndexablePublicPath(pathname: string) {
   const normalized = normalizePublicPath(pathname);
-  return INDEXABLE_PUBLIC_PATHS.has(normalized) || /^\/pricing\/[^/]+$/.test(normalized);
+  return INDEXABLE_PUBLIC_PATHS.has(normalized) || /^\/pricing\/[a-z0-9-]{1,100}$/.test(normalized);
 }
 
 export function shouldIndexPage({
@@ -107,9 +102,9 @@ export function createPageMeta(title: string, description: string, context: SeoP
     { property: "og:description", content: description },
     { property: "og:image", content: socialImageUrl },
     { property: "og:image:type", content: "image/png" },
-    { property: "og:image:width", content: "1024" },
-    { property: "og:image:height", content: "1024" },
-    { property: "og:image:alt", content: "Video editors working in a creator post-production studio" },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
+    { property: "og:image:alt", content: "EdiCut — You create. We handle the edit. YouTube, podcasts, Shorts, and thumbnails." },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:image", content: socialImageUrl },
     { name: "twitter:title", content: title },
@@ -118,7 +113,7 @@ export function createPageMeta(title: string, description: string, context: SeoP
 }
 
 export function createRouteMeta(args: SeoRouteArgs, title: string, description: string) {
-  const rootData = args.matches.find((match) => match.id === "root")?.data as {
+  const rootData = args.matches.find((match) => match.id === "root")?.loaderData as {
     appUrl?: string;
     searchCrawlingEnabled?: boolean;
     maintenanceModeEnabled?: boolean;
@@ -127,7 +122,7 @@ export function createRouteMeta(args: SeoRouteArgs, title: string, description: 
   return createPageMeta(title, description, {
     appUrl: rootData?.appUrl,
     pathname: args.location.pathname,
-    crawlingEnabled: rootData?.searchCrawlingEnabled !== false,
+    crawlingEnabled: rootData?.searchCrawlingEnabled !== false && args.error == null,
     maintenanceModeEnabled: rootData?.maintenanceModeEnabled === true,
   });
 }
@@ -142,16 +137,27 @@ export function createSiteStructuredData(appUrl?: string) {
         "@type": "Organization",
         "@id": `${origin}/#organization`,
         name: "EdiCut",
+        alternateName: "edicut.com",
         url: `${origin}/`,
-        logo: `${origin}/icons/edicut-logo.svg`,
+        logo: `${origin}/favicon.png`,
         description: DEFAULT_SEO_DESCRIPTION,
+        email: DEFAULT_CONTACT_EMAIL,
+        contactPoint: {
+          "@type": "ContactPoint",
+          contactType: "customer support",
+          email: DEFAULT_CONTACT_EMAIL,
+          url: `${origin}/contact`,
+          availableLanguage: "English",
+        },
       },
       {
         "@type": "WebSite",
         "@id": `${origin}/#website`,
         name: "EdiCut",
+        alternateName: "edicut.com",
         url: `${origin}/`,
         publisher: { "@id": `${origin}/#organization` },
+        inLanguage: "en",
       },
     ],
   };

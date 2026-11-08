@@ -26,6 +26,7 @@ export function ProjectLibrary({
   pageCount = 1,
   staff = false,
   manager = false,
+  reviewsEnabled = true,
   basePath = "/dashboard/projects",
   teams = {},
   editors = [],
@@ -38,6 +39,7 @@ export function ProjectLibrary({
   pageCount?: number;
   staff?: boolean;
   manager?: boolean;
+  reviewsEnabled?: boolean;
   basePath?: string;
   teams?: Record<string, { members: ReviewTeamMember[]; revision: number }>;
   editors?: ReviewEditorOption[];
@@ -49,9 +51,9 @@ export function ProjectLibrary({
   const view = [
     "all",
     "active",
-    "reviews",
+    ...(reviewsEnabled ? ["reviews"] : []),
     "delivered",
-    ...(manager ? ["unassigned"] : []),
+    ...(manager && reviewsEnabled ? ["unassigned"] : []),
   ].includes(requestedView)
     ? requestedView
     : "all";
@@ -72,9 +74,9 @@ export function ProjectLibrary({
         <nav aria-label="Project filters">
           {[
             ["all", "All projects"],
-            ...(manager ? [["unassigned", "Needs editor"]] : []),
+            ...(manager && reviewsEnabled ? [["unassigned", "Needs editor"]] : []),
             ["active", "In progress"],
-            ["reviews", "Ready for review"],
+            ...(reviewsEnabled ? [["reviews", "Ready for review"]] : []),
             ["delivered", "Delivered"],
           ].map(([value, label]) => (
             <Link
@@ -152,13 +154,13 @@ export function ProjectLibrary({
                   </span>
                 </header>
                 <h3>
-                  <Link to={`${basePath}/${project.id}`}>{project.title}</Link>
+                  {reviewsEnabled ? <Link to={`${basePath}/${project.id}`}>{project.title}</Link> : project.title}
                 </h3>
                 <p className="project-card__creator">
                   {project.channelName}
                   {runtime ? <span>{runtime}</span> : null}
                 </p>
-                {manager && onAssign ? (
+                {manager && onAssign && reviewsEnabled ? (
                   <ProjectAssignment
                     compact
                     title={project.title}
@@ -172,7 +174,9 @@ export function ProjectLibrary({
                 ) : null}
                 <p className="project-card__description">
                   {review
-                    ? "Your latest cut is ready. Watch it and leave feedback at the moments that matter."
+                    ? reviewsEnabled
+                      ? "Your latest cut is ready. Watch it and leave feedback at the moments that matter."
+                      : "This cut is ready for review. Ask an administrator to enable Reviews to open it."
                     : objective ||
                       (stage === 0
                         ? "Your brief is with the team. We’ll confirm the next steps after reviewing your files."
@@ -220,14 +224,14 @@ export function ProjectLibrary({
                   </span>
                 </div>
                 <footer>
-                  <Link
+                  {reviewsEnabled ? <Link
                     to={`${basePath}/${project.id}`}
                     className={`review-button ${review ? "review-button--primary" : ""}`}
                   >
                     {review ? "Review latest cut" : "Open project"}
                     <ArrowRight size={15} aria-hidden="true" />
-                  </Link>
-                  <details className="project-card__brief">
+                  </Link> : <span className="review-button" aria-label="Project details unavailable">Project details unavailable</span>}
+                  {reviewsEnabled ? <details className="project-card__brief">
                     <summary>
                       <FileText size={15} aria-hidden="true" />
                       Brief
@@ -250,7 +254,7 @@ export function ProjectLibrary({
                         <ArrowRight size={13} />
                       </Link>
                     </div>
-                  </details>
+                  </details> : null}
                 </footer>
               </article>
             );

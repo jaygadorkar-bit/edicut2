@@ -9,6 +9,20 @@ const nonce = "30000000-0000-4000-8000-000000000003";
 const actor: ChatActor = { id: actorId, key: `user:${actorId}`, name: "Alex", role: "customer", admin: false };
 
 describe("D1 chat message write batching", () => {
+  it("refuses client-directory conversation reads from non-admin accounts",async()=>{
+    const authority=vi.fn(),prepare=vi.fn();
+    await expect(createD1ChatStore({prepare} as unknown as D1Database,authority).listClientChatRooms(actor,actorId)).rejects.toMatchObject({status:403});
+    expect(authority).not.toHaveBeenCalled();expect(prepare).not.toHaveBeenCalled();
+  });
+  it("binds the exact client and current administrator when reading conversation context",async()=>{
+    const values:unknown[][]=[];
+    const prepare=vi.fn((_query:string)=>({bind:(...args:unknown[])=>{values.push(args);return{all:async()=>({results:[]})};}}));
+    const admin={...actor,key:`admin:${actorId}`,role:"admin",admin:true};
+    const authority=vi.fn(async():Promise<ChatAuthority>=>({users:[],admins:[{id:actorId,email:"admin@example.test",name:"Admin",role:"admin",active:true}]}));
+    expect(await createD1ChatStore({prepare} as unknown as D1Database,authority).listClientChatRooms(admin,roomId)).toEqual({rooms:[],hasMore:false});
+    expect(prepare.mock.calls[0][0]).toContain("r.client_id=?");expect(prepare.mock.calls[0][0]).toContain("LIMIT 21");
+    expect(values[0]).toContain(roomId);expect(values[0]).toContain(actorId);expect(values[0]).toContain("admin");
+  });
   it("initializes customer rooms in one batch and limits preview repairs to authorized rooms", async () => {
     const prepare = vi.fn(() => {
       const statement = { bind: vi.fn(() => statement) };

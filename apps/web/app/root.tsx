@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   Links,
   Meta,
@@ -21,26 +21,24 @@ import { getAdminProfileImage } from "./lib/admin-profile.server";
 import stylesheetUrl from "./styles/global.css?url";
 import { resolveWebEnv } from "./lib/context.server";
 import type { LoaderContext } from "./types";
-import { getAdminSession, getSession } from "./lib/session.server";
+import { createSignOutCsrfToken, getAdminSession, getSession } from "./lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./lib/admin-paths";
 import { getDbFromContext } from "./lib/db.server";
 import { getSiteSettingsSnapshot } from "./lib/site-settings.server";
-import { AdminToolbar } from "./components/admin/AdminToolbar";
 import { getAdminToolbarAccess, type AdminToolbarAccess } from "./lib/admin-toolbar-access.server";
 import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 import { getSupabaseClient } from "./integrations/supabase/client.server";
 import { SmoothScroll } from "./components/site/SmoothScroll.js";
-import { shouldEnableSiteMotion, shouldUseWorkspaceLoader } from "./lib/site-motion";
+import { shouldEnableSiteMotion, shouldTransitionBetweenRoutes, shouldUseWorkspaceLoader } from "./lib/site-motion";
 import { WorkspaceLoadingOverlay } from "./components/WorkspaceLoadingOverlay";
 import { shouldLoadPromoBarSettings, shouldLoadRootSiteSettings, shouldShowAdminToolbar } from "./lib/root-data-requirements";
 import { getRouteErrorDebugDetails, getRouteErrorPresentation } from "./lib/route-error-presentation";
-import { getMaterialSymbolsStylesheetUrl } from "./lib/material-symbols";
+import { MATERIAL_SYMBOLS_FONT_URL } from "./lib/material-symbols";
 import {
   createPageMeta,
   createSiteStructuredData,
   DEFAULT_SEO_DESCRIPTION,
   DEFAULT_SEO_TITLE,
-  isIndexablePublicPath,
   serializeJsonLd,
   shouldIndexPage,
 } from "./lib/seo";
@@ -49,16 +47,25 @@ const usePageTransitionLayoutEffect = typeof document === "undefined" ? useEffec
 const PAGE_TRANSITION_COVER_MS = 860;
 const PAGE_TRANSITION_REVEAL_MS = 920;
 const NAVIGATION_STALL_NOTICE_MS = 15_000;
-const WORKSPACE_LOADING_DELAY_MS = 120;
+const WORKSPACE_LOADING_DELAY_MS = 200;
+const AdminToolbar = lazy(() => import("./components/admin/AdminToolbar").then(({ AdminToolbar: component }) => ({ default: component })));
+const COOKIE_CONSENT_BOOTSTRAP = `try {
+  const saved = localStorage.getItem("edicut-cookie-consent-v1");
+  if (saved) {
+    const consent = JSON.parse(saved);
+    if (consent && typeof consent.analytics === "boolean" && typeof consent.marketing === "boolean") {
+      document.documentElement.dataset.edicutConsent = "saved";
+    }
+  }
+} catch {}`;
 
 export function links() {
   return [
-    { rel: "stylesheet", href: stylesheetUrl },
     { rel: "preload", href: "/fonts/dm-sans-latin-normal.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
-    { rel: "preconnect", href: "https://fonts.googleapis.com" },
-    { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-    { rel: "icon", href: "/favicon.ico", type: "image/svg+xml" },
-    { rel: "stylesheet", href: getMaterialSymbolsStylesheetUrl() }
+    { rel: "preload", href: MATERIAL_SYMBOLS_FONT_URL, as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+    { rel: "stylesheet", href: stylesheetUrl },
+    { rel: "icon", href: "/favicon.ico?v=d8469f69", type: "image/x-icon", sizes: "16x16 32x32 48x48 256x256" },
+    { rel: "icon", href: "/favicon.svg?v=31b9f7e0", type: "image/svg+xml", sizes: "any" },
   ];
 }
 
@@ -87,6 +94,9 @@ export async function loader({
   const userId = session.get("userId");
   const adminUserId = adminSession.get("adminUserId");
   const userAdminUserId = session.get("adminUserId");
+  const signOutCsrfToken = userId || adminUserId
+    ? await createSignOutCsrfToken(cookieHeader, context)
+    : null;
   // Reuse the database client within this request; every read still hits its source.
   let rootDb: ReturnType<typeof getDbFromContext> | undefined;
   const getRootDb = () => rootDb ??= getDbFromContext(context ?? {});
@@ -183,6 +193,9 @@ export async function loader({
     nodeApiBaseUrl: env.NODE_API_BASE_URL ?? "http://localhost:8787/api/node",
     isSignedIn: Boolean(userId),
     isAdminSignedIn,
+    signOutCsrfToken,
+    workspaceUserIdentity: typeof userId === "string" ? userId : null,
+    workspaceAdminIdentity: isAdminSignedIn ? adminUserId || userAdminUserId || null : null,
     adminProfile,
     adminToolbarAccess,
     unreadEnquiryCount,
@@ -201,18 +214,19 @@ export async function loader({
   });
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data: rootData, location }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData: rootData, location, error }) => {
   return createPageMeta(DEFAULT_SEO_TITLE, DEFAULT_SEO_DESCRIPTION, {
     appUrl: rootData?.appUrl,
     pathname: location.pathname,
-    crawlingEnabled: rootData?.searchCrawlingEnabled !== false,
+    crawlingEnabled: rootData?.searchCrawlingEnabled !== false && error == null,
     maintenanceModeEnabled: rootData?.maintenanceModeEnabled === true,
   });
 };
 
-export const headers: HeadersFunction = ({ loaderHeaders, parentHeaders }) => {
+export const headers: HeadersFunction = ({ loaderHeaders, parentHeaders, errorHeaders }) => {
   const headers = new Headers(parentHeaders);
   loaderHeaders.forEach((value, key) => headers.set(key, value));
+  if (errorHeaders) headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
   return headers;
 };
 
@@ -223,6 +237,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
+        <script dangerouslySetInnerHTML={{ __html: COOKIE_CONSENT_BOOTSTRAP }} />
         <Links />
       </head>
       <body className="antialiased overflow-x-hidden">
@@ -239,7 +254,7 @@ export default function AppRoot() {
   const navigation = useNavigation();
   const fetchers = useFetchers();
   const showAdminToolbar = shouldShowAdminToolbar(location.pathname, data.isAdminSignedIn, data.adminToolbarEnabled);
-  const includeStructuredData = shouldIndexPage({
+  const includeStructuredData = location.pathname === "/" && shouldIndexPage({
     pathname: location.pathname,
     crawlingEnabled: data.searchCrawlingEnabled,
     maintenanceModeEnabled: data.maintenanceModeEnabled,
@@ -258,9 +273,9 @@ export default function AppRoot() {
   const pendingOperationsKey = [navigationKey, fetcherKey].filter(Boolean).join("|");
   const hasPendingOperations = pendingOperationsKey.length > 0;
   const [navigationStalled, setNavigationStalled] = useState(false);
-  const workspacePending = shouldUseWorkspaceLoader(location.pathname) && hasPendingOperations && !navigationStalled;
+  // Fetchers have local feedback and must not interrupt the entire workspace.
+  const workspacePending = shouldUseWorkspaceLoader(location.pathname) && navigation.state !== "idle" && !navigationStalled;
   const [workspaceLoaderReady, setWorkspaceLoaderReady] = useState(false);
-  const workspaceFocusBeforeLoading = useRef<HTMLElement | null>(null);
   const showWorkspaceLoader = workspacePending && workspaceLoaderReady;
 
   useEffect(() => {
@@ -269,18 +284,10 @@ export default function AppRoot() {
       return;
     }
     const timer = window.setTimeout(() => {
-      workspaceFocusBeforeLoading.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setWorkspaceLoaderReady(true);
     }, WORKSPACE_LOADING_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [workspacePending]);
-
-  useEffect(() => {
-    if (showWorkspaceLoader) return;
-    const previousFocus = workspaceFocusBeforeLoading.current;
-    if (previousFocus?.isConnected && document.activeElement === document.body) previousFocus.focus({ preventScroll: true });
-    workspaceFocusBeforeLoading.current = null;
-  }, [showWorkspaceLoader]);
 
   useEffect(() => {
     if (!hasPendingOperations) {
@@ -297,8 +304,8 @@ export default function AppRoot() {
     <>
       {useSiteMotion ? <SmoothScroll /> : null}
       <div className={`neo-app-shell${showAdminToolbar ? " neo-app-shell--admin-toolbar" : ""}`}
-        aria-busy={workspacePending || undefined} inert={showWorkspaceLoader}>
-        {showAdminToolbar ? <AdminToolbar /> : null}
+        aria-busy={workspacePending || undefined}>
+        {showAdminToolbar ? <Suspense fallback={null}><AdminToolbar /></Suspense> : null}
         <Outlet />
         {useSiteMotion ? <PageTransition navigationStalled={navigationStalled} /> : null}
       </div>
@@ -307,24 +314,9 @@ export default function AppRoot() {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />
       ) : null}
       {navigationStalled ? <NavigationRecovery /> : null}
-      {data.recaptchaSiteKey && shouldLoadRecaptcha(location.pathname) ? (
-        <script
-          src="https://www.google.com/recaptcha/api.js?render=explicit"
-          async
-          defer
-          data-edicut-recaptcha-site-key={data.recaptchaSiteKey}
-        />
-      ) : null}
+      {data.recaptchaSiteKey ? <span hidden data-edicut-recaptcha-site-key={data.recaptchaSiteKey} /> : null}
     </>
   );
-}
-
-function shouldLoadRecaptcha(pathname: string) {
-  return isIndexablePublicPath(pathname) ||
-    pathname === "/custom-quote" ||
-    pathname === "/signin" ||
-    pathname === "/forgot-password" ||
-    pathname === ADMIN_LOGIN_PATH;
 }
 
 function isPageChange(
@@ -395,7 +387,7 @@ function PageTransition({ navigationStalled }: { navigationStalled: boolean }) {
       const nextUrl = new URL(anchor.href, window.location.href);
       const currentUrl = new URL(window.location.href);
       if (nextUrl.origin !== currentUrl.origin) return;
-      if (!shouldEnableSiteMotion(currentUrl.pathname) || !shouldEnableSiteMotion(nextUrl.pathname)) return;
+      if (!shouldTransitionBetweenRoutes(currentUrl.pathname, nextUrl.pathname)) return;
       if (nextUrl.pathname === currentUrl.pathname && nextUrl.search === currentUrl.search) {
         if (nextUrl.hash !== currentUrl.hash) return;
 
@@ -431,7 +423,12 @@ function PageTransition({ navigationStalled }: { navigationStalled: boolean }) {
 
   usePageTransitionLayoutEffect(() => {
     if (navigation.state === "loading") {
-      if (startedAt.current === null && navigation.location && isPageChange(location, navigation.location)) {
+      if (
+        startedAt.current === null &&
+        navigation.location &&
+        shouldTransitionBetweenRoutes(location.pathname, navigation.location.pathname) &&
+        isPageChange(location, navigation.location)
+      ) {
         beginCover();
       }
       return;

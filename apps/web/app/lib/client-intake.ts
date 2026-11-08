@@ -113,10 +113,14 @@ export function validateProjectBrief(form: FormData, now = new Date()): IntakeRe
 }
 
 export function projectBriefNotes(profile: CreatorProfile, brief: ProjectBrief, purchaseType: "monthly" | "single" = "single") {
+  const runtimeSeconds = Math.round(brief.finishedMinutes * 60);
+  const runtimeLabel = runtimeSeconds >= 60 && runtimeSeconds % 60 === 0
+    ? `${runtimeSeconds / 60} minutes`
+    : `${runtimeSeconds} seconds`;
   return [
     `Creator profile: ${profile.channelName} (${profile.platform || inferCreatorPlatform(profile.channelUrl)} · ${profile.channelUrl})`, `Brand assets: ${profile.brandUrl || "None"}`,
     `Goal: ${brief.objective}`, `Format: ${brief.videoType}, ${brief.aspectRatio}, ${brief.resolution}`,
-    `Finished runtime: ${brief.finishedMinutes} minutes`,
+    `Finished runtime: ${runtimeLabel}`,
     `Target date: ${brief.deadline}`, `Footage: ${brief.footageUrl}`, `Script: ${brief.scriptUrl || "None"}`,
     `Project reference: ${brief.referenceUrl || "None"}`, `Captions: ${brief.captions}`,
     brief.editingMinutes ? `Reserved editing time: ${brief.editingMinutes / 60} hours` : purchaseType === "monthly" ? "Editing hours: editor to confirm after reviewing the brief; no hours deducted at submission" : "Uses one purchased video credit",

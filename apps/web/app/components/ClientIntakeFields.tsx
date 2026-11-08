@@ -1,3 +1,4 @@
+import { Select } from "./Select";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CREATOR_PLATFORM_OPTIONS, OTHER_CREATOR_PLATFORM } from "../lib/client-intake";
 
@@ -10,7 +11,7 @@ export function IntakeField({ name, label, values, errors, hint, children, type 
   const input = { id, name, defaultValue: values[name] ?? "", required, "aria-invalid": Boolean(errors?.[name]), "aria-describedby": `${id}-help`,
     className: "neo-workspace__profile-input w-full min-w-0 rounded-xl px-4 py-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-slate-500" };
   return <div className="min-w-0"><label htmlFor={id} className="mb-2 block text-sm font-bold text-slate-800">{label}{!required ? <span className="ml-2 text-xs font-normal text-slate-500">Optional</span> : null}</label>
-    {children ? <select {...input}>{children}</select> : multiline ? <textarea {...input} rows={4} maxLength={maxLength} /> : <input {...input} type={type} maxLength={maxLength} {...limits} />}
+    {children ? <Select {...input}>{children}</Select> : multiline ? <textarea {...input} rows={4} maxLength={maxLength} /> : <input {...input} type={type} maxLength={maxLength} {...limits} />}
     <p id={`${id}-help`} className={`mt-2 text-xs leading-5 ${errors?.[name] ? "text-red-700" : "text-slate-600"}`}>{errors?.[name] || hint}</p>
   </div>;
 }
@@ -49,7 +50,7 @@ export function CreatorPlatformField({ values, errors, hint }: {
   return <div className="min-w-0">
     <label htmlFor={selectId} className="mb-2 block text-sm font-bold text-slate-800">Primary platform</label>
     <div className="relative">
-      <select
+      <Select
         id={selectId}
         name="platformChoice"
         value={choice}
@@ -62,8 +63,7 @@ export function CreatorPlatformField({ values, errors, hint }: {
         <option value="" disabled>Choose a platform</option>
         {CREATOR_PLATFORM_OPTIONS.map((platform) => <option key={platform} value={platform}>{platform}</option>)}
         <option value={OTHER_CREATOR_PLATFORM}>Other</option>
-      </select>
-      <span className="material-symbols-outlined neo-workspace__profile-select-icon pointer-events-none absolute right-4 top-1/2 -translate-y-1/2" aria-hidden="true">expand_more</span>
+      </Select>
     </div>
     {isCustom ? <div className="mt-3">
       <label htmlFor={customId} className="mb-2 block text-sm font-bold text-slate-800">Platform name</label>

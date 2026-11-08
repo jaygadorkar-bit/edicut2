@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useMatches } from "react-router";
-import { authHref } from "../auth/AuthModal";
+import { authHref } from "../auth/auth-links";
 import { navLinks } from "../site/data";
 
 export function LogoMark({ className = "h-10" }: { className?: string }) {
@@ -11,8 +11,8 @@ export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const matches = useMatches();
   const location = useLocation();
-  const rootData = matches.find((m) => m.id === "root")?.data as { promoBarSettings?: { enabled: boolean; message: string } } | undefined;
-  const isSignedIn = matches.some((match) => Boolean((match.data as { isSignedIn?: boolean } | undefined)?.isSignedIn));
+  const rootData = matches.find((m) => m.id === "root")?.loaderData as { promoBarSettings?: { enabled: boolean; message: string } } | undefined;
+  const isSignedIn = matches.some((match) => Boolean((match.loaderData as { isSignedIn?: boolean } | undefined)?.isSignedIn));
 
   const promoEnabled = rootData?.promoBarSettings?.enabled;
   const promoMessage = rootData?.promoBarSettings?.message;
@@ -68,6 +68,7 @@ export function Header() {
           <div className="hidden items-center gap-3 lg:flex">
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
+              reloadDocument={!isSignedIn}
               className="neo-button neo-button--primary neo-button--compact uppercase tracking-[0.12em]"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/5 text-current transition-colors">
@@ -146,6 +147,7 @@ export function Header() {
           <div className="border-t border-black/5 p-5 sm:p-6">
             <Link
               to={isSignedIn ? "/dashboard" : authHref(location.pathname, location.search, "signin")}
+              reloadDocument={!isSignedIn}
               onClick={() => setIsMenuOpen(false)}
               className="neo-button neo-button--primary w-full uppercase tracking-[0.14em]"
             >

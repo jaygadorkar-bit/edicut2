@@ -16,9 +16,16 @@ const mocks = vi.hoisted(() => {
     } })) };
   });
   const db = { select, execute: vi.fn(async (_query: SQL) => []) };
+  const assignedProject = { id: "assigned-project", ownerId: "owner-1", title: "Assigned edit", channelName: "Creator", status: "editing", deadline: null, notes: null, updatedAt: new Date() };
   return {
-    project, where, db,
+    project, assignedProject, where, db,
   allowedFeatures: ["overview", "projects", "reviews", "uploads", "billing", "settings"] as string[],
+    loadAssignedProjects: vi.fn(async (_db: unknown, _actor: unknown, _query: string, view: string) => ({ projects: view === "all" ? [assignedProject] : [], count: view === "unassigned" ? 1 : 6, page: 1, pageCount: 1 })),
+    loadAssignedProjectSummary: vi.fn(async () => ({ total: 6, active: 4, reviews: 2, delivered: 2, unassigned: 1 })),
+    loadReviewEditorOptions: vi.fn(async () => [{ id: "editor-1", name: "Alex Editor", role: "editor", activeProjects: 2 }]),
+    loadManagerActionQueue: vi.fn(async () => []),
+    getAffiliatePortalData: vi.fn(async () => ({ id: "affiliate-1", code: "ALEXEDIT", commissionRateBps: 1000, active: true, referralUrl: "https://example.test/ref", orderCount: 3, paidOrderCount: 2, paidRevenueCents: 50000, commissionEarnedCents: 5000, pendingCommissionCents: 1000, orders: [] })),
+    isMissingMarketingSchema: vi.fn(() => false),
   getSiteSetting: vi.fn(async () => null),
     requireUserId: vi.fn(async () => "owner-1"),
     findUserById: vi.fn(async () => ({ id: "owner-1", name: "Client", email: "client@example.com", role: "user", active: true, deletedAt: null, passwordHash: "server-only" })),
@@ -39,6 +46,19 @@ vi.mock("../lib/role-feature-access", () => ({
 vi.mock("../lib/usage-protection.server", () => ({ consumeUsageLimit: mocks.consumeUsageLimit, requestBodyExceedsLimit: () => false }));
 vi.mock("../lib/telegram-notifications.server", () => ({ queueTelegramOrderNotice: mocks.queueTelegramOrderNotice }));
 vi.mock("../lib/client-workspace.server", () => ({ loadClientWorkspace: mocks.loadClientWorkspace, isMissingClientWorkspaceSchema: () => false }));
+vi.mock("../lib/project-review.server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/project-review.server")>()),
+  loadAssignedProjects: mocks.loadAssignedProjects,
+  loadAssignedProjectSummary: mocks.loadAssignedProjectSummary,
+  loadReviewEditorOptions: mocks.loadReviewEditorOptions,
+  isMissingReviewSchema: () => false,
+}));
+vi.mock("../lib/manager-workspace.server", () => ({ loadManagerActionQueue: mocks.loadManagerActionQueue }));
+vi.mock("../lib/chat-store.server", () => ({ createChatStore: () => ({ listLegacyClientManagerAssignments: async () => [] }) }));
+vi.mock("../lib/marketing.server", () => ({
+  getAffiliatePortalData: mocks.getAffiliatePortalData,
+  isMissingMarketingSchema: mocks.isMissingMarketingSchema,
+}));
 import { loader as dashboardLoader } from "./dashboard";
 import { loader as sectionLoader, action as sectionAction } from "./dashboard-placeholder";
 import { workspaceProjectColumns, workspaceProjectSummaryColumns } from "../lib/workspace-projects.server";
@@ -51,6 +71,7 @@ function args(section?: string, body?: URLSearchParams) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.allowedFeatures = ["overview", "projects", "reviews", "uploads", "billing", "settings"];
+  mocks.findUserById.mockImplementation(async () => ({ id: "owner-1", name: "Client", email: "client@example.com", role: "user", active: true, deletedAt: null, passwordHash: "server-only" }));
 });
 
 describe("workspace reads without the optional marketing migration", () => {
@@ -77,6 +98,68 @@ describe("workspace reads without the optional marketing migration", () => {
     for (const [filter] of mocks.where.mock.calls) {
       expect(new PgDialect().sqlToQuery(filter).params).toContain("owner-1");
     }
+  });
+
+  it("loads manager dashboard data through project assignments and team summaries", async () => {
+    mocks.findUserById.mockImplementationOnce(async () => ({ id: "owner-1", name: "Manager", email: "manager@example.com", role: "project_manager", active: true, deletedAt: null, passwordHash: "server-only" }));
+
+    const result = await dashboardLoader(args());
+
+    expect(result).toMatchObject({
+      projectCount: 6,
+      activeCount: 4,
+      reviewCount: 2,
+      unassignedProjectCount: 1,
+      assignedProjects: [mocks.assignedProject],
+      editors: [{ id: "editor-1", activeProjects: 2 }],
+    });
+    expect(mocks.loadAssignedProjects).toHaveBeenCalledWith(mocks.db, expect.objectContaining({ role: "project_manager" }), "", "all", 1);
+    expect(mocks.loadReviewEditorOptions).toHaveBeenCalledOnce();
+    expect(mocks.db.select).not.toHaveBeenCalled();
+    expect(mocks.loadClientWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("skips review queues and editor data when a manager lacks Reviews access", async () => {
+    mocks.allowedFeatures = ["overview", "projects"];
+    mocks.findUserById.mockImplementationOnce(async () => ({ id: "owner-1", name: "Manager", email: "manager@example.com", role: "project_manager", active: true, deletedAt: null, passwordHash: "server-only" }));
+
+    const result = await dashboardLoader(args());
+
+    expect(result).toMatchObject({ reviewCount: 0, editors: [], managerTasks: [] });
+    expect(result.assignedProjects).toEqual([]);
+    expect(mocks.loadAssignedProjects).not.toHaveBeenCalled();
+    expect(mocks.loadReviewEditorOptions).not.toHaveBeenCalled();
+    expect(mocks.loadManagerActionQueue).not.toHaveBeenCalled();
+  });
+
+  it("loads editor totals and project links from only assigned work", async () => {
+    mocks.findUserById.mockImplementationOnce(async () => ({ id: "owner-1", name: "Editor", email: "editor@example.com", role: "editor", active: true, deletedAt: null, passwordHash: "server-only" }));
+
+    const result = await dashboardLoader(args());
+
+    expect(result).toMatchObject({
+      projectCount: 6,
+      activeCount: 4,
+      reviewCount: 2,
+      deliveredCount: 2,
+      assignedProjects: [mocks.assignedProject],
+    });
+    expect(mocks.loadAssignedProjects).toHaveBeenCalledWith(mocks.db, expect.objectContaining({ role: "editor" }), "", "all", 1);
+    expect(mocks.loadReviewEditorOptions).not.toHaveBeenCalled();
+    expect(mocks.db.select).not.toHaveBeenCalled();
+    expect(mocks.loadClientWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("loads affiliate-only order totals without the customer billing snapshot", async () => {
+    mocks.findUserById.mockImplementationOnce(async () => ({ id: "owner-1", name: "Affiliate", email: "affiliate@example.com", role: "affiliate", active: true, deletedAt: null, passwordHash: "server-only" }));
+
+    const result = await dashboardLoader(args());
+
+    expect(result.affiliateData).toMatchObject({ code: "ALEXEDIT", orderCount: 3, paidOrderCount: 2 });
+    expect(result.affiliateReady).toBe(true);
+    expect(mocks.getAffiliatePortalData).toHaveBeenCalledWith(mocks.db, "owner-1", "http://localhost:3002");
+    expect(mocks.db.select).not.toHaveBeenCalled();
+    expect(mocks.loadClientWorkspace).not.toHaveBeenCalled();
   });
 
   it("starts balance reads without waiting for project reads to finish", async () => {
@@ -109,8 +192,22 @@ describe("workspace reads without the optional marketing migration", () => {
     expect(result.projectCount).toBe(0);
     expect(result.activeCount).toBe(0);
     expect(result.fileCount).toBe(0);
-    expect(result.reviewCount).toBe(1);
+    expect(result.reviewCount).toBe(0);
     expect(mocks.db.select).not.toHaveBeenCalledWith(workspaceProjectColumns);
+  });
+
+  it("limits the Files page to source links when Reviews is disabled", async () => {
+    mocks.allowedFeatures = ["overview", "projects", "uploads"];
+    mocks.findUserById.mockResolvedValueOnce({ id: "owner-1", name: "Manager", email: "manager@example.com", role: "project_manager", active: true, deletedAt: null, passwordHash: "server-only" });
+
+    const result = await sectionLoader(args("uploads"));
+
+    expect(result.files).toEqual([]);
+    const fileQuery = mocks.db.execute.mock.calls
+      .map(([query]) => new PgDialect().sqlToQuery(query))
+      .find(({ sql }) => sql.includes("FROM workspace_project_files f"));
+    expect(fileQuery?.sql).toContain("f.kind='source'");
+    expect(fileQuery?.params).toContain(false);
   });
 
   it.each(["projects"])("loads %s without selecting marketing fields", async section => {
@@ -150,5 +247,23 @@ describe("workspace reads without the optional marketing migration", () => {
     expect(statement.sql).toContain("workspace_project_files");
     expect(statement.sql).toContain("f.kind = 'review'");
     expect(statement.sql).toContain("NULLIF(BTRIM(f.share_url), '') IS NOT NULL");
+  });
+
+  it("writes manager file links only through the assigned-project access predicate", async () => {
+    mocks.findUserById.mockResolvedValueOnce({ id: "owner-1", name: "Manager", email: "manager@example.com", role: "project_manager", active: true, deletedAt: null, passwordHash: "server-only" });
+    const body = new URLSearchParams({
+      intent: "add-file-link",
+      projectId: "11111111-1111-4111-8111-111111111111",
+      fileName: "Source footage",
+      shareUrl: "https://drive.google.com/file/d/source-id/view",
+    });
+
+    await expect(sectionAction(args("uploads", body))).resolves.toMatchObject({ error: "That project is not assigned to your team." });
+
+    const statement = new PgDialect().sqlToQuery(mocks.db.execute.mock.calls[0][0]);
+    expect(statement.sql).toContain("client_project_managers");
+    expect(statement.sql).toContain("INSERT INTO workspace_project_files");
+    expect(statement.params).toContain("owner-1");
+    expect(statement.params).not.toContain("manager@example.com");
   });
 });

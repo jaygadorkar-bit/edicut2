@@ -1,12 +1,15 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import type { LoaderContext } from "../types";
 import { requireChatActor } from "../lib/chat-access.server";
-import { canSendChatMessage, chatId, chatMessagePayloadMatches, chatSenderName, validateChatMessage, validateSupportTicket, TICKET_STATUSES, TICKET_PRIORITIES, type TicketCategory, type TicketPriority, type TicketStatus } from "../lib/chat";
+import { canModerateChat, canSendChatMessage, chatAttachmentIsRemoved, chatId, chatMessagePayloadMatches, chatSenderName, validateChatMessage, validateSupportTicket, TICKET_STATUSES, TICKET_PRIORITIES, type TicketCategory, type TicketPriority, type TicketStatus } from "../lib/chat";
 import { createChatStore, isMissingChatSchema, chatMigrationPaused } from "../lib/chat-store.server";
-import { CHAT_FILE_MAX_BYTES, chatAttachmentName, deleteChatFile, downloadChatFile, uploadChatFile, validateChatFile } from "../lib/chat-files.server";
+import { downloadChatFile } from "../lib/chat-files.server";
+import { claimChatAttachmentForSend, finalizeChatAttachmentUpload, markChatAttachmentSaved, receiveChatAttachmentChunk, reconcileChatAttachmentUpload, startChatAttachmentUpload } from "../lib/chat-attachment-uploads.server";
+import { cleanupRemovedChatAttachment } from "../lib/chat-moderation.server";
 import { deferChatNotification, notifyChatActors } from "../lib/chat-realtime.server";
 import { isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 import { consumeUsageLimit } from "../lib/usage-protection.server";
+import { assignClientProjectManager, importMissingClientProjectManagers } from "../lib/client-project-managers.server";
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 export function headers() { return { "Cache-Control": "no-store" }; }
 async function safely(operation: () => Promise<unknown>) {
@@ -35,6 +38,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     if (operation === "unread") return chat.getChatUnreadCounts(actor);
     if (operation === "rooms" || operation === "sync") {
       const view = url.searchParams.get('view') === 'tickets' ? 'tickets' : 'projects';
+      if (view === "projects" && actor.role === "project_manager")
+        await importMissingClientProjectManagers(db, actor, await chat.listLegacyClientManagerAssignments(actor));
       const selectedId = url.searchParams.get("roomId")?.toLowerCase();
       if (operation === "sync" && selectedId && !chatId(selectedId)) throw new Response("Choose a valid conversation.", { status: 400 });
       if (view === 'projects') await chat.ensureClientChatRooms(actor);
@@ -49,7 +54,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const roomId = url.searchParams.get("roomId")?.toLowerCase(); if (!chatId(roomId)) throw new Response("Choose a conversation.", { status: 400 });
     if (operation === "attachment") {
       const messageId = url.searchParams.get("messageId")?.toLowerCase(); if (!chatId(messageId)) throw new Response("Invalid attachment", { status: 400 });
-      return downloadChatFile(await chat.getChatAttachment(actor, roomId, messageId), context as LoaderContext);
+      return downloadChatFile(await chat.getChatAttachment(actor, roomId, messageId), db, context as LoaderContext, request.headers.get("Range"), request.signal);
     }
     if (operation !== "messages") throw new Response("Unknown chat request.", { status: 400 });
     const at = url.searchParams.get("beforeAt"), id = url.searchParams.get("beforeId")?.toLowerCase();
@@ -65,7 +70,15 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const chat = createChatStore(db, context);
     const limit = await consumeUsageLimit({ request, context, bindingName: "USER_ACTION_LIMITER", key: `chat:${actor.key}`, localLimit: 60, localPeriodSeconds: 60 });
     if (limit !== "allowed") throw new Response(limit === "limited" ? "Please wait a minute before trying again." : "Chat is temporarily unavailable.", { status: limit === "limited" ? 429 : 503 });
-    const form = await readMutationForm(request, CHAT_FILE_MAX_BYTES + 32 * 1024); if (!form) throw new Response("Submit a valid message with attachments up to 5 MB.", { status: 400 });
+    const operation = url.searchParams.get("operation") ?? "";
+    if (operation === "upload-chunk") {
+      const roomId = String(url.searchParams.get("roomId") ?? "").toLowerCase(), uploadId = String(url.searchParams.get("uploadId") ?? "").toLowerCase();
+      if (!chatId(roomId)) throw new Response("Choose a conversation.", { status: 400 });
+      const room = await chat.getChatRoom(actor, roomId);
+      if (!canSendChatMessage(actor, room)) throw new Response("You cannot upload to this conversation.", { status: 403 });
+      return receiveChatAttachmentChunk({ request, db, context: context as LoaderContext, actor, roomId, uploadId });
+    }
+    const form = await readMutationForm(request, 64 * 1024); if (!form) throw new Response("Submit a valid chat change.", { status: 400 });
     const intent = String(form.get("intent") ?? ""); const roomId = String(form.get("roomId") ?? "").toLowerCase();
     if (intent === 'ticket-create') {
       const subject = String(form.get('subject') ?? '').trim(), body = String(form.get('body') ?? '').trim();
@@ -80,36 +93,53 @@ export async function action({ request, context }: ActionFunctionArgs) {
       await notifyChatActors(context as LoaderContext, await chat.chatRecipients(rooms[0].id)); return { rooms };
     }
     if (!chatId(roomId)) throw new Response("Choose a conversation.", { status: 400 });
+    if (intent === "upload-status") {
+      const room = await chat.getChatRoom(actor, roomId);
+      if (!canSendChatMessage(actor, room)) throw new Response("You cannot upload to this conversation.", { status: 403 });
+      return reconcileChatAttachmentUpload(db, context as LoaderContext, actor, roomId, String(form.get("uploadId") ?? "").toLowerCase());
+    }
+    if (intent === "upload-start") {
+      const room = await chat.getChatRoom(actor, roomId);
+      if (!canSendChatMessage(actor, room)) throw new Response("You cannot upload to this conversation.", { status: 403 });
+      const bytes = Number(form.get("bytes")), mime = String(form.get("mime") ?? ""), name = String(form.get("name") ?? "");
+      if (!name || name.length > 512) throw new Response("Choose a valid attachment file.", { status: 400 });
+      return startChatAttachmentUpload({ db, context: context as LoaderContext, chat, actor, room, uploadId: String(form.get("uploadId") ?? "").toLowerCase(), name, mime, bytes });
+    }
     if (intent === "send") {
       const body = String(form.get("body") ?? "").trim(), nonce = String(form.get("nonce") ?? "").toLowerCase();
       const entries = form.getAll("file");
-      if (entries.length > 1) throw new Response("Choose one valid attachment file.", { status: 400 });
-      const fileEntry = entries[0];
-      if (typeof fileEntry === "string") throw new Response("Choose one valid attachment file.", { status: 400 });
-      const file: File | null = fileEntry ?? null;
-      const invalid = validateChatMessage(body, nonce, Boolean(file)); if (invalid) throw new Response(invalid, { status: 400 });
-      // Text writes enforce room access and send permission atomically in the
-      // store. Attachments need a preflight before uploading the file.
-      const room = file ? await chat.getChatRoom(actor, roomId) : null;
+      if (entries.length) throw new Response("Attach the file again and retry the upload.", { status: 400 });
+      const uploadId = String(form.get("uploadId") ?? "").toLowerCase();
+      const invalid = validateChatMessage(body, nonce, Boolean(uploadId)); if (invalid) throw new Response(invalid, { status: 400 });
+      const room = uploadId ? await chat.getChatRoom(actor, roomId) : null;
       if (room && !canSendChatMessage(actor, room)) throw new Response(room.ticket?.status === 'closed' ? 'Reopen this ticket before sending a reply.' : 'Project manager is available after purchasing a subscription.', { status: 403 });
-      if (file) { const invalidFile = await validateChatFile(file); if (invalidFile) throw new Response(invalidFile, { status: 400 }); }
-      if (file) {
+      const upload = uploadId ? await finalizeChatAttachmentUpload(db, context as LoaderContext, actor, roomId, uploadId) : null;
+      const attachment = upload?.attachment ?? null;
+      if (upload?.upload.status === "saved" && upload.upload.messageId) {
+        if (upload.upload.clientNonce !== nonce) throw new Response("This uploaded file has already been sent. Attach it again to start a new message.", { status: 409 });
+        const saved = await chat.findChatMessageByNonce(actor, roomId, nonce);
+        if (!saved || saved.id !== upload.upload.messageId || !chatMessagePayloadMatches(saved, body, attachment) || saved.attachment?.driveFileId !== attachment?.driveFileId)
+          throw new Response("This uploaded file has already been sent. Attach it again to start a new message.", { status: 409 });
+        deferChatNotification(context as LoaderContext, async () => notifyChatActors(context as LoaderContext, await chat.chatRecipients(roomId)));
+        return { message: saved };
+      }
+      if (upload) {
+        await claimChatAttachmentForSend(db, actor, roomId, uploadId, nonce);
         const existing = await chat.findChatMessageByNonce(actor, roomId, nonce);
         if (existing) {
-          if (!chatMessagePayloadMatches(existing, body, { name: chatAttachmentName(file), mime: file.type, bytes: file.size })) throw new Response("Message reference already used. Refresh before sending.", { status: 409 });
+          if (!chatMessagePayloadMatches(existing, body, attachment) || existing.attachment?.driveFileId !== attachment?.driveFileId) throw new Response("Message reference already used. Refresh before sending.", { status: 409 });
+          await markChatAttachmentSaved(db, actor, uploadId, nonce, existing.id);
+          deferChatNotification(context as LoaderContext, async () => notifyChatActors(context as LoaderContext, await chat.chatRecipients(roomId)));
           return { message: existing };
         }
-        const uploadLimit = await consumeUsageLimit({ request, context, bindingName: "CLOUDINARY_UPLOAD_LIMITER", key: `chat:${actor.key}`, localLimit: 2, localPeriodSeconds: 60 });
-        if (uploadLimit !== "allowed") throw new Response(uploadLimit === "limited" ? "Attachments are limited to two uploads per minute." : "Attachment uploads are temporarily unavailable.", { status: uploadLimit === "limited" ? 429 : 503 });
       }
-      const attachment = file ? await uploadChatFile(file, roomId, context as LoaderContext) : null;
       try {
         const message = await chat.sendChatMessage(actor, roomId, body, nonce, attachment);
-        if (attachment && message.attachment?.publicId !== attachment.publicId) await deleteChatFile(attachment, context as LoaderContext).catch(() => console.warn("Unused chat attachment requires cleanup"));
+        if (upload && message.attachment?.driveFileId !== attachment?.driveFileId) throw new Response("Message reference already used. Refresh before sending.", { status: 409 });
+        if (upload) await markChatAttachmentSaved(db, actor, uploadId, nonce, message.id);
         deferChatNotification(context as LoaderContext, async () => notifyChatActors(context as LoaderContext, await chat.chatRecipients(roomId)));
         return { message };
       } catch (error) {
-        if (attachment && error instanceof Response && [403, 409].includes(error.status)) await deleteChatFile(attachment, context as LoaderContext).catch(() => console.warn("Unused chat attachment requires cleanup"));
         // Never delete an attachment after an uncertain commit: a retry uses the
         // same nonce and retrieves the persisted message without charging twice.
         throw error;
@@ -125,8 +155,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (intent === "assign") {
       const managerId = String(form.get("managerId") ?? "").toLowerCase() || null, expected = String(form.get("expectedManagerId") ?? "").toLowerCase() || null;
       if ((managerId && !chatId(managerId)) || (expected && !chatId(expected))) throw new Response("Choose a valid manager.", { status: 400 });
-      await chat.assignChatManager(actor, roomId, managerId, expected);
-      await notifyChatActors(context as LoaderContext, await chat.chatRecipients(roomId, room.managerId)); return { ok: true };
+      await importMissingClientProjectManagers(db, actor, await chat.listLegacyClientManagerAssignments(actor));
+      const currentRoom = await chat.getChatRoom(actor, roomId);
+      if (currentRoom.kind !== "manager") throw new Response("Choose a client project group before assigning a manager.", { status: 400 });
+      await assignClientProjectManager(db, actor, currentRoom.clientId, managerId, expected);
+      await chat.assignChatManager(actor, roomId, managerId);
+      await notifyChatActors(context as LoaderContext, await chat.chatRecipients(roomId, currentRoom.managerId)); return { ok: true };
     }
     if (intent === "typing") {
       if (!canSendChatMessage(actor, room)) throw new Response("Conversation unavailable", { status: 403 });
@@ -138,16 +172,23 @@ export async function action({ request, context }: ActionFunctionArgs) {
       await chat.markChatRead(actor, roomId, messageId);
       await notifyChatActors(context as LoaderContext, await chat.chatRecipients(roomId)); return { ok: true };
     }
-    if (intent === "edit" || intent === "delete") {
-      if (!canSendChatMessage(actor, room)) throw new Response('Reopen this ticket or check your project access before changing messages.', { status: 403 });
-      if (!chatId(messageId)) throw new Response("Choose your message", { status: 400 });
+    if (intent === "edit" || intent === "delete" || intent === "remove-attachment") {
+      if (intent === "remove-attachment" && !canModerateChat(actor)) throw new Response("Only administrators can remove attachments.", { status: 403 });
+      const moderation = canModerateChat(actor) && intent !== "edit";
+      if (!moderation && !canSendChatMessage(actor, room)) throw new Response('Reopen this ticket or check your project access before changing messages.', { status: 403 });
+      if (!chatId(messageId)) throw new Response("Choose a valid message", { status: 400 });
       const body = String(form.get("body") ?? "").trim();
       if (intent === "edit" && (!body || body.length > 4000)) throw new Response("Use 1–4,000 characters.", { status: 400 });
-      const message = await chat.changeChatMessage(actor, roomId, messageId, intent === "delete" ? null : body);
-      if (intent === "delete" && message.attachment) {
-        try { await deleteChatFile(message.attachment, context as LoaderContext); } catch { console.warn("Deleted chat attachment requires storage cleanup"); }
+      const removed = intent === "remove-attachment" ? await chat.removeChatAttachment(actor, roomId, messageId) : null;
+      const message = removed?.message ?? await chat.changeChatMessage(actor, roomId, messageId, intent === "delete" ? null : body);
+      const attachment = removed?.attachment ?? (intent === "delete" ? message.attachment : null);
+      let cleanupPending = await cleanupRemovedChatAttachment(attachment, db, context as LoaderContext);
+      if (attachment && !cleanupPending) {
+        try { await chat.finishChatAttachmentCleanup(roomId, messageId, attachment); }
+        catch { cleanupPending = true; console.warn("Chat attachment cleanup confirmation needs retry"); }
       }
-      await notifyChatActors(context as LoaderContext, await chat.chatRecipients(roomId)); return { message };
+      await notifyChatActors(context as LoaderContext, await chat.chatRecipients(roomId));
+      return { message: { ...message, attachment: message.deletedAt || chatAttachmentIsRemoved(message.attachment) ? null : message.attachment }, cleanupPending };
     }
     throw new Response("Unknown chat action.", { status: 400 });
   });

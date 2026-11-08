@@ -16,7 +16,7 @@ This document serves as the definitive reference for the security measures imple
 
 | Service | Credential Variable Name | Location |
 | :--- | :--- | :--- |
-| **Database (Supabase PostgreSQL)** | `DATABASE_URL` | Cloudflare Worker secret / Supabase project |
+| **Database (Supabase PostgreSQL)** | `SUPABASE_HYPERDRIVE` binding in production; `SUPABASE_DATABASE_URL` for local Node | Cloudflare Hyperdrive configuration / ignored root `.env` |
 | **Cache (Upstash)** | `REDIS_URL` | Cloudflare Worker secret / Upstash Console |
 | **Email (Resend)** | `RESEND_API_KEY` | Cloudflare Worker secret / Resend Dashboard |
 | **Email (Gmail OTP)** | `GMAIL_REFRESH_TOKEN`, etc. | Cloudflare Worker secret / Gmail API |

@@ -13,9 +13,15 @@ BEGIN
     'workspace_projects', 'workspace_project_files', 'customer_subscriptions',
     'marketing_coupons', 'marketing_affiliates', 'custom_quotes',
     'creator_profiles', 'purchase_entitlements', 'project_intakes',
-    'workspace_project_reviews', 'chat_rooms', 'chat_messages', 'chat_reads', 'support_tickets'
+    'workspace_project_reviews', 'project_review_versions', 'project_review_uploads',
+    'video_storage_connections', 'chat_rooms', 'chat_messages', 'chat_reads', 'support_tickets'
   ] LOOP
-    IF to_regclass(format('public.%I', app_table)) IS NULL THEN CONTINUE; END IF;
+    IF to_regclass(format('public.%I', app_table)) IS NULL THEN
+      IF app_table IN ('project_review_versions', 'project_review_uploads', 'video_storage_connections') THEN
+        RAISE EXCEPTION 'Required review storage table is missing: %', app_table;
+      END IF;
+      CONTINUE;
+    END IF;
     IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = to_regclass(format('public.%I', app_table))) THEN
       RAISE EXCEPTION 'RLS is disabled on %', app_table;
     END IF;

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="100" y1="45" x2="1400" y2="980" gradientUnits="userSpaceOnUse"><stop stop-color="#F5F8FB"/><stop offset="1" stop-color="#DCE7F0"/></linearGradient>
+    <linearGradient id="screen" x1="357" y1="221" x2="1157" y2="673" gradientUnits="userSpaceOnUse"><stop stop-color="#FDFEFF"/><stop offset="1" stop-color="#E7EEF5"/></linearGradient>
+    <linearGradient id="scene" x1="450" y1="289" x2="1074" y2="543" gradientUnits="userSpaceOnUse"><stop stop-color="#C9DCEB"/><stop offset="1" stop-color="#E8D8C8"/></linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F14350"/><stop offset="1" stop-color="#D91E35"/></linearGradient>
+    <filter id="shadow" x="180" y="109" width="1176" height="809" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feGaussianBlur in="BackgroundImageFix" stdDeviation="24"/><feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur"/><feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="20"/><feGaussianBlur stdDeviation="22"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix values="0 0 0 0 0.20 0 0 0 0 0.29 0 0 0 0 0.39 0 0 0 0.14 0"/><feBlend in2="effect1_backgroundBlur" result="shadow"/><feBlend in="SourceGraphic" in2="shadow" result="shape"/></filter>
+    <clipPath id="frame"><rect x="421" y="259" width="694" height="326" rx="22"/></clipPath>
+  </defs>
+  <rect width="1536" height="1024" rx="42" fill="url(#bg)"/>
+  <circle cx="1278" cy="171" r="164" fill="#E6EEF5"/><circle cx="246" cy="846" r="203" fill="#E5EDF4"/>
+  <path d="M0 792C234 728 406 752 605 811c205 60 435 78 931-22v235H0V792Z" fill="#D4E1EB" opacity=".54"/>
+  <g filter="url(#shadow)">
+    <rect x="280" y="176" width="976" height="596" rx="38" fill="#F8FAFC" stroke="#fff" stroke-width="4"/>
+    <rect x="316" y="212" width="904" height="485" rx="25" fill="url(#screen)"/>
+    <rect x="345" y="237" width="846" height="369" rx="21" fill="#172331"/>
+    <g clip-path="url(#frame)">
+      <rect x="421" y="259" width="694" height="326" fill="url(#scene)"/>
+      <circle cx="967" cy="333" r="49" fill="#F5D6A5"/>
+      <path d="m421 507 122-129 120 91 146-164 144 151 162-109v238H421V507Z" fill="#92A7B5"/>
+      <path d="m421 533 139-88 91 46 120-84 122 75 117-69 105 48v124H421V533Z" fill="#627E8D"/>
+      <path d="m421 555 127-45 112 25 105-37 126 48 129-32 175 31v40H421v-30Z" fill="#B9C8C8"/>
+      <path d="M424 489c135 20 222 4 316 15 91 11 180 8 282 25 41 7 66 18 92 26" stroke="#F5F7F5" stroke-width="5" stroke-linecap="round" opacity=".78"/>
+      <path d="m759 384 89 55-89 55V384Z" fill="#fff"/>
+      <rect x="443" y="279" width="88" height="31" rx="15.5" fill="#fff" fill-opacity=".88"/><circle cx="462" cy="294" r="6" fill="#E42D40"/><path d="M477 294h39" stroke="#526579" stroke-width="5" stroke-linecap="round"/>
+    </g>
+    <rect x="345" y="625" width="846" height="52" rx="14" fill="#E9EFF5"/>
+    <rect x="364" y="640" width="48" height="22" rx="6" fill="#94A9BA"/><rect x="419" y="640" width="129" height="22" rx="6" fill="#D5E1EA"/>
+    <rect x="559" y="640" width="211" height="22" rx="6" fill="#E7B9BF"/><rect x="780" y="640" width="147" height="22" rx="6" fill="#AFC8D5"/><rect x="938" y="640" width="104" height="22" rx="6" fill="#D5E1EA"/>
+    <rect x="554" y="633" width="5" height="36" rx="2.5" fill="#E52E42"/>
+    <rect x="565" y="216" width="130" height="10" rx="5" fill="#C8D4DE"/><circle cx="1165" cy="221" r="6" fill="#D5DEE7"/><circle cx="1142" cy="221" r="6" fill="#D5DEE7"/>
+    <path d="M700 774h137l45 75H653l47-75Z" fill="#DCE5ED"/><rect x="627" y="845" width="281" height="19" rx="9.5" fill="#C9D5DF"/>
+  </g>
+  <g transform="rotate(-7 1192 649)"><rect x="1074" y="571" width="240" height="129" rx="26" fill="#fff" stroke="#E2EAF0" stroke-width="3"/><rect x="1094" y="591" width="47" height="47" rx="15" fill="#FCE7E9"/><path d="m1108 615 9 9 19-22" stroke="url(#red)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><text x="1155" y="614" fill="#233447" font-family="Arial,sans-serif" font-size="18" font-weight="700">Clear edit plan</text><text x="1155" y="644" fill="#718295" font-family="Arial,sans-serif" font-size="15">Story · pacing · delivery</text></g>
+  <g transform="rotate(8 319 294)"><rect x="198" y="251" width="235" height="90" rx="25" fill="#fff" stroke="#E5ECF2" stroke-width="3"/><rect x="216" y="270" width="51" height="51" rx="17" fill="#EAF1F6"/><path d="M234 295h16m-8-8v16" stroke="#49657B" stroke-width="4" stroke-linecap="round"/><text x="280" y="289" fill="#26384A" font-family="Arial,sans-serif" font-size="16" font-weight="700">Made for your channel</text><text x="280" y="314" fill="#718295" font-family="Arial,sans-serif" font-size="14">A thoughtful editing partner</text></g>
+  <path d="M1241 341c43-32 65-15 61 17-4 31 20 43 53 10" stroke="url(#red)" stroke-width="8" stroke-linecap="round"/><circle cx="1242" cy="341" r="9" fill="#E42D40"/>
+</svg>

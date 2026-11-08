@@ -25,7 +25,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 export default function DashboardChat() {
   const { actor, features, state } = useLoaderData<typeof loader>();
-  return <ChatWorkspace actor={actor} initialState={state} renderShell={(content, navigationPanel) => <WorkspaceShell title="Chat" navItems={clientNavigation(features)} account={{ name: actor.name, detail: actor.role === "project_manager" ? "Project manager" : actor.role === "customer_support" ? "Customer support" : "Client" }} mobileMenu navigationFeedback profileTo="/dashboard/profile" profileNavAtBottom settingsTo="/dashboard/settings" navigationPanel={navigationPanel}>
+  return <ChatWorkspace actor={actor} initialState={state} renderShell={(content, navigationPanel) => <WorkspaceShell title="Chat" navItems={clientNavigation(features, actor.role)} account={{ name: actor.name, detail: actor.role === "project_manager" ? "Project manager" : actor.role === "customer_support" ? "Customer support" : "Client" }} mobileMenu navigationFeedback profileTo="/dashboard/profile" profileNavAtBottom settingsTo="/dashboard/settings" navigationPanel={navigationPanel}>
     {content}
   </WorkspaceShell>} />;
 }

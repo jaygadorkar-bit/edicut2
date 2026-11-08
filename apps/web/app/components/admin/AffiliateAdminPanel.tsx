@@ -1,6 +1,8 @@
+import { Select } from "../Select";
 import { useState } from "react";
 import { Form, Link } from "react-router";
 import type { AdminMarketingData, MarketingAffiliateView } from "../../lib/marketing.server";
+import { AffiliateProgramAdmin } from "./AffiliateProgramAdmin";
 
 type AffiliateActionData = { error?: string; success?: string } | undefined;
 
@@ -15,6 +17,7 @@ export function AffiliateAdminPanel({
 }) {
   const [editingAffiliateId, setEditingAffiliateId] = useState("");
   const [copiedAffiliateId, setCopiedAffiliateId] = useState("");
+  const [copiedCouponAffiliateId, setCopiedCouponAffiliateId] = useState("");
   const [copyError, setCopyError] = useState("");
   const editingAffiliate = data.affiliates.find((affiliate) => affiliate.id === editingAffiliateId);
   const activePartners = data.affiliates.filter((affiliate) => affiliate.active).length;
@@ -34,6 +37,18 @@ export function AffiliateAdminPanel({
     }
   }
 
+  async function copyAffiliateCoupon(affiliate: MarketingAffiliateView) {
+    if (!affiliate.couponCode) return;
+    setCopyError("");
+    try {
+      await navigator.clipboard.writeText(affiliate.couponCode);
+      setCopiedCouponAffiliateId(affiliate.id);
+      window.setTimeout(() => setCopiedCouponAffiliateId((current) => current === affiliate.id ? "" : current), 1800);
+    } catch {
+      setCopyError("Copy was blocked by the browser. Select the coupon code to copy it manually.");
+    }
+  }
+
   return (
     <section className="grid min-w-0 grid-cols-1 gap-5 [&_label]:min-w-0 [&_input]:min-w-0 [&_select]:min-w-0" aria-labelledby="affiliates-title">
       <header className="neo-workspace__panel flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between sm:p-6">
@@ -46,6 +61,8 @@ export function AffiliateAdminPanel({
         </div>
       </header>
 
+      {data.program ? <AffiliateProgramAdmin program={data.program} actionData={actionData} isSubmitting={isSubmitting} /> : null}
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryValue label="Active partners" value={activePartners} />
         <SummaryValue label="Attributed orders" value={attributedOrders} />
@@ -54,9 +71,9 @@ export function AffiliateAdminPanel({
         <SummaryValue label="Potential on unpaid orders" value={formatMoney(potentialCommission)} />
       </div>
 
-      {actionData?.error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{actionData.error}</p> : null}
-      {actionData?.success ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{actionData.success}</p> : null}
-      {!data.schemaReady ? (
+      {!data.program && actionData?.error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{actionData.error}</p> : null}
+      {!data.program && actionData?.success ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{actionData.success}</p> : null}
+      {!data.program && !data.schemaReady ? (
         <div role="alert" className="neo-workspace__panel border-amber-300 bg-amber-50 p-5 text-sm font-semibold text-amber-950">
           <h2 className="text-base font-black">Affiliate database setup is needed</h2>
           <p className="mt-2">Apply the marketing database migration before managing partners.</p>
@@ -67,7 +84,7 @@ export function AffiliateAdminPanel({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-black text-[#17202a]">{editingAffiliate ? "Edit affiliate" : "Add an affiliate"}</h2>
-                <p className="mt-1 text-sm text-[#687583]">Select a user with the Affiliate role, then set their referral code and commission rate.</p>
+                <p className="mt-1 text-sm text-[#687583]">Set a referral link, customer coupon, commission, and discount for each active partner.</p>
               </div>
               {editingAffiliate ? <button type="button" onClick={() => setEditingAffiliateId("")} className="min-h-11 rounded-xl px-3 text-sm font-bold text-[#536779] underline underline-offset-4">Cancel edit</button> : null}
             </div>
@@ -78,10 +95,10 @@ export function AffiliateAdminPanel({
               ) : (
                 <label className="grid gap-1.5 text-sm font-semibold text-[#445260]">
                   Affiliate account
-                  <select name="userId" required defaultValue="" className="neo-workspace__profile-input h-11 rounded-xl px-3" disabled={isSubmitting || !data.affiliateCandidates.length}>
+                  <Select name="userId" required defaultValue="" className="neo-workspace__profile-input h-11 rounded-xl px-3" disabled={isSubmitting || !data.affiliateCandidates.length}>
                     <option value="" disabled>{data.affiliateCandidates.length ? "Choose an account" : "No eligible accounts"}</option>
                     {data.affiliateCandidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.email}</option>)}
-                  </select>
+                  </Select>
                 </label>
               )}
               <label className="grid gap-1.5 text-sm font-semibold text-[#445260]">
@@ -91,8 +108,18 @@ export function AffiliateAdminPanel({
               </label>
               <label className="grid gap-1.5 text-sm font-semibold text-[#445260]">
                 Commission rate (%)
-                <input name="commissionRate" type="number" required min="0" max="100" step="0.01" defaultValue={editingAffiliate ? (editingAffiliate.commissionRateBps / 100).toFixed(2) : ""} placeholder="Set a rate" className="neo-workspace__profile-input h-11 rounded-xl px-3" disabled={isSubmitting} />
+                <input name="commissionRate" type="number" required min="0" max="100" step="0.01" defaultValue={editingAffiliate ? (editingAffiliate.commissionRateBps / 100).toFixed(2) : "10"} placeholder="10" className="neo-workspace__profile-input h-11 rounded-xl px-3" disabled={isSubmitting} />
                 <span className="text-xs font-normal text-[#687583]">Changes apply to future orders; existing orders keep their saved rate.</span>
+              </label>
+              <label className="grid gap-1.5 text-sm font-semibold text-[#445260]">
+                Customer coupon code
+                <input name="couponCode" required minLength={3} maxLength={32} pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,31}" defaultValue={editingAffiliate?.couponCode ?? editingAffiliate?.code ?? ""} placeholder="Same as referral code" autoComplete="off" className="neo-workspace__profile-input h-11 rounded-xl px-3 font-bold uppercase" disabled={isSubmitting} />
+                <span className="text-xs font-normal text-[#687583]">Can match the referral code. Customers apply it at checkout.</span>
+              </label>
+              <label className="grid gap-1.5 text-sm font-semibold text-[#445260]">
+                Customer discount (%)
+                <input name="discountRate" type="number" required min="1" max="100" step="1" defaultValue={editingAffiliate ? String((editingAffiliate.discountRateBps ?? 1000) / 100) : "10"} placeholder="10" className="neo-workspace__profile-input h-11 rounded-xl px-3" disabled={isSubmitting} />
+                <span className="text-xs font-normal text-[#687583]">Applies to new purchases using this coupon.</span>
               </label>
               <div className="flex items-end">
                 <button type="submit" disabled={isSubmitting || (!editingAffiliate && !data.affiliateCandidates.length)} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#6d55e8] px-4 text-sm font-black text-white transition hover:bg-[#5b44d3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6d55e8] disabled:cursor-not-allowed disabled:opacity-60">
@@ -124,6 +151,8 @@ export function AffiliateAdminPanel({
                     isSubmitting={isSubmitting}
                     copied={copiedAffiliateId === affiliate.id}
                     onCopy={() => void copyReferralLink(affiliate)}
+                    couponCopied={copiedCouponAffiliateId === affiliate.id}
+                    onCopyCoupon={() => void copyAffiliateCoupon(affiliate)}
                     onEdit={() => setEditingAffiliateId(affiliate.id)}
                   />
                 ))}
@@ -146,12 +175,16 @@ function AffiliateRow({
   isSubmitting,
   copied,
   onCopy,
+  couponCopied,
+  onCopyCoupon,
   onEdit,
 }: {
   affiliate: MarketingAffiliateView;
   isSubmitting: boolean;
   copied: boolean;
   onCopy: () => void;
+  couponCopied: boolean;
+  onCopyCoupon: () => void;
   onEdit: () => void;
 }) {
   return (
@@ -162,7 +195,7 @@ function AffiliateRow({
             <h3 className="truncate font-black text-[#17202a]">{affiliate.name}</h3>
             <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${affiliate.active ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-700"}`}>{affiliate.active ? "Active" : "Paused"}</span>
           </div>
-          <p className="mt-1 break-all text-sm text-[#687583]">{affiliate.email} · <span className="font-bold text-[#445260]">{affiliate.code}</span> · {(affiliate.commissionRateBps / 100).toFixed(2)}% commission</p>
+          <p className="mt-1 break-all text-sm text-[#687583]">{affiliate.email} · Referral <span className="font-bold text-[#445260]">{affiliate.code}</span> · {(affiliate.commissionRateBps / 100).toFixed(2)}% commission</p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={onEdit} disabled={isSubmitting} className="min-h-11 rounded-lg border border-[#dce3e9] px-3 text-sm font-bold text-[#445260] transition hover:bg-[#f4f7f9] disabled:opacity-50">Edit</button>
@@ -185,6 +218,14 @@ function AffiliateRow({
         <input id={`affiliate-link-${affiliate.id}`} type="url" readOnly value={affiliate.referralUrl} onFocus={(event) => event.currentTarget.select()} className="neo-workspace__profile-input min-h-11 min-w-0 flex-1 rounded-lg px-3 text-xs text-[#536779]" />
         <button type="button" onClick={onCopy} disabled={isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#dce3e9] px-3 text-sm font-bold text-[#445260] transition hover:bg-[#f4f7f9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6d55e8] disabled:opacity-50">
           <span className="material-symbols-outlined text-[18px]">{copied ? "check" : "content_copy"}</span>{copied ? "Copied" : "Copy link"}
+        </button>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <label className="sr-only" htmlFor={`affiliate-coupon-${affiliate.id}`}>Coupon code for {affiliate.name}</label>
+        <input id={`affiliate-coupon-${affiliate.id}`} type="text" readOnly value={affiliate.couponCode ?? "Not set"} onFocus={(event) => event.currentTarget.select()} className="neo-workspace__profile-input min-h-11 min-w-0 flex-1 rounded-lg px-3 text-sm font-bold uppercase text-[#536779]" />
+        <span className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#f4f7f9] px-3 text-sm font-bold text-[#445260]">{affiliate.discountRateBps == null ? "No discount" : `${(affiliate.discountRateBps / 100).toFixed(0)}% off`}</span>
+        <button type="button" onClick={onCopyCoupon} disabled={isSubmitting || !affiliate.couponCode} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#dce3e9] px-3 text-sm font-bold text-[#445260] transition hover:bg-[#f4f7f9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6d55e8] disabled:opacity-50">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">{couponCopied ? "check" : "content_copy"}</span>{couponCopied ? "Copied" : "Copy code"}
         </button>
       </div>
     </article>

@@ -10,7 +10,7 @@ export function PackageAddOns({ editingPackage, selected, onChange, disabled = f
   disabled?: boolean;
 }) {
   const isMonthly = editingPackage.packageType === "monthly";
-  const options = packageAddOnsFor(editingPackage.packageType);
+  const options = packageAddOnsFor(editingPackage.packageType, editingPackage.slug);
   return <fieldset className="package-addons" disabled={disabled}>
       <legend><Plus size={15} aria-hidden="true" />{isMonthly ? "Monthly extras" : "Make it yours"} <span>{isMonthly ? "Quoted separately" : "Optional add-ons"}</span></legend>
       {isMonthly ? <>

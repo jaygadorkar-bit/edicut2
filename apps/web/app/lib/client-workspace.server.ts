@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { creatorProfiles, customerSubscriptions, projectIntakes, purchaseEntitlements } from "@edicut/db/schema";
 import type { DatabaseClient } from "@edicut/db/client";
-import { getCatalogPackage } from "./subscriptions";
+import { getFinishedLengthLimitSeconds, getProjectFulfillmentPackage, SHORT_FORM_PACKAGE_SLUG } from "./subscriptions";
 import { hasReturnedRows } from "./db.server";
 import { projectBriefNotes, type CreatorProfile, type ProjectBrief } from "./client-intake";
 
@@ -10,7 +10,7 @@ export type ClientPurchase = {
   granted: number; used: number; remaining: number; paidAt: string; expiresAt: string | null; active: boolean;
 };
 export function purchaseAllowance(slug: string, type: string) {
-  const pack = getCatalogPackage(slug);
+  const pack = getProjectFulfillmentPackage(slug);
   return pack?.packageType === type ? pack.packageType === "monthly" ? pack.editingHoursPerMonth * 60 : 1 : 0;
 }
 export function purchaseExpiry(paidAt: Date, type: string) {
@@ -83,12 +83,17 @@ export async function createPurchasedProject(db: DatabaseClient, ownerId: string
   if (existing[0]) return { id: existing[0].id };
   const purchase = state.purchases.find(p => p.id === subscriptionId);
   if (!purchase?.active || !purchase.remaining) return { error: "Choose a paid package with an available balance." };
-  const pack = getCatalogPackage(purchase.slug);
+  const pack = getProjectFulfillmentPackage(purchase.slug);
   if (!pack) return { error: "Contact us to confirm the allowance for this package." };
   if (pack.packageType === "single") {
-    const maxFinished = Number(pack.finishedLength.match(/\d+/)?.[0]);
+    const maxFinishedSeconds = getFinishedLengthLimitSeconds(pack);
     // Editors check the footage allowance when reviewing the shared folder.
-    if (brief.finishedMinutes > maxFinished) return { error: `This package allows up to ${maxFinished} finished minutes. Choose a larger package or request a custom quote.` };
+    if (brief.finishedMinutes * 60 > maxFinishedSeconds) {
+      return { error: `This package allows ${pack.finishedLength.toLowerCase()} of finished runtime. Choose a larger package or request a custom quote.` };
+    }
+    if (pack.slug === SHORT_FORM_PACKAGE_SLUG && brief.aspectRatio !== "9:16") {
+      return { error: "This short-form package is delivered in a vertical 9:16 format." };
+    }
   }
   // Hours are confirmed by the editor, never supplied or charged by intake.
   brief = { ...brief, editingMinutes: 0 };

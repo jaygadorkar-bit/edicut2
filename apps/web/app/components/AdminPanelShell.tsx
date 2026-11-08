@@ -1,25 +1,33 @@
 import type { ReactNode } from "react";
-import { Form, useRouteLoaderData } from "react-router";
+import { useRouteLoaderData } from "react-router";
 import { adminPath } from "../lib/admin-paths";
 import { useAdminNavigationCounts } from "../lib/use-admin-navigation-counts";
+import { ConfirmSignOutButton } from "./ConfirmSignOutButton";
 import { WorkspaceShell, type WorkspaceNavigationPanel } from "./WorkspaceShell";
 
 export const adminPanelNavItems = [
   { label: "Dashboard", icon: "dashboard_customize", tab: "overview" },
-  { label: "Orders", icon: "receipt_long", tab: "subscriptions" },
+  { label: "Clients", icon: "folder_shared", tab: "clients" },
+  { label: "Orders", icon: "receipt_long", tab: "orders" },
   { label: "Projects", icon: "video_library", tab: "projects" },
-  { label: "Users", icon: "group", tab: "users" },
+  { label: "Role manager", icon: "group", tab: "users" },
   { label: "Chat", icon: "chat", tab: "chat" },
   { label: "Support tickets", icon: "confirmation_number", tab: "tickets" },
   { label: "Enquiries", icon: "mail", tab: "messages" },
+  { label: "Recruiting forms", icon: "description", tab: "recruiting-forms" },
   { label: "Custom quotes", icon: "description", tab: "quotes" },
-  { label: "Roles", icon: "shield_person", tab: "roles" },
+  { label: "Role permissions", icon: "shield_person", tab: "roles" },
   { label: "Packages", icon: "sell", tab: "packages" },
   { label: "Discounts", icon: "sell", tab: "marketing" },
   { label: "Affiliates", icon: "groups", tab: "affiliates" },
   { label: "Images", icon: "image", tab: "images" },
+  { label: "Marketing content", icon: "campaign", tab: "marketing-content" },
   { label: "Videos", icon: "movie", tab: "videos" },
+  { label: "Analytics", icon: "travel_explore", tab: "analytics" },
+  { label: "Error log", icon: "bug_report", tab: "error-log" },
+  { label: "Threat log", icon: "security", tab: "threat-log" },
   { label: "Infrastructure", icon: "monitoring", tab: "infrastructure" },
+  { label: "Update", icon: "system_update_alt", tab: "update" },
   { label: "Settings", icon: "settings", tab: "settings" },
 ] as const;
 
@@ -49,10 +57,15 @@ export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount,
     label,
     bottomLabel: tab === "overview" ? "Overview" : undefined,
     icon,
-    to: tab === "messages" ? "/dashboard/messages" : ["infrastructure", "subscriptions", "quotes", "chat", "tickets", "projects"].includes(tab) ? adminPath(`/${tab}`) : adminPath(`?tab=${tab}`),
+    to: tab === "messages" ? "/dashboard/messages" : ["clients", "orders", "analytics", "error-log", "threat-log", "infrastructure", "update", "subscriptions", "quotes", "recruiting-forms", "marketing-content", "chat", "tickets", "projects"].includes(tab) ? adminPath(`/${tab}`) : adminPath(`?tab=${tab}`),
     active: tab === activeTab,
-    unreadCount: tab === "messages" ? counts.unreadEnquiryCount : tab === "subscriptions" ? counts.pendingOrderCount : undefined,
-    unreadLabel: tab === "subscriptions" ? "orders awaiting payment confirmation" : "unread enquiries",
+    unreadCount: tab === "messages" ? counts.unreadEnquiryCount : tab === "update" ? counts.availableUpdateCount : undefined,
+    unreadLabel: tab === "orders"
+      ? "unread order notifications"
+      : tab === "update"
+        ? counts.availableUpdateCount === 1 ? "software update available" : "software updates available"
+        : "unread enquiries",
+    notificationKind: tab === "orders" ? "order" as const : undefined,
   }));
   return (
     <WorkspaceShell
@@ -73,15 +86,13 @@ export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount,
       notificationCount={notificationCount}
       navigationPanel={navigationPanel}
       accountAction={(
-        <Form method="post" action="/signout" reloadDocument>
-          <button type="submit" className="text-[#a0a3b5] transition hover:text-[#5a43d5]" aria-label="Sign out">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
-          </button>
-        </Form>
+        <ConfirmSignOutButton buttonClassName="neo-workspace__signout-trigger">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
+        </ConfirmSignOutButton>
       )}
       headerActions={headerActions}
     >
-      <span className="sr-only" role="status" aria-atomic="true">{`${counts.pendingOrderCount} orders awaiting payment confirmation, ${counts.unreadEnquiryCount} unread enquiries.`}</span>
+      <span className="sr-only" role="status" aria-atomic="true">{`${counts.unreadEnquiryCount} unread enquiries. ${counts.availableUpdateCount} ${counts.availableUpdateCount === 1 ? "software update" : "software updates"} available.`}</span>
       {children}
     </WorkspaceShell>
   );

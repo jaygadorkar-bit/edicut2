@@ -1,8 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { desc, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, isNotNull, isNull } from "drizzle-orm";
 import { contactMessages } from "@edicut/db/schema";
 import { getDbFromContext } from "../lib/db.server";
 import { requireContactInboxAccess } from "../lib/contact-inbox-access.server";
+import { getContactInboxRecordFilter } from "../lib/contact-message-filters.server";
 
 const MAX_CSV_EXPORT_ROWS = 1_000;
 
@@ -11,7 +12,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const { db } = await requireContactInboxAccess(request, getDbFromContext(context), context);
   const requestedFilter = new URL(request.url).searchParams.get("filter");
   const filter = requestedFilter === "replied" || requestedFilter === "unreplied" ? requestedFilter : "all";
-  const whereClause = filter === "replied" ? isNotNull(contactMessages.repliedAt) : filter === "unreplied" ? isNull(contactMessages.repliedAt) : undefined;
+  const whereClause = and(
+    getContactInboxRecordFilter(),
+    filter === "replied" ? isNotNull(contactMessages.repliedAt) : filter === "unreplied" ? isNull(contactMessages.repliedAt) : undefined,
+  );
   const rows = await db.select().from(contactMessages).where(whereClause).orderBy(desc(contactMessages.createdAt)).limit(MAX_CSV_EXPORT_ROWS + 1);
   const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
 

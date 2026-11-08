@@ -2,7 +2,7 @@ import { safeAdminRedirect } from "../lib/safe-redirect";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { Form, redirect, useActionData, useNavigation, useSearchParams, useSubmit } from "react-router";
+import { data, Form, redirect, useActionData, useLoaderData, useNavigation, useSearchParams, useSubmit } from "react-router";
 import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
 import { getDbFromContext } from "../lib/db.server";
 import {
@@ -11,17 +11,19 @@ import {
   destroyAdminSession,
   requireAdminUser,
   isAdminRole,
+  issueAuthCsrfToken,
+  verifyAuthCsrfToken,
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 import { verifyPassword } from "../lib/password.server";
-import { executeInvisibleRecaptcha } from "../lib/recaptcha.client";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
+import { isLocalDevelopmentHostname } from "../lib/recaptcha.shared";
 import {
   signInWithSupabase,
   supabaseAuthEnabled,
 } from "../integrations/supabase/auth.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
-import { isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
+import { readMutationForm } from "../lib/mutation-request.server";
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -44,12 +46,12 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export function headers() {
-  return {
-    "X-Robots-Tag": "noindex, nofollow, noarchive",
-    "Cache-Control": "no-store",
-    "Referrer-Policy": "same-origin",
-  };
+export function headers({ loaderHeaders, actionHeaders }: { loaderHeaders: Headers; actionHeaders: Headers }) {
+  const headers = new Headers(actionHeaders.has("Set-Cookie") ? actionHeaders : loaderHeaders);
+  headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  headers.set("Cache-Control", "no-store");
+  headers.set("Referrer-Policy", "same-origin");
+  return headers;
 }
 
 function safeRedirectTo(value: FormDataEntryValue | string | null) {
@@ -120,6 +122,10 @@ function pruneExpiredAttempts(store: Map<string, LoginAttempt>, now: number) {
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  const csrf = await issueAuthCsrfToken(request, context);
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  if (csrf.setCookie) headers.append("Set-Cookie", csrf.setCookie);
+
   const session = await getAdminSession(request.headers.get("Cookie"), context);
 
   if (session.has("adminUserId")) {
@@ -127,27 +133,28 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       await requireAdminUser(request, getDbFromContext(context), context);
     } catch (error) {
       if (!(error instanceof Response) || error.status !== 302) throw error;
-      throw redirect("/signin?redirectTo=%2Fdashboard", {
-        headers: { "Set-Cookie": await destroyAdminSession(session, context) },
-      });
+      headers.append("Set-Cookie", await destroyAdminSession(session, context));
+      return data({ csrfToken: csrf.token }, { headers });
     }
     throw redirect(ADMIN_BASE_PATH);
   }
 
-  throw redirect("/signin?redirectTo=%2Fdashboard");
+  return data({ csrfToken: csrf.token }, { headers });
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  if (!isSameSiteMutation(request)) {
-    return { error: "Admin request origin was rejected." };
-  }
-
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return { error: "Admin sign-in request is too large. Please try again." };
   }
 
   const formData = await readMutationForm(request, 64 * 1024);
   if (!formData) return { error: "Admin sign-in request could not be read. Please try again." };
+  if (!await verifyAuthCsrfToken(request, formData.get("csrfToken"), context)) {
+    const csrf = await issueAuthCsrfToken(request, context);
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    if (csrf.setCookie) headers.append("Set-Cookie", csrf.setCookie);
+    return data({ error: "This sign-in form expired. Please try again.", csrfToken: csrf.token }, { headers });
+  }
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const redirectTo = safeRedirectTo(formData.get("redirectTo"));
@@ -173,10 +180,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
     };
   }
 
-  const captcha = await verifyRecaptchaToken({
-    context,
-    token: formData.get("g-recaptcha-response"),
-  });
+  const captcha = isLocalDevelopmentHostname(new URL(request.url).hostname)
+    ? { success: true as const }
+    : await verifyRecaptchaToken({
+        context,
+        token: formData.get("g-recaptcha-response"),
+      });
 
   if (!captcha.success) {
     return { error: captcha.error };
@@ -232,6 +241,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function AdminLoginRoute() {
+  const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const submit = useSubmit();
@@ -240,6 +250,7 @@ export default function AdminLoginRoute() {
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [securityPending, setSecurityPending] = useState(false);
   const isSubmitting = navigation.state !== "idle" || securityPending;
+  const csrfToken = actionData && "csrfToken" in actionData ? actionData.csrfToken : loaderData.csrfToken;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
@@ -250,7 +261,10 @@ export default function AdminLoginRoute() {
     setSecurityPending(true);
 
     try {
-      await executeInvisibleRecaptcha(form, "admin_login");
+      if (!isLocalDevelopmentHostname(window.location.hostname)) {
+        const { executeInvisibleRecaptcha } = await import("../lib/recaptcha.client");
+        await executeInvisibleRecaptcha(form, "admin_login");
+      }
       await submit(form, { method: "post", action: ADMIN_LOGIN_PATH });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
@@ -267,8 +281,11 @@ export default function AdminLoginRoute() {
     setSecurityError(null);
     setSecurityPending(true);
     try {
-      await executeInvisibleRecaptcha(form, "admin_google_login");
-      await submit(form, { method: "post", action: "/auth/google" });
+      if (!isLocalDevelopmentHostname(window.location.hostname)) {
+        const { executeInvisibleRecaptcha } = await import("../lib/recaptcha.client");
+        await executeInvisibleRecaptcha(form, "admin_google_login");
+      }
+      form.submit();
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
     } finally {
@@ -315,15 +332,18 @@ export default function AdminLoginRoute() {
             <span className="material-symbols-outlined text-primary">lock</span>
           </div>
 
-          {securityError || actionData?.error || ["recaptcha", "google-unavailable"].includes(searchParams.get("error") || "") ? (
+          {securityError || actionData?.error || ["recaptcha", "google-unavailable", "auth-request"].includes(searchParams.get("error") || "") ? (
             <div role="alert" className="mt-5 rounded-lg border border-red-100 bg-[#FFF5F5] p-3 text-sm font-bold text-[#D90000]">
               {securityError || actionData?.error || (searchParams.get("error") === "google-unavailable"
                 ? "Google sign-in could not be completed. Please start a new sign-in attempt."
-                : "Security check failed. Please try again.")}
+                : searchParams.get("error") === "auth-request"
+                  ? "Your sign-in request expired. Please try again."
+                  : "Security check failed. Please try again.")}
             </div>
           ) : null}
 
-          <Form method="post" action="/auth/google" className="mt-6" onSubmit={handleGoogleSubmit}>
+          <form method="post" action="/auth/google" className="mt-6" onSubmit={handleGoogleSubmit}>
+            <input type="hidden" name="csrfToken" value={csrfToken} />
             <input type="hidden" name="mode" value="admin" />
             <input type="hidden" name="returnTo" value={redirectTo} />
             <input type="hidden" name="g-recaptcha-response" value="" />
@@ -331,7 +351,7 @@ export default function AdminLoginRoute() {
               <img src="/icons/google-g.png" alt="" className="h-5 w-auto shrink-0" aria-hidden="true" />
               Continue with Google
             </button>
-          </Form>
+          </form>
 
           <div className="my-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-gray-200" />
@@ -340,6 +360,7 @@ export default function AdminLoginRoute() {
           </div>
 
           <Form method="post" action={ADMIN_LOGIN_PATH} className="grid gap-4" onSubmit={handleSubmit}>
+            <input type="hidden" name="csrfToken" value={csrfToken} />
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <input type="hidden" name="g-recaptcha-response" value="" />
             <label className="grid gap-2 text-sm font-black">

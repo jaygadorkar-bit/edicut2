@@ -10,6 +10,7 @@ import {
   shouldIndexPage,
   serializeJsonLd,
 } from "./seo";
+import { PUBLIC_PAGE_PATHS } from "./public-pages";
 
 describe("SEO helpers", () => {
   it("uses the production origin when the configured URL is local", () => {
@@ -25,10 +26,28 @@ describe("SEO helpers", () => {
 
   it("allows only public marketing and policy routes to be indexed", () => {
     expect(isIndexablePublicPath("/")).toBe(true);
+    expect(isIndexablePublicPath("/why-hire-us")).toBe(true);
+    expect(isIndexablePublicPath("/services/youtube-video-editing")).toBe(true);
+    expect(isIndexablePublicPath("/services/not-a-service")).toBe(false);
     expect(isIndexablePublicPath("/pricing/creator")).toBe(true);
     expect(isIndexablePublicPath("/dashboard")).toBe(false);
     expect(isIndexablePublicPath("/checkout/creator")).toBe(false);
     expect(isIndexablePublicPath("/pricing/creator/extra")).toBe(false);
+  });
+
+  it("keeps all sitemap and prerender marketing pages indexable in production", () => {
+    for (const pathname of PUBLIC_PAGE_PATHS) {
+      expect(shouldIndexPage({ pathname, appUrl: "https://edicut.com", crawlingEnabled: true, maintenanceModeEnabled: false })).toBe(true);
+    }
+  });
+
+  it("does not advertise a failed route for indexing", () => {
+    const meta = createRouteMeta({
+      location: { pathname: "/pricing/missing" },
+      matches: [{ id: "root", loaderData: { appUrl: "https://edicut.com", searchCrawlingEnabled: true } }],
+      error: new Response("Not found", { status: 404 }),
+    }, "Package not found | EdiCut", "This editing package is unavailable.");
+    expect(meta).toContainEqual({ name: "robots", content: "noindex, nofollow, noarchive" });
   });
 
   it("disables indexing for local, maintenance, or explicitly disabled environments", () => {
@@ -63,7 +82,7 @@ describe("SEO helpers", () => {
       location: { pathname: "/contact" },
       matches: [{
         id: "root",
-        data: {
+        loaderData: {
           appUrl: "http://localhost:3002",
           searchCrawlingEnabled: true,
           maintenanceModeEnabled: false,
@@ -80,8 +99,8 @@ describe("SEO helpers", () => {
     const graph = schema["@graph"];
 
     expect(schema["@context"]).toBe("https://schema.org");
-    expect(graph[0]).toMatchObject({ "@type": "Organization", url: "https://edicut.com/" });
-    expect(graph[1]).toMatchObject({ "@type": "WebSite", url: "https://edicut.com/" });
+    expect(graph[0]).toMatchObject({ "@type": "Organization", name: "EdiCut", alternateName: "edicut.com", url: "https://edicut.com/", logo: "https://edicut.com/favicon.png" });
+    expect(graph[1]).toMatchObject({ "@type": "WebSite", name: "EdiCut", alternateName: "edicut.com", url: "https://edicut.com/" });
     expect(serializeJsonLd({ name: "</script>" })).toContain("\\u003c/script>");
   });
 });

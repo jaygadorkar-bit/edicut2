@@ -1,9 +1,12 @@
-import type { MetaFunction } from "react-router";
+import type { LinksFunction, MetaFunction } from "react-router";
 import { useState } from "react";
 import { CircleHelp, MessageCircle, Search, X } from "lucide-react";
 import { ButtonLink, PageShell, TrustStrip } from "../components/site/Marketing.js";
 import { FaqSection } from "../components/site/FaqSection";
 import { createRouteMeta } from "../lib/seo";
+import faqPageStyles from "../styles/faq-page.css?url";
+
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: faqPageStyles }];
 
 export const meta: MetaFunction = (args) => createRouteMeta(args,
   "YouTube Video Editing FAQs: Pricing, Process, and Delivery | EdiCut",
@@ -21,12 +24,17 @@ const allFaqs = [
   {
     category: "Workflow",
     question: "What is your turnaround time for first cuts and revisions?",
-    answer: "The first cut is delivered within 48 hours. Included revision rounds are submitted as timestamped notes; revision timing is agreed during the project.",
+    answer: "Single-video packages have a 48-hour first-cut target after the brief, footage access, and payment are confirmed. We agree timing for larger or custom projects before editing starts. Send revision feedback as timestamped notes; revision timing depends on the agreed scope.",
   },
   {
     category: "Pricing",
     question: "How do I change or cancel a monthly editing plan?",
     answer: "The workspace records project requests and invoices but does not manage recurring charges. Contact EdiCut support to discuss changes or cancellation under your confirmed service agreement before the next billing cycle.",
+  },
+  {
+    category: "Pricing",
+    question: "Can I pay with cryptocurrency, a card, Apple Pay, or Google Pay?",
+    answer: "EdiCut checkout uses Cryptomus for cryptocurrency payments. Choose a supported coin and network on the hosted payment page, check the amount and network carefully, and pay before the invoice expires. Credit cards, debit cards, Apple Pay, and Google Pay are not currently offered at EdiCut checkout.",
   },
   {
     category: "Pricing",
@@ -125,7 +133,7 @@ export default function FAQPage() {
         )}
       />
 
-      <section className="faq-page__support" aria-labelledby="faq-support-title">
+      <section data-analytics-region="faq" className="faq-page__support" aria-labelledby="faq-support-title">
         <div className="faq-page__support-panel neo-surface">
           <div className="faq-page__support-copy">
             <span className="faq-page__support-icon neo-icon-badge" aria-hidden="true">

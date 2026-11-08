@@ -14,10 +14,26 @@ export type WorkspaceEvent = {
   detail: string;
   to: string;
   occurredAt: string;
+  /** This viewer's receipt timestamp; null means unread. */
+  readAt?: string | null;
+  /** Account that owns this read receipt. */
+  readBy?: string | null;
+  priority?: "action" | "important" | "normal";
+  actionLabel?: string;
+  actionTo?: string;
+  groupKey?: string;
+};
+export type NotificationEventGroup = {
+  id: string;
+  events: WorkspaceEvent[];
+  priority: "action" | "important" | "normal";
+  occurredAt: string;
 };
 export type NotificationFeed = {
   kinds?: NotificationKind[];
   unavailableKinds?: NotificationKind[];
+  /** Whether per-viewer read receipts are available through PostgreSQL. */
+  readReceiptsAvailable?: boolean;
   identity: string;
   events: WorkspaceEvent[];
   generatedAt: string;
@@ -113,4 +129,47 @@ export function notificationTime(iso: string, now = Date.now()) {
     month: "short",
     timeZone: "Asia/Dhaka",
   }).format(new Date(iso));
+}
+
+const notificationPriorityRank = {
+  normal: 0,
+  important: 1,
+  action: 2,
+} as const;
+
+/** Group same-project updates while keeping each source event available for read state. */
+export function groupNotificationEvents(
+  events: WorkspaceEvent[],
+): NotificationEventGroup[] {
+  const groups = new Map<string, WorkspaceEvent[]>();
+  for (const event of events) {
+    const key = event.groupKey || event.id;
+    const members = groups.get(key) ?? [];
+    members.push(event);
+    groups.set(key, members);
+  }
+  return [...groups.entries()]
+    .map(([id, members]) => {
+      members.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+      const priority = members.reduce<NotificationEventGroup["priority"]>(
+        (highest, event) =>
+          notificationPriorityRank[event.priority ?? "normal"] >
+          notificationPriorityRank[highest]
+            ? event.priority ?? "normal"
+            : highest,
+        "normal",
+      );
+      return {
+        id,
+        events: members,
+        priority,
+        occurredAt: members[0]?.occurredAt ?? "",
+      };
+    })
+    .sort(
+      (a, b) =>
+        notificationPriorityRank[b.priority] -
+          notificationPriorityRank[a.priority] ||
+        b.occurredAt.localeCompare(a.occurredAt),
+    );
 }

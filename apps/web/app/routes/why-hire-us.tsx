@@ -19,6 +19,7 @@ import whyHirePageStyles from "../styles/why-hire-us-page.css?url";
 import filmStyles from "../styles/why-hire-us-film.css?url";
 
 export const links: LinksFunction = () => [
+  { rel: "preload", as: "image", href: "/artwork/why-hire-us/creator-recording-scene-b93b36d3.webp", type: "image/webp" },
   { rel: "stylesheet", href: whyHireStyles },
   { rel: "stylesheet", href: whyHirePageStyles },
   { rel: "stylesheet", href: filmStyles },

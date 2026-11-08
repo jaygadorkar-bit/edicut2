@@ -12,6 +12,7 @@ import { getPageWithinRange, getPositivePage } from "../lib/admin-data-requireme
 import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import { readMutationForm } from "../lib/mutation-request.server";
 import { isWorkspaceRecordId } from "../lib/workspace";
+import { getContactInboxRecordFilter } from "../lib/contact-message-filters.server";
 
 const PAGE_SIZE = 10;
 const MAX_IMPORT_BYTES = 1024 * 1024;
@@ -37,7 +38,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const requestedPage = getPositivePage(url.searchParams.get("page"));
   const eventId = url.searchParams.get("event");
   if (eventId && !isWorkspaceRecordId(eventId)) throw new Response("Enquiry not found.", { status: 404 });
-  const whereClause = eventId ? eq(contactMessages.id, eventId) : getFilterClause(filter);
+  const inboxRecordFilter = getContactInboxRecordFilter();
+  const whereClause = and(inboxRecordFilter, eventId ? eq(contactMessages.id, eventId) : getFilterClause(filter));
 
   if (url.searchParams.get("export") === "csv") {
     return redirect(`/dashboard/messages/export?filter=${filter}`, { headers: { "Cache-Control": "no-store" } });
@@ -45,9 +47,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   const [totalResult, repliedResult, unrepliedResult, unreadResult] = await Promise.all([
     db.select({ count: drizzleCount() }).from(contactMessages).where(whereClause),
-    db.select({ count: drizzleCount() }).from(contactMessages).where(isNotNull(contactMessages.repliedAt)),
-    db.select({ count: drizzleCount() }).from(contactMessages).where(isNull(contactMessages.repliedAt)),
-    db.select({ count: drizzleCount() }).from(contactMessages).where(and(isNull(contactMessages.repliedAt), ne(contactMessages.status, "read"))),
+    db.select({ count: drizzleCount() }).from(contactMessages).where(and(inboxRecordFilter, isNotNull(contactMessages.repliedAt))),
+    db.select({ count: drizzleCount() }).from(contactMessages).where(and(inboxRecordFilter, isNull(contactMessages.repliedAt))),
+    db.select({ count: drizzleCount() }).from(contactMessages).where(and(inboxRecordFilter, isNull(contactMessages.repliedAt), ne(contactMessages.status, "read"))),
   ]);
 
   const total = Number(totalResult[0]?.count || 0);
@@ -108,7 +110,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!ids.length || ids.length > PAGE_SIZE) return { ok: false };
     const viewedAt = new Date();
     await db.update(contactMessages).set({ status: "read", updatedAt: viewedAt })
-      .where(and(inArray(contactMessages.id, ids), isNull(contactMessages.repliedAt), ne(contactMessages.status, "read")));
+      .where(and(inArray(contactMessages.id, ids), getContactInboxRecordFilter(), isNull(contactMessages.repliedAt), ne(contactMessages.status, "read")));
     return { ok: true };
   }
 
@@ -139,7 +141,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       ));
     }
 
-    const [message] = await db.select().from(contactMessages).where(eq(contactMessages.id, messageId)).limit(1);
+    const [message] = await db.select().from(contactMessages).where(and(eq(contactMessages.id, messageId), getContactInboxRecordFilter())).limit(1);
     if (!message) {
       return redirect(withFlash(returnTo, "error", "Message not found."));
     }
@@ -180,8 +182,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return redirect(withFlash(returnTo, "error", `Delete at most ${MAX_BULK_MESSAGE_IDS} messages at a time.`));
     }
 
-    await db.delete(contactMessages).where(inArray(contactMessages.id, ids));
-    return redirect(withFlash(returnTo, "flash", `Deleted ${ids.length} message${ids.length === 1 ? "" : "s"}.`));
+    const deletedMessages = await db.delete(contactMessages)
+      .where(and(inArray(contactMessages.id, ids), getContactInboxRecordFilter()))
+      .returning({ id: contactMessages.id });
+    if (!deletedMessages.length) {
+      return redirect(withFlash(returnTo, "error", "No matching enquiries were found to delete."));
+    }
+    return redirect(withFlash(returnTo, "flash", `Deleted ${deletedMessages.length} message${deletedMessages.length === 1 ? "" : "s"}.`));
   }
 
   if (intent === "import") {

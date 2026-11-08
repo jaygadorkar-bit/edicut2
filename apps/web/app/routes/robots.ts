@@ -3,13 +3,13 @@ import { getDbFromContext } from "../lib/db.server";
 import { getSiteSettingsSnapshot } from "../lib/site-settings.server";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { resolveWebEnv } from "../lib/context.server";
-import { getCanonicalSiteOrigin, isLocalSiteUrl } from "../lib/seo";
+import { getCanonicalSiteOrigin, isProductionSiteUrl } from "../lib/seo";
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = getSupabaseClient(context) ? null : getDbFromContext(context ?? {});
   const { searchCrawlingEnabled, maintenanceModeEnabled } = await getSiteSettingsSnapshot(db, context);
   const appUrl = resolveWebEnv(context).APP_URL;
-  const disallowCrawling = !searchCrawlingEnabled || maintenanceModeEnabled || isLocalSiteUrl(appUrl);
+  const disallowCrawling = !searchCrawlingEnabled || maintenanceModeEnabled || !isProductionSiteUrl(appUrl);
   const body = disallowCrawling
     ? "User-agent: *\nDisallow: /\n"
     : `User-agent: *\nAllow: /\nSitemap: ${getCanonicalSiteOrigin(appUrl)}/sitemap.xml\n`;

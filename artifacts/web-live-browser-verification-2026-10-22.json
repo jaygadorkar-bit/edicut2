@@ -1,0 +1,44 @@
+{
+  "desktop": {
+    "canonical": "https://edicut.com/blog",
+    "cards": [
+      {
+        "footerTop": 697.796875,
+        "image": "/images/blog/choose-editing-partner.svg",
+        "loaded": true
+      },
+      {
+        "footerTop": 697.796875,
+        "image": "/images/blog/video-brief-checklist.svg",
+        "loaded": true
+      },
+      {
+        "footerTop": 697.796875,
+        "image": "/images/blog/creator-video-to-shorts.svg",
+        "loaded": true
+      },
+      {
+        "footerTop": 1290,
+        "image": "/images/blog/edicut-editing-team.svg",
+        "loaded": true
+      }
+    ],
+    "h1Count": 1,
+    "overflow": false,
+    "robots": "index, follow",
+    "title": "Video Editing Guides & Studio Insights | EdiCut Blog",
+    "url": "https://edicut.com/blog",
+    "viewport": {
+      "height": 720,
+      "width": 1280
+    }
+  },
+  "mobile": {
+    "allCoversLoaded": true,
+    "overflow": false,
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  }
+}

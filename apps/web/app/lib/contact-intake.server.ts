@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
+import { z } from "zod";
 import { contactIntakeSchema } from "@edicut/shared/contracts/operations";
 import { contactMessages } from "@edicut/db/schema";
 import { getDbFromContext } from "./db.server";
@@ -8,16 +9,18 @@ import { queueTelegramContactInquiryNotice } from "./telegram-notifications.serv
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "./usage-protection.server";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "./mutation-request.server";
 
-type ContactReturnPath = "/" | "/contact";
+type ContactReturnPath = "/" | "/contact" | "/video-editor-partner";
 
 export async function submitContactInquiry({
   request,
   context,
   returnTo,
+  briefMaxLength = 1200,
 }: {
   request: Request;
   context: ActionFunctionArgs["context"];
   returnTo: ContactReturnPath;
+  briefMaxLength?: number;
 }) {
   if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
@@ -26,7 +29,9 @@ export async function submitContactInquiry({
 
   const formData = await readMutationForm(request, 64 * 1024);
   if (!formData) return redirect(`${returnTo}?error=invalid#contact`);
-  const parsed = contactIntakeSchema.safeParse({
+  const parsed = contactIntakeSchema.extend({
+    brief: z.string().trim().min(20).max(briefMaxLength),
+  }).safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
     projectType: formData.get("projectType") || undefined,

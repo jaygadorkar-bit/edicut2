@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   ArrowLeft,
-  CheckCheck,
   ChevronRight,
   ClipboardList,
   ExternalLink,
@@ -21,7 +20,9 @@ import { ProjectAssignment } from "./ProjectAssignment";
 import {
   projectBriefSections,
   projectStatusLabel,
+  validateReviewComment,
   type FrameAnnotation,
+  type ReviewComment,
   type ReviewData,
   type ReviewResult,
 } from "../lib/project-review";
@@ -40,37 +41,48 @@ export function ProjectReviewWorkspace({
   onVersion: (versionId: string) => void;
   backTo?: string;
 }) {
-  const {
-    project,
-    versions,
-    comments,
-    canUpload,
-    canAssign,
-    canDecide,
-    ready,
-    actor,
-  } = data;
+  const { project, versions, comments, canUpload, canAssign, ready, actor } =
+    data;
   const version =
     versions.find((item) => item.id === data.selectedVersionId) ?? versions[0];
   const [tab, setTab] = useState("review"),
     [uploadOpen, setUploadOpen] = useState(false),
     [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ReviewResult | null>(null),
-    [time, setTime] = useState(0),
     [anchor, setAnchor] = useState<number | null>(null),
     [rangeEnd, setRangeEnd] = useState<number | null>(null),
     [selectedComment, setSelectedComment] = useState<string | null>(null),
     [annotation, setAnnotation] = useState<FrameAnnotation | null>(null);
-  const [decision, setDecision] = useState<
-      "approved" | "changes_requested" | null
-    >(null),
-    [decisionNote, setDecisionNote] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [localComments, setLocalComments] = useState<ReviewComment[]>([]);
+  const playbackTime = useRef(0);
+  const updateTime = useCallback((value: number) => {
+    playbackTime.current = value;
+  }, []);
+  const getTime = useCallback(
+    () => player.current?.currentTime() ?? playbackTime.current,
+    [],
+  );
+  const visibleComments = useMemo(() => {
+    const saved = new Set(comments.map((comment) => comment.id));
+    return [
+      ...comments,
+      ...localComments.filter((local) => !saved.has(local.id)),
+    ];
+  }, [comments, localComments]);
+  useEffect(() => {
+    const saved = new Set(comments.map((comment) => comment.id));
+    setLocalComments((current) => {
+      const next = current.filter((local) => !saved.has(local.id));
+      return next.length === current.length ? current : next;
+    });
+  }, [comments]);
+  const [selectedCommentKey, setSelectedCommentKey] = useState(0);
   const [fileName, setFileName] = useState(""),
     [shareUrl, setShareUrl] = useState("");
   const inFlight = useRef(false),
     player = useRef<ReviewPlayerHandle | null>(null),
-    composer = useRef<HTMLTextAreaElement>(null),
-    decisionRef = useRef<HTMLDivElement>(null);
+    composer = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
   const dirty = useRef(false),
     draftSources = useRef({ feedback: false, upload: false, metadata: false }),
@@ -85,11 +97,9 @@ export function ProjectReviewWorkspace({
     dirty.current = Object.values(draftSources.current).some(Boolean);
   }, []);
   useEffect(() => {
-    draftSources.current.metadata = Boolean(
-      fileName.trim() || shareUrl.trim() || decisionNote.trim(),
-    );
+    draftSources.current.metadata = Boolean(fileName.trim() || shareUrl.trim());
     dirty.current = Object.values(draftSources.current).some(Boolean);
-  }, [fileName, shareUrl, decisionNote]);
+  }, [fileName, shareUrl]);
   function switchVersion(id: string) {
     if (busy || id === data.selectedVersionId) return;
     if (dirty.current) setPendingSwitch(id);
@@ -108,10 +118,6 @@ export function ProjectReviewWorkspace({
     window.addEventListener("beforeunload", protect);
     return () => window.removeEventListener("beforeunload", protect);
   }, []);
-  const openChanges = comments.filter(
-    (comment) =>
-      !comment.parentId && !comment.resolved && comment.category === "change",
-  ).length;
   async function submit(
     form: FormData,
     onProgress?: (percent: number) => void,
@@ -120,11 +126,53 @@ export function ProjectReviewWorkspace({
     inFlight.current = true;
     setBusy(true);
     setResult(null);
+    const id = String(form.get("commentId") ?? "");
+    const parsed =
+      version && form.get("intent") === "add-comment" && !form.has("voice")
+        ? validateReviewComment(form, version.durationMs).value
+        : undefined;
+    if (parsed && id) {
+      const parentId = String(form.get("parentId") ?? "") || null;
+      const now = new Date().toISOString();
+      setLocalComments((current) => [
+        ...current.filter((comment) => comment.id !== id),
+        {
+          id,
+          versionId: version.id,
+          parentId,
+          actorKey: actor.key,
+          authorName: actor.name,
+          authorRole: actor.role,
+          body: parsed.body,
+          timestampMs: parentId ? null : parsed.timestampMs,
+          endMs: parentId ? null : parsed.endMs,
+          annotation: parentId ? null : parsed.annotation,
+          category: parsed.category as ReviewComment["category"],
+          priority: parsed.priority as ReviewComment["priority"],
+          resolved: false,
+          createdAt: now,
+          updatedAt: now,
+          pending: true,
+        },
+      ]);
+    }
+    function settleComment(failed: boolean) {
+      if (!parsed) return;
+      setLocalComments((current) =>
+        failed
+          ? current.filter((comment) => comment.id !== id)
+          : current.map((comment) =>
+              comment.id === id ? { ...comment, pending: false } : comment,
+            ),
+      );
+    }
     try {
       const response = await onAction(form, onProgress);
+      settleComment(Boolean(response.error));
       setResult(response);
       return response;
     } catch {
+      settleComment(true);
       const response = {
         error:
           "Your change could not be confirmed. Check your connection and try again; your draft is still here.",
@@ -136,6 +184,11 @@ export function ProjectReviewWorkspace({
       setBusy(false);
     }
   }
+  useEffect(() => {
+    if (!result?.success) return;
+    const timeout = window.setTimeout(() => setResult(null), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [result]);
   const date = project.deadline
     ? new Date(`${project.deadline}T00:00:00Z`).toLocaleDateString("en-GB", {
         day: "numeric",
@@ -143,37 +196,72 @@ export function ProjectReviewWorkspace({
         timeZone: "UTC",
       })
     : "To be confirmed";
+  const versionSelector = version ? (
+    <div className="review-version-toolbar">
+      <div className="review-version-toolbar__select">
+        <label id="review-version-label" htmlFor="review-version">
+          Version
+        </label>
+        <FormSelect
+          id="review-version"
+          name="version"
+          value={version.id}
+          onChange={(value) => {
+            if (busy) return;
+            player.current?.pause();
+            switchVersion(value);
+          }}
+          options={versions.map((item, index) => ({
+            value: item.id,
+            label: `v${versions.length - index} · ${item.title}${item.id === versions[0].id ? " (latest)" : ""}`,
+          }))}
+          className="review-field"
+        />
+      </div>
+      {version.decision !== "pending" ? (
+        <span
+          className={`review-version-decision review-version-decision--${version.decision}`}
+        >
+          {version.decision === "approved"
+            ? "Approved"
+            : version.decision === "changes_requested"
+              ? "Changes requested"
+              : "Awaiting feedback"}
+        </span>
+      ) : null}
+    </div>
+  ) : null;
   return (
-    <div className="project-review project-review--focused">
+    <div className="project-review project-review--focused project-review--proofing">
       <header className="review-project-heading">
         <div className="review-project-title">
-      <Link
-        to={backTo}
-        className="review-back"
-        onClick={(event) => {
-          if (busy) {
-            event.preventDefault();
-            return;
-          }
-          if (
-            dirty.current &&
-            !event.ctrlKey &&
-            !event.metaKey &&
-            !event.shiftKey &&
-            event.button === 0
-          ) {
-            event.preventDefault();
-            setPendingSwitch("back");
-          }
-        }}
-      >
-        <ArrowLeft size={16} />
-        Projects
-      </Link>
+          <Link
+            to={backTo}
+            className="review-back"
+            onClick={(event) => {
+              if (busy) {
+                event.preventDefault();
+                return;
+              }
+              if (
+                dirty.current &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.shiftKey &&
+                event.button === 0
+              ) {
+                event.preventDefault();
+                setPendingSwitch("back");
+              }
+            }}
+          >
+            <ArrowLeft size={16} />
+            Projects
+          </Link>
           <h1>{project.title}</h1>
-            <span className={`review-status review-status--${project.status}`}>
-              {projectStatusLabel(project.status)}
-            </span>
+          <span className={`review-status review-status--${project.status}`}>
+            {projectStatusLabel(project.status)}
+          </span>
         </div>
         <div className="review-project-heading__actions">
           {canUpload ? (
@@ -216,12 +304,27 @@ export function ProjectReviewWorkspace({
           </button>
         ))}
       </nav>
-      {result?.error || result?.success ? (
+      {result?.error ? (
+        <div className="review-notice is-error" role="alert">
+          <span>{result.error}</span>
+          <button
+            type="button"
+            className="review-icon-button"
+            onClick={() => setResult(null)}
+            aria-label="Dismiss message"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ) : null}
+      {result?.success ? (
         <div
-          className={`review-notice ${result.error ? "is-error" : "is-success"}`}
-          role={result.error ? "alert" : "status"}
+          className="review-toast review-toast--success"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
         >
-          <span>{result.error || result.success}</span>
+          <span>{result.success}</span>
           <button
             type="button"
             className="review-icon-button"
@@ -255,37 +358,6 @@ export function ProjectReviewWorkspace({
       <div hidden={tab !== "review"}>
         {version ? (
           <>
-            <div className="review-version-toolbar">
-              <div className="review-version-toolbar__select">
-                <label id="review-version-label" htmlFor="review-version">
-                  Version
-                </label>
-                <FormSelect
-                  id="review-version"
-                  name="version"
-                  value={version.id}
-                  onChange={(value) => {
-                    if (busy) return;
-                    player.current?.pause();
-                    switchVersion(value);
-                  }}
-                  options={versions.map((item, index) => ({
-                    value: item.id,
-                    label: `v${versions.length - index} · ${item.title}${item.id === versions[0].id ? " (latest)" : ""}`,
-                  }))}
-                  className="review-field"
-                />
-              </div>
-              {version.decision !== "pending" ? <span
-                className={`review-version-decision review-version-decision--${version.decision}`}
-              >
-                {version.decision === "approved"
-                  ? "Approved"
-                  : version.decision === "changes_requested"
-                    ? "Changes requested"
-                    : "Awaiting feedback"}
-              </span> : null}
-            </div>
             <div className="review-workbench">
               <div className="review-workbench__video">
                 <ReviewPlayer
@@ -299,21 +371,25 @@ export function ProjectReviewWorkspace({
                   }
                   title={version.title}
                   durationMs={version.durationMs}
+                  mediaBytes={version.bytes}
                   draftAnnotation={annotation}
                   readOnly={version.decision === "approved"}
-                  comments={comments}
-                  onTime={setTime}
+                  comments={visibleComments}
+                  draftBody={draftBody}
+                  draftTime={anchor}
+                  setDraftBody={setDraftBody}
+                  onPost={() => composer.current?.form?.requestSubmit()}
+                  busy={busy}
+                  onTime={updateTime}
                   onMark={(milliseconds) => {
                     setAnchor(milliseconds);
                     setRangeEnd(null);
                     setAnnotation(null);
                   }}
-                  onRange={(start, end) => {
-                    setAnchor(start);
-                    setRangeEnd(end);
-                    setAnnotation(null);
+                  onSelectComment={(id) => {
+                    setSelectedComment(id);
+                    setSelectedCommentKey((key) => key + 1);
                   }}
-                  onSelectComment={setSelectedComment}
                   onAnnotation={setAnnotation}
                   onAddComment={() => {
                     composer.current?.focus({ preventScroll: true });
@@ -324,159 +400,37 @@ export function ProjectReviewWorkspace({
               <ReviewFeedback
                 key={version.id}
                 version={version}
-                comments={comments}
-                actor={actor}
+                versionSelector={versionSelector}
+                comments={visibleComments}
+                actorKey={actor.key}
                 busy={busy}
                 onSubmit={submit}
                 onSeek={(milliseconds, mark) =>
                   player.current?.seek(milliseconds, mark)
                 }
-                time={time}
+                getTime={getTime}
                 anchor={anchor}
                 setAnchor={setAnchor}
                 rangeEnd={rangeEnd}
                 setRangeEnd={setRangeEnd}
                 selectedComment={selectedComment}
+                selectedCommentKey={selectedCommentKey}
                 annotation={annotation}
                 setAnnotation={setAnnotation}
                 composerRef={composer}
                 onDraftChange={markDirty}
                 onPause={() => player.current?.pause()}
+                draftBody={draftBody}
+                setDraftBody={setDraftBody}
+                voiceUrl={(commentId) =>
+                  `${mediaUrl(version.id).replace(/([?&])media=[^&]*/, "$1voice=" + encodeURIComponent(commentId))}`
+                }
+                voiceAvailable={Boolean(
+                  data.storage?.connected &&
+                    data.storage.provider === "google_drive",
+                )}
+                active={tab === "review"}
               />
-              <div className="review-workbench__details">
-                {version.note ? (
-                  <details className="review-editor-note">
-                    <summary>Editor’s note</summary>
-                      <p>{version.note}</p>
-                  </details>
-                ) : null}
-                <div className="review-decision">
-                  <div>
-                    <h2>
-                      {version.decision === "approved"
-                        ? "This cut is approved"
-                        : version.id !== versions[0]?.id
-                          ? "You’re viewing an earlier version"
-                          : "Review decision"}
-                    </h2>
-                    {canDecide && openChanges > 0 ? <p>
-                      {openChanges} open {openChanges === 1 ? "change" : "changes"} to resolve before approval.
-                    </p> : null}
-                  </div>
-                  {canDecide &&
-                  version.id === versions[0]?.id &&
-                  version.decision === "pending" ? (
-                    <div className="review-decision__buttons">
-                      <button
-                        type="button"
-                        className="review-button"
-                        disabled={busy}
-                        onClick={() => {
-                          setDecision("changes_requested");
-                          setTimeout(() => decisionRef.current?.focus(), 0);
-                        }}
-                      >
-                        Request changes
-                      </button>
-                      <button
-                        type="button"
-                        className="review-button review-button--approve"
-                        disabled={busy || openChanges > 0}
-                        onClick={() => {
-                          setDecision("approved");
-                          setTimeout(() => decisionRef.current?.focus(), 0);
-                        }}
-                      >
-                        <CheckCheck size={17} />
-                        Approve version
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                {decision ? (
-                  <div
-                    ref={decisionRef}
-                    tabIndex={-1}
-                    className="review-decision-confirm"
-                    role="region"
-                    aria-label="Confirm review decision"
-                  >
-                    <h3>
-                      {decision === "approved"
-                        ? "Approve this version?"
-                        : "Send this version back for changes?"}
-                    </h3>
-                    <p>
-                      {decision === "approved"
-                        ? "This marks the project delivered and keeps this version’s feedback for reference."
-                        : "Your editor will see the open comments and this note. A new cut starts a new review."}
-                    </p>
-                    <label htmlFor="decision-note">
-                      {decision === "approved"
-                        ? "Final note (optional)"
-                        : "Note for your editor"}
-                      <textarea
-                        id="decision-note"
-                        className="review-field"
-                        rows={2}
-                        maxLength={4000}
-                        value={decisionNote}
-                        onChange={(event) =>
-                          setDecisionNote(event.target.value)
-                        }
-                        placeholder={
-                          decision === "approved"
-                            ? "Thanks, this is ready to go."
-                            : "Summarize anything that isn’t covered by the comments."
-                        }
-                      />
-                    </label>
-                    <div>
-                      <button
-                        type="button"
-                        className="review-button review-button--quiet"
-                        disabled={busy}
-                        onClick={() => setDecision(null)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        className={`review-button ${decision === "approved" ? "review-button--approve" : "review-button--primary"}`}
-                        disabled={
-                          busy ||
-                          (decision === "changes_requested" &&
-                            !openChanges &&
-                            !decisionNote.trim())
-                        }
-                        onClick={async () => {
-                          const form = new FormData();
-                          Object.entries({
-                            intent: "review-decision",
-                            versionId: version.id,
-                            decision,
-                            note: decisionNote,
-                            expectedRevision: String(
-                              project.reviewRevision ?? 0,
-                            ),
-                          }).forEach(([key, value]) => form.set(key, value));
-                          const response = await submit(form);
-                          if (!response.error) {
-                            setDecision(null);
-                            setDecisionNote("");
-                          }
-                        }}
-                      >
-                        {busy
-                          ? "Saving…"
-                          : decision === "approved"
-                            ? "Confirm approval"
-                            : "Send changes"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
             </div>
           </>
         ) : (
@@ -524,7 +478,9 @@ export function ProjectReviewWorkspace({
         <section className="review-brief">
           <div>
             <h2>The project brief</h2>
-            <p>{project.channelName} · Delivery {date}</p>
+            <p>
+              {project.channelName} · Delivery {date}
+            </p>
             <dl className="review-brief__text">
               {projectBriefSections(project.notes).map((section, index) => (
                 <div key={index}>

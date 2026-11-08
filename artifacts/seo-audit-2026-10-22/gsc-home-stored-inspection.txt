@@ -1,0 +1,101 @@
+help_outline
+Help
+manage_accounts
+User settings
+	
+notifications
+Messages
+6
+
+home
+Overview
+lightbulb_2
+Insights
+trending_up
+Performance
+keyboard_arrow_down
+search
+URL inspection
+Indexing
+keyboard_arrow_up
+file_copy
+Pages
+account_tree
+Sitemaps
+visibility_off
+Removals
+Experience
+keyboard_arrow_up
+speed
+Core Web Vitals
+lock
+HTTPS
+Enhancements
+keyboard_arrow_up
+layers
+Breadcrumbs
+Security & Manual Actions
+keyboard_arrow_down
+link_2
+Links
+trophy
+Achievements
+settings
+Settings
+feedback
+Submit feedback
+info
+About Search Console
+PrivacyTerms
+https://edicut.com/
+URL Inspection
+TEST LIVE URL
+check_circle
+URL is on Google
+It can appear in Google Search results (if not subject to a manual action or removal request) with all relevant enhancements. Learn more
+VIEW CRAWLED PAGE
+Page changed?
+REQUEST INDEXING
+check_circle
+Page indexing
+Page is indexed
+
+Discovery
+Sitemaps
+https://edicut.com/sitemap.xml
+Referring page
+http://edicut.com/
+http://edicut.com/pricing/creator-plus
+https://seol.store/domain/domain/part/04-03-2025-155
+https://jacobverghese.info/c8fc72123d4ba37eb5c6107c8141ca5d-list.html
+Crawl
+Last crawl
+Oct 21, 2026, 2:24:02 AM
+Crawled as
+Googlebot smartphone
+Crawl allowed?
+Yes
+Page fetch
+Successful
+Indexing allowed?
+Yes
+Indexing
+User-declared canonical
+https://edicut.com/
+Google-selected canonical
+
+Inspected URL
+LEARN MORE
+OPEN REPORT
+Enhancements & Experience
+check_circle
+HTTPS
+Page is served over HTTPS
+
+
+URL inspection
+Learn how the Google Index sees your page. Use this to troubleshoot if your page isn't appearing, or isn't appearing properly, in Google Search results.
+Learn more
+Got it
+New! Discover how visitors find your Instagram, TikTok, X and YouTube content on Google Search
+close

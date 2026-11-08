@@ -13,6 +13,10 @@
     "migrations_dir": "../../packages/db/d1/chat",
     "migrations_pattern": "../../packages/db/d1/chat/[0-9]*.sql"
   }],
+  "hyperdrive": [{
+    "binding": "SUPABASE_HYPERDRIVE",
+    "id": "3419622095a448329b465a6ea07bdd1e"
+  }],
   "durable_objects": { "bindings": [{ "name": "CHAT_SOCKET_HUB", "class_name": "ChatSocketHub" }] },
   "migrations": [{ "tag": "chat-sockets-v1", "new_sqlite_classes": ["ChatSocketHub"] }],
   "routes": [
@@ -82,6 +86,8 @@
       "simple": { "limit": 5, "period": 60 }
     }
   ],
+  // Local Node uses SUPABASE_DATABASE_URL (Supavisor session pooler URI, port 5432).
+  // Production database access uses the SUPABASE_HYPERDRIVE binding above.
   // Configure these at deploy time with `wrangler secret put`:
   // SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SERVICE_ROLE_KEY,
   // Optional dashboard analytics: SUPABASE_ACCESS_TOKEN (scoped to analytics_usage_read),
@@ -89,6 +95,7 @@
   // CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_ZONE_ID,
   // Telegram order and contact inquiry notifications: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID,
   // both configured with `wrangler secret put`.
+  // Cryptomus: configure CRYPTOMUS_MERCHANT_ID and CRYPTOMUS_PAYMENT_API_KEY as Worker secrets.
   // CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET,
   // CLOUDINARY_VIDEO_CLOUD_NAME, CLOUDINARY_VIDEO_API_KEY, CLOUDINARY_VIDEO_API_SECRET,
   // AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET,
@@ -101,6 +108,8 @@
     "CLOUDFLARE_ZONE_NAME": "edicut.com",
     "CLOUDFLARE_WORKER_NAME": "edicut-web",
     "APP_URL": "https://edicut.com",
+    "APP_ENV": "production",
+    "CRYPTOMUS_TEST_WEBHOOK_ENABLED": "false",
     "GOOGLE_DRIVE_ACCOUNT_EMAIL": "jaygadorkar@gmail.com",
     "DEBUG_MODE": "false",
     "CHAT_BACKEND": "d1",
@@ -109,7 +118,22 @@
   "assets": {
     "directory": "./build/client",
     "binding": "ASSETS",
-    "run_worker_first": true
+    "html_handling": "drop-trailing-slash",
+    "run_worker_first": [
+      "/",
+      "/about",
+      "/about/*",
+      "/why-hire-us",
+      "/services",
+      "/services/*",
+      "/pricing",
+      "/pricing/*",
+      "/portfolio",
+      "/faq",
+      "/contact",
+      "/privacy",
+      "/terms"
+    ]
   },
   "observability": {
     "enabled": true

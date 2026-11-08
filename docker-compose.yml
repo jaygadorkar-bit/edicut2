@@ -7,7 +7,7 @@ services:
     init: true
     restart: "no"
     working_dir: /app
-    # Uses Neon for account/billing authorization and the live D1 chat database.
+    # Uses Supabase Postgres for application data and the live D1 chat database.
     # The management token stays server-side in this local development container.
     env_file:
       - .env.cloudflare
@@ -20,6 +20,7 @@ services:
       CHAT_D1_DATABASE_ID: "248da0e0-8360-4d6d-9d06-83e1504f332f"
       CLOUDFLARE_ACCOUNT_ID: "f2c46bb116722bcb7dc4be44e500154b"
       CLOUDFLARE_CHAT_DEV_API_TOKEN: ${CLOUDFLARE_MASTER_API_TOKEN:?Set CLOUDFLARE_MASTER_API_TOKEN in the local .env}
+      SUPABASE_DATABASE_URL: ${SUPABASE_DATABASE_URL:?Set SUPABASE_DATABASE_URL in the root .env}
       APP_URL: http://localhost:3002
       AUTH_URL: http://localhost:3002/api/auth
       NEXT_PUBLIC_APP_URL: http://localhost:3002

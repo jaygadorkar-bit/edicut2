@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { monthlyAddOnQuoteHref, monthlyAddOnQuotePrefill, packageAddOnQuery, packageAddOnTotal, parsePackageAddOns, savedPackageAddOns, selectedPackageAddOns, withoutIncludedThumbnails } from "./package-addons";
-import { SINGLE_VIDEO_PACKAGES, SUBSCRIPTION_PACKAGES, getCheckoutUrl } from "./subscriptions";
+import { SHORT_FORM_PACKAGE_SLUG, SINGLE_VIDEO_PACKAGES, SUBSCRIPTION_PACKAGES, getCheckoutUrl } from "./subscriptions";
 
 describe("optional package add-ons", () => {
-  it.each(SINGLE_VIDEO_PACKAGES)("offers both $20 extras with $name without including a thumbnail", pack => {
+  it.each(SINGLE_VIDEO_PACKAGES.filter(pack => pack.slug !== SHORT_FORM_PACKAGE_SLUG))("offers both $20 extras with $name without including a thumbnail", pack => {
     expect([...pack.features, ...pack.deliverables].join(" ")).not.toMatch(/thumbnail/i);
-    const addOns = parsePackageAddOns(["short-form", "thumbnail"], pack.packageType)!;
+    const addOns = parsePackageAddOns(["short-form", "thumbnail"], pack.packageType, pack.slug)!;
     expect(packageAddOnTotal(addOns)).toBe(4000);
     expect(getCheckoutUrl(pack, { addOns: addOns.map(item => item.id), affiliateCode: "partner-1" })).toBe(`/checkout/${pack.slug}?addon=thumbnail&addon=short-form&ref=PARTNER-1`);
+  });
+  it("does not offer a second short-form cut as an add-on to the short-form package", () => {
+    const pack = SINGLE_VIDEO_PACKAGES[0]!;
+    expect(pack.slug).toBe(SHORT_FORM_PACKAGE_SLUG);
+    expect(parsePackageAddOns(["short-form"], "single", pack.slug)).toBeNull();
+    expect(parsePackageAddOns(["thumbnail"], "single", pack.slug)).toMatchObject([{ id: "thumbnail", amountCents: 2000 }]);
+    expect(getCheckoutUrl(pack, { addOns: ["short-form"], affiliateCode: "partner-1" })).toBe(`/checkout/${pack.slug}?ref=PARTNER-1`);
   });
   it.each(SUBSCRIPTION_PACKAGES)("excludes per-video charges from $name monthly checkout", pack => {
     expect(selectedPackageAddOns(["thumbnail", "short-form"], pack.packageType)).toEqual([]);

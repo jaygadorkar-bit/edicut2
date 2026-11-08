@@ -85,31 +85,15 @@ describe("customer subscription route", () => {
   });
 });
 describe("admin subscription route", () => {
-  it("opens a selected order independently of its old status or page", async () => {
-    const id = "11111111-1111-4111-8111-111111111111";
-    const result = await adminLoader(args(undefined, `?page=99&event=${id}`));
-    expect(result.page).toBe(1);
-    expect(mocks.listAdminSubscriptions).toHaveBeenCalledWith(expect.anything(), 1, "unpaid", id);
+  it.each(["", "?status=paid&page=2", "?event=11111111-1111-4111-8111-111111111111&page=99"])("redirects legacy order links into the separate Orders page while preserving context: %s", async query => {
+    const result = await adminLoader(args(undefined, query));
+    const location = new URL(result.headers.get("Location")!, "http://localhost:3002");
+    expect(location.pathname).toBe("/site/node-logmin/orders");
+    for (const [key, value] of new URLSearchParams(query)) expect(location.searchParams.get(key)).toBe(value);
+    expect(mocks.listAdminSubscriptions).not.toHaveBeenCalled();
   });
-  it("lists records without sending private admin fields", async () => {
-    const result = await adminLoader(args());
-    expect(mocks.listAdminSubscriptions).toHaveBeenCalledWith(expect.anything(), 1, "unpaid", undefined);
-    expect(result.admin).not.toHaveProperty("passwordHash");
-    expect(result.status).toBe("unpaid");
-    expect(result.summary).toEqual({ total: 3, paid: 1, unpaid: 2 });
-  });
-  it("applies paid filtering before pagination", async () => {
-    mocks.subscriptionSummaryRows = [{ total: 81, paid: 51, unpaid: 30 }];
-    const result = await adminLoader(args(undefined, "?status=paid&page=2"));
-    expect(mocks.listAdminSubscriptions).toHaveBeenCalledWith(expect.anything(), 2, "paid", undefined);
-    expect(result.status).toBe("paid"); expect(result.page).toBe(2);
-  });
-  it("clamps an out-of-range page to the last page for the selected status", async () => {
-    mocks.subscriptionSummaryRows = [{ total: 26, paid: 0, unpaid: 26 }];
-    const result = await adminLoader(args(undefined, "?status=unpaid&page=4"));
-    expect(result.page).toBe(2);
-    expect(mocks.listAdminSubscriptions).toHaveBeenNthCalledWith(1, expect.anything(), 4, "unpaid", undefined);
-    expect(mocks.listAdminSubscriptions).toHaveBeenNthCalledWith(2, expect.anything(), 2, "unpaid");
+  it("rejects invalid legacy event links", async () => {
+    await expect(adminLoader(args(undefined, "?event=invalid"))).rejects.toMatchObject({ status: 404 });
   });
   it("downloads the full CSV for the selected status with safe attachment headers", async () => {
     const result = await adminExportLoader(args(undefined, "?status=paid"));

@@ -3,6 +3,7 @@ import type { SupabaseRuntimeContext } from "../integrations/supabase/client.ser
 import { ALL_EDITING_PACKAGES, formatPackagePrice, getCatalogPackage, parsePackagePrice, REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING, type EditingPackage } from "./subscriptions";
 import { getSiteSetting, saveSiteSetting } from "./site-settings.server";
 import { withoutIncludedThumbnails } from "./package-addons";
+import { canonicalPricingPackageSlug } from "./pricing-slugs";
 
 const PRICING_PACKAGES_KEY = "pricing_packages";
 
@@ -75,6 +76,17 @@ function stringList(value: unknown) {
   return value.map((item) => String(item).trim()).filter(Boolean);
 }
 
+function migrateLegacyMonthlyPackageName(slug: string, name: string) {
+  const currentName = name.trim().toLocaleLowerCase();
+  const renames: Record<string, { previous: string[]; current: string }> = {
+    creator: { previous: ["basic", "starter"], current: "Essential" },
+    "creator-plus": { previous: ["medium", "growth"], current: "Pro" },
+    "creator-pro": { previous: ["pro", "studio"], current: "Max" },
+  };
+  const rename = renames[slug];
+  return rename?.previous.includes(currentName) ? rename.current : name;
+}
+
 function includePackageRequirements(items: string[], catalogPackage: EditingPackage, list: "features" | "deliverables") {
   items = withoutIncludedThumbnails(items);
   const isStudio = catalogPackage.slug === "creator-pro";
@@ -97,8 +109,9 @@ function includePackageRequirements(items: string[], catalogPackage: EditingPack
 function normalizePackage(value: unknown, index: number): PricingPackage | null {
   if (!value || typeof value !== "object") return null;
   const row = value as Partial<PricingPackage>;
-  const name = String(row.name || "").trim();
-  const slug = packageSlug(String(row.slug || name), name);
+  const savedName = String(row.name || "").trim();
+  const slug = canonicalPricingPackageSlug(packageSlug(String(row.slug || savedName), savedName));
+  const name = migrateLegacyMonthlyPackageName(slug, savedName);
   const price = String(row.price || "").trim();
   const description = String(row.description || "").trim();
   const savedSortOrder = typeof row.sortOrder === "number" ? row.sortOrder : null;
@@ -130,7 +143,10 @@ function normalizePackage(value: unknown, index: number): PricingPackage | null 
 }
 
 export function sortPackages(packages: PricingPackage[]) {
-  return [...packages].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  const catalogOrder = new Map<string, number>(ALL_EDITING_PACKAGES.map((item, index): [string, number] => [item.slug, index]));
+  return [...packages].sort((a, b) => a.sortOrder - b.sortOrder
+    || (catalogOrder.get(a.slug) ?? Number.MAX_SAFE_INTEGER) - (catalogOrder.get(b.slug) ?? Number.MAX_SAFE_INTEGER)
+    || a.name.localeCompare(b.name));
 }
 
 function hasOutdatedDefaultCapacityCopy(pkg: PricingPackage) {
@@ -159,7 +175,7 @@ function replaceLegacyDefaultPricing(packages: PricingPackage[]) {
 
   const merged = defaultPricingPackages.map((plan) => {
     const previous = packages.find((pkg) => pkg.slug === plan.slug);
-    if (!previous) return plan;
+    if (!previous) return { ...plan };
     const refreshDefaults = (plan.packageType === "monthly" && isLegacyMonthlySnapshot)
       || parsePackagePrice(previous.price) === null;
     const refreshFeaturePrice = plan.slug === "single-feature" && parsePackagePrice(previous.price) === 189;
@@ -181,6 +197,14 @@ function replaceLegacyDefaultPricing(packages: PricingPackage[]) {
       sortOrder: previous.sortOrder,
     };
   });
+
+  if (!packages.some((pkg) => pkg.slug === "short-form-video-editing")) {
+    const firstOtherSingleOrder = Math.min(...merged
+      .filter((pkg) => pkg.packageType === "single" && pkg.slug !== "short-form-video-editing")
+      .map((pkg) => pkg.sortOrder));
+    const shortForm = merged.find((pkg) => pkg.slug === "short-form-video-editing");
+    if (shortForm && Number.isFinite(firstOtherSingleOrder)) shortForm.sortOrder = Math.min(shortForm.sortOrder, Math.max(0, firstOtherSingleOrder - 1));
+  }
 
   return sortPackages(merged);
 }
@@ -212,8 +236,8 @@ export async function getPricingPackages(
       const discardedPackages = parsed.filter((item) => !normalizePackage(item, 0));
       const hasUnexpectedPackage = discardedPackages.some((item) => {
         const row = item && typeof item === "object" ? item as { slug?: unknown } : {};
-        // This retired package is intentionally discarded when migrating the catalog.
-        return row.slug !== "single-short";
+        // Retired package rows are intentionally discarded when migrating the catalog.
+        return row.slug !== "single-short" && row.slug !== "single-studio";
       });
       if (hasUnexpectedPackage || !packages.length) {
         throw new Error("Saved pricing packages could not be read safely.");

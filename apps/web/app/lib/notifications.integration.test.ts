@@ -4,6 +4,9 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import type { DatabaseClient } from "@edicut/db/client";
 import {
   getWorkspaceNotificationFeed,
+  importUserWorkspaceEventReads,
+  setAdminWorkspaceEventsRead,
+  setUserWorkspaceEventsRead,
   type NotificationViewer,
 } from "./notifications.server";
 const connection = process.env.REVIEW_TEST_DATABASE_URL;
@@ -44,6 +47,8 @@ describe.skipIf(!connection)("notification PostgreSQL boundaries", () => {
       CREATE TABLE project_review_versions(id uuid PRIMARY KEY,project_id uuid,actor_key text,title text,decision text,created_at timestamptz DEFAULT '2026-10-14 06:01:00Z',updated_at timestamptz DEFAULT '2026-10-14 06:03:00Z');
       CREATE TABLE project_review_comments(id uuid PRIMARY KEY,version_id uuid,actor_key text,author_name text,parent_id uuid,category text,created_at timestamptz DEFAULT '2026-10-14 06:02:00Z');
       CREATE TABLE workspace_project_reviews(id uuid PRIMARY KEY,project_id uuid,decision text,created_at timestamptz DEFAULT '2026-10-14 06:03:00Z');`);
+    await client.unsafe(`CREATE TABLE admin_workspace_event_reads(event_id varchar(180) NOT NULL,is_read boolean NOT NULL,read_at timestamptz,updated_at timestamptz NOT NULL,read_by uuid NOT NULL,PRIMARY KEY(event_id,read_by));`);
+    await client.unsafe(`CREATE TABLE user_workspace_event_reads(event_id varchar(180) NOT NULL,is_read boolean NOT NULL,read_at timestamptz,updated_at timestamptz NOT NULL,user_id uuid NOT NULL,PRIMARY KEY(event_id,user_id));`);
     db = drizzle(client) as unknown as DatabaseClient;
   });
   afterAll(async () => {
@@ -54,7 +59,7 @@ describe.skipIf(!connection)("notification PostgreSQL boundaries", () => {
   });
   beforeEach(async () => {
     await client.unsafe(
-      "TRUNCATE workspace_projects,customer_subscriptions,contact_messages,custom_quotes,project_review_members,project_review_versions,project_review_comments,workspace_project_reviews",
+      "TRUNCATE workspace_projects,customer_subscriptions,contact_messages,custom_quotes,project_review_members,project_review_versions,project_review_comments,workspace_project_reviews,admin_workspace_event_reads,user_workspace_event_reads",
     );
     await client`INSERT INTO workspace_projects(id,owner_id,title,status)VALUES(${id(101)},${id(1)},'Client one film','review'),(${id(102)},${id(2)},'Private client two film','intake')`;
     await client`INSERT INTO customer_subscriptions(id,owner_id,plan_name,status,paid_at)VALUES(${id(201)},${id(1)},'Growth','paid','2026-10-14 06:01:00Z'),(${id(202)},${id(2)},'Private Studio','unpaid',NULL)`;
@@ -73,6 +78,71 @@ describe.skipIf(!connection)("notification PostgreSQL boundaries", () => {
       feed.events.some((event) => event.title === "Changes requested"),
     ).toBe(true);
     expect(feed.partial).toBe(false);
+  });
+  it("persists admin read receipts independently across viewers", async () => {
+    const original = await getWorkspaceNotificationFeed(db, admin, now);
+    const target = original.events.find((event) => event.kind === "enquiry")!;
+    const readAt = new Date("2026-10-14T08:01:00Z");
+    await setAdminWorkspaceEventsRead(db, admin.id, [target.id], true, readAt);
+
+    const otherAdmin = { ...admin, id: id(10) };
+    const ownFeed = await getWorkspaceNotificationFeed(db, admin, now);
+    expect(ownFeed.events.find((event) => event.id === target.id)).toMatchObject({
+      readAt: readAt.toISOString(),
+      readBy: admin.id,
+    });
+
+    const otherFeed = await getWorkspaceNotificationFeed(db, otherAdmin, now);
+    expect(otherFeed.events.find((event) => event.id === target.id)).toMatchObject({
+      readAt: null,
+      readBy: null,
+    });
+
+    await setAdminWorkspaceEventsRead(db, otherAdmin.id, [target.id], false, readAt);
+    const stillRead = await getWorkspaceNotificationFeed(db, admin, now);
+    expect(stillRead.events.find((event) => event.id === target.id)?.readAt).toBe(readAt.toISOString());
+  });
+  it("keeps a newer receipt action when requests reach the database out of order", async () => {
+    const original = await getWorkspaceNotificationFeed(db, admin, now);
+    const target = original.events.find((event) => event.kind === "enquiry")!;
+    const earlier = new Date("2026-10-14T08:01:00Z");
+    const later = new Date("2026-10-14T08:02:00Z");
+
+    await setAdminWorkspaceEventsRead(db, admin.id, [target.id], false, later);
+    await setAdminWorkspaceEventsRead(db, admin.id, [target.id], true, earlier);
+    const stillUnread = await getWorkspaceNotificationFeed(db, admin, now);
+    expect(stillUnread.events.find((event) => event.id === target.id)?.readAt).toBeNull();
+
+    await setAdminWorkspaceEventsRead(db, admin.id, [target.id], true, later);
+    await setAdminWorkspaceEventsRead(db, admin.id, [target.id], false, earlier);
+    const stillRead = await getWorkspaceNotificationFeed(db, admin, now);
+    expect(stillRead.events.find((event) => event.id === target.id)?.readAt).toBe(later.toISOString());
+  });
+  it("persists client receipts across devices and protects newer read or unread state", async () => {
+    const original = await getWorkspaceNotificationFeed(db, customer, now);
+    const target = original.events.find((event) => event.kind === "order")!;
+    const readAt = new Date("2026-10-14T08:01:00Z");
+    await setUserWorkspaceEventsRead(db, customer.id, [target.id], true, readAt);
+
+    const otherAccount = { ...customer, id: id(2) };
+    await setUserWorkspaceEventsRead(db, otherAccount.id, [target.id], false, readAt);
+    const ownFeed = await getWorkspaceNotificationFeed(db, customer, now);
+    expect(ownFeed.events.find((event) => event.id === target.id)).toMatchObject({
+      readAt: readAt.toISOString(),
+      readBy: customer.id,
+    });
+
+    const importedAt = new Date("2026-10-14T08:02:00Z");
+    const laterUnreadAt = new Date("2026-10-14T08:03:00Z");
+    await setUserWorkspaceEventsRead(db, customer.id, [target.id], false, laterUnreadAt);
+    await importUserWorkspaceEventReads(
+      db,
+      customer.id,
+      [{ eventId: target.id, readAt: importedAt.toISOString() }],
+      new Date("2026-10-14T08:04:00Z"),
+    );
+    const stillUnread = await getWorkspaceNotificationFeed(db, customer, now);
+    expect(stillUnread.events.find((event) => event.id === target.id)?.readAt).toBeNull();
   });
   it("isolates customers and excludes their own review comments and restricted modules", async () => {
     const feed = await getWorkspaceNotificationFeed(db, customer, now);

@@ -1,5 +1,5 @@
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useSearchParams } from "react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight, BadgeCheck, CalendarDays, Captions, Clapperboard, ClipboardList, Clock3, FileVideo, Film, History, Image, Layers3, Library, MessageSquareText, Pause, Play, Scissors, SlidersHorizontal, UserRoundCheck, UsersRound, WandSparkles } from "lucide-react";
 import { ContactSection, PageShell } from "../components/site/Marketing.js";
@@ -7,6 +7,7 @@ import { EditingArtwork } from "../components/site/EditingArtwork";
 import { PackageChoiceLink } from "../components/site/PackageChoiceLink";
 import { PackageAddOns } from "../components/site/PackageAddOns";
 import { PackageCarousel } from "../components/site/PackageCarousel";
+import { FaqSection } from "../components/site/FaqSection";
 import { packageAddOnTotal, selectedPackageAddOns, type PackageAddOnId } from "../lib/package-addons";
 import packageStyles from "../styles/package.css?url";
 import addOnStyles from "../styles/package-addons.css?url";
@@ -14,19 +15,37 @@ import { getDbFromContext } from "../lib/db.server";
 import { getPricingPackages, configuredEditingPackage, configuredPublicEditingPackages, publicPricingPackages } from "../lib/pricing.server";
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
-import { normalizeMarketingCode } from "../lib/marketing.server";
 import { createRouteMeta } from "../lib/seo";
-import { formatPackagePrice, getCheckoutUrl, type EditingPackage } from "../lib/subscriptions";
+import { formatPackagePrice, getCheckoutUrl, SHORT_FORM_PACKAGE_SLUG, type EditingPackage } from "../lib/subscriptions";
 
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: packageStyles }, { rel: "stylesheet", href: addOnStyles }];
 
+function getPackageSeoDescription(editingPackage: EditingPackage) {
+  if (editingPackage.slug === SHORT_FORM_PACKAGE_SLUG) {
+    return `Order a ${formatPackagePrice(editingPackage.basePrice)} short-form video edit for TikTok, Instagram Reels, or YouTube Shorts. One vertical, captioned edit up to 60 seconds, with one revision included.`;
+  }
+  if (editingPackage.packageType === "monthly") {
+    const hasSharedEditorStaffing = editingPackage.features.some((feature) => /\btwo\b.*\beditors?\b/i.test(feature));
+    const editorCapacity = hasSharedEditorStaffing
+      ? "shared by two dedicated video editors"
+      : "supported by a dedicated video editor";
+    return `${editingPackage.editingHoursPerMonth} editing hours per month at ${editingPackage.editingHoursPerWorkday} hours per workday across ${editingPackage.workingDaysPerMonth} working days, ${editorCapacity}. ${editingPackage.bestFor}`;
+  }
+
+  return `${editingPackage.videoFormat}, ${editingPackage.finishedLength.toLowerCase()} finished from ${editingPackage.rawFootageLimit.toLowerCase()} of footage, with ${editingPackage.revisionRounds} ${editingPackage.revisionRounds === 1 ? "revision" : "revisions"}. See the current scope and price.`;
+}
+
 export const meta: MetaFunction<typeof loader> = (args) => createRouteMeta(
   args,
-  args.data?.editingPackage ? `${args.data.editingPackage.name} Video Editing Package | EdiCut` : "Video Editing Package | EdiCut",
-  args.data?.editingPackage?.description || "Explore EdiCut single-video editing and monthly editing-hours packages.",
+  args.loaderData?.editingPackage
+    ? args.loaderData.editingPackage.slug === SHORT_FORM_PACKAGE_SLUG
+      ? "Short-Form Video Editing | Reels, TikTok & Shorts | EdiCut"
+      : `${args.loaderData.editingPackage.name} ${args.loaderData.editingPackage.packageType === "monthly" ? "Monthly Video Editing Package" : "Editing Package"} | EdiCut`
+    : "Video Editing Package | EdiCut",
+  args.loaderData?.editingPackage ? getPackageSeoDescription(args.loaderData.editingPackage) : "Explore EdiCut single-video editing and monthly editing-hours packages.",
 );
 
-export async function loader({ params, request, context }: LoaderFunctionArgs) {
+export async function loader({ params, context }: LoaderFunctionArgs) {
   const db = getSupabaseClient(context) ? null : getDbFromContext(context);
   const allPackages = await getPricingPackages(db, context);
   const packages = publicPricingPackages(allPackages);
@@ -35,15 +54,17 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
   if (!packageRecord || !editingPackage) throw new Response("Package not found", { status: 404 });
 
   const alternatives = configuredPublicEditingPackages(allPackages).filter((item) => item.slug !== editingPackage.slug);
-  const query = new URL(request.url).searchParams;
-  const affiliateCode = normalizeMarketingCode(query.get("ref") || "") || "";
-  const addOns = selectedPackageAddOns(query.getAll("addon"), editingPackage.packageType).map(item => item.id);
-  return { packageRecord, editingPackage, alternatives, affiliateCode, addOns };
+  return { packageRecord, editingPackage, alternatives };
 }
 
 export default function PackagePage() {
-  const { packageRecord, editingPackage, alternatives, affiliateCode, addOns } = useLoaderData<typeof loader>();
+  const { packageRecord, editingPackage, alternatives } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const rawAffiliateCode = searchParams.get("ref")?.trim().toUpperCase() ?? "";
+  const affiliateCode = /^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(rawAffiliateCode) ? rawAffiliateCode : "";
+  const addOns = selectedPackageAddOns(searchParams.getAll("addon"), editingPackage.packageType, editingPackage.slug).map(item => item.id);
   const isMonthly = editingPackage.packageType === "monthly";
+  const isShortForm = editingPackage.slug === SHORT_FORM_PACKAGE_SLUG;
   const facts = isMonthly ? [
     [Clock3, "Editing hours per month", `${editingPackage.editingHoursPerMonth} hours`],
     [Clock3, "Editing hours per workday", `${editingPackage.editingHoursPerWorkday} ${editingPackage.editingHoursPerWorkday === 1 ? "hour" : "hours"}`],
@@ -55,9 +76,34 @@ export default function PackagePage() {
     [FileVideo, "Raw footage limit", editingPackage.rawFootageLimit],
     [Scissors, "Included revisions", `${editingPackage.revisionRounds} ${editingPackage.revisionRounds === 1 ? "round" : "rounds"}`],
   ] as const;
+  const shortFormStructuredData = isShortForm ? JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Service",
+        name: "Short-form video editing",
+        serviceType: "Short-form video editing",
+        description: "One captioned vertical video edit up to 60 seconds for TikTok, Instagram Reels, or YouTube Shorts.",
+        provider: { "@type": "Organization", name: "EdiCut", url: "https://edicut.com" },
+        offers: {
+          "@type": "Offer", url: "https://edicut.com/pricing/short-form-video-editing",
+          priceCurrency: "USD", price: editingPackage.basePrice, availability: "https://schema.org/InStock",
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: "https://edicut.com/" },
+          { "@type": "ListItem", position: 2, name: "Pricing", item: "https://edicut.com/pricing" },
+          { "@type": "ListItem", position: 3, name: "Short-form video editing", item: "https://edicut.com/pricing/short-form-video-editing" },
+        ],
+      },
+    ],
+  }).replace(/</g, "\\u003c") : null;
 
   return (
     <PageShell className="package-page">
+      {shortFormStructuredData ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: shortFormStructuredData }} /> : null}
       <section className="package-hero border-b neo-line" aria-labelledby="package-title">
         <div className="package-container package-hero-grid">
           <div className="package-intro">
@@ -107,6 +153,43 @@ export default function PackagePage() {
         </div>
       </section>
 
+      {isShortForm ? <>
+        <section className="border-b neo-line px-5 py-16 sm:px-6" aria-labelledby="short-form-scope-title">
+          <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)] lg:items-center">
+            <div>
+              <p className="yt-tag neo-section-label"><Clapperboard size={16} aria-hidden="true" />Short-form video editing</p>
+              <h2 id="short-form-scope-title" className="mt-3 yt-title font-black neo-ink">One focused short, ready for a vertical feed.</h2>
+              <p className="mt-4 max-w-2xl text-base leading-7 neo-muted">This {formatPackagePrice(editingPackage.basePrice)} package covers one vertical edit up to 60 seconds, made from up to 15 minutes of footage you provide. Share the exact clip or timestamps, the platform, and the point you want viewers to remember. Moment selection from a longer recording, additional versions, and work beyond this scope need a separate quote.</p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link to="/services/short-form-video-editing" className="package-compare">How our short-form editing works <ArrowRight size={16} aria-hidden="true" /></Link>
+                <Link to="/portfolio" className="package-compare">Browse editing examples <ArrowRight size={16} aria-hidden="true" /></Link>
+              </div>
+            </div>
+            <ol className="grid gap-3">
+              {([
+                ["01", "Share the moment", "Send the footage link, timestamps or exact clip, intended platform, and any caption or brand references."],
+                ["02", "We shape the short", "Your editor makes a vertical 9:16 cut with burned-in captions and basic color and audio finishing."],
+                ["03", "Review and approve", "A first-cut target of 48 hours applies after the brief and files are ready. One revision round is included."],
+              ] as const).map(([number, title, description]) => <li key={number} className="neo-inset rounded-2xl p-5">
+                <p className="text-xs font-black tracking-widest text-primary">{number} / SHORT-FORM EDIT</p>
+                <h3 className="mt-2 text-lg font-black neo-ink">{title}</h3>
+                <p className="mt-2 text-sm leading-6 neo-muted">{description}</p>
+              </li>)}
+            </ol>
+          </div>
+        </section>
+        <FaqSection
+          title={<>Short-form video editing, clearly scoped.</>}
+          description={`Know what one ${formatPackagePrice(editingPackage.basePrice)} short includes before you place an order.`}
+          items={[
+            { question: "How many short videos are included?", answer: "One edited vertical video up to 60 seconds. Place another order for another short; alternate aspect ratios, multiple versions, or several clips from one source need a separate scope." },
+            { question: "What footage should I send?", answer: "Share the video files or a secure folder link, up to 15 minutes of source footage, and the exact clip or timestamps to edit. Selecting highlights from an extended recording is not included in this package." },
+            { question: `What does the ${formatPackagePrice(editingPackage.basePrice)} edit include?`, answer: "One 9:16 vertical export, burned-in captions, basic color and audio finishing, one revision round, and a first-cut target of 48 hours once your brief and files are ready." },
+            { question: "Will the edit go viral or guarantee more views?", answer: "No. Editing can make a clip easier to follow and publish, but reach depends on the content, audience, publishing choices, and platform distribution." },
+          ]}
+        />
+      </> : null}
+
       {alternatives.length ? <section className="border-b neo-line px-5 py-16 sm:px-6">
         <div className="mx-auto max-w-7xl">
           <div className="text-center"><p className="yt-tag neo-section-label"><Layers3 size={16} aria-hidden="true" />Other options</p><h2 className="mt-3 yt-title font-black neo-ink">Compare the other packages</h2></div>
@@ -150,7 +233,7 @@ function PackageArtwork() {
 
 function PackageCheckoutCard({ editingPackage, affiliateCode, initialAddOns }: { editingPackage: EditingPackage; affiliateCode: string; initialAddOns: PackageAddOnId[] }) {
   const [addOns, setAddOns] = useState(initialAddOns);
-  const extras = packageAddOnTotal(selectedPackageAddOns(addOns, editingPackage.packageType)) / 100;
+  const extras = packageAddOnTotal(selectedPackageAddOns(addOns, editingPackage.packageType, editingPackage.slug)) / 100;
   const checkoutHref = getCheckoutUrl(editingPackage, { affiliateCode, addOns });
   const isMonthly = editingPackage.packageType === "monthly";
   return <section className="package-checkout neo-surface" aria-labelledby="package-title">
@@ -158,7 +241,7 @@ function PackageCheckoutCard({ editingPackage, affiliateCode, initialAddOns }: {
       {isMonthly ? <CalendarDays size={16} aria-hidden="true" /> : <Film size={16} aria-hidden="true" />}
       {isMonthly ? "Monthly editing hours" : "Single video edit"}
     </p>
-    <h1 id="package-title">{editingPackage.name}</h1>
+            <h1 id="package-title">{editingPackage.slug === SHORT_FORM_PACKAGE_SLUG ? "Short-form Video Editing" : editingPackage.name}</h1>
     <div className="package-base-price neo-inset">
       <p className="text-sm font-black neo-ink">{isMonthly ? "Monthly package price" : "One-time video price"}</p>
       <p className="text-3xl font-black neo-ink">{formatPackagePrice(editingPackage.basePrice)}<span className="block text-right text-xs font-medium neo-muted">{isMonthly ? "/month" : "one time"}</span></p>

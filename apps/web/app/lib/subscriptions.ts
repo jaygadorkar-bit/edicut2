@@ -22,10 +22,13 @@ export type SingleVideoPackage = PackageBase & {
   packageType: "single";
   videoFormat: string;
   finishedLength: string;
+  maxFinishedSeconds?: number;
   rawFootageLimit: string;
   revisionRounds: number;
   firstCutHours: number;
 };
+
+export const SHORT_FORM_PACKAGE_SLUG = "short-form-video-editing";
 
 export type EditingPackage = SubscriptionPackage | SingleVideoPackage;
 
@@ -35,7 +38,7 @@ export const STUDIO_PACKAGE_STAFFING = ["Personal project manager", "Two dedicat
 export const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
   {
     packageType: "monthly",
-    name: "Starter",
+    name: "Essential",
     slug: "creator",
     description: "Four editing hours each workday, with clear monthly capacity for a steady publishing schedule.",
     badge: "Start steady",
@@ -49,7 +52,7 @@ export const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
   },
   {
     packageType: "monthly",
-    name: "Growth",
+    name: "Pro",
     slug: "creator-plus",
     description: "Five editing hours each workday for creators who want a reliable weekly rhythm and room to repurpose footage.",
     badge: "Most popular",
@@ -63,7 +66,7 @@ export const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
   },
   {
     packageType: "monthly",
-    name: "Studio",
+    name: "Max",
     slug: "creator-pro",
     description: "Five editing hours each workday shared by two editors for established channels with a larger production pipeline.",
     badge: "More capacity",
@@ -80,6 +83,23 @@ export const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
 export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
   {
     packageType: "single",
+    name: "Short-form Video",
+    slug: SHORT_FORM_PACKAGE_SLUG,
+    description: "One focused, captioned vertical edit from your supplied footage for Reels, TikTok, or YouTube Shorts.",
+    badge: "Short-form",
+    bestFor: "Creators and brands who need one clear, vertical clip for TikTok, Instagram Reels, or YouTube Shorts.",
+    videoFormat: "One short-form vertical edit",
+    finishedLength: "Up to 60 seconds",
+    maxFinishedSeconds: 60,
+    rawFootageLimit: "Up to 15 minutes",
+    revisionRounds: 1,
+    firstCutHours: 48,
+    features: ["Vertical 9:16 export for TikTok, Instagram Reels, or YouTube Shorts", "Readable burned-in captions", "Clean cuts and basic color and audio finishing", "One revision round", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["1 vertical short-form video up to 60 seconds", "9:16 export for TikTok, Instagram Reels, or YouTube Shorts", "Burned-in captions", "Basic color and audio finishing", "1 revision round", ...REQUIRED_PACKAGE_STAFFING],
+    basePrice: 25,
+  },
+  {
+    packageType: "single",
     name: "Creator Video",
     slug: "single-creator",
     description: "A complete, clean long-form edit for your next creator upload.",
@@ -87,28 +107,13 @@ export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
     bestFor: "A YouTube, podcast, or educational video with a clear brief and established style.",
     videoFormat: "One standard long-form edit",
     finishedLength: "Up to 8 minutes",
+    maxFinishedSeconds: 8 * 60,
     rawFootageLimit: "Up to 60 minutes",
     revisionRounds: 1,
     firstCutHours: 48,
     features: ["Captions, pacing, and clean cuts", "Basic color and audio finishing", "One revision round", ...REQUIRED_PACKAGE_STAFFING],
     deliverables: ["1 edited video up to 8 minutes", "Captions", "Basic color and audio finishing", "1 revision round", ...REQUIRED_PACKAGE_STAFFING],
     basePrice: 109,
-  },
-  {
-    packageType: "single",
-    name: "Studio Video",
-    slug: "single-studio",
-    description: "A more detailed long-form edit with extra room for branded polish.",
-    badge: "More polish",
-    bestFor: "A channel launch, feature video, or more involved edit that needs additional finishing.",
-    videoFormat: "One enhanced long-form edit",
-    finishedLength: "Up to 15 minutes",
-    rawFootageLimit: "Up to 120 minutes",
-    revisionRounds: 2,
-    firstCutHours: 48,
-    features: ["Captions and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "Two revision rounds", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["1 edited video up to 15 minutes", "Captions", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "2 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
-    basePrice: 179,
   },
   {
     packageType: "single",
@@ -119,6 +124,7 @@ export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
     bestFor: "Feature videos, deep-dive tutorials, or creator stories that need more structure and polish.",
     videoFormat: "One feature-length edit",
     finishedLength: "Up to 30 minutes",
+    maxFinishedSeconds: 30 * 60,
     rawFootageLimit: "Up to 240 minutes",
     revisionRounds: 3,
     firstCutHours: 48,
@@ -147,6 +153,37 @@ export function parsePackagePrice(value: string) {
 
 export function getCatalogPackage(slug: string) {
   return ALL_EDITING_PACKAGES.find((item) => item.slug === slug);
+}
+
+const LEGACY_STUDIO_SINGLE_PACKAGE: SingleVideoPackage = {
+  packageType: "single",
+  name: "Studio Video",
+  slug: "single-studio",
+  description: "A more detailed long-form edit with extra room for branded polish.",
+  badge: "More polish",
+  bestFor: "A channel launch, feature video, or more involved edit that needs additional finishing.",
+  videoFormat: "One enhanced long-form edit",
+  finishedLength: "Up to 15 minutes",
+  maxFinishedSeconds: 15 * 60,
+  rawFootageLimit: "Up to 120 minutes",
+  revisionRounds: 2,
+  firstCutHours: 48,
+  features: ["Captions and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "Two revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+  deliverables: ["1 edited video up to 15 minutes", "Captions", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "2 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+  basePrice: 179,
+};
+
+/** Includes the retired Studio SKU only so clients can submit projects from already-paid orders. */
+export function getProjectFulfillmentPackage(slug: string) {
+  return getCatalogPackage(slug) ?? (slug === LEGACY_STUDIO_SINGLE_PACKAGE.slug ? LEGACY_STUDIO_SINGLE_PACKAGE : undefined);
+}
+
+export function getFinishedLengthLimitSeconds(editingPackage: SingleVideoPackage) {
+  if (editingPackage.maxFinishedSeconds !== undefined) return editingPackage.maxFinishedSeconds;
+  const match = editingPackage.finishedLength.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  return amount * (/seconds?/i.test(editingPackage.finishedLength) ? 1 : 60);
 }
 
 export function getPackageIndex(slug: string, packages: Array<{ slug: string }>) {
@@ -187,7 +224,7 @@ export function getCheckoutUrl(editingPackage: EditingPackage, options: { runtim
   const params = new URLSearchParams();
   if (options.runtime && editingPackage.packageType === "monthly") params.set("runtime", "1");
   if (options.raw && editingPackage.packageType === "monthly") params.set("raw", "1");
-  packageAddOnQuery(options.addOns ?? [], editingPackage.packageType, params);
+  packageAddOnQuery(options.addOns ?? [], editingPackage.packageType, params, editingPackage.slug);
   const affiliateCode = options.affiliateCode?.trim().toUpperCase();
   if (affiliateCode && /^[A-Z0-9][A-Z0-9_-]{2,31}$/.test(affiliateCode)) params.set("ref", affiliateCode);
   const query = params.toString();

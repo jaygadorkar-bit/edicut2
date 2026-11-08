@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, redirect, useLoaderData } from "react-router";
+import { Link, redirect, useLoaderData } from "react-router";
 import { count as drizzleCount, desc, eq, sql } from "drizzle-orm";
 import { workspaceProjectFiles, workspaceProjects } from "@edicut/db/schema";
 import { findUserById } from "@edicut/db/repositories/users";
@@ -7,17 +7,28 @@ import { requireUserId, getSession, destroySession } from "../lib/session.server
 import { getDbFromContext } from "../lib/db.server";
 import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
 import { canAccessDashboardFeature, getAllowedDashboardFeatures, getDashboardLandingPath, type DashboardFeature } from "../lib/role-feature-access";
+import { loadAssignedProjectSummary, loadAssignedProjects, loadReviewEditorOptions, isMissingReviewSchema } from "../lib/project-review.server";
+import type { ReviewActor, ReviewEditorOption, ReviewProject } from "../lib/project-review";
+import { loadManagerActionQueue } from "../lib/manager-workspace.server";
+import type { ManagerActionProject } from "../lib/manager-workspace.server";
+import { getAffiliatePortalData, isMissingMarketingSchema, type AffiliatePortalData } from "../lib/marketing.server";
 import { WorkspaceShell } from "../components/WorkspaceShell";
+import { ConfirmSignOutButton } from "../components/ConfirmSignOutButton";
+import { RoleDashboardOverview } from "../components/dashboard/RoleDashboardOverviews";
 import { isMissingWorkspaceSchema, WORKSPACE_MIGRATION_NOTICE } from "../lib/workspace";
 import { workspaceProjectSummaryColumns, type WorkspaceProjectSummary } from "../lib/workspace-projects.server";
 import { toPublicUser } from "../lib/admin-public";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 import { ClientBalance } from "../components/ClientBalance";
 import { isMissingClientWorkspaceSchema, loadClientWorkspace } from "../lib/client-workspace.server";
+import { createChatStore } from "../lib/chat-store.server";
+import { importMissingClientProjectManagers } from "../lib/client-project-managers.server";
 
 const navItems = [
   { label: "Dashboard", icon: "dashboard_customize", path: "/dashboard", feature: "overview" as DashboardFeature },
   { label: "Projects", icon: "video_library", path: "/dashboard/projects", feature: "projects" as DashboardFeature },
+  { label: "Reviews", icon: "rate_review", path: "/dashboard/reviews", feature: "reviews" as DashboardFeature },
+  { label: "Files", icon: "upload_file", path: "/dashboard/uploads", feature: "uploads" as DashboardFeature },
   { label: "Enquiries", icon: "mail", path: "/dashboard/messages", feature: "support" as DashboardFeature },
   { label: "Subscriptions", icon: "receipt_long", path: "/dashboard/subscriptions", feature: "billing" as DashboardFeature },
   { label: "Affiliates", icon: "hub", path: "/dashboard/affiliates", feature: "affiliates" as DashboardFeature },
@@ -69,11 +80,18 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       projectCount: 0,
       activeCount: 0,
       reviewCount: 0,
+      deliveredCount: 0,
       fileCount: 0,
       workspaceReady: true,
       noDashboardAccess: true,
       clientBalance: null,
       balanceReady: true,
+      assignedProjects: [] as ReviewProject[],
+      unassignedProjectCount: 0,
+      editors: [] as ReviewEditorOption[],
+      managerTasks: [] as ManagerActionProject[],
+      affiliateData: null as AffiliatePortalData | null,
+      affiliateReady: true,
     };
   }
 
@@ -82,15 +100,24 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   }
 
   const canViewProjects = allowedFeatures.includes("projects");
-  const canViewReviews = allowedFeatures.includes("reviews");
+  const canViewReviews = allowedFeatures.includes("reviews") && allowedFeatures.includes("projects");
   const canViewUploads = allowedFeatures.includes("uploads");
+  const isStaff = user.role === "editor" || user.role === "project_manager";
   let projects: WorkspaceProjectSummary[] = [];
   let projectCount = 0;
   let activeCount = 0;
   let reviewCount = 0;
+  let deliveredCount = 0;
   let fileCount = 0;
   let workspaceReady = true;
-  const loadOverview = async () => {
+  let assignedProjects: ReviewProject[] = [];
+  let unassignedProjectCount = 0;
+  let editors: ReviewEditorOption[] = [];
+  let managerTasks: ManagerActionProject[] = [];
+  let affiliateData: AffiliatePortalData | null = null;
+  let affiliateReady = true;
+  const loadCustomerOverview = async () => {
+    if (isStaff || user.role === "affiliate") return;
     try {
       const ownerFilter = eq(workspaceProjects.ownerId, userId);
       const recentProjectsPromise: Promise<WorkspaceProjectSummary[]> = canViewProjects
@@ -131,7 +158,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const loadBalance = async () => {
     let clientBalance: Awaited<ReturnType<typeof loadClientWorkspace>> | null = null;
     let balanceReady = true;
-    if (allowedFeatures.includes("billing")) {
+    if (allowedFeatures.includes("billing") && ["user", "customer"].includes(user.role)) {
       try { clientBalance = await loadClientWorkspace(db, userId); }
       catch (error) {
         if (!isMissingClientWorkspaceSchema(error)) throw error;
@@ -140,21 +167,78 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     }
     return { clientBalance, balanceReady };
   };
-  const [, { clientBalance, balanceReady }] = await Promise.all([loadOverview(), loadBalance()]);
-  return { user: toPublicUser(user), allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, workspaceReady, noDashboardAccess: false, clientBalance, balanceReady };
+  const loadStaffOverview = async () => {
+    if (!isStaff || !canViewProjects) return;
+    const actor: ReviewActor = {
+      id: userId,
+      key: `user:${userId}`,
+      name: user.name || (user.role === "project_manager" ? "Manager" : "Editor"),
+      role: user.role,
+      admin: false,
+    };
+    if (user.role === "project_manager") {
+      const chat = createChatStore(db, context);
+      await importMissingClientProjectManagers(db, actor, await chat.listLegacyClientManagerAssignments(actor));
+    }
+    const [assigned, summary] = await Promise.all([
+      canViewProjects && canViewReviews
+        ? loadAssignedProjects(db, actor, "", "all", 1)
+        : Promise.resolve({ projects: [], count: 0, page: 1, pageCount: 1 }),
+      loadAssignedProjectSummary(db, actor),
+    ]);
+    assignedProjects = canViewProjects ? assigned.projects.slice(0, 5) : [];
+    projectCount = canViewProjects ? summary.total : 0;
+    activeCount = canViewProjects ? summary.active : 0;
+    deliveredCount = canViewProjects ? summary.delivered : 0;
+    reviewCount = canViewReviews ? summary.reviews : 0;
+    unassignedProjectCount = user.role === "project_manager" && canViewProjects ? summary.unassigned : 0;
+    if (user.role === "project_manager" && canViewProjects && canViewReviews) {
+      try {
+        [editors, managerTasks] = await Promise.all([
+          loadReviewEditorOptions(db, actor),
+          loadManagerActionQueue(db, actor),
+        ]);
+      } catch (error) {
+        if (!isMissingReviewSchema(error)) throw error;
+      }
+    }
+  };
+  const loadAffiliateOverview = async () => {
+    if (user.role !== "affiliate") return;
+    try {
+      affiliateData = await getAffiliatePortalData(db, userId, new URL(request.url).origin);
+    } catch (error) {
+      if (!isMissingMarketingSchema(error)) throw error;
+      affiliateReady = false;
+    }
+  };
+  const [, { clientBalance, balanceReady }] = await Promise.all([
+    loadCustomerOverview(),
+    loadBalance(),
+    loadStaffOverview(),
+    loadAffiliateOverview(),
+  ]);
+  return {
+    user: toPublicUser(user), allowedFeatures, projects, projectCount, activeCount, reviewCount,
+    deliveredCount, fileCount, workspaceReady, noDashboardAccess: false, clientBalance, balanceReady,
+    assignedProjects, unassignedProjectCount, editors, managerTasks, affiliateData, affiliateReady,
+  };
 }
 
 export default function DashboardRoute() {
-  const { user, allowedFeatures, projects, projectCount, activeCount, reviewCount, fileCount, workspaceReady, noDashboardAccess, clientBalance, balanceReady } = useLoaderData<typeof loader>();
+  const { user, allowedFeatures, projects, projectCount, activeCount, reviewCount, deliveredCount, fileCount, workspaceReady, noDashboardAccess, clientBalance, balanceReady, assignedProjects, unassignedProjectCount, editors, managerTasks, affiliateData, affiliateReady } = useLoaderData<typeof loader>();
   const displayName = user.name || user.email;
-  const visibleNavItems = navItems.filter((item) => allowedFeatures.includes(item.feature));
   const canViewProjects = allowedFeatures.includes("projects");
+  const canViewReviews = canViewProjects && allowedFeatures.includes("reviews");
+  const canStartProject = canViewProjects && ["user", "customer"].includes(user.role);
+  const visibleNavItems = navItems.filter((item) => allowedFeatures.includes(item.feature) && (item.feature !== "reviews" || canViewReviews));
+  if (user.role === "project_manager" && allowedFeatures.includes("projects")) visibleNavItems.splice(2, 0, { label: "Clients", icon: "group", path: "/dashboard/clients", feature: "projects" });
   const dashboardMetrics = [
     ...(canViewProjects ? [
       { label: "Active projects", value: activeCount, icon: "movie", to: "/dashboard/projects" },
       { label: "Project requests", value: projectCount, icon: "receipt_long", to: "/dashboard/projects" },
     ] : []),
-    ...(allowedFeatures.includes("reviews") ? [{ label: "Cuts to review", value: reviewCount, icon: "rate_review", to: "/dashboard/reviews" }] : []),
+    ...(canViewReviews ? [{ label: "Cuts to review", value: reviewCount, icon: "rate_review", to: "/dashboard/reviews" }] : []),
     ...(allowedFeatures.includes("uploads") ? [{ label: "Shared file links", value: fileCount, icon: "upload_file", to: "/dashboard/uploads" }] : []),
   ];
 
@@ -169,16 +253,13 @@ export default function DashboardRoute() {
       profileTo={allowedFeatures.includes("settings") ? "/dashboard/profile" : null}
       profileNavAtBottom
       settingsTo={allowedFeatures.includes("settings") ? "/dashboard/settings" : null}
-      startProjectTo={canViewProjects ? "/dashboard/projects#new-project" : null}
-      notificationsTo={allowedFeatures.includes("reviews") ? "/dashboard/reviews" : null}
-      notificationCount={allowedFeatures.includes("reviews") ? reviewCount : 0}
+      startProjectTo={canStartProject ? "/dashboard/projects#new-project" : null}
+      notificationsTo={canViewReviews ? "/dashboard/reviews" : null}
+      notificationCount={canViewReviews ? reviewCount : 0}
       accountAction={(
-        <Form method="post">
-          <input type="hidden" name="intent" value="logout" />
-          <button type="submit" className="text-[#687583] transition hover:text-[#17202a]" aria-label="Sign out">
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
-          </button>
-        </Form>
+        <ConfirmSignOutButton buttonClassName="neo-workspace__signout-trigger">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>
+        </ConfirmSignOutButton>
       )}
     >
       {noDashboardAccess ? (
@@ -191,7 +272,25 @@ export default function DashboardRoute() {
           {!workspaceReady ? <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900" role="status">{WORKSPACE_MIGRATION_NOTICE}</p> : null}
           <p className="neo-workspace__eyebrow mb-7">Your creative workspace</p>
           {!balanceReady ? <p role="status" className="neo-workspace__panel mb-7 rounded-2xl p-5 text-sm text-slate-600">Editing balances and creator profile setup are waiting for a database migration. Your existing subscription records have not changed.</p> : null}
-          {clientBalance ? <ClientBalance purchases={clientBalance.purchases} hasProfile={Boolean(clientBalance.profile)} canStartProjects={canViewProjects} /> : null}
+          {clientBalance && ["user", "customer"].includes(user.role) ? <ClientBalance purchases={clientBalance.purchases} hasProfile={Boolean(clientBalance.profile)} canStartProjects={canViewProjects} /> : null}
+          {user.role === "project_manager" || user.role === "editor" ? (
+            <RoleDashboardOverview
+              role={user.role}
+              projectsEnabled={canViewProjects}
+              reviewsEnabled={canViewReviews}
+              projects={assignedProjects}
+              projectCount={projectCount}
+              activeCount={activeCount}
+              reviewCount={reviewCount}
+              deliveredCount={deliveredCount}
+              unassignedCount={unassignedProjectCount}
+              editors={editors}
+              managerTasks={managerTasks}
+            />
+          ) : user.role === "affiliate" ? (
+            <RoleDashboardOverview affiliate={affiliateData} ready={affiliateReady} />
+          ) : (
+            <>
           <section aria-labelledby="workspace-overview-title">
             <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div><p className="text-[10px] font-black uppercase tracking-[0.17em] text-[#9699ac]">Your workspace</p><h2 id="workspace-overview-title" className="mt-1 text-xl font-black tracking-[-0.035em]">Project overview</h2></div>
@@ -216,6 +315,8 @@ export default function DashboardRoute() {
               )}
             </section>
           ) : null}
+            </>
+          )}
         </>
       )}
     </WorkspaceShell>

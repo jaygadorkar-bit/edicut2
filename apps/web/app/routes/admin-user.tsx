@@ -24,9 +24,9 @@ import { chatMigrationPaused } from "../lib/chat-store.server";
 
 export function links() { return [{ rel: "stylesheet", href: stylesheetUrl }]; }
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   return [
-    { title: data?.user ? `${data.user.email} - Admin - EdiCut` : "Edit account - Admin - EdiCut" },
+    { title: loaderData?.user ? `${loaderData.user.email} - Admin - EdiCut` : "Edit account - Admin - EdiCut" },
     { name: "robots", content: "noindex,nofollow" },
   ];
 };

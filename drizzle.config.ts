@@ -1,13 +1,22 @@
 import { config } from "dotenv";
-import { defineConfig } from "drizzle-kit";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-config({ path: ".env.local" });
+const repositoryRoot = path.dirname(fileURLToPath(import.meta.url));
 
-export default defineConfig({
-  schema: "./packages/platform-core/src/db/schema.ts",
-  out: "./drizzle",
+config({ path: path.join(repositoryRoot, ".env.local") });
+config({ path: path.join(repositoryRoot, ".env") });
+
+const databaseUrl = process.env.SUPABASE_DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("Set SUPABASE_DATABASE_URL before running Drizzle migrations.");
+}
+
+export default {
+  schema: "./packages/db/src/schema.ts",
+  out: "./packages/db/drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    url: databaseUrl,
   },
-});
+};

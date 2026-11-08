@@ -46,6 +46,13 @@ describe("dashboard role access", () => {
     expect(canAccessDashboardFeature("customer_support", "support", savedAccess)).toBe(true);
   });
 
+  it("lets customer accounts access the affiliate application workspace by default", () => {
+    expect(DEFAULT_ROLE_FEATURE_ACCESS.customer).toContain("affiliates");
+    expect(DEFAULT_ROLE_FEATURE_ACCESS.user).toContain("affiliates");
+    expect(canAccessDashboardFeature("customer", "affiliates", DEFAULT_ROLE_FEATURE_ACCESS)).toBe(true);
+    expect(canAccessDashboardFeature("user", "affiliates", DEFAULT_ROLE_FEATURE_ACCESS)).toBe(true);
+  });
+
   it("saves the visible Customer settings for both customer and legacy user accounts", () => {
     const form = new FormData();
     form.set("access__customer__overview", "on");
@@ -59,5 +66,17 @@ describe("dashboard role access", () => {
     expect(access.user).toEqual(["overview", "uploads"]);
     expect(access.user).not.toBe(access.customer);
     expect(access.customer_support).toContain("support");
+  });
+
+  it("requires Projects access before enabling Reviews", () => {
+    const form = new FormData();
+    form.set("access__project_manager__overview", "on");
+    form.set("access__project_manager__reviews", "on");
+
+    expect(roleFeatureAccessFromFormData(form).project_manager).toEqual(["overview"]);
+    expect(getAllowedDashboardFeatures("project_manager", {
+      ...DEFAULT_ROLE_FEATURE_ACCESS,
+      project_manager: ["overview", "reviews"],
+    })).toEqual(["overview"]);
   });
 });

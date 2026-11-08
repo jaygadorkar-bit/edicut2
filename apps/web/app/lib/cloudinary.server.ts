@@ -1,5 +1,7 @@
 import type { PricingPackage } from "./pricing.server";
 import type { PortfolioSection } from "./portfolio.server";
+import { MARKETING_ASSET_CATEGORIES, type MarketingAssetCategory } from "./marketing-assets";
+export { MARKETING_ASSET_CATEGORIES, type MarketingAssetCategory } from "./marketing-assets";
 import { fetchWithTimeout, UPLOAD_FETCH_TIMEOUT_MS } from "@edicut/shared/server-fetch";
 
 type CloudinaryEnv = {
@@ -12,7 +14,6 @@ type CloudinaryAccount = "image" | "video";
 const MAX_CLOUDINARY_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_CLOUDINARY_VIDEO_BYTES = 50 * 1024 * 1024;
 const MAX_CLOUDINARY_DELETE_IDS = 100;
-
 
 async function readLocalEnvFile() {
   if (!globalThis.process?.cwd) {
@@ -62,6 +63,11 @@ export type CloudinaryImageResource = {
   height?: number;
   format?: string;
   created_at?: string;
+  original_filename?: string;
+  context?: {
+    custom?: Record<string, string>;
+    [key: string]: unknown;
+  };
 };
 
 export type CloudinaryVideoResource = {
@@ -217,6 +223,104 @@ export async function uploadPackageImageToCloudinary(file: File, context?: Cloud
     format: result.format || file.type.split("/")[1],
     created_at: result.created_at,
   } satisfies CloudinaryImageResource;
+}
+
+export async function uploadMarketingImageToCloudinary(file: File, category: MarketingAssetCategory, context?: CloudinaryEnv) {
+  if (!MARKETING_ASSET_CATEGORIES.includes(category)) {
+    throw new Error("Choose a valid marketing asset type.");
+  }
+  if (!["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"].includes(file.type)) {
+    throw new Error("Use a JPG, PNG, WebP, AVIF, or GIF image.");
+  }
+  if (file.size > MAX_CLOUDINARY_IMAGE_BYTES) {
+    throw new Error("Each marketing image must be 10 MB or smaller.");
+  }
+
+  const env = await requireCloudinaryEnv(context, "image");
+  const folder = `edicut/marketing/${category}`;
+  const title = marketingTitleFromFilename(file.name);
+  const assetContext = marketingContext(title, category);
+  const timestamp = Math.round(Date.now() / 1000);
+  const uploadParams = { context: assetContext, folder, timestamp };
+  const signature = await signUpload(uploadParams, env.apiSecret);
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("api_key", env.apiKey);
+  formData.set("context", assetContext);
+  formData.set("folder", folder);
+  formData.set("timestamp", String(timestamp));
+  formData.set("signature", signature);
+
+  const response = await fetchWithTimeout(`https://api.cloudinary.com/v1_1/${env.cloudName}/image/upload`, {
+    method: "POST",
+    body: formData,
+  }, UPLOAD_FETCH_TIMEOUT_MS);
+  const result = await response.json() as Partial<CloudinaryImageResource> & { error?: { message?: string } };
+  if (!response.ok || !result.secure_url || !result.public_id) {
+    throw new Error(result.error?.message || "Marketing image upload failed.");
+  }
+
+  return {
+    public_id: result.public_id,
+    secure_url: result.secure_url,
+    bytes: result.bytes || file.size,
+    width: result.width,
+    height: result.height,
+    format: result.format || file.type.split("/")[1],
+    created_at: result.created_at,
+    original_filename: result.original_filename || file.name.replace(/\.[^.]+$/, ""),
+    context: { custom: { marketing_title: title, marketing_category: category } },
+  } satisfies CloudinaryImageResource;
+}
+
+export async function listCloudinaryMarketingImages(context?: CloudinaryEnv) {
+  const result = await cloudinaryAdminRequest<{ resources?: CloudinaryImageResource[] }>(
+    "/resources/image/upload?prefix=edicut/marketing/&max_results=100&context=true", context,
+  );
+  return result.resources || [];
+}
+
+export async function updateCloudinaryMarketingImage(
+  publicId: string,
+  title: string,
+  category: MarketingAssetCategory,
+  context?: CloudinaryEnv,
+) {
+  const publicIdParts = publicId.split("/");
+  if (
+    publicIdParts.length < 3
+    || publicIdParts[0] !== "edicut"
+    || publicIdParts[1] !== "marketing"
+    || publicIdParts.some((part) => !part || part === "." || part === ".." || part.includes("\\"))
+  ) {
+    throw new Error("Only marketing library images can be updated.");
+  }
+  if (!MARKETING_ASSET_CATEGORIES.includes(category)) {
+    throw new Error("Choose a valid marketing asset type.");
+  }
+
+  const cleanTitle = title.trim();
+  if (!cleanTitle || cleanTitle.length > 120 || /[\u0000-\u001F\u007F]/.test(cleanTitle)) {
+    throw new Error("Enter a title between 1 and 120 characters.");
+  }
+
+  const path = publicId.split("/").map(encodeURIComponent).join("/");
+  const params = new URLSearchParams({ context: marketingContext(cleanTitle, category) });
+  await cloudinaryAdminRequest(
+    `/resources/image/upload/${path}`,
+    context,
+    { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: params },
+  );
+}
+
+function marketingTitleFromFilename(fileName: string) {
+  const title = fileName.replace(/\.[^.]+$/, "").replace(/[\u0000-\u001F\u007F]/g, " ").replace(/[-_]+/g, " ").trim().slice(0, 120);
+  return title || "Marketing asset";
+}
+
+function marketingContext(title: string, category: MarketingAssetCategory) {
+  const escape = (value: string) => value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/=/g, "\\=");
+  return `marketing_title=${escape(title)}|marketing_category=${category}`;
 }
 
 export async function listCloudinaryImages(context?: CloudinaryEnv) {

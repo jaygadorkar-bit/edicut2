@@ -1,3 +1,4 @@
+import { Select } from "../Select";
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Form, Link, useActionData, useLoaderData, useLocation, useNavigation, useSearchParams } from "react-router";
 import type { action, loader } from "../../routes/admin";
@@ -93,7 +94,7 @@ export default function AdminManagementPanel() {
       : tab === "videos"
         ? "Portfolio Videos"
       : tab === "roles"
-        ? "Role Management"
+        ? "Role permissions"
       : tab === "settings"
           ? "Settings"
           : tab === "marketing"
@@ -101,7 +102,7 @@ export default function AdminManagementPanel() {
           : tab === "affiliates"
             ? "Affiliates"
           : tab === "users"
-            ? "User Management"
+            ? "Role manager"
             : `${tab.charAt(0).toUpperCase()}${tab.slice(1)} Module`;
 
   return (
@@ -152,13 +153,17 @@ export default function AdminManagementPanel() {
           ) : null}
           {tab === "users" ? (
             <>
+              <header className="flex flex-wrap items-center justify-between gap-3">
+                <div><h2 className="text-2xl font-black tracking-tight">Role manager</h2><p className="mt-1 text-sm text-slate-600">Manage accounts, staff roles, and access. Client work and assignments are in Clients.</p></div>
+                <Link to={adminPath("/clients")} className="neo-workspace__secondary-action inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold">Open clients</Link>
+              </header>
               <div className="flex flex-wrap gap-3 sm:hidden">
                 <button type="button" onClick={event => { event.currentTarget.focus(); setShowCreateModal(true); }} className="neo-workspace__secondary-action inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold"><span className="material-symbols-outlined" aria-hidden="true">person_add</span>Add User</button>
                 <button type="button" onClick={event => { event.currentTarget.focus(); setShowCreateAdminModal(true); }} className="neo-workspace__secondary-action inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold"><span className="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>Add Admin</button>
               </div>
               {/* Metrics */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                <MetricCard compact label="All Users" value={stats.total} icon="group" color="blue" to="?tab=users&view=active" active={!isAdminDirectory && view !== "trash" && !searchParams.get("role")} />
+                <MetricCard compact label="All accounts" value={stats.total} icon="group" color="blue" to="?tab=users&view=active" active={!isAdminDirectory && view !== "trash" && !searchParams.get("role")} />
                 <MetricCard compact label="Admins" value={stats.admins} icon="admin_panel_settings" color="red" to="?tab=users&view=admins" active={isAdminDirectory} />
                 <MetricCard compact label="Managers" value={stats.managers} icon="manage_accounts" color="indigo" to="?tab=users&view=active&role=project_manager" active={!isAdminDirectory && searchParams.get("role") === "project_manager"} />
                 <MetricCard compact label="Support" value={stats.support} icon="support_agent" color="slate" to="?tab=users&view=active&role=customer_support" active={!isAdminDirectory && searchParams.get("role") === "customer_support"} />
@@ -173,7 +178,7 @@ export default function AdminManagementPanel() {
                     onClick={() => { const p = new URLSearchParams(searchParams); p.set("view", "active"); setSearchParams(p); }}
                     className={`flex-1 py-3 text-xs font-black uppercase tracking-widest -colors ${!isAdminDirectory && searchParams.get("view") !== "trash" ? "bg-white text-black border-b-2 border-black" : "bg-slate-50 text-slate-400 "}`}
                   >
-                    All Users
+                    All accounts
                   </button>
                   <button 
                     onClick={() => { const p = new URLSearchParams(searchParams); p.set("view", "admins"); p.delete("role"); setSearchParams(p); }}
@@ -209,7 +214,7 @@ export default function AdminManagementPanel() {
                     </div>
                     <div className="flex items-center gap-2">
                       {!isAdminDirectory ? (
-                        <select
+                        <Select
                           name="role"
                           aria-label="Filter by account role"
                           defaultValue={searchParams.get("role") || ""}
@@ -217,7 +222,7 @@ export default function AdminManagementPanel() {
                         >
                           <option value="">All Roles</option>
                           {USER_ROLES.map(r => <option key={r} value={r}>{formatUserRole(r)}</option>)}
-                        </select>
+                        </Select>
                       ) : null}
                       <button 
                         type="submit"
@@ -256,9 +261,9 @@ export default function AdminManagementPanel() {
                             <Form method="post" reloadDocument className="flex items-center gap-2">
                               <input type="hidden" name="intent" value="bulk-update-role" />
                               {selectedUsers.map(id => <input key={id} type="hidden" name="userIds" value={id} />)}
-                              <select name="role" defaultValue="customer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold outline-none">
+                              <Select name="role" defaultValue="customer" className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold outline-none">
                                 {USER_ROLES.map(r => <option key={r} value={r}>{formatUserRole(r)}</option>)}
-                              </select>
+                              </Select>
                               <button type="submit" className="rounded-lg bg-white px-3 py-1.5 text-xs font-black text-black ">Update Role</button>
                             </Form>
                             <Form method="post" reloadDocument onSubmit={e => !confirm("Move selected users to trash?") && e.preventDefault()}>
@@ -385,7 +390,7 @@ export default function AdminManagementPanel() {
               <span className="material-symbols-outlined text-[64px] mb-4">construction</span>
               <h2 className="text-xl font-black text-slate-900">{tab.charAt(0).toUpperCase() + tab.slice(1)} Module</h2>
               <p className="text-sm font-medium mt-2">This module is currently being implemented to meet the new security and management requirements.</p>
-              <Link to="?tab=users" className="mt-6 text-sm font-black text-black underline underline-offset-4">Return to User Management</Link>
+              <Link to="?tab=users" className="mt-6 text-sm font-black text-black underline underline-offset-4">Return to Role manager</Link>
             </div>
           )}
         </div>
@@ -413,9 +418,9 @@ export default function AdminManagementPanel() {
               </div>
               <div>
                 <label htmlFor="new-user-role" className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">System Role</label>
-                <select id="new-user-role" name="role" required defaultValue="customer" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black">
+                <Select id="new-user-role" name="role" required defaultValue="customer" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-black">
                   {USER_ROLES.map(r => <option key={r} value={r}>{formatUserRole(r)}</option>)}
-                </select>
+                </Select>
               </div>
               {actionError && <div className="rounded-xl bg-red-50 p-3 text-center border border-red-100 text-xs font-bold text-red-600">{actionError}</div>}
               <div className="pt-4 flex gap-3">
@@ -714,16 +719,16 @@ function VideoLibraryPanel({
             </label>
             <label>
               <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Portfolio section</span>
-              <select name="sectionSlug" defaultValue={sections[0]?.slug || "featured"} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black">
+              <Select name="sectionSlug" defaultValue={sections[0]?.slug || "featured"} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black">
                 {sections.map((section) => <option key={section.id} value={section.slug}>{section.name}</option>)}
-              </select>
+              </Select>
             </label>
             <label>
               <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Orientation</span>
-              <select name="orientation" defaultValue="horizontal" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black">
+              <Select name="orientation" defaultValue="horizontal" className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-black">
                 <option value="horizontal">Horizontal</option>
                 <option value="vertical">Vertical / reel</option>
-              </select>
+              </Select>
             </label>
             <label>
               <span className="mb-1.5 ml-1 block text-[10px] font-black uppercase tracking-widest text-slate-500">Creator / client</span>

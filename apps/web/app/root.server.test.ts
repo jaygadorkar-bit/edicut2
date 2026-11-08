@@ -6,13 +6,17 @@ const mocks = vi.hoisted(() => ({
   userSession: vi.fn(), adminSession: vi.fn(),
 }));
 vi.mock("./lib/db.server", () => ({ getDbFromContext: mocks.database }));
-vi.mock("./lib/session.server", () => ({ getSession: mocks.userSession, getAdminSession: mocks.adminSession }));
+vi.mock("./lib/session.server", () => ({
+  createSignOutCsrfToken: async () => "csrf-test-token",
+  getSession: mocks.userSession,
+  getAdminSession: mocks.adminSession,
+}));
 vi.mock("./lib/admin-toolbar-access.server", () => ({ getAdminToolbarAccess: mocks.access }));
 vi.mock("./lib/admin-profile.server", () => ({ getAdminProfileImage: mocks.profile }));
 vi.mock("./lib/admin-navigation-counts.server", () => ({ getAdminNavigationCounts: mocks.counts }));
 vi.mock("./lib/site-settings.server", () => ({ getSiteSettingsSnapshot: mocks.settings }));
 vi.mock("./integrations/supabase/client.server", () => ({ getSupabaseClient: () => null, getRecaptchaSiteKey: () => "" }));
-import { loader } from "./root";
+import { headers as rootHeaders, links as rootLinks, loader, meta as rootMeta } from "./root";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -37,6 +41,18 @@ beforeEach(() => {
 });
 
 describe("fresh root admin data", () => {
+  it("keys client and administrator services to separate session identities", async () => {
+    mocks.userSession.mockResolvedValue({ get: (key: string) => key === "userId" ? "client-id" : undefined });
+    const result = await load();
+    expect(result.data).toMatchObject({ workspaceUserIdentity: "client-id", workspaceAdminIdentity: "admin-id" });
+    mocks.access.mockResolvedValue("none");
+    const revoked = await load();
+    expect(revoked.data.workspaceAdminIdentity).toBeNull();
+    mocks.userSession.mockResolvedValue({ get: () => undefined });
+    const signedOut = await load();
+    expect(signedOut.data.workspaceUserIdentity).toBeNull();
+  });
+
   it("starts profile, badge and settings reads together after fresh authorization", async () => {
     const access = deferred<string>(), profile = deferred<null>();
     const counts = deferred<{ pendingOrderCount: number; unreadEnquiryCount: number }>();
@@ -94,5 +110,72 @@ describe("fresh root admin data", () => {
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(302);
     expect((result as Response).headers.get("Location")).toBe("/maintenance?redirectTo=%2Fportfolio");
+  });
+});
+
+describe("root response headers", () => {
+  it("keeps known public errors out of search results", () => {
+    const headers = rootHeaders({
+      parentHeaders: new Headers(),
+      loaderHeaders: new Headers({ "X-Robots-Tag": "index, follow" }),
+      actionHeaders: new Headers(),
+      errorHeaders: new Headers(),
+    });
+
+    expect(new Headers(headers).get("X-Robots-Tag")).toBe("noindex, nofollow, noarchive");
+  });
+
+  it("preserves normal indexability when no route error occurred", () => {
+    const headers = rootHeaders({
+      parentHeaders: new Headers(),
+      loaderHeaders: new Headers({ "X-Robots-Tag": "index, follow" }),
+      actionHeaders: new Headers(),
+      errorHeaders: undefined,
+    });
+
+    expect(new Headers(headers).get("X-Robots-Tag")).toBe("index, follow");
+  });
+});
+
+describe("root error metadata", () => {
+  it("marks nested 404 routes noindex in the root metadata too", () => {
+    const rootData: NonNullable<Parameters<typeof rootMeta>[0]["loaderData"]> = {
+      appName: "EdiCut",
+      appUrl: "https://edicut.com",
+      nodeApiBaseUrl: "",
+      isSignedIn: false,
+      isAdminSignedIn: false,
+      signOutCsrfToken: null,
+      workspaceUserIdentity: null,
+      workspaceAdminIdentity: null,
+      adminProfile: null,
+      adminToolbarAccess: "none",
+      unreadEnquiryCount: 0,
+      pendingOrderCount: 0,
+      adminToolbarEnabled: false,
+      searchCrawlingEnabled: true,
+      maintenanceModeEnabled: false,
+      promoBarSettings: { enabled: false, message: "" },
+      recaptchaSiteKey: "",
+      debugEnabled: false,
+    };
+    const meta = rootMeta({
+      location: { pathname: "/pricing/not-a-package", search: "", hash: "", state: null, key: "test" },
+      matches: [],
+      error: new Response("Not found", { status: 404 }),
+      params: {},
+      loaderData: rootData,
+    });
+
+    expect(meta).toContainEqual({ name: "robots", content: "noindex, nofollow, noarchive" });
+  });
+});
+
+describe("root favicon metadata", () => {
+  it("advertises valid ICO and SVG icons at site-root URLs", () => {
+    expect(rootLinks()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rel: "icon", href: "/favicon.ico?v=d8469f69", type: "image/x-icon" }),
+      expect.objectContaining({ rel: "icon", href: "/favicon.svg?v=31b9f7e0", type: "image/svg+xml" }),
+    ]));
   });
 });

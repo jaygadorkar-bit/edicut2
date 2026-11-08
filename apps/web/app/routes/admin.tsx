@@ -1,5 +1,6 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Await, Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import { Select } from "../components/Select";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import bcrypt from "bcryptjs";
 import { AdminRecentEvents } from "../components/WorkspaceNotifications";
 import { updateUserRole } from "@edicut/db/repositories/users";
@@ -8,6 +9,7 @@ import { removeD1ChatUsers } from "../lib/chat-cleanup.server";
 import { chatMigrationPaused } from "../lib/chat-store.server";
 import { adminUsers as adminUsersTable, customerSubscriptions, marketingAffiliates, marketingCoupons, users as usersTable, workspaceProjectFiles, workspaceProjects } from "@edicut/db/schema";
 import { getDbFromContext, hasReturnedRows } from "../lib/db.server";
+import { loadAdminAffiliateProgram, reviewApplication, reviewPayout, saveProgramSettings, isMissingAffiliateSchema } from "../lib/affiliate-program.server";
 import {
   destroyAdminSession,
   destroySession,
@@ -36,7 +38,6 @@ import {
   deleteCloudinaryImages,
   getCloudinaryVideoUsage,
   getCloudinaryUsage,
-  countCloudinaryImages,
   listCloudinaryVideos,
   listCloudinaryImages,
   removeCloudinaryUrlsFromPortfolioSections,
@@ -83,8 +84,11 @@ import {
 } from "../lib/marketing.server";
 import { isMissingCustomerSubscriptionSchema } from "../lib/customer-subscriptions.server";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
+import roleAccessStyles from "../styles/admin-role-access.css?url";
 
 const AdminManagementPanel = lazy(() => import("../components/admin/AdminManagementPanel"));
+
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: roleAccessStyles }];
 
 const PAGE_SIZE = 10;
 const WORKSPACE_PROJECT_PAGE_SIZE = 20;
@@ -135,6 +139,13 @@ const adminPlaceholderConfigs = {
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function parseAffiliateDiscountPercent(value: string) {
+  const normalized = value.trim();
+  if (!/^(?:[1-9]|[1-9]\d|100)$/.test(normalized)) return null;
+  const percent = Number(normalized);
+  return Number.isSafeInteger(percent) && percent >= 1 && percent <= 100 ? percent : null;
 }
 
 function usageLimitMessage(result: UsageLimitResult, limitedMessage: string) {
@@ -292,9 +303,9 @@ function readExpectedUpdatedAt(value: FormDataEntryValue | null) {
   return Number.isNaN(date.valueOf()) || date.toISOString() !== value ? null : date.toISOString();
 }
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction<typeof loader> = ({loaderData}) => {
   return [
-    { title: "Admin Workspace - EdiCut" },
+    { title: loaderData?.tab === "users" ? "Role manager | EdiCut Admin" : "Admin Workspace - EdiCut" },
     { name: "robots", content: "noindex,nofollow" },
   ];
 };
@@ -312,9 +323,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const adminUser = await requireAdminUser(request, db, context, `${url.pathname}${url.search}`);
   const tab = url.searchParams.get("tab") || "overview";
-  if (tab === "payments" || tab === "subscriptions") throw redirect(adminPath("/subscriptions"));
+  if (tab === "payments" || tab === "subscriptions") throw redirect(adminPath("/orders"));
   if (tab === "messages") throw redirect("/dashboard/messages");
-  if (tab === "quotes" || tab === "infrastructure") throw redirect(adminPath(`/${tab}`));
+  if (tab === "quotes" || tab === "infrastructure" || tab === "clients") throw redirect(adminPath(`/${tab}`));
   if (!["overview", "users", "roles", "packages", "marketing", "affiliates", "images", "videos", "projects", "audit", "settings"].includes(tab)) {
     throw redirect(ADMIN_BASE_PATH);
   }
@@ -502,16 +513,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const marketingPromise = (async () => {
     const empty: AdminMarketingData = { schemaReady: false, coupons: [], affiliates: [], affiliateCandidates: [] };
     if (!requirements.marketingData) return empty;
-    try { return await getAdminMarketingData(db, url.origin, tab === "marketing" ? "coupons" : "affiliates"); }
+    try {
+      const marketing = await getAdminMarketingData(db, url.origin, tab === "marketing" ? "coupons" : "affiliates");
+      return tab === "affiliates" ? { ...marketing, program: await loadAdminAffiliateProgram(db) } : marketing;
+    }
     catch (error) { if (!isMissingMarketingSchema(error)) throw error; return empty; }
   })();
-
-  // This live provider read is non-critical; stream it without blocking the dashboard.
-  const overviewMedia = requirements.imageCount
-    ? countCloudinaryImages(context)
-      .then(count => ({ count, error: null as string | null }))
-      .catch(() => ({ count: 0, error: "The image count could not be loaded. Check the media connection and refresh." }))
-    : null;
 
   // Aggregate user totals in one PostgreSQL pass; keep the separate admin
   // table count because privileged accounts live in a different table.
@@ -594,7 +601,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     workspaceReady,
     view,
     pricingPackages: tab === "packages" ? pricingPackages : [],
-    pricingPackageCount: pricingPackages.length,
     adminToolbarEnabled: siteSettingsSnapshot.adminToolbarEnabled,
     searchCrawlingEnabled: siteSettingsSnapshot.searchCrawlingEnabled,
     maintenanceModeEnabled: siteSettingsSnapshot.maintenanceModeEnabled,
@@ -603,7 +609,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     portfolioSections,
     cloudinaryImages: tab === "images" ? cloudinaryImages : [],
     cloudinaryImageCount: cloudinaryImages.length,
-    overviewMedia,
     cloudinaryUsage,
     cloudinaryError,
     cloudinaryVideos,
@@ -714,6 +719,19 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
     return { error: "Permission denied." };
   }
 
+  if (["affiliate-save-settings", "affiliate-review-application", "affiliate-review-payout"].includes(intent)) {
+    try {
+      if (intent === "affiliate-save-settings") return await saveProgramSettings(db, formData);
+      if (intent === "affiliate-review-application") return await reviewApplication(db, adminUser.id, formData);
+      return await reviewPayout(db, adminUser.id, formData);
+    } catch (error) {
+      if (isMissingAffiliateSchema(error)) return { error: "Apply the affiliate program database migration before using these tools." };
+      if (isUniqueConstraintError(error)) return { error: "This change conflicts with an existing affiliate record. Refresh and try again." };
+      console.error("Affiliate program update failed");
+      return { error: "The affiliate change could not be saved. Refresh and try again." };
+    }
+  }
+
   const marketingIntents = new Set([
     "create-marketing-coupon",
     "update-marketing-coupon",
@@ -727,17 +745,19 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       if (intent === "create-marketing-coupon" || intent === "update-marketing-coupon") {
         const coupon = marketingCouponInput(formData);
         if ("error" in coupon) return coupon;
+        const [affiliateCodeCollision] = await db.select({ id: marketingAffiliates.id }).from(marketingAffiliates).where(eq(marketingAffiliates.code, coupon.code)).limit(1);
+        if (affiliateCodeCollision) return { error: "That code belongs to an affiliate. Edit the partner’s coupon in the affiliate panel." };
         const couponId = String(formData.get("couponId") || "");
         if (intent === "update-marketing-coupon") {
           if (!isUuid(couponId)) return { error: "Choose a valid coupon to update." };
           const [updated] = await db.update(marketingCoupons)
             .set({ ...coupon, updatedAt: new Date() })
-            .where(eq(marketingCoupons.id, couponId))
+            .where(and(eq(marketingCoupons.id, couponId), isNull(marketingCoupons.affiliateId)))
             .returning();
           if (!updated) return { error: "Coupon not found." };
           return { success: "Coupon updated." };
         }
-        await db.insert(marketingCoupons).values(coupon);
+        await db.insert(marketingCoupons).values({ ...coupon, affiliateId: null });
         return { success: "Coupon created." };
       }
 
@@ -749,7 +769,7 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
         }
         const [updated] = await db.update(marketingCoupons)
           .set({ active: activeValue === "true", updatedAt: new Date() })
-          .where(eq(marketingCoupons.id, couponId))
+          .where(and(eq(marketingCoupons.id, couponId), isNull(marketingCoupons.affiliateId)))
           .returning();
         if (!updated) return { error: "Coupon not found." };
         return { success: activeValue === "true" ? "Coupon activated." : "Coupon paused." };
@@ -758,10 +778,15 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       if (intent === "create-marketing-affiliate") {
         const userId = String(formData.get("userId") || "");
         const code = normalizeMarketingCode(String(formData.get("code") || ""));
-        const commissionRateBps = parseCommissionRateBps(String(formData.get("commissionRate") || ""));
+        const couponCode = normalizeMarketingCode(String(formData.get("couponCode") || formData.get("code") || ""));
+        const commissionInput = String(formData.get("commissionRate") || "10");
+        const commissionRateBps = parseCommissionRateBps(commissionInput);
+        const discountRate = parseAffiliateDiscountPercent(String(formData.get("discountRate") || "10"));
         if (!isUuid(userId)) return { error: "Select an eligible affiliate account." };
         if (!code) return { error: "Use 3–32 letters, numbers, hyphens, or underscores for the referral code." };
+        if (!couponCode) return { error: "Use 3–32 letters, numbers, hyphens, or underscores for the coupon code." };
         if (commissionRateBps === null) return { error: "Enter a commission rate from 0 to 100, with up to two decimal places." };
+        if (discountRate === null) return { error: "Enter a coupon discount from 1% to 100%." };
         const [candidate] = await db.select({ id: usersTable.id }).from(usersTable).where(and(
           eq(usersTable.id, userId),
           eq(usersTable.role, "affiliate"),
@@ -769,22 +794,60 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
           isNull(usersTable.deletedAt),
         )).limit(1);
         if (!candidate) return { error: "That user is not an active affiliate. Update their role first." };
-        await db.insert(marketingAffiliates).values({ userId, code, commissionRateBps });
+        const [referralCouponCollision] = await db.select({ id: marketingCoupons.id }).from(marketingCoupons).where(eq(marketingCoupons.code, code)).limit(1);
+        if (referralCouponCollision) return { error: "That referral code is already used by a coupon. Choose a different code." };
+        const [couponCodeCollision] = await db.select({ id: marketingAffiliates.id }).from(marketingAffiliates).where(eq(marketingAffiliates.code, couponCode)).limit(1);
+        if (couponCodeCollision) return { error: "That coupon code is already used as a referral code." };
+        await db.transaction(async (tx) => {
+          const [affiliate] = await tx.insert(marketingAffiliates).values({ userId, code, commissionRateBps }).returning({ id: marketingAffiliates.id });
+          if (!affiliate) throw new Error("Affiliate profile could not be created.");
+          await tx.insert(marketingCoupons).values({ affiliateId: affiliate.id, code: couponCode, discountType: "percent", discountValue: discountRate });
+        });
         return { success: "Affiliate partner added." };
       }
 
       if (intent === "update-marketing-affiliate") {
         const affiliateId = String(formData.get("affiliateId") || "");
         const code = normalizeMarketingCode(String(formData.get("code") || ""));
+        const couponCode = normalizeMarketingCode(String(formData.get("couponCode") || ""));
         const commissionRateBps = parseCommissionRateBps(String(formData.get("commissionRate") || ""));
+        const discountRate = parseAffiliateDiscountPercent(String(formData.get("discountRate") || ""));
         if (!isUuid(affiliateId)) return { error: "Choose a valid affiliate partner to update." };
         if (!code) return { error: "Use 3–32 letters, numbers, hyphens, or underscores for the referral code." };
+        if (!couponCode) return { error: "Use 3–32 letters, numbers, hyphens, or underscores for the coupon code." };
         if (commissionRateBps === null) return { error: "Enter a commission rate from 0 to 100, with up to two decimal places." };
-        const [updated] = await db.update(marketingAffiliates)
-          .set({ code, commissionRateBps, updatedAt: new Date() })
-          .where(eq(marketingAffiliates.id, affiliateId))
-          .returning();
-        if (!updated) return { error: "Affiliate partner not found." };
+        if (discountRate === null) return { error: "Enter a coupon discount from 1% to 100%." };
+        await db.transaction(async (tx) => {
+          const [current] = await tx.select({ id: marketingAffiliates.id }).from(marketingAffiliates).where(eq(marketingAffiliates.id, affiliateId)).for("update").limit(1);
+          if (!current) return false;
+          const [referralCouponCollision] = await tx.select({ id: marketingCoupons.id }).from(marketingCoupons).where(and(
+            eq(marketingCoupons.code, code),
+            or(isNull(marketingCoupons.affiliateId), ne(marketingCoupons.affiliateId, affiliateId)),
+          )).limit(1);
+          if (referralCouponCollision) throw new Error("AFFILIATE_REFERRAL_CODE_COLLISION");
+          const [couponReferralCollision] = await tx.select({ id: marketingAffiliates.id }).from(marketingAffiliates).where(and(
+            eq(marketingAffiliates.code, couponCode), ne(marketingAffiliates.id, affiliateId),
+          )).limit(1);
+          if (couponReferralCollision) throw new Error("AFFILIATE_COUPON_CODE_COLLISION");
+          const [updated] = await tx.update(marketingAffiliates)
+            .set({ code, commissionRateBps, updatedAt: new Date() })
+            .where(eq(marketingAffiliates.id, affiliateId))
+            .returning({ id: marketingAffiliates.id });
+          if (!updated) return false;
+          const [existingCoupon] = await tx.select({ id: marketingCoupons.id }).from(marketingCoupons).where(eq(marketingCoupons.affiliateId, affiliateId)).for("update").limit(1);
+          if (existingCoupon) {
+            const [coupon] = await tx.update(marketingCoupons)
+              .set({ code: couponCode, discountType: "percent", discountValue: discountRate, updatedAt: new Date() })
+              .where(eq(marketingCoupons.id, existingCoupon.id))
+              .returning({ id: marketingCoupons.id });
+            if (!coupon) throw new Error("Affiliate coupon could not be updated.");
+          } else {
+            await tx.insert(marketingCoupons).values({ affiliateId, code: couponCode, discountType: "percent", discountValue: discountRate });
+          }
+          return true;
+        }).then((updated) => {
+          if (!updated) throw new Error("AFFILIATE_NOT_FOUND");
+        });
         return { success: "Affiliate partner updated." };
       }
 
@@ -803,6 +866,9 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       }
     } catch (error) {
       if (isMissingMarketingSchema(error)) return { error: MARKETING_MIGRATION_NOTICE };
+      if (error instanceof Error && error.message === "AFFILIATE_REFERRAL_CODE_COLLISION") return { error: "That referral code is already being used by a coupon. Choose a different code." };
+      if (error instanceof Error && error.message === "AFFILIATE_COUPON_CODE_COLLISION") return { error: "That coupon code is already used as another affiliate’s referral code." };
+      if (error instanceof Error && error.message === "AFFILIATE_NOT_FOUND") return { error: "Affiliate partner not found." };
       if (isUniqueConstraintError(error)) return { error: "That coupon or referral code is already in use." };
       console.error("Admin marketing update failed:", error);
       return { error: "The marketing change could not be saved. Please try again." };
@@ -1432,7 +1498,7 @@ function AdminProjects() {
                   <input type="hidden" name="intent" value="workspace-project-billing" />
                   <input type="hidden" name="projectId" value={project.id} />
                   <input type="hidden" name="expectedUpdatedAt" value={new Date(project.updatedAt).toISOString()} />
-                  <label className="grid gap-2 text-xs font-black text-[#536779]">Billing status<select name="billingStatus" defaultValue={project.billingStatus} className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="quote_requested">Quote requested</option><option value="quote_approved">Quote confirmed</option><option value="invoice_pending">Invoice sent</option><option value="paid">Paid</option></select></label>
+                  <label className="grid gap-2 text-xs font-black text-[#536779]">Billing status<Select name="billingStatus" defaultValue={project.billingStatus} className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="quote_requested">Quote requested</option><option value="quote_approved">Quote confirmed</option><option value="invoice_pending">Invoice sent</option><option value="paid">Paid</option></Select></label>
                   <label className="grid gap-2 text-xs font-black text-[#536779]">Final amount (USD)<input name="finalAmount" type="number" min="0.01" max="9999999.99" step="0.01" defaultValue={project.finalAmountCents == null ? "" : (project.finalAmountCents / 100).toFixed(2)} placeholder="80.00" className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
                   <label className="grid gap-2 text-xs font-black text-[#536779]">Invoice or payment link<input name="invoiceUrl" type="url" maxLength={2048} defaultValue={project.invoiceUrl || ""} placeholder="https://…" className="neo-workspace__profile-input h-11 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
                   <button type="submit" disabled={isSubmitting} className="neo-workspace__secondary-action h-11 rounded-xl px-4 text-xs font-black disabled:opacity-60">{isSubmitting ? "Saving…" : "Save billing"}</button>
@@ -1441,7 +1507,7 @@ function AdminProjects() {
                   <input type="hidden" name="intent" value="workspace-project-status" />
                   <input type="hidden" name="projectId" value={project.id} />
                   <input type="hidden" name="expectedUpdatedAt" value={new Date(project.updatedAt).toISOString()} />
-                  <label className="grid min-w-0 flex-1 basis-48 gap-2 text-xs font-black text-[#536779]">Move project to<select name="status" defaultValue={project.status} className="neo-workspace__profile-input h-11 min-w-0 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="intake">Intake</option><option value="editing">Editing</option><option value="review">Customer review</option><option value="revision">Revision</option><option value="delivered">Delivered</option></select></label>
+                  <label className="grid min-w-0 flex-1 basis-48 gap-2 text-xs font-black text-[#536779]">Move project to<Select name="status" defaultValue={project.status} className="neo-workspace__profile-input h-11 min-w-0 rounded-xl px-3 text-sm font-bold" disabled={isSubmitting}><option value="intake">Intake</option><option value="editing">Editing</option><option value="review">Customer review</option><option value="revision">Revision</option><option value="delivered">Delivered</option></Select></label>
                   <label className="grid min-w-0 flex-1 basis-56 gap-2 text-xs font-black text-[#536779]">Preview link <input type="url" name="reviewUrl" placeholder="Required for customer review" className="neo-workspace__profile-input h-11 min-w-0 rounded-xl px-3 text-sm font-medium" disabled={isSubmitting} /></label>
                   <button type="submit" disabled={isSubmitting} className="neo-workspace__profile-submit h-11 rounded-xl px-4 text-xs font-black disabled:opacity-60">{isSubmitting ? "Saving…" : "Update status"}</button>
                 </Form>
@@ -1466,26 +1532,25 @@ function AdminProjects() {
   );
 }
 
-function AdminOverviewMetric({ label, value, hint, icon, pending = false }: {
-  label: string; value: string; hint: string; icon: string; pending?: boolean;
+function AdminStatCard({ label, value, hint, icon }: {
+  label: string; value: string; hint: string; icon: string;
 }) {
   return (
-    <article className="neo-workspace__stat-card h-full rounded-[17px] p-4" aria-busy={pending || undefined}>
-      <div className="flex items-start justify-between gap-3">
+    <article className="admin-overview-metric neo-workspace__stat-card h-full rounded-[17px] p-3 sm:p-4">
+      <div className="flex min-w-0 items-center justify-between gap-3">
         <div>
           <p className="neo-workspace__eyebrow">{label}</p>
-          <p className="neo-workspace__stat-value mt-2">{value}</p>
+          <p className="neo-workspace__stat-value mt-1">{value}</p>
         </div>
-        <span className="neo-icon-badge neo-workspace__stat-icon flex h-9 w-9 items-center justify-center rounded-xl" aria-hidden="true"><span className="material-symbols-outlined text-[19px]">{icon}</span></span>
+        <span className="neo-icon-badge neo-workspace__stat-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" aria-hidden="true"><span className="material-symbols-outlined text-[18px]">{icon}</span></span>
       </div>
-      <p className="neo-workspace__stat-hint mt-3">{hint}</p>
+      <p className="neo-workspace__stat-hint mt-2">{hint}</p>
     </article>
   );
 }
 
 function AdminOverview() {
-  const { adminUser, stats, overviewMedia, pricingPackageCount } = useLoaderData<typeof loader>();
-  const mediaUnavailable = <AdminOverviewMetric label="Media assets" value="—" hint="Media connection unavailable" icon="perm_media" />;
+  const { adminUser, stats } = useLoaderData<typeof loader>();
 
   return (
     <AdminPanelShell
@@ -1493,9 +1558,9 @@ function AdminOverview() {
       activeTab="overview"
       account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
       headerActions={(
-        <Link to="?tab=users" className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
+        <Link to={adminPath("/clients")} className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex">
           <span className="material-symbols-outlined text-[17px]">manage_accounts</span>
-          Manage users
+          Manage clients
         </Link>
       )}
     >
@@ -1505,21 +1570,13 @@ function AdminOverview() {
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[#687583]">Review incoming work, manage your team, and keep the public site current.</p>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Admin metrics">
+      <section className="admin-overview-metrics grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Admin metrics">
         {[
           ["Total users", String(stats.total), "Accounts outside trash", "group"],
           ["Admin team", String(stats.admins), "Privileged accounts", "admin_panel_settings"],
           ["Editors", String(stats.editors), "Production capacity", "movie_edit"],
-        ].map(([label, value, hint, icon]) => <AdminOverviewMetric key={label} label={label} value={value} hint={hint} icon={icon} />)}
-        <div aria-live="polite" aria-atomic="true">
-          <Suspense fallback={<AdminOverviewMetric label="Media assets" value="…" hint="Loading live media count…" icon="perm_media" pending />}>
-            <Await resolve={overviewMedia} errorElement={mediaUnavailable}>
-              {(media: Awaited<typeof overviewMedia>) => media && !media.error
-                ? <AdminOverviewMetric label="Media assets" value={String(media.count)} hint={`${pricingPackageCount} packages published`} icon="perm_media" />
-                : mediaUnavailable}
-            </Await>
-          </Suspense>
-        </div>
+          ["Managers", String(stats.managers), "Project manager accounts", "manage_accounts"],
+        ].map(([label, value, hint, icon]) => <AdminStatCard key={label} label={label} value={value} hint={hint} icon={icon} />)}
       </section>
 
       <AdminRecentEvents />
@@ -1531,7 +1588,8 @@ function AdminOverview() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {[
-            { title: "Manage users", description: "Accounts, roles, and access", icon: "group", to: adminPath("?tab=users") },
+            { title: "Manage clients", description: "Payments, assignments, and client activity", icon: "folder_shared", to: adminPath("/clients") },
+            { title: "Role manager", description: "Accounts, roles, and access", icon: "group", to: adminPath("?tab=users") },
             { title: "Review projects", description: "Production status and billing", icon: "video_library", to: adminPath("?tab=projects") },
             { title: "Open enquiries", description: "Contact form messages and replies", icon: "mail", to: "/dashboard/messages" },
             { title: "Pricing packages", description: "Edit published packages", icon: "sell", to: adminPath("?tab=packages") },

@@ -28,6 +28,8 @@ pnpm dev
 
 Frontend URL: `http://localhost:3002`
 
+The local web app connects directly to the hosted Supabase project configured in the root `.env` (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_DATABASE_URL`). It does not need a local Supabase stack. The Supabase CLI config and migrations remain for managing the hosted project and optional local database tests.
+
 Run the Node API:
 
 ```bash
@@ -38,7 +40,7 @@ API URL: `http://localhost:8787/api/node`
 
 ## Docker
 
-Start the web-only local container. It reads the live database and Cloudinary configuration from `.env.cloudflare`:
+Start the web-only local container. It reads Supabase connection settings from the root `.env` and Cloudinary settings from `.env.cloudflare`:
 
 ```bash
 docker compose up --build web
@@ -69,6 +71,9 @@ pnpm audit --prod
 ```
 
 ## Why Hire Us hero audio
+
+For new films, Google AI Studio audio collection, and repeatable narration
+timing, follow [the video creation guide](docs/VIDEO_CREATION_GUIDE.md).
 
 The current `/why-hire-us` introduction uses the dashboard-focused, 86-word narration generated on **2026-10-08** in **Google AI Studio, Chrome**:
 

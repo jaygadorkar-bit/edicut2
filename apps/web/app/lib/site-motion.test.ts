@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldEnableSiteMotion, shouldUseWorkspaceLoader } from "./site-motion";
+import { shouldEnableSiteMotion, shouldTransitionBetweenRoutes, shouldUseWorkspaceLoader } from "./site-motion";
 
 describe("shouldEnableSiteMotion", () => {
   it.each(["/", "/pricing", "/pricing/creator", "/portfolio", "/contact", "/faq", "/privacy", "/terms"])(
@@ -22,6 +22,24 @@ describe("shouldEnableSiteMotion", () => {
     "/checkout/creator",
   ])("keeps global site motion off for workspace and account routes: %s", (pathname) => {
     expect(shouldEnableSiteMotion(pathname)).toBe(false);
+  });
+});
+
+describe("shouldTransitionBetweenRoutes", () => {
+  it.each([
+    ["/", "/signin"],
+    ["/pricing", "/forgot-password"],
+    ["/", "/auth/google"],
+    ["/signin", "/dashboard"],
+  ])("does not cover account-flow navigation from %s to %s", (from, to) => {
+    expect(shouldTransitionBetweenRoutes(from, to)).toBe(false);
+  });
+
+  it.each([
+    ["/", "/pricing"],
+    ["/portfolio", "/services"],
+  ])("keeps transitions between public pages from %s to %s", (from, to) => {
+    expect(shouldTransitionBetweenRoutes(from, to)).toBe(true);
   });
 });
 

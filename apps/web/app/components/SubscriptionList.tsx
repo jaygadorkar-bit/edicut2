@@ -30,6 +30,11 @@ function SubscriptionCard({ row: { subscription: record, name, email }, admin }:
   const navigation = useNavigation();
   const pending = navigation.state !== "idle";
   const unpaid = record.status === "unpaid";
+  const cryptomusOrder = record.paymentProvider === "cryptomus";
+  const invoiceExpired = record.cryptomusInvoiceExpiresAt
+    ? new Date(record.cryptomusInvoiceExpiresAt).valueOf() <= Date.now()
+    : new Date(record.updatedAt).valueOf() <= Date.now() - 12 * 60 * 60 * 1000;
+  const canDelete = admin ? !cryptomusOrder : !cryptomusOrder || (unpaid && invoiceExpired);
   const isMonthly = record.purchaseType === "monthly";
   const addOns = savedPackageAddOns(record.addOns);
   const purchaseLabel = isMonthly ? "Monthly package" : "Single video edit";
@@ -44,7 +49,8 @@ function SubscriptionCard({ row: { subscription: record, name, email }, admin }:
       <div><dt className="text-xs text-slate-500">Country</dt><dd className="mt-1 font-semibold">{countryName(record.country)}</dd></div>
       <div><dt className="text-xs text-slate-500">Phone</dt><dd className="mt-1 font-semibold">{record.phone}</dd></div>
       <div><dt className="text-xs text-slate-500">Selected</dt><dd className="mt-1">{new Date(record.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</dd></div>
-      {record.paidAt ? <div><dt className="text-xs text-slate-500">Payment recorded</dt><dd className="mt-1">{new Date(record.paidAt).toLocaleDateString("en-US", { timeZone: "UTC" })} · Manual confirmation</dd></div> : null}
+      {record.paidAt ? <div><dt className="text-xs text-slate-500">Payment recorded</dt><dd className="mt-1">{new Date(record.paidAt).toLocaleDateString("en-US", { timeZone: "UTC" })} · {cryptomusOrder ? "Cryptomus" : "Manual confirmation"}</dd></div> : null}
+      {unpaid && cryptomusOrder ? <div><dt className="text-xs text-slate-500">Payment</dt><dd className="mt-1">{record.cryptomusInvoiceExpiresAt ? `Cryptomus invoice expires ${new Date(record.cryptomusInvoiceExpiresAt).toLocaleString("en-US", { timeZone: "UTC" })}` : "Cryptomus payment setup is processing"}</dd></div> : null}
       {record.couponCode ? <div><dt className="text-xs text-slate-500">Coupon</dt><dd className="mt-1">{record.couponCode}</dd></div> : null}
     </dl>
     {unpaid ? <div className="mt-5 border-t border-slate-200 pt-4">
@@ -59,7 +65,8 @@ function SubscriptionCard({ row: { subscription: record, name, email }, admin }:
         </div>
       </Form> : <div className="flex flex-wrap gap-3">
         {!admin ? <Link to={`/checkout/${record.packageSlug}?step=payment&subscription=${record.id}`} className="inline-flex min-h-11 items-center rounded-xl bg-slate-900 px-4 text-sm font-bold text-white">Review purchase</Link> : null}
-        <button type="button" onClick={() => setConfirming(true)} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold">{admin ? "Mark as paid" : "Delete unpaid"}</button>
+        {canDelete ? <button type="button" onClick={() => setConfirming(true)} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold">{admin ? "Mark as paid" : cryptomusOrder ? "Remove expired invoice" : "Delete unpaid"}</button>
+          : <p className="self-center text-xs text-slate-500">This Cryptomus payment link stays attached to the order until it expires.</p>}
       </div>}
     </div> : null}
   </article>;

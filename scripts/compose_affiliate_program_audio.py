@@ -1,0 +1,153 @@
+"""Mix the Google AI Studio Ludo narration with EdiCut's original music.
+
+Uses the existing homepage composer. Keeps the source WAV untouched, writes an
+immutable compressed browser asset, and emits measured scene and caption cues.
+Dependencies: numpy, scipy, imageio-ffmpeg. Run from the repository root.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+import imageio_ffmpeg
+import numpy as np
+from scipy.signal import resample_poly
+
+from compose_why_hire_us_audio import compose, ducking, metrics, read_voice, write_wav
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--narration", type=Path, default=Path("media/audio/affiliate-ludo/affiliate-ludo-source.wav"))
+    parser.add_argument("--scene-config", type=Path, default=Path("scripts/data/affiliate-ludo-cues.json"))
+    parser.add_argument("--output-dir", type=Path, default=Path("media/audio/affiliate-ludo"))
+    parser.add_argument("--public-dir", type=Path, default=Path("apps/web/public/audio/affiliate"))
+    args = parser.parse_args()
+
+    narration = args.narration
+    source_hash_before = hashlib.sha256(narration.read_bytes()).hexdigest()
+    cue_config = read_json(args.scene_config)
+    if cue_config.get("sourceSha256") and cue_config["sourceSha256"] != source_hash_before:
+        raise ValueError("Cue sheet checksum does not match the narration. Measure cues for this take before mixing.")
+    voice, rate = read_voice(narration)
+    expected_rate = int(cue_config["sampleRateHz"])
+    if rate != expected_rate or voice.ndim != 1:
+        raise ValueError(f"Expected mono narration at {expected_rate} Hz; got {voice.ndim} channel dimension(s) at {rate} Hz.")
+    source_duration = len(voice) / rate
+    if abs(source_duration - float(cue_config["sourceDurationSeconds"])) > 0.002:
+        raise ValueError("Cue sheet duration does not match the narration. Regenerate cue data before mixing.")
+
+    scenes = cue_config["scenes"]
+    if not scenes:
+        raise ValueError("Cue sheet has no film scenes.")
+    last_scene_at = -1.0
+    for scene in scenes:
+        scene_at = float(scene["at"])
+        if scene_at < last_scene_at or scene_at >= source_duration:
+            raise ValueError("Scene cues must be ordered and start within the source narration.")
+        last_scene_at = scene_at
+        for cue in scene["cues"]:
+            cue_at = float(cue["at"])
+            if cue_at < scene_at or cue_at >= source_duration:
+                raise ValueError("Caption cues must follow their scene start and fall within the narration.")
+
+    output = args.output_dir
+    output.mkdir(parents=True, exist_ok=True)
+    lead = float(cue_config["leadInSeconds"])
+    tail = float(cue_config["tailSeconds"])
+    timeline_voice = np.pad(voice, (round(lead * rate), round(tail * rate)))
+    music = compose(len(timeline_voice), rate, 80, 20261022)
+    bed = music * ducking(timeline_voice, rate)[:, None]
+    voice_rms = float(np.sqrt(np.mean(timeline_voice ** 2)))
+    bed_rms = float(np.sqrt(np.mean(bed ** 2)))
+    if voice_rms <= 0 or bed_rms <= 0:
+        raise ValueError("Narration and music must contain non-silent samples.")
+    below_voice_db = float(cue_config.get("musicUnderVoiceDb", 12))
+    bed_gain = min(1, voice_rms * 10 ** (-below_voice_db / 20) / bed_rms)
+    bed *= bed_gain
+    mix = timeline_voice[:, None] + bed
+    peak = float(np.max(np.abs(resample_poly(mix, 4, 1, axis=0))))
+    master = 10 ** (-1.5 / 20) / peak
+    mix *= master
+
+    wave_path = output / "affiliate-program-mix.wav"
+    rendered = write_wav(wave_path, mix, rate)
+    write_wav(output / "affiliate-program-music.wav", music, rate)
+    compressed_path = output / "affiliate-program.m4a"
+    subprocess.run(
+        [imageio_ffmpeg.get_ffmpeg_exe(), "-nostdin", "-y", "-v", "error", "-i", str(wave_path),
+         "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(compressed_path)],
+        check=True,
+    )
+    asset_hash = hashlib.sha256(compressed_path.read_bytes()).hexdigest()
+    asset_name = f"affiliate-program-{asset_hash[:8]}.m4a"
+    public_dir = args.public_dir
+    public_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(compressed_path, public_dir / asset_name)
+
+    web_scenes = [
+        {
+            **scene,
+            "at": round(float(scene["at"]) + lead, 3) if index else 0,
+            "cues": [{**cue, "at": round(float(cue["at"]) + lead, 3)} for cue in scene["cues"]],
+        }
+        for index, scene in enumerate(scenes)
+    ]
+    data = {
+        "audio": f"/audio/affiliate/{asset_name}",
+        "duration": round(len(rendered) / rate, 3),
+        "leadIn": lead,
+        "scenes": web_scenes,
+    }
+    config_path = Path("apps/web/app/components/site/affiliate-film-content.ts")
+    config_path.write_text(
+        "// Generated by scripts/compose_affiliate_program_audio.py from the measured narration source.\n"
+        + "export const affiliateFilmContent = "
+        + json.dumps(data, indent=2, ensure_ascii=False)
+        + " as const;\n",
+        encoding="utf-8",
+    )
+
+    source_hash_after = hashlib.sha256(narration.read_bytes()).hexdigest()
+    report = {
+        "voice": cue_config["voice"],
+        "voice_description": cue_config["voiceDescription"],
+        "model": cue_config.get("model"),
+        "narration_style": cue_config.get("style"),
+        "narration_rate_percent": cue_config.get("ratePercent"),
+        "source": str(narration),
+        "source_sha256": source_hash_before,
+        "source_unchanged": source_hash_before == source_hash_after,
+        "source_metrics": metrics(voice, rate),
+        "mix_metrics": metrics(rendered, rate),
+        "music_method": "Existing original NumPy/SciPy homepage composer; 80 BPM, D major, seed 20261022",
+        "music_gain": round(bed_gain, 6),
+        "music_level_below_voice_db": round(-20 * np.log10(float(np.sqrt(np.mean(bed ** 2))) / voice_rms), 3),
+        "master_gain_db": round(20 * np.log10(master), 3),
+        "lead_in_seconds": lead,
+        "tail_seconds": tail,
+        "web_encoding": "AAC 128 kbps stereo, M4A faststart",
+        "web_asset": data["audio"],
+        "web_asset_bytes": compressed_path.stat().st_size,
+        "web_asset_sha256": asset_hash,
+        "scene_configuration": data,
+    }
+    (output / "affiliate-program-report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if not report["source_unchanged"] or report["mix_metrics"]["clipped_samples"] or not report["mix_metrics"]["finite"]:
+        raise RuntimeError("Audio validation failed.")
+    if not (public_dir / asset_name).exists():
+        raise RuntimeError("Hashed browser audio asset was not copied to the public directory.")
+    print(json.dumps({"asset": data["audio"], "duration": data["duration"],
+                      "bytes": report["web_asset_bytes"], "metrics": report["mix_metrics"]}, indent=2))
+
+
+if __name__ == "__main__":
+    main()

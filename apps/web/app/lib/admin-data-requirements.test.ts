@@ -11,7 +11,6 @@ describe("getAdminDataRequirements", () => {
       roleFeatureAccess: false,
       portfolioSections: false,
       images: false,
-      imageCount: true,
       imageUsage: false,
       videos: false,
       videoUsage: false,

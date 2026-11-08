@@ -58,13 +58,18 @@ export default function AdminInfrastructureRoute() {
       activeTab="infrastructure"
       account={{ name: adminUser.name || "Admin", detail: adminUser.email }}
       headerActions={(
-        <Link
-          to={adminPath()}
-          className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex"
-        >
-          <span className="material-symbols-outlined text-[17px]" aria-hidden="true">dashboard_customize</span>
-          Dashboard
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link to={adminPath("/cryptomus-test")} className="hidden h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-xs font-black text-slate-800 transition hover:bg-slate-50 md:inline-flex">
+            Cryptomus test
+          </Link>
+          <Link
+            to={adminPath()}
+            className="hidden h-10 items-center gap-2 rounded-full bg-[#6d55e8] px-4 text-xs font-black text-white shadow-[0_7px_18px_rgba(109,85,232,0.22)] transition hover:bg-[#5b44d3] md:inline-flex"
+          >
+            <span className="material-symbols-outlined text-[17px]" aria-hidden="true">dashboard_customize</span>
+            Dashboard
+          </Link>
+        </div>
       )}
     >
       <ServiceUsagePanel providers={providers} />

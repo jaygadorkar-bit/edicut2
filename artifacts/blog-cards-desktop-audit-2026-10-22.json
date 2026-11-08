@@ -1,0 +1,49 @@
+{
+  "cards": [
+    {
+      "footerTop": 621.0625,
+      "height": 525.34375,
+      "href": "/blog/how-to-choose-youtube-video-editing-service",
+      "image": "/images/blog/choose-editing-partner.svg",
+      "imageAlt": "A creator’s video edit beside a selected editor profile and a review checkmark",
+      "loaded": true,
+      "title": "How to Choose a YouTube Video Editing Service",
+      "top": 203.71875
+    },
+    {
+      "footerTop": 621.0625,
+      "height": 525.34375,
+      "href": "/blog/youtube-video-editing-brief-checklist",
+      "image": "/images/blog/video-brief-checklist.svg",
+      "imageAlt": "An illustrated video brief with checked goal, footage, and deliverables, a pencil, and a clapperboard",
+      "loaded": true,
+      "title": "The YouTube Video Editing Brief Checklist (With a Sample Brief)",
+      "top": 203.71875
+    },
+    {
+      "footerTop": 621.0625,
+      "height": 525.34375,
+      "href": "/blog/repurpose-youtube-videos-into-shorts",
+      "image": "/images/blog/creator-video-to-shorts.svg",
+      "imageAlt": "A horizontal creator video reframed into two vertical Shorts with individual crops and captions",
+      "loaded": true,
+      "title": "How to Repurpose a YouTube Video Into Shorts That Stand Alone",
+      "top": 203.71875
+    },
+    {
+      "footerTop": 1194.40625,
+      "height": 525.34375,
+      "href": "/blog/3-reasons-why-you-should-hire-edicut",
+      "image": "/images/blog/edicut-editing-team.svg",
+      "imageAlt": "EdiCut’s editing team with a project manager, studio review, and clearly scoped packages",
+      "loaded": true,
+      "title": "3 reasons why you should hire EdiCut",
+      "top": 777.0625
+    }
+  ],
+  "overflow": false,
+  "viewport": {
+    "height": 884,
+    "width": 1057
+  }
+}

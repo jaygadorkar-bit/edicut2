@@ -2,30 +2,26 @@ import { safeRedirectPath } from "../../lib/safe-redirect";
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { Form, Link, useFetcher, useSearchParams } from "react-router";
-import { executeInvisibleRecaptcha } from "../../lib/recaptcha.client";
+import { Link, useFetcher, useSearchParams } from "react-router";
+import { authHref, type AuthMode } from "./auth-links";
+import { isLocalDevelopmentHostname } from "../../lib/recaptcha.shared";
 
-type AuthMode = "signin" | "signup";
+export { authHref } from "./auth-links";
 
 type AuthActionData = {
   error?: string;
   intent?: string;
+  csrfToken?: string;
 };
 
-export function authHref(_pathname: string, _search: string, mode: AuthMode = "signin", redirectTo = "/dashboard") {
-  const params = new URLSearchParams();
-  params.set("mode", mode);
-  params.set("redirectTo", redirectTo);
-  return `/signin?${params.toString()}`;
-}
-
-export function AuthPage() {
+export function AuthPage({ csrfToken: loaderCsrfToken }: { csrfToken: string }) {
   const [searchParams] = useSearchParams();
   const fetcher = useFetcher<AuthActionData>();
   const requestedMode = searchParams.get("mode") || searchParams.get("auth");
   const redirectTo = safeRedirectPath(searchParams.get("redirectTo") || "/dashboard");
   const resetComplete = searchParams.get("reset") === "success";
   const mode: AuthMode = requestedMode === "signup" ? "signup" : "signin";
+  const csrfToken = fetcher.data?.csrfToken ?? loaderCsrfToken;
   const [showPassword, setShowPassword] = useState(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [emailChecking, setEmailChecking] = useState(false);
@@ -36,6 +32,9 @@ export function AuthPage() {
   const googleStateError = searchParams.get("error") === "google-state"
     ? "Google sign-in expired or could not be verified. Please try again."
     : undefined;
+  const googleRequestError = searchParams.get("error") === "auth-request"
+    ? "Your sign-in request expired. Please try again."
+    : undefined;
   const googleUnavailableError = searchParams.get("error") === "google-unavailable"
     ? "Google sign-in could not be completed. Please start a new sign-in attempt."
     : undefined;
@@ -45,7 +44,7 @@ export function AuthPage() {
   const accountError = searchParams.get("error") === "account-unavailable"
     ? "This account is unavailable. Contact EdiCut support."
     : undefined;
-  const visibleError = securityError || error || googleStateError || googleUnavailableError || googleCaptchaError || accountError;
+  const visibleError = securityError || error || googleStateError || googleRequestError || googleUnavailableError || googleCaptchaError || accountError;
   const submitting = fetcher.state !== "idle";
   const busy = submitting || emailChecking;
 
@@ -64,37 +63,17 @@ export function AuthPage() {
 
     try {
       const formData = new FormData(form);
-      formData.set(
-        "g-recaptcha-response",
-        await executeInvisibleRecaptcha(form, mode === "signup" ? "dashboard_signup" : "dashboard_signin")
-      );
+      if (!isLocalDevelopmentHostname(window.location.hostname)) {
+        const { executeInvisibleRecaptcha } = await import("../../lib/recaptcha.client");
+        formData.set(
+          "g-recaptcha-response",
+          await executeInvisibleRecaptcha(form, mode === "signup" ? "dashboard_signup" : "dashboard_signin")
+        );
+      }
       fetcher.submit(formData, { method: "post", action: "/signin" });
     } catch (error) {
       setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
     } finally {
-      setEmailChecking(false);
-    }
-  }
-
-  async function handleGoogleSubmit(event: FormEvent<HTMLFormElement>) {
-    const form = event.currentTarget;
-    event.preventDefault();
-    if (busy) return;
-
-    setSecurityError(null);
-    setEmailChecking(true);
-    try {
-      const token = await executeInvisibleRecaptcha(form, "google_login");
-      const formData = new FormData(form);
-      formData.set("g-recaptcha-response", token);
-      setEmailChecking(false);
-      fetcher.submit(formData, {
-        method: "post",
-        action: "/auth/google",
-        encType: "application/x-www-form-urlencoded",
-      });
-    } catch (error) {
-      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
       setEmailChecking(false);
     }
   }
@@ -119,15 +98,15 @@ export function AuthPage() {
           </div>
 
           <div className="auth-google-form">
-            <Form method="post" action="/auth/google" className="w-full" onSubmit={handleGoogleSubmit}>
+            <form method="post" action="/auth/google" className="w-full">
+              <input type="hidden" name="csrfToken" value={csrfToken} />
               <input type="hidden" name="mode" value="user" />
               <input type="hidden" name="returnTo" value={redirectTo} />
-              <input type="hidden" name="g-recaptcha-response" value="" />
               <button type="submit" disabled={busy} className="auth-button auth-button--link w-full">
                 <img src="/icons/google-g.png" alt="" width="200" height="204" className="auth-google-icon" />
                 <span>{emailChecking ? "Checking security…" : submitting ? "Opening Google…" : "Continue with Google"}</span>
               </button>
-            </Form>
+            </form>
           </div>
 
           <div className="auth-divider" aria-hidden="true"><span>or</span></div>
@@ -140,6 +119,7 @@ export function AuthPage() {
           ) : null}
 
           <fetcher.Form method="post" action="/signin" className="auth-form" onSubmit={handleSubmit} aria-busy={emailChecking || submitting} aria-describedby={visibleError ? "auth-feedback" : undefined}>
+            <input type="hidden" name="csrfToken" value={csrfToken} />
             <input type="hidden" name="intent" value={mode} />
             <input type="hidden" name="redirectTo" value={redirectTo} />
             <input type="hidden" name="g-recaptcha-response" value="" />

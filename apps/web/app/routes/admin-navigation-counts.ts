@@ -1,5 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { getAdminNavigationCounts } from "../lib/admin-navigation-counts.server";
+import { countAvailableSoftwareUpdates } from "../lib/admin-software-versions";
+import { getAdminSoftwareVersionSnapshot } from "../lib/admin-software-versions.server";
 import { getAdminToolbarAccess } from "../lib/admin-toolbar-access.server";
 import { getDbFromContext } from "../lib/db.server";
 import { getAdminSession, getSession } from "../lib/session.server";
@@ -23,5 +25,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     verifiedUserAdminCredentialVersion: session.get("adminCredentialVersion"),
   }, context);
   if (access !== "verified") return Response.json({ error: "Permission denied" }, { status: 403, headers });
-  return Response.json(await getAdminNavigationCounts(db), { headers });
+  const [counts, softwareVersions] = await Promise.all([
+    getAdminNavigationCounts(db),
+    getAdminSoftwareVersionSnapshot(db),
+  ]);
+  return Response.json({
+    ...counts,
+    availableUpdateCount: countAvailableSoftwareUpdates(softwareVersions.versions),
+  }, { headers });
 }

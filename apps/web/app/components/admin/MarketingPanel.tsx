@@ -1,3 +1,4 @@
+import { Select } from "../Select";
 import { useState } from "react";
 import { Form } from "react-router";
 import type { AdminMarketingData, MarketingCouponView } from "../../lib/marketing.server";
@@ -54,10 +55,10 @@ export function MarketingPanel({
               </label>
               <label className="grid gap-1.5 text-sm font-semibold text-[#445260]">
                 Discount type
-                <select name="discountType" value={discountType} onChange={(event) => setDiscountType(event.currentTarget.value as "percent" | "fixed")} className="neo-workspace__profile-input h-11 rounded-xl px-3" disabled={isSubmitting}>
+                <Select name="discountType" value={discountType} onChange={(event) => setDiscountType(event.currentTarget.value as "percent" | "fixed")} className="neo-workspace__profile-input h-11 rounded-xl px-3" disabled={isSubmitting}>
                   <option value="percent">Percentage</option>
                   <option value="fixed">Fixed amount (USD)</option>
-                </select>
+                </Select>
               </label>
               <label className="grid gap-1.5 text-sm font-semibold text-[#445260]">
                 Discount value

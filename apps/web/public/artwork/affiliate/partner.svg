@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <title>Male EdiCut affiliate partner</title>
+  <defs><clipPath id="portrait"><circle cx="100" cy="100" r="98"/></clipPath></defs>
+  <g clip-path="url(#portrait)">
+    <path d="M20 204v-27c0-19 25-29 57-37h46c32 8 57 18 57 37v27" fill="#c91d37"/>
+    <path d="m77 139 23 11 23-11 15 65H62z" fill="#f5fafb"/>
+    <path d="M82 118h36v29c-10 13-26 13-36 0z" fill="#ffab88"/>
+    <path d="M82 123h36v12c-13 7-25 5-36-3z" fill="#ed886d"/>
+    <path d="M57 91c-15-5-16 24-3 28l10 2-1-27zm86 0c15-5 16 24 3 28l-10 2 1-27z" fill="#ffab88"/>
+    <path d="M58 64c0-31 84-31 84 0v39c0 27-22 45-42 45s-42-18-42-45z" fill="#ffb28f"/>
+    <path d="M59 98c-9-9-15-27-10-43 3-10 9-16 17-19 4-14 22-22 40-19 13 2 25 8 36 5 0 9-3 16-10 21 17 9 21 32 10 55l-5-28c-18 3-35-6-44-16-8 10-19 17-32 19z" fill="#18222e"/>
+    <path d="M68 42c15-13 35-13 53-6" stroke="#263443" stroke-width="5" stroke-linecap="round"/>
+    <path d="M70 87c6-3 12-3 18 0m24 0c6-3 12-3 18 0" stroke="#29252a" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="80" cy="99" rx="3.2" ry="5" fill="#202027"/>
+    <ellipse cx="120" cy="99" rx="3.2" ry="5" fill="#202027"/>
+    <path d="m99 99-4 14 7 2" stroke="#ed886d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M85 123c9 9 22 9 31 0-10 3-21 3-31 0" fill="#fff8f2"/>
+    <path d="m76 140-12 10 10 13-8 10 15 31H50l4-48zm48 0 12 10-10 13 8 10-15 31h31l-4-48z" fill="#ac1b32"/>
+    <path d="M84 143c8 10 24 10 32 0" stroke="#e1ebef" stroke-width="3"/>
+  </g>
+</svg>

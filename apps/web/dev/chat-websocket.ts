@@ -1,6 +1,6 @@
 import { WebSocketServer, type WebSocket } from "ws";
 import type { Plugin } from "vite";
-import type { ChatEvent } from "../app/lib/chat-realtime.server";
+import type { ChatEvent } from "../app/lib/chat-realtime.server.ts";
 
 export function chatWebSocketPlugin(): Plugin {
   return { name: "edicut-chat-websocket", configureServer(server) {

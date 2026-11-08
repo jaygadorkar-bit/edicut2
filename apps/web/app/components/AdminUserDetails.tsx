@@ -1,3 +1,4 @@
+import { Select } from "./Select";
 import { Form, Link } from "react-router";
 import { formatUserRole, isUserRole, normalizeUserRole, USER_ROLES } from "../lib/admin-user-roles";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
@@ -100,7 +101,7 @@ export function AdminUserDetails({ user, canEdit, returnTo, busy = false, pendin
             <legend>Access & status</legend>
             <div className="admin-user__fields admin-user__access-fields">
               <label className="admin-user__field"><span>Account role</span>
-                {adminAccount ? <input value={role} readOnly /> : <select name="role" defaultValue={normalizeUserRole(user.role)}>{USER_ROLES.map(value => <option key={value} value={value}>{formatUserRole(value)}</option>)}</select>}
+                {adminAccount ? <input value={role} readOnly /> : <Select name="role" disabled={disabled} defaultValue={normalizeUserRole(user.role)}>{USER_ROLES.map(value => <option key={value} value={value}>{formatUserRole(value)}</option>)}</Select>}
               </label>
               <label className="admin-user__active">
                 <input name="active" type="checkbox" defaultChecked={user.active} disabled={adminAccount?.self} />

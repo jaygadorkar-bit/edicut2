@@ -1,6 +1,7 @@
 import { and, desc, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { DatabaseClient } from "@edicut/db/client";
 import { customerSubscriptions, marketingAffiliates, marketingCoupons, users, workspaceProjects } from "@edicut/db/schema";
+import type { AdminAffiliateProgramView } from "./affiliate-program";
 
 export type MarketingCouponView = {
   id: string;
@@ -22,6 +23,8 @@ export type MarketingAffiliateView = {
   email: string;
   code: string;
   commissionRateBps: number;
+  couponCode: string | null;
+  discountRateBps: number | null;
   active: boolean;
   referralCount: number;
   paidReferralCount: number;
@@ -47,6 +50,8 @@ export type AffiliatePortalData = {
   id: string;
   code: string;
   commissionRateBps: number;
+  couponCode?: string | null;
+  discountRateBps?: number | null;
   active: boolean;
   referralUrl: string;
   orderCount: number;
@@ -68,12 +73,14 @@ export type AdminMarketingData = {
   coupons: MarketingCouponView[];
   affiliates: MarketingAffiliateView[];
   affiliateCandidates: AffiliateCandidateView[];
+  program?: AdminAffiliateProgramView;
 };
 
 export type CouponQuote = {
   coupon: MarketingCouponView;
   discountCents: number;
   discountedTotalCents: number;
+  affiliate: { id: string; userId: string; code: string; commissionRateBps: number } | null;
 };
 
 export function normalizeMarketingCode(value: string) {
@@ -198,7 +205,7 @@ export async function getAdminMarketingData(
   const includeCoupons = view !== "affiliates";
   const includeAffiliates = view !== "coupons";
   const [coupons, affiliateProfiles, affiliateCandidates, projectMetrics, subscriptionMetrics] = await Promise.all([
-    includeCoupons ? db.select().from(marketingCoupons).orderBy(desc(marketingCoupons.createdAt)) : Promise.resolve([]),
+    includeCoupons ? db.select().from(marketingCoupons).where(isNull(marketingCoupons.affiliateId)).orderBy(desc(marketingCoupons.createdAt)) : Promise.resolve([]),
     includeAffiliates ? db.select({
       id: marketingAffiliates.id,
       userId: users.id,
@@ -206,9 +213,12 @@ export async function getAdminMarketingData(
       email: users.email,
       code: marketingAffiliates.code,
       commissionRateBps: marketingAffiliates.commissionRateBps,
+      couponCode: marketingCoupons.code,
+      discountValue: marketingCoupons.discountValue,
       active: marketingAffiliates.active,
     })
       .from(marketingAffiliates)
+      .leftJoin(marketingCoupons, eq(marketingCoupons.affiliateId, marketingAffiliates.id))
       .innerJoin(users, eq(marketingAffiliates.userId, users.id))
       .orderBy(desc(marketingAffiliates.createdAt)) : Promise.resolve([]),
     includeAffiliates ? db.select({ id: users.id, name: users.name, email: users.email })
@@ -222,24 +232,27 @@ export async function getAdminMarketingData(
       referralCount: sql<number>`count(${workspaceProjects.id})`.mapWith(Number),
       paidReferralCount: sql<number>`count(${workspaceProjects.id}) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid')`.mapWith(Number),
       paidRevenueCents: sql<number>`coalesce(sum(${workspaceProjects.finalAmountCents}) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid'), 0)`.mapWith(Number),
-      commissionEarnedCents: sql<number>`coalesce(sum(round(${workspaceProjects.finalAmountCents} * ${workspaceProjects.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid' AND ${workspaceProjects.finalAmountCents} IS NOT NULL), 0)`.mapWith(Number),
-      pendingCommissionCents: sql<number>`coalesce(sum(round(${workspaceProjects.finalAmountCents} * ${workspaceProjects.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${workspaceProjects.billingStatus} <> 'paid' AND ${workspaceProjects.finalAmountCents} IS NOT NULL), 0)`.mapWith(Number),
+      commissionEarnedCents: sql<number>`coalesce(sum(round(${workspaceProjects.finalAmountCents}::numeric * ${workspaceProjects.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid' AND ${workspaceProjects.finalAmountCents} IS NOT NULL), 0)`.mapWith(Number),
+      pendingCommissionCents: sql<number>`coalesce(sum(round(${workspaceProjects.finalAmountCents}::numeric * ${workspaceProjects.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${workspaceProjects.billingStatus} <> 'paid' AND ${workspaceProjects.finalAmountCents} IS NOT NULL), 0)`.mapWith(Number),
     }).from(marketingAffiliates)
-      .leftJoin(workspaceProjects, or(
+      .leftJoin(workspaceProjects, and(or(
         eq(workspaceProjects.affiliateId, marketingAffiliates.id),
         and(isNull(workspaceProjects.affiliateId), eq(workspaceProjects.affiliateCode, marketingAffiliates.code)),
-      ))
+      ), sql`${workspaceProjects.ownerId} <> ${marketingAffiliates.userId}`, eq(workspaceProjects.currency, "USD"),
+      sql`NOT EXISTS (SELECT 1 FROM project_intakes pi WHERE pi.project_id = ${workspaceProjects.id})`))
       .groupBy(marketingAffiliates.id) : Promise.resolve([]),
     includeAffiliates ? db.select({
       affiliateId: marketingAffiliates.id,
       referralCount: sql<number>`count(${customerSubscriptions.id})`.mapWith(Number),
       paidReferralCount: sql<number>`count(${customerSubscriptions.id}) FILTER (WHERE ${customerSubscriptions.status} = 'paid')`.mapWith(Number),
       paidRevenueCents: sql<number>`coalesce(sum(${customerSubscriptions.amountCents}) FILTER (WHERE ${customerSubscriptions.status} = 'paid'), 0)`.mapWith(Number),
-      commissionEarnedCents: sql<number>`coalesce(sum(round(${customerSubscriptions.amountCents} * ${customerSubscriptions.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${customerSubscriptions.status} = 'paid'), 0)`.mapWith(Number),
-      pendingCommissionCents: sql<number>`coalesce(sum(round(${customerSubscriptions.amountCents} * ${customerSubscriptions.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${customerSubscriptions.status} = 'unpaid'), 0)`.mapWith(Number),
+      commissionEarnedCents: sql<number>`coalesce(sum(round(${customerSubscriptions.amountCents}::numeric * ${customerSubscriptions.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${customerSubscriptions.status} = 'paid'), 0)`.mapWith(Number),
+      pendingCommissionCents: sql<number>`coalesce(sum(round(${customerSubscriptions.amountCents}::numeric * ${customerSubscriptions.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${customerSubscriptions.status} = 'unpaid'), 0)`.mapWith(Number),
     }).from(marketingAffiliates)
       .leftJoin(customerSubscriptions, and(
         eq(customerSubscriptions.affiliateId, marketingAffiliates.id),
+        sql`${customerSubscriptions.ownerId} <> ${marketingAffiliates.userId}`,
+        eq(customerSubscriptions.currency, "USD"),
         isNull(customerSubscriptions.deletedAt),
       ))
       .groupBy(marketingAffiliates.id) : Promise.resolve([]),
@@ -265,6 +278,8 @@ export async function getAdminMarketingData(
         pendingCommissionCents: 0,
       }),
       name: affiliate.name || "Affiliate partner",
+      couponCode: affiliate.couponCode ?? null,
+      discountRateBps: affiliate.discountValue == null ? null : affiliate.discountValue * 100,
       referralUrl: new URL(`/pricing/creator?ref=${encodeURIComponent(affiliate.code)}`, siteOrigin).toString(),
     })),
     affiliateCandidates: affiliateCandidates.map((candidate) => ({
@@ -280,38 +295,43 @@ export async function getAffiliatePortalData(db: DatabaseClient, userId: string,
     id: marketingAffiliates.id,
     code: marketingAffiliates.code,
     commissionRateBps: marketingAffiliates.commissionRateBps,
+    couponCode: marketingCoupons.code,
+    discountValue: marketingCoupons.discountValue,
     active: marketingAffiliates.active,
   }).from(marketingAffiliates)
+    .leftJoin(marketingCoupons, eq(marketingCoupons.affiliateId, marketingAffiliates.id))
     .innerJoin(users, eq(marketingAffiliates.userId, users.id))
     .where(and(
       eq(marketingAffiliates.userId, userId),
-      eq(users.role, "affiliate"),
       eq(users.active, true),
       isNull(users.deletedAt),
     ))
     .limit(1);
   if (!affiliate) return null;
 
-  const projectAttribution = or(
+  const projectAttribution = and(or(
     eq(workspaceProjects.affiliateId, affiliate.id),
     and(isNull(workspaceProjects.affiliateId), eq(workspaceProjects.affiliateCode, affiliate.code)),
-  );
+  ), sql`${workspaceProjects.ownerId} <> ${userId}`, eq(workspaceProjects.currency, "USD"),
+  sql`NOT EXISTS (SELECT 1 FROM project_intakes pi WHERE pi.project_id = ${workspaceProjects.id})`);
   const [projectSummary, subscriptionSummary, projectRows, subscriptionRows] = await Promise.all([
     db.select({
       count: sql<number>`count(*)`.mapWith(Number),
       paidCount: sql<number>`count(*) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid')`.mapWith(Number),
       revenueCents: sql<number>`coalesce(sum(${workspaceProjects.finalAmountCents}) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid'), 0)`.mapWith(Number),
-      commissionCents: sql<number>`coalesce(sum(round(${workspaceProjects.finalAmountCents} * ${workspaceProjects.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid' AND ${workspaceProjects.finalAmountCents} IS NOT NULL), 0)`.mapWith(Number),
-      pendingCommissionCents: sql<number>`coalesce(sum(round(${workspaceProjects.finalAmountCents} * ${workspaceProjects.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${workspaceProjects.billingStatus} <> 'paid' AND ${workspaceProjects.finalAmountCents} IS NOT NULL), 0)`.mapWith(Number),
+      commissionCents: sql<number>`coalesce(sum(round(${workspaceProjects.finalAmountCents}::numeric * ${workspaceProjects.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${workspaceProjects.billingStatus} = 'paid' AND ${workspaceProjects.finalAmountCents} IS NOT NULL), 0)`.mapWith(Number),
+      pendingCommissionCents: sql<number>`coalesce(sum(round(${workspaceProjects.finalAmountCents}::numeric * ${workspaceProjects.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${workspaceProjects.billingStatus} <> 'paid' AND ${workspaceProjects.finalAmountCents} IS NOT NULL), 0)`.mapWith(Number),
     }).from(workspaceProjects).where(projectAttribution),
     db.select({
       count: sql<number>`count(*)`.mapWith(Number),
       paidCount: sql<number>`count(*) FILTER (WHERE ${customerSubscriptions.status} = 'paid')`.mapWith(Number),
       revenueCents: sql<number>`coalesce(sum(${customerSubscriptions.amountCents}) FILTER (WHERE ${customerSubscriptions.status} = 'paid'), 0)`.mapWith(Number),
-      commissionCents: sql<number>`coalesce(sum(round(${customerSubscriptions.amountCents} * ${customerSubscriptions.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${customerSubscriptions.status} = 'paid'), 0)`.mapWith(Number),
-      pendingCommissionCents: sql<number>`coalesce(sum(round(${customerSubscriptions.amountCents} * ${customerSubscriptions.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${customerSubscriptions.status} = 'unpaid'), 0)`.mapWith(Number),
+      commissionCents: sql<number>`coalesce(sum(round(${customerSubscriptions.amountCents}::numeric * ${customerSubscriptions.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${customerSubscriptions.status} = 'paid'), 0)`.mapWith(Number),
+      pendingCommissionCents: sql<number>`coalesce(sum(round(${customerSubscriptions.amountCents}::numeric * ${customerSubscriptions.affiliateCommissionBps} / 10000.0)) FILTER (WHERE ${customerSubscriptions.status} = 'unpaid'), 0)`.mapWith(Number),
     }).from(customerSubscriptions).where(and(
       eq(customerSubscriptions.affiliateId, affiliate.id),
+      sql`${customerSubscriptions.ownerId} <> ${userId}`,
+      eq(customerSubscriptions.currency, "USD"),
       isNull(customerSubscriptions.deletedAt),
     )),
     db.select({
@@ -334,6 +354,8 @@ export async function getAffiliatePortalData(db: DatabaseClient, userId: string,
       currency: customerSubscriptions.currency,
     }).from(customerSubscriptions).where(and(
       eq(customerSubscriptions.affiliateId, affiliate.id),
+      sql`${customerSubscriptions.ownerId} <> ${userId}`,
+      eq(customerSubscriptions.currency, "USD"),
       isNull(customerSubscriptions.deletedAt),
     )).orderBy(desc(customerSubscriptions.createdAt)).limit(50),
   ]);
@@ -367,6 +389,7 @@ export async function getAffiliatePortalData(db: DatabaseClient, userId: string,
   const subscriptionTotals = subscriptionSummary[0] ?? { count: 0, paidCount: 0, revenueCents: 0, commissionCents: 0, pendingCommissionCents: 0 };
   return {
     ...affiliate,
+    discountRateBps: affiliate.discountValue == null ? null : affiliate.discountValue * 100,
     referralUrl: new URL(`/pricing/creator?ref=${encodeURIComponent(affiliate.code)}`, siteOrigin).toString(),
     orderCount: projectTotals.count + subscriptionTotals.count,
     paidOrderCount: projectTotals.paidCount + subscriptionTotals.paidCount,
@@ -395,6 +418,26 @@ export async function findCouponForQuote(db: DatabaseClient, rawCode: string, su
     return { error: `This code requires a minimum package price of $${(coupon.minimumSubtotalCents / 100).toFixed(2)}.` } as const;
   }
 
+  let affiliate: CouponQuote["affiliate"] = null;
+  if (coupon.affiliateId) {
+    const [profile] = await db.select({
+      id: marketingAffiliates.id,
+      userId: marketingAffiliates.userId,
+      code: marketingAffiliates.code,
+      commissionRateBps: marketingAffiliates.commissionRateBps,
+    }).from(marketingAffiliates)
+      .innerJoin(users, eq(users.id, marketingAffiliates.userId))
+      .where(and(
+        eq(marketingAffiliates.id, coupon.affiliateId),
+        eq(marketingAffiliates.active, true),
+        eq(users.active, true),
+        isNull(users.deletedAt),
+      )).limit(1);
+    if (!profile) return { error: "That affiliate coupon is paused or unavailable." } as const;
+    if (profile.userId === userId) return { error: "Affiliate coupon codes cannot be used on your own account." } as const;
+    affiliate = profile;
+  }
+
   const [priorUse] = await db.select({ id: workspaceProjects.id }).from(workspaceProjects).where(and(
     eq(workspaceProjects.ownerId, userId),
     eq(workspaceProjects.couponId, coupon.id),
@@ -415,6 +458,7 @@ export async function findCouponForQuote(db: DatabaseClient, rawCode: string, su
     coupon: couponView(coupon),
     discountCents,
     discountedTotalCents: subtotalCents - discountCents,
+    affiliate,
   } satisfies CouponQuote;
 }
 
@@ -434,7 +478,6 @@ export async function findAffiliateByCode(db: DatabaseClient, rawCode: string) {
       eq(marketingAffiliates.code, code),
       eq(marketingAffiliates.active, true),
       eq(users.active, true),
-      eq(users.role, "affiliate"),
       isNull(users.deletedAt),
     ))
     .limit(1);

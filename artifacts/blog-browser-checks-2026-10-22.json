@@ -1,0 +1,112 @@
+[
+  {
+    "canonical": "https://edicut.com/blog/youtube-video-editing-brief-checklist",
+    "h1Count": 1,
+    "images": [
+      {
+        "alt": "Illustrated storyboard cards with a pencil and checkmarks",
+        "loaded": true,
+        "src": "/images/blog/video-editing-brief.webp"
+      },
+      {
+        "alt": "Illustrated filmstrip of landscape frames with a selection cursor and red checkmark",
+        "loaded": true,
+        "src": "/images/blog/youtube-editing-service.webp"
+      },
+      {
+        "alt": "Illustration showing one landscape video frame divided into three vertical crops",
+        "loaded": false,
+        "src": "/images/blog/youtube-to-shorts.webp"
+      }
+    ],
+    "missingAnchors": [],
+    "overflow": false,
+    "schemaTypes": [
+      "BlogPosting",
+      "BreadcrumbList"
+    ],
+    "title": "YouTube Video Editing Brief Checklist + Sample | EdiCut",
+    "url": "/blog/youtube-video-editing-brief-checklist",
+    "viewport": 390
+  },
+  {
+    "canonical": "https://edicut.com/blog/repurpose-youtube-videos-into-shorts",
+    "h1Count": 1,
+    "images": [
+      {
+        "alt": "Illustration showing one landscape video frame divided into three vertical crops",
+        "loaded": true,
+        "src": "/images/blog/youtube-to-shorts.webp"
+      },
+      {
+        "alt": "Illustrated filmstrip of landscape frames with a selection cursor and red checkmark",
+        "loaded": true,
+        "src": "/images/blog/youtube-editing-service.webp"
+      },
+      {
+        "alt": "Illustrated storyboard cards with a pencil and checkmarks",
+        "loaded": true,
+        "src": "/images/blog/video-editing-brief.webp"
+      }
+    ],
+    "missingAnchors": [],
+    "overflow": false,
+    "schemaTypes": [
+      "BlogPosting",
+      "BreadcrumbList"
+    ],
+    "title": "How to Repurpose YouTube Videos Into Shorts | EdiCut",
+    "url": "/blog/repurpose-youtube-videos-into-shorts",
+    "viewport": 390
+  },
+  {
+    "h1Width": 278,
+    "overflow": false,
+    "url": "/blog/repurpose-youtube-videos-into-shorts",
+    "viewport": 320
+  },
+  {
+    "h1Width": 580.59375,
+    "overflow": false,
+    "url": "/blog/repurpose-youtube-videos-into-shorts",
+    "viewport": 768
+  },
+  {
+    "h1Width": 941.53125,
+    "overflow": false,
+    "url": "/blog/repurpose-youtube-videos-into-shorts",
+    "viewport": 1258
+  },
+  {
+    "footerBlog": true,
+    "h1Count": 1,
+    "headerBlog": false,
+    "overflow": false,
+    "url": "/blog",
+    "viewport": 320
+  },
+  {
+    "footerBlog": true,
+    "h1Count": 1,
+    "headerBlog": false,
+    "overflow": false,
+    "url": "/blog",
+    "viewport": 390
+  },
+  {
+    "footerBlog": true,
+    "h1Count": 1,
+    "headerBlog": false,
+    "overflow": false,
+    "url": "/blog",
+    "viewport": 768
+  },
+  {
+    "footerBlog": true,
+    "h1Count": 1,
+    "headerBlog": false,
+    "overflow": false,
+    "url": "/blog",
+    "viewport": 1258
+  }
+]

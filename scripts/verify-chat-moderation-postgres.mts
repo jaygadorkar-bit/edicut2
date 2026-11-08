@@ -1,0 +1,80 @@
+// Synthetic local database only. Never reads environment credentials or production data.
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { readFile } from "node:fs/promises";
+import postgres from "postgres";
+import type { DatabaseClient } from "@edicut/db/client";
+import { changeChatMessage, removeChatAttachment, getChatAttachment, finishChatAttachmentCleanup } from "../apps/web/app/lib/chat.server";
+import type { ChatActor } from "../apps/web/app/lib/chat";
+import { queueChatAttachmentCleanup, markChatAttachmentDeleted } from "../apps/web/app/lib/chat-attachment-uploads.server";
+const web=createRequire(new URL("../apps/web/package.json",import.meta.url));
+const { drizzle }=web("drizzle-orm/postgres-js");
+const connection=postgres("postgres://postgres:local-test-only@127.0.0.1:55449/edicut_chat_moderation_test",{max:1});
+const db=drizzle(connection) as DatabaseClient;
+const clientId=crypto.randomUUID(),adminId=crypto.randomUUID(),roomId=crypto.randomUUID(),ticketId=crypto.randomUUID();
+const admin:ChatActor={id:adminId,key:`admin:${adminId}`,role:"admin",admin:true,name:"Admin"};
+const client:ChatActor={id:clientId,key:`user:${clientId}`,role:"customer",admin:false,name:"Client"};
+const attachment={publicId:"synthetic-local-file",name:"moderation-fixture.pdf",mime:"application/pdf",bytes:123};
+let checks=0;const check=(value:unknown,label:string)=>{assert.ok(value,label);checks++;};
+const denied=async(run:()=>Promise<unknown>,status:number)=>{await assert.rejects(run,error=>error instanceof Response&&error.status===status);checks++;};
+async function fixture(body:string,selected=roomId){
+ const id=crypto.randomUUID();
+ await connection`INSERT INTO chat_messages(id,room_id,actor_key,sender_name,sender_role,body,attachment,client_nonce) VALUES(${id},${selected},${client.key},'Client','customer',${body},${JSON.stringify(attachment)}::jsonb,${crypto.randomUUID()})`;
+ return id;
+}
+try{
+ const identity=await connection`SELECT current_database() AS db,inet_server_addr()::text AS host`;
+ assert.equal(identity[0].db,"edicut_chat_moderation_test");
+ await connection.unsafe(`DROP TABLE IF EXISTS chat_attachment_uploads,chat_messages,support_tickets,chat_rooms,client_project_managers,customer_subscriptions,admin_users,users;
+ CREATE TABLE users(id uuid PRIMARY KEY,role text,active boolean DEFAULT true,deleted_at timestamptz);
+ CREATE TABLE admin_users(id uuid PRIMARY KEY,role text,active boolean DEFAULT true);
+ CREATE TABLE customer_subscriptions(owner_id uuid,status text,deleted_at timestamptz);
+ CREATE TABLE client_project_managers(client_id uuid,manager_id uuid);
+ CREATE TABLE chat_rooms(id uuid PRIMARY KEY,client_id uuid,manager_id uuid,kind text,last_message_preview text,updated_at timestamptz DEFAULT now());
+ CREATE TABLE support_tickets(room_id uuid PRIMARY KEY,status text);
+ CREATE TABLE chat_messages(id uuid PRIMARY KEY,room_id uuid,actor_key text,sender_name text,sender_role text,body text,attachment jsonb,client_nonce uuid,created_at timestamptz DEFAULT clock_timestamp(),edited_at timestamptz,deleted_at timestamptz);`);
+ await connection`INSERT INTO users(id,role) VALUES(${clientId},'customer')`;
+ await connection`INSERT INTO admin_users(id,role) VALUES(${adminId},'admin')`;
+ await connection`INSERT INTO customer_subscriptions(owner_id,status) VALUES(${clientId},'paid')`;
+ await connection`INSERT INTO chat_rooms(id,client_id,kind) VALUES(${roomId},${clientId},'manager'),(${ticketId},${clientId},'support')`;
+ await connection`INSERT INTO support_tickets(room_id,status) VALUES(${ticketId},'closed')`;
+ for(const file of ["0022_chat_google_drive_attachments.sql","0023_chat_attachment_send_claim.sql"])
+  await connection.unsafe((await readFile(new URL(`../packages/db/drizzle/${file}`,import.meta.url),"utf8")).replaceAll("--> statement-breakpoint",""));
+ const uploadId=crypto.randomUUID(),drive={...attachment,driveFileId:"synthetic-file-id",provider:"google_drive" as const};
+ await connection`INSERT INTO chat_attachment_uploads(id,client_id,room_id,actor_key,name,mime,bytes,received_bytes,status,drive_file_id,message_id,client_nonce)
+ VALUES(${uploadId},${clientId},${roomId},${client.key},${drive.name},${drive.mime},123,123,'saved',${drive.driveFileId},${crypto.randomUUID()},${crypto.randomUUID()})`;
+ await queueChatAttachmentCleanup(db,drive);
+ const queued=(await connection`SELECT status,message_id,drive_file_id,expires_at<=now() AS expired FROM chat_attachment_uploads WHERE id=${uploadId}`)[0];
+ check(queued.status==="uploaded"&&queued.message_id===null&&queued.expired,"Cleanup queues an expired reservation for bounded retry");
+ check(queued.drive_file_id===drive.driveFileId,"Pending cleanup keeps its storage identity and charged reservation");
+ await markChatAttachmentDeleted(db,drive);
+ check((await connection`SELECT status='deleted' AND drive_file_id IS NULL AS released FROM chat_attachment_uploads WHERE id=${uploadId}`)[0].released,"Confirmed Drive cleanup releases the reservation");
+ const mixed=await fixture("Preserve this text");
+ await denied(()=>removeChatAttachment(db,client,roomId,mixed),403);
+ await denied(()=>changeChatMessage(db,admin,roomId,mixed,"Cannot edit another author"),403);
+ const removed=await removeChatAttachment(db,admin,roomId,mixed);
+ check(removed.message.body==="Preserve this text"&&!removed.message.deletedAt&&removed.message.attachment===null,"Mixed message keeps text and hides the file");
+ check(removed.attachment.publicId===attachment.publicId,"Cleanup receives original metadata");
+ await denied(()=>getChatAttachment(db,client,roomId,mixed),404);
+ check((await removeChatAttachment(db,admin,roomId,mixed)).message.attachment===null,"Removal retry stays hidden");
+ await finishChatAttachmentCleanup(db,roomId,mixed,{...attachment,publicId:"wrong-file"});
+ check((await connection`SELECT attachment FROM chat_messages WHERE id=${mixed}`)[0].attachment!==null,"Wrong file confirmation cannot clear metadata");
+ await finishChatAttachmentCleanup(db,roomId,mixed,attachment);
+ check((await connection`SELECT attachment FROM chat_messages WHERE id=${mixed}`)[0].attachment===null,"Confirmed storage cleanup clears metadata");
+ const only=await fixture("");
+ check(Boolean((await removeChatAttachment(db,admin,roomId,only)).message.deletedAt),"File-only removal becomes a tombstone");
+ const full=await fixture("Delete me");
+ const deleted=await changeChatMessage(db,admin,roomId,full,null);
+ check(Boolean(deleted.deletedAt)&&deleted.actorKey===client.key&&deleted.body==="","Admin deletes another author's message");
+ check((await connection`SELECT last_message_preview FROM chat_rooms WHERE id=${roomId}`)[0].last_message_preview==="Message deleted","Deletion repairs the room preview");
+ await denied(()=>getChatAttachment(db,admin,roomId,full),404);
+ const ticketMessage=await fixture("Closed ticket text",ticketId);
+ check((await removeChatAttachment(db,admin,ticketId,ticketMessage)).message.body==="Closed ticket text","Closed ticket moderation works");
+ check(Boolean((await changeChatMessage(db,admin,ticketId,ticketMessage,null)).deletedAt),"Closed ticket deletion works");
+ const system=await fixture("System notice");
+ await connection`UPDATE chat_messages SET sender_role='system' WHERE id=${system}`;
+ await denied(()=>changeChatMessage(db,admin,roomId,system,null),403);
+ await connection`UPDATE admin_users SET active=false WHERE id=${adminId}`;
+ await denied(()=>removeChatAttachment(db,admin,roomId,only),404);
+ console.log(`${checks} PostgreSQL moderation checks passed against disposable localhost fixtures.`);
+} finally {await connection.end();}

@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import type { DatabaseClient } from "@edicut/db/client";
+import { assignClientProjectManager } from "./client-project-managers.server";
 import {
   findReviewProject,
   loadProjectReview,
@@ -73,6 +74,8 @@ describe.skipIf(!connection)("video review PostgreSQL boundaries", () => {
     await sql.unsafe("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
     await sql.unsafe(`CREATE TABLE users(id uuid PRIMARY KEY,name text,role text,active boolean DEFAULT true,deleted_at timestamptz);
       CREATE TABLE admin_users(id uuid PRIMARY KEY,name text,role text,active boolean DEFAULT true);
+      CREATE TABLE customer_subscriptions(owner_id uuid,status text,deleted_at timestamptz);
+      CREATE TABLE client_project_managers(client_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,manager_id uuid REFERENCES users(id) ON DELETE SET NULL,assigned_by uuid REFERENCES admin_users(id) ON DELETE SET NULL,assigned_at timestamptz NOT NULL DEFAULT now());
       CREATE TABLE workspace_projects(id uuid PRIMARY KEY,owner_id uuid REFERENCES users(id),title text,channel_name text,status text DEFAULT 'intake',deadline text,notes text,updated_at timestamptz DEFAULT clock_timestamp());
       CREATE TABLE workspace_project_files(id uuid DEFAULT gen_random_uuid() PRIMARY KEY,owner_id uuid,project_id uuid,kind text,file_name text,share_url text,created_at timestamptz DEFAULT now());
       CREATE TABLE workspace_project_reviews(id uuid DEFAULT gen_random_uuid() PRIMARY KEY,owner_id uuid,project_id uuid,decision text,feedback text,created_at timestamptz DEFAULT now());`);
@@ -113,10 +116,11 @@ describe.skipIf(!connection)("video review PostgreSQL boundaries", () => {
   });
   beforeEach(async () => {
     await sql.unsafe(
-      "TRUNCATE users,admin_users,workspace_projects,workspace_project_files,workspace_project_reviews,project_review_versions,project_review_comments,project_review_members CASCADE",
+      "TRUNCATE client_project_managers,customer_subscriptions,users,admin_users,workspace_projects,workspace_project_files,workspace_project_reviews,project_review_versions,project_review_comments,project_review_members CASCADE",
     );
     await sql`INSERT INTO users(id,name,role) VALUES(${client.id},${client.name},${client.role}),(${editor.id},${editor.name},${editor.role})`;
     await sql`INSERT INTO admin_users(id,name,role)VALUES(${admin.id},${admin.name},'admin')`;
+    await sql`INSERT INTO customer_subscriptions(owner_id,status) VALUES(${client.id},'paid')`;
     await sql`INSERT INTO workspace_projects(id,owner_id,title,channel_name)VALUES(${projectId},${client.id},'Launch film','Studio')`;
   });
   const upload = async (id = versionId) =>
@@ -134,6 +138,75 @@ describe.skipIf(!connection)("video review PostgreSQL boundaries", () => {
       "Editor note",
       id,
     );
+  it("persists multiple proofing marks and private voice metadata in the existing JSONB column", async () => {
+    await upload();
+    const id = crypto.randomUUID();
+    const drawing = {
+      x: 0.2,
+      y: 0.2,
+      width: 0.4,
+      height: 0.3,
+      kind: "arrow",
+      color: "#f97316",
+      start: { x: 0.2, y: 0.2 },
+      end: { x: 0.6, y: 0.5 },
+      shapes: [
+        {
+          x: 0.2,
+          y: 0.2,
+          width: 0.4,
+          height: 0.3,
+          kind: "arrow",
+          color: "#f97316",
+          start: { x: 0.2, y: 0.2 },
+          end: { x: 0.6, y: 0.5 },
+        },
+        {
+          x: 0.5,
+          y: 0.3,
+          width: 0.2,
+          height: 0.2,
+          kind: "ellipse",
+          color: "#38bdf8",
+        },
+      ],
+    };
+    const values = form({
+      intent: "add-comment",
+      versionId,
+      commentId: id,
+      body: "Move this title",
+      timestampMs: "2000",
+      category: "change",
+      priority: "normal",
+      annotation: JSON.stringify(drawing),
+    });
+    const voice = {
+      driveFileId: "private-drive-file-123",
+      mime: "audio/webm",
+      bytes: 100,
+      durationMs: 2000,
+      digest: "a".repeat(64),
+    };
+    expect(
+      await mutateProjectReview(db, client, projectId, values, voice),
+    ).toHaveProperty("success");
+    expect(
+      await mutateProjectReview(db, client, projectId, values, voice),
+    ).toHaveProperty("success");
+    const data = await loadProjectReview(db, client, projectId, [], versionId);
+    expect(data.comments).toHaveLength(1);
+    expect(data.comments[0].annotation).toEqual(drawing);
+    expect(data.comments[0].voice).toEqual({
+      mime: "audio/webm",
+      bytes: 100,
+      durationMs: 2000,
+    });
+    expect(JSON.stringify(data.comments)).not.toContain(
+      "private-drive-file-123",
+    );
+    expect(JSON.stringify(data.comments)).not.toContain(voice.digest);
+  });
   const comment = async (extra: Record<string, string> = {}) =>
     mutateProjectReview(
       db,
@@ -225,6 +298,16 @@ describe.skipIf(!connection)("video review PostgreSQL boundaries", () => {
       name: "Second editor",
     };
     await sql`INSERT INTO users(id,name,role)VALUES(${manager.id},${manager.name},${manager.role}),(${second.id},${second.name},${second.role})`;
+    const otherClientId = "88888888-8888-4888-8888-888888888888";
+    const otherProjectId = "99999999-9999-4999-8999-999999999999";
+    await sql.unsafe(`INSERT INTO users(id,name,role) VALUES ('${otherClientId}','Other client','customer')`);
+    await sql.unsafe(`INSERT INTO workspace_projects(id,owner_id,title,channel_name) VALUES ('${otherProjectId}','${otherClientId}','Private client project','Private')`);
+    expect((await loadAssignedProjects(db, manager)).count).toBe(0);
+    await expect(findReviewProject(db, manager, projectId)).rejects.toMatchObject({ status: 404 });
+    await assignClientProjectManager(db, admin, client.id, manager.id, null);
+    await expect(assignClientProjectManager(db, admin, client.id, null, null)).rejects.toMatchObject({ status: 409 });
+    expect((await loadAssignedProjects(db, manager)).count).toBe(1);
+    await expect(findReviewProject(db, manager, otherProjectId)).rejects.toMatchObject({ status: 404 });
     expect(
       (await loadAssignedProjects(db, manager, "", "unassigned")).count,
     ).toBe(1);
@@ -295,6 +378,9 @@ describe.skipIf(!connection)("video review PostgreSQL boundaries", () => {
       "id",
       projectId,
     );
+    await assignClientProjectManager(db, admin, client.id, null, manager.id);
+    expect((await loadAssignedProjects(db, manager)).count).toBe(0);
+    await expect(findReviewProject(db, manager, projectId)).rejects.toMatchObject({ status: 404 });
     await sql`UPDATE users SET active=false WHERE id=${manager.id}`;
     expect(
       await mutateProjectReview(
@@ -386,7 +472,11 @@ describe.skipIf(!connection)("video review PostgreSQL boundaries", () => {
     );
     vi.stubGlobal("fetch", fetch);
     const args = (request: Request) =>
-      ({ request, context, params: { projectId } }) as unknown as ActionFunctionArgs;
+      ({
+        request,
+        context,
+        params: { projectId },
+      }) as unknown as ActionFunctionArgs;
     const init = form({
       intent: "init-video-upload",
       uploadId: versionId,
@@ -548,6 +638,50 @@ describe.skipIf(!connection)("video review PostgreSQL boundaries", () => {
       endMs: 4000,
     });
   });
+  it("limits comment edits and deletes to the author and removes a deleted thread", async () => {
+    await upload();
+    const added = await comment();
+    const rootId = added.commentId!;
+    const replyId = crypto.randomUUID();
+    expect(
+      await comment({
+        parentId: rootId,
+        commentId: replyId,
+        timestampMs: "",
+        body: "A reply that belongs to this thread.",
+      }),
+    ).toHaveProperty("success");
+
+    const edit = form({
+      intent: "edit-comment",
+      versionId,
+      commentId: rootId,
+      body: "Updated direction",
+    });
+    expect(await mutateProjectReview(db, client, projectId, edit)).toEqual({
+      success: "Comment updated.",
+    });
+    expect(
+      await mutateProjectReview(db, admin, projectId, edit),
+    ).toHaveProperty("error");
+    expect(
+      (
+        await sql`SELECT body FROM project_review_comments WHERE id=${rootId}`
+      )[0].body,
+    ).toBe("Updated direction");
+
+    expect(
+      await mutateProjectReview(
+        db,
+        client,
+        projectId,
+        form({ intent: "delete-comment", versionId, commentId: rootId }),
+      ),
+    ).toEqual({ success: "Comment and replies deleted." });
+    expect(
+      await sql`SELECT id FROM project_review_comments WHERE id IN (${rootId}, ${replyId})`,
+    ).toHaveLength(0);
+  });
   it("blocks approval until changes are resolved, preserves decisions, and locks approved feedback", async () => {
     await upload();
     const added = await comment();
@@ -587,6 +721,27 @@ describe.skipIf(!connection)("video review PostgreSQL boundaries", () => {
       "delivered",
     );
     expect(await comment()).toHaveProperty("error");
+    expect(
+      await mutateProjectReview(
+        db,
+        client,
+        projectId,
+        form({
+          intent: "edit-comment",
+          versionId,
+          commentId: added.commentId!,
+          body: "Cannot edit after approval",
+        }),
+      ),
+    ).toHaveProperty("error");
+    expect(
+      await mutateProjectReview(
+        db,
+        client,
+        projectId,
+        form({ intent: "delete-comment", versionId, commentId: added.commentId! }),
+      ),
+    ).toHaveProperty("error");
     expect(
       (await sql`SELECT decision FROM workspace_project_reviews`)[0].decision,
     ).toBe("approved");

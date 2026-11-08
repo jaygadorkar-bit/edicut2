@@ -17,13 +17,22 @@ export type ChatRoom = {
   updatedAt: string; unreadCount: number;
   projectUnlocked: boolean; ticket: SupportTicket | null;
 };
-export type ChatAttachment = { publicId: string; name: string; mime: string; bytes: number };
+export type ChatAttachment = {
+  /** Cloudinary ID retained for attachments saved before the Drive migration. */
+  publicId: string;
+  name: string;
+  mime: string;
+  bytes: number;
+  provider?: "google_drive";
+  driveFileId?: string;
+};
 export type ChatMessage = { id: string; roomId: string; actorKey: string; senderName: string; senderRole: string; body: string; clientNonce: string; createdAt: string; editedAt: string | null; deletedAt: string | null; attachment: ChatAttachment | null };
 export function sanitizeChatMessageBody(actorKey: string, body: string) {
   return actorKey === "system:assignment" ? body.replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "Project manager") : body;
 }
 export type ChatReceipt = { actorKey: string; name: string; role: string; lastReadAt: string; lastReadId: string | null };
 export type ChatPerson = { id: string; name: string; email: string };
+export type LegacyClientManagerAssignment = { clientId: string; managerId: string };
 export type ChatState = { rooms: ChatRoom[]; hasMore: boolean; page: number; ready: boolean; ticketCounts?: Record<TicketStatus | "all", number> };
 export type ChatUnreadCounts = { projects: number; tickets: number };
 export type ChatHistory = { room: ChatRoom; messages: ChatMessage[]; hasOlder: boolean; receipts: ChatReceipt[] };
@@ -33,6 +42,13 @@ export const CHAT_PAGE_SIZE = 40;
 export const CHAT_HISTORY_SIZE = 50;
 export const chatId = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export const chatIsStaff = (actor: ChatActor) => actor.admin || ["project_manager", "customer_support"].includes(actor.role);
+export const canModerateChat = (actor: ChatActor) => actor.admin && actor.role === "admin";
+/** Removed file metadata stays server-side for idempotent storage cleanup. */
+export const chatAttachmentIsRemoved = (attachment: ChatAttachment | null) => Boolean(attachment && "removedAt" in attachment && attachment.removedAt);
+export function canDeleteChatMessage(actor: ChatActor, room: ChatRoom, message: ChatMessage) {
+  return !message.deletedAt && message.senderRole !== "system" && canReadChatRoom(actor, room)
+    && (canModerateChat(actor) || message.actorKey === actor.key && canSendChatMessage(actor, room));
+}
 export function canReadChatRoom(actor: ChatActor, room: ChatRoom) {
   if (actor.admin) return room.kind === "support" ? Boolean(room.ticket) : room.projectUnlocked;
   if (!room.clientActive) return false;

@@ -1,0 +1,218 @@
+{
+  "responsive": [
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "32px",
+      "headerBlog": false,
+      "path": "/blog",
+      "scrollWidth": 310,
+      "width": 320
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "30px",
+      "headerBlog": false,
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "scrollWidth": 310,
+      "width": 320
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "30px",
+      "headerBlog": false,
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "scrollWidth": 310,
+      "width": 320
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "30px",
+      "headerBlog": false,
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "scrollWidth": 310,
+      "width": 320
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "35.88px",
+      "headerBlog": false,
+      "path": "/blog",
+      "scrollWidth": 380,
+      "width": 390
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "34.32px",
+      "headerBlog": false,
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "scrollWidth": 380,
+      "width": 390
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "34.32px",
+      "headerBlog": false,
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "scrollWidth": 380,
+      "width": 390
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "34.32px",
+      "headerBlog": false,
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "scrollWidth": 380,
+      "width": 390
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "36px",
+      "headerBlog": false,
+      "path": "/blog",
+      "scrollWidth": 758,
+      "width": 768
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "36px",
+      "headerBlog": false,
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "scrollWidth": 758,
+      "width": 768
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "36px",
+      "headerBlog": false,
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "scrollWidth": 758,
+      "width": 768
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "36px",
+      "headerBlog": false,
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "scrollWidth": 758,
+      "width": 768
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "72px",
+      "headerBlog": false,
+      "path": "/blog",
+      "scrollWidth": 1248,
+      "width": 1258
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "56.61px",
+      "headerBlog": false,
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "scrollWidth": 1248,
+      "width": 1258
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "56.61px",
+      "headerBlog": false,
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "scrollWidth": 1248,
+      "width": 1258
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "56.61px",
+      "headerBlog": false,
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "scrollWidth": 1248,
+      "width": 1258
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "72px",
+      "headerBlog": false,
+      "path": "/blog",
+      "scrollWidth": 1430,
+      "width": 1440
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "60px",
+      "headerBlog": false,
+      "path": "/blog/how-to-choose-youtube-video-editing-service",
+      "scrollWidth": 1430,
+      "width": 1440
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "60px",
+      "headerBlog": false,
+      "path": "/blog/youtube-video-editing-brief-checklist",
+      "scrollWidth": 1430,
+      "width": 1440
+    },
+    {
+      "brokenImages": [],
+      "footerBlog": true,
+      "h1Count": 1,
+      "h1Size": "60px",
+      "headerBlog": false,
+      "path": "/blog/repurpose-youtube-videos-into-shorts",
+      "scrollWidth": 1430,
+      "width": 1440
+    }
+  ],
+  "playback": {
+    "videoWithSound": true,
+    "captionsVisible": true,
+    "replay": true,
+    "offscreenPause": true,
+    "reducedMotionAudio": true,
+    "transcriptParagraphs": 6
+  },
+  "articleInteraction": {
+    "tableOfContents": true,
+    "activeChapter": true,
+    "faqKeyboardToggle": true,
+    "focusOutline": true
+  }
+}

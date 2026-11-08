@@ -10,6 +10,7 @@ import { isWorkspaceRecordId } from "./workspace";
 import {
   REVIEW_MAX_BYTES,
   REVIEW_MAX_DURATION_MS,
+  REVIEW_VOICE_MAX_BYTES,
   YOUTUBE_REVIEW_MAX_BYTES,
   type ReviewStorage,
   type ReviewResult,
@@ -35,6 +36,15 @@ import { getYouTubeStorageStatus } from "./youtube-storage.server";
 import { youtubeUploadChunk, youtubeUploadForm } from "./youtube-review-upload.server";
 import { getGoogleDriveStorageStatus, GOOGLE_DRIVE_REVIEW_MAX_BYTES } from "./google-drive-storage.server";
 import { googleDriveUploadChunk, googleDriveUploadForm } from "./google-drive-review-upload.server";
+import { addReviewVoiceComment, streamReviewVoice } from "./review-voice.server";
+import { createChatStore } from "./chat-store.server";
+import { importMissingClientProjectManagers } from "./client-project-managers.server";
+
+async function bootstrapManagerAssignments(db: Awaited<ReturnType<typeof requireReviewActor>>["db"], context: LoaderFunctionArgs["context"], actor: Awaited<ReturnType<typeof requireReviewActor>>["actor"]) {
+  if (actor.admin || actor.role !== "project_manager") return;
+  const chat = createChatStore(db, context);
+  await importMissingClientProjectManagers(db, actor, await chat.listLegacyClientManagerAssignments(actor));
+}
 
 async function reviewUploadProvider(db: Awaited<ReturnType<typeof requireReviewActor>>["db"], actor: Awaited<ReturnType<typeof requireReviewActor>>["actor"], projectId: string, id: string) {
   if (!isWorkspaceRecordId(id)) throw new Response("Upload not found.", { status: 404 });
@@ -48,10 +58,11 @@ export async function projectReviewLoader(
   admin: boolean,
 ) {
   const { db, actor, features } = await requireReviewActor(args, admin);
+  await bootstrapManagerAssignments(db, args.context, actor);
   const projectId = args.params.projectId ?? "";
   const url = new URL(args.request.url);
   try {
-    if (url.searchParams.get("media")) {
+    if (url.searchParams.get("media") || url.searchParams.has("voice")) {
       const limit = await consumeUsageLimit({
         ...args,
         bindingName: "USER_ACTION_LIMITER",
@@ -63,6 +74,7 @@ export async function projectReviewLoader(
         throw new Response("Please wait a minute before reloading the video.", {
           status: 429,
         });
+      if (url.searchParams.has("voice")) return streamReviewVoice(args, db, actor, projectId, url.searchParams.get("voice") ?? "");
       const versionId = url.searchParams.get("media")!;
       if (!isWorkspaceRecordId(projectId) || !isWorkspaceRecordId(versionId))
         throw new Response("Video not found.", { status: 404 });
@@ -111,6 +123,7 @@ export async function projectReviewAction(
 ): Promise<ReviewResult | Response> {
   if (!isSameSiteMutation(args.request)) return forbiddenMutation();
   const { db, actor } = await requireReviewActor(args, admin);
+  await bootstrapManagerAssignments(db, args.context, actor);
   const projectId = args.params.projectId ?? "";
   const multipart = args.request.headers
     .get("Content-Type")
@@ -132,23 +145,19 @@ export async function projectReviewAction(
       const provider = await reviewUploadProvider(db, actor, projectId, new URL(args.request.url).searchParams.get("upload") || "");
       return provider === "google_drive" ? await googleDriveUploadChunk(args,db,actor,projectId) : await youtubeUploadChunk(args,db,actor,projectId);
     }
-    if (
-      multipart &&
-      !actor.admin &&
-      !["editor", "project_manager"].includes(actor.role)
-    )
-      throw new Response("Only the project editor can upload video versions.", {
-        status: 403,
-      });
     const form = await readMutationForm(
       args.request,
-      multipart ? REVIEW_MAX_BYTES + 64 * 1024 : 64 * 1024,
+      multipart ? ((!actor.admin && !["editor", "project_manager"].includes(actor.role)) ? REVIEW_VOICE_MAX_BYTES : REVIEW_MAX_BYTES) + 64 * 1024 : 64 * 1024,
     );
     if (!form)
       return {
         error: "This form could not be read or exceeds the upload limit.",
       };
     const uploadIntent = String(form.get("intent"));
+    if (multipart && uploadIntent === "add-comment" && form.has("voice"))
+      return await addReviewVoiceComment(args, db, actor, project.id, form);
+    if (multipart && !actor.admin && !["editor", "project_manager"].includes(actor.role))
+      throw new Response("Only the project editor can upload video versions.", { status: 403 });
     if (uploadIntent === "init-video-upload") return form.get("provider") === "google_drive" ? await googleDriveUploadForm(args,db,actor,projectId,form) : await youtubeUploadForm(args,db,actor,projectId,form);
     if (["status-video-upload","finish-video-upload"].includes(uploadIntent)) {
       const provider = await reviewUploadProvider(db, actor, projectId, String(form.get("uploadId") || ""));

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-
-const CONSENT_STORAGE_KEY = "edicut-cookie-consent-v1";
+import { setSiteAnalyticsConsent, SITE_ANALYTICS_CONSENT_KEY } from "../../lib/site-analytics";
 
 type ConsentState = {
   analytics: boolean;
@@ -9,44 +8,56 @@ type ConsentState = {
 };
 
 export function CookieConsent() {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isReady, setIsReady] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(CONSENT_STORAGE_KEY);
+      const saved = window.localStorage.getItem(SITE_ANALYTICS_CONSENT_KEY);
 
       if (saved) {
-        JSON.parse(saved);
-      } else {
-        setIsVisible(true);
+        const consent = JSON.parse(saved) as Partial<ConsentState> | null;
+        if (
+          consent &&
+          typeof consent.analytics === "boolean" &&
+          typeof consent.marketing === "boolean"
+        ) {
+          setSiteAnalyticsConsent(consent.analytics);
+          document.documentElement.dataset.edicutConsent = "saved";
+          setIsVisible(false);
+          return;
+        }
       }
+      document.documentElement.removeAttribute("data-edicut-consent");
     } catch {
-      setIsVisible(true);
-    } finally {
-      setIsReady(true);
+      document.documentElement.removeAttribute("data-edicut-consent");
     }
+
+    setSiteAnalyticsConsent(false);
+    setIsVisible(true);
   }, []);
 
   function saveConsent(next: ConsentState) {
     try {
       window.localStorage.setItem(
-        CONSENT_STORAGE_KEY,
+        SITE_ANALYTICS_CONSENT_KEY,
         JSON.stringify({ ...next, savedAt: new Date().toISOString() }),
       );
     } catch {
       // The choice still applies for the current page when storage is unavailable.
     }
 
+    setSiteAnalyticsConsent(next.analytics);
+    document.documentElement.dataset.edicutConsent = "saved";
+    window.dispatchEvent(new Event("edicut:consent-change"));
     setIsVisible(false);
   }
 
-  if (!isReady || !isVisible) return null;
+  if (!isVisible) return null;
 
   return (
     <aside
+      id="edicut-cookie-consent"
       className="fixed bottom-3 right-3 z-[90] w-[min(21rem,calc(100vw-1.5rem))] rounded-xl border border-[var(--neo-line)] bg-[var(--neo-bg)] p-3 text-[var(--neo-ink)] shadow-[0_20px_55px_-24px_var(--neo-shadow-dark)] sm:bottom-4 sm:right-4 lg:left-4 lg:right-auto"
-      role="dialog"
       aria-labelledby="cookie-consent-title"
       aria-describedby="cookie-consent-description"
     >

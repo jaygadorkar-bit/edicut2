@@ -1,15 +1,17 @@
 import { safeRedirectPath } from "../lib/safe-redirect";
-import type { ActionFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { AuthPage } from "../components/auth/AuthModal";
+import { data, useLoaderData } from "react-router";
 import { users } from "@edicut/db/schema";
 import { findUserByEmail } from "@edicut/db/repositories/users";
 import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
 import bcrypt from "bcryptjs";
-import { createUserSession, isAdminRole } from "../lib/session.server";
+import { createUserSession, isAdminRole, issueAuthCsrfToken, verifyAuthCsrfToken } from "../lib/session.server";
 import { getDbFromContext } from "../lib/db.server";
 import { verifyPassword } from "../lib/password.server";
 import { verifyRecaptchaToken } from "../lib/recaptcha.server";
-import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
+import { isLocalDevelopmentHostname } from "../lib/recaptcha.shared";
+import { readMutationForm } from "../lib/mutation-request.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
 import {
   signInWithSupabase,
@@ -23,8 +25,14 @@ export const meta: MetaFunction = () => [
   { name: "robots", content: "noindex, nofollow, noarchive" },
 ];
 
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const csrf = await issueAuthCsrfToken(request, context);
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  if (csrf.setCookie) headers.append("Set-Cookie", csrf.setCookie);
+  return data({ csrfToken: csrf.token }, { headers });
+}
+
 export async function action({ request, context }: ActionFunctionArgs) {
-  if (!isSameSiteMutation(request)) return forbiddenMutation();
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return { error: "Sign-in request is too large. Please try again.", intent: "signin" };
   }
@@ -32,6 +40,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await readMutationForm(request, 64 * 1024);
   if (!formData) return { error: "Sign-in request could not be read. Please try again.", intent: "signin" };
   const intent = String(formData.get("intent") || "");
+  if (!await verifyAuthCsrfToken(request, formData.get("csrfToken"), context)) {
+    const csrf = await issueAuthCsrfToken(request, context);
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    if (csrf.setCookie) headers.append("Set-Cookie", csrf.setCookie);
+    return data({
+      error: "This sign-in form expired. Please try again.",
+      intent,
+      csrfToken: csrf.token,
+    }, { headers });
+  }
   const rawEmail = formData.get("email");
   const rawPassword = formData.get("password");
   const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
@@ -72,10 +90,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return { error: "Your name must be 120 characters or fewer.", intent };
   }
 
-  const captcha = await verifyRecaptchaToken({
-    context,
-    token: formData.get("g-recaptcha-response"),
-  });
+  // Localhost testing still keeps request and identity rate limits, but Google CAPTCHA tokens
+  // are not reliable for loopback hosts and can prevent developers from testing authentication.
+  const captcha = isLocalDevelopmentHostname(new URL(request.url).hostname)
+    ? { success: true as const }
+    : await verifyRecaptchaToken({
+        context,
+        token: formData.get("g-recaptcha-response"),
+      });
 
   if (!captcha.success) {
     return { error: captcha.error, intent };
@@ -224,5 +246,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function SigninPage() {
-  return <AuthPage />;
+  const { csrfToken } = useLoaderData<typeof loader>();
+  return <AuthPage csrfToken={csrfToken} />;
 }

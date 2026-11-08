@@ -3,24 +3,51 @@ import { reactRouter } from "@react-router/dev/vite";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
-import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
-import { chatWebSocketPlugin } from "./dev/chat-websocket";
+import { chatWebSocketPlugin } from "./dev/chat-websocket.ts";
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-export default defineConfig(({ mode, isSsrBuild }) => {
+export default defineConfig(({ mode }) => {
   const localEnv = loadEnv(mode, workspaceRoot, "");
-  // React Router's dev server runs from apps/web; keep this server-side config
-  // out of Vite's client env while loading the same keys as the Worker.
+  // Supabase's URL and publishable key are public client configuration. Keep
+  // the allowlist explicit so server credentials from the same .env can never
+  // be exposed to the browser bundle.
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+    || localEnv.VITE_SUPABASE_URL
+    || process.env.SUPABASE_URL
+    || localEnv.SUPABASE_URL
+    || "";
+  const supabasePublishableKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY
+    || localEnv.VITE_SUPABASE_PUBLISHABLE_KEY
+    || process.env.SUPABASE_PUBLISHABLE_KEY
+    || localEnv.SUPABASE_PUBLISHABLE_KEY
+    || "";
+  // React Router's dev server and prerender build run from apps/web. Make the
+  // same server-only settings available to loaders without adding them to the
+  // browser environment or client bundle.
   for (const name of [
+    "APP_URL", "APP_ENV", "GMAIL_SENDER_EMAIL",
+    "CRYPTOMUS_MERCHANT_ID", "CRYPTOMUS_PAYMENT_API_KEY",
+    "CRYPTOMUS_TEST_WEBHOOK_ENABLED", "CRYPTOMUS_TEST_WEBHOOK_CALLBACK_URL",
+    "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_DATABASE_URL",
     "NEXT_PUBLIC_RECAPTCHA_SITE_KEY", "RECAPTCHA_SECRET_KEY",
     "YOUTUBE_OAUTH_CLIENT_ID", "YOUTUBE_OAUTH_CLIENT_SECRET", "YOUTUBE_TOKEN_SECRET",
+    "GOOGLE_DRIVE_ACCOUNT_EMAIL",
   ]) {
     if (process.env[name] === undefined && localEnv[name]) process.env[name] = localEnv[name];
   }
 
   return {
+    // Keep router contexts and React's hook dispatcher on the same runtime in
+    // the pnpm workspace and across Vite's persistent dependency cache.
+    resolve: {
+      dedupe: ["react", "react-dom", "react-router"],
+    },
+    define: {
+      __EDICUT_SUPABASE_URL__: JSON.stringify(supabaseUrl),
+      __EDICUT_SUPABASE_PUBLISHABLE_KEY__: JSON.stringify(supabasePublishableKey),
+    },
     envDir: workspaceRoot,
     cacheDir: process.env.DEV_CACHE_DIR ?? ".vite-cache",
     server: {
@@ -38,7 +65,9 @@ export default defineConfig(({ mode, isSsrBuild }) => {
           "**/chrome-profile/**",
           "**/scratch/**",
           "**/artifacts/**",
-          "**/media/**",
+          // Ignore source recordings without excluding public hero media from
+          // Vite's asset index and file watcher.
+          resolve(workspaceRoot, "media/**").replace(/\\/g, "/"),
           "**/coverage/**",
           "**/build/**",
           "**/*.tsbuildinfo",
@@ -54,21 +83,12 @@ export default defineConfig(({ mode, isSsrBuild }) => {
     },
     build: {
       cssCodeSplit: true,
-      sourcemap: process.env.NODE_ENV !== "production",
+      sourcemap: mode !== "production",
       assetsInlineLimit: 2048,
-      rollupOptions: isSsrBuild
-        ? undefined
-        : {
-            output: {
-              manualChunks: {
-                react: ["react", "react-dom", "react-router"],
-              },
-            },
-          },
     },
     ssr: {
       noExternal: ["react-router", "@react-router/dev", "@react-router/cloudflare"],
     },
-    plugins: [chatWebSocketPlugin(), reactRouter(), tsconfigPaths(), tailwindcss()],
+    plugins: [chatWebSocketPlugin(), reactRouter(), tailwindcss()],
   };
 });

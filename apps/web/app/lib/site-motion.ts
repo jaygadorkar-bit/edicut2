@@ -21,6 +21,11 @@ export function shouldEnableSiteMotion(pathname: string) {
   return !ROUTES_WITHOUT_SITE_MOTION.some((route) => isAtRouteOrChild(pathname, route));
 }
 
+/** Page transitions only run when both ends of a client navigation are public motion pages. */
+export function shouldTransitionBetweenRoutes(fromPathname: string, toPathname: string) {
+  return shouldEnableSiteMotion(fromPathname) && shouldEnableSiteMotion(toPathname);
+}
+
 export function shouldUseWorkspaceLoader(pathname: string) {
   return isAtRouteOrChild(pathname, "/dashboard") || (
     isAtRouteOrChild(pathname, ADMIN_BASE_PATH) &&

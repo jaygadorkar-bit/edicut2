@@ -1,0 +1,91 @@
+[
+  {
+    "url": "http://edicut.com/",
+    "status": 301,
+    "location": "https://edicut.com/",
+    "cache": null,
+    "xRobots": null,
+    "robots": [],
+    "prerenderLocalhost": false
+  },
+  {
+    "url": "http://www.edicut.com/",
+    "status": 301,
+    "location": "https://www.edicut.com/",
+    "cache": null,
+    "xRobots": null,
+    "robots": [],
+    "prerenderLocalhost": false
+  },
+  {
+    "url": "https://www.edicut.com/",
+    "status": 200,
+    "location": null,
+    "cache": "HIT",
+    "xRobots": null,
+    "robots": [
+      "noindex, nofollow, noarchive"
+    ],
+    "prerenderLocalhost": true
+  },
+  {
+    "url": "https://edicut.com/services/youtube-video-editing/",
+    "status": 307,
+    "location": "/services/youtube-video-editing",
+    "cache": null,
+    "xRobots": null,
+    "robots": [],
+    "prerenderLocalhost": false
+  },
+  {
+    "url": "https://edicut.com/about",
+    "status": 404,
+    "location": null,
+    "cache": null,
+    "xRobots": null,
+    "robots": [
+      "noindex, nofollow, noarchive"
+    ],
+    "prerenderLocalhost": false
+  },
+  {
+    "url": "https://edicut.com/custom-quote",
+    "status": 302,
+    "location": "/signin?redirectTo=%2Fcustom-quote",
+    "cache": null,
+    "xRobots": null,
+    "robots": [],
+    "prerenderLocalhost": false
+  },
+  {
+    "url": "https://edicut.com/signin",
+    "status": 200,
+    "location": null,
+    "cache": null,
+    "xRobots": "noindex, nofollow, noarchive",
+    "robots": [
+      "noindex, nofollow, noarchive"
+    ],
+    "prerenderLocalhost": false
+  },
+  {
+    "url": "https://edicut.com/checkout/single-creator",
+    "status": 302,
+    "location": "/signin?redirectTo=%2Fcheckout%2Fsingle-creator",
+    "cache": null,
+    "xRobots": null,
+    "robots": [],
+    "prerenderLocalhost": false
+  },
+  {
+    "url": "https://edicut.com/?seo_audit=20261022",
+    "status": 200,
+    "location": null,
+    "cache": "HIT",
+    "xRobots": null,
+    "robots": [
+      "noindex, nofollow, noarchive"
+    ],
+    "prerenderLocalhost": true
+  }
+]

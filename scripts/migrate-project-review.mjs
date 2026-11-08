@@ -48,7 +48,7 @@ export function projectReviewMigrationPlan(applied, migrations) {
   return pending;
 }
 export async function migrateProjectReview(connection, options = {}) {
-  if (!connection) throw new MigrationSafetyError("DATABASE_URL is required.");
+  if (!connection) throw new MigrationSafetyError("SUPABASE_DATABASE_URL is required.");
   const target = new URL(connection);
   if (!["postgres:", "postgresql:"].includes(target.protocol))
     throw new MigrationSafetyError("A PostgreSQL database is required.");
@@ -178,7 +178,7 @@ if (
     });
     console.log(
       JSON.stringify(
-        await migrateProjectReview(process.env.DATABASE_URL, values),
+        await migrateProjectReview(process.env.SUPABASE_DATABASE_URL, values),
       ),
     );
   } catch (error) {

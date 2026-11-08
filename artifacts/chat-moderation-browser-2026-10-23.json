@@ -1,0 +1,14 @@
+{
+  "attachmentStillPresent": true,
+  "messageMenus": 8,
+  "openDialog": false,
+  "overflow": false,
+  "url": "http://localhost:3002/site/node-logmin/chat",
+  "viewport": 1280,
+  "confirmationCancelled": true,
+  "focusReturnVerified": true,
+  "mobileWidth": 390,
+  "mobileOverflow": false,
+  "confirmationButtonHeight": 44,
+  "existingMessageDeletionPerformed": false
+}
