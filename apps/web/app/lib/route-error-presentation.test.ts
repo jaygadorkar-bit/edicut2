@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getRouteErrorDebugDetails, getRouteErrorPresentation } from "./route-error-presentation";
+import { getRouteErrorDebugDetails, getRouteErrorPresentation, getSafeRouteErrorDiagnostics } from "./route-error-presentation";
 
 describe("getRouteErrorPresentation", () => {
   it("offers a clear recovery message for a database timeout", () => {
@@ -43,5 +43,45 @@ describe("getRouteErrorPresentation", () => {
 describe("getRouteErrorDebugDetails", () => {
   it("includes details for the development-only diagnostics panel", () => {
     expect(getRouteErrorDebugDetails(new Error("test failure"))).toContain("Error: test failure");
+  });
+});
+
+describe("getSafeRouteErrorDiagnostics", () => {
+  it("accepts only bounded dashboard diagnostics", () => {
+    expect(getSafeRouteErrorDiagnostics({
+      status: 500,
+      statusText: "Internal Server Error",
+      data: { diagnostics: {
+        requestReference: "a577a90c4ec041fc-DAC",
+        route: "dashboard",
+        stage: "client-balance",
+        status: 500,
+        errorType: "TypeError",
+        databaseCode: "08006",
+      } },
+      internal: true,
+    })).toEqual({
+      requestReference: "a577a90c4ec041fc-DAC",
+      route: "dashboard",
+      stage: "client-balance",
+      status: 500,
+      errorType: "TypeError",
+      databaseCode: "08006",
+    });
+  });
+
+  it("rejects malformed or unapproved diagnostics", () => {
+    expect(getSafeRouteErrorDiagnostics({
+      status: 500,
+      statusText: "Internal Server Error",
+      data: { diagnostics: {
+        requestReference: "private-account@example.test",
+        route: "dashboard",
+        stage: "raw-sql-query",
+        status: 500,
+        errorType: "TypeError",
+      } },
+      internal: true,
+    })).toBeNull();
   });
 });

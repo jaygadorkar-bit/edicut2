@@ -75,3 +75,44 @@ export function getRouteErrorDebugDetails(error: unknown) {
   if (error instanceof Error) return `${error.name}: ${error.message}\n${error.stack ?? ""}`;
   return String(error);
 }
+
+export type SafeRouteErrorDiagnostics = {
+  requestReference: string | null;
+  route: "dashboard" | "root";
+  stage: "session-profile" | "role-feature-access" | "customer-project-list" | "customer-project-summary" | "customer-file-count" | "customer-projects" | "client-balance" | "staff-overview" | "affiliate-overview" | "dashboard-loader" | "root-loader";
+  status: number;
+  errorType: string;
+  databaseCode?: string;
+};
+
+/** Read only the server-generated, allowlisted diagnostics safe for a customer page. */
+export function getSafeRouteErrorDiagnostics(error: unknown): SafeRouteErrorDiagnostics | null {
+  if (!isRouteErrorResponse(error) || !error.data || typeof error.data !== "object") return null;
+  const value = (error.data as { diagnostics?: unknown }).diagnostics;
+  if (!value || typeof value !== "object") return null;
+
+  const candidate = value as Record<string, unknown>;
+  const stagesByRoute = {
+    dashboard: ["session-profile", "role-feature-access", "customer-project-list", "customer-project-summary", "customer-file-count", "customer-projects", "client-balance", "staff-overview", "affiliate-overview", "dashboard-loader"],
+    root: ["root-loader"],
+  } as const;
+  if (candidate.route !== "dashboard" && candidate.route !== "root") return null;
+  if (typeof candidate.stage !== "string" || !(stagesByRoute[candidate.route] as readonly string[]).includes(candidate.stage)) return null;
+  if (!Number.isInteger(candidate.status) || Number(candidate.status) < 500 || Number(candidate.status) > 599) return null;
+  if (typeof candidate.errorType !== "string" || !/^[A-Za-z][A-Za-z0-9_.]{0,79}$/.test(candidate.errorType)) return null;
+  const reference = typeof candidate.requestReference === "string" && /^[a-f0-9]{16}(?:-[a-z0-9]{3})?$/i.test(candidate.requestReference)
+    ? candidate.requestReference
+    : null;
+  const databaseCode = typeof candidate.databaseCode === "string" && /^(?:[A-Z0-9]{5}|CONNECT_TIMEOUT|CONNECTION_CLOSED|ECONNRESET|ECONNREFUSED|ETIMEDOUT)$/.test(candidate.databaseCode)
+    ? candidate.databaseCode
+    : undefined;
+
+  return {
+    requestReference: reference,
+    route: candidate.route,
+    stage: candidate.stage as SafeRouteErrorDiagnostics["stage"],
+    status: Number(candidate.status),
+    errorType: candidate.errorType,
+    ...(databaseCode ? { databaseCode } : {}),
+  };
+}

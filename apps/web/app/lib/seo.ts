@@ -6,7 +6,7 @@ export const DEFAULT_SEO_TITLE = "EdiCut | Video Editing for YouTube Creators";
 export const DEFAULT_SEO_DESCRIPTION =
   "EdiCut edits YouTube videos, Shorts, podcasts, and thumbnails for creators, with a clear workflow for footage, reviews, and delivery.";
 export const DEFAULT_PUBLIC_SITE_ORIGIN = "https://edicut.com";
-export const SOCIAL_PREVIEW_IMAGE_PATH = "/images/edicut-social.png";
+export const SOCIAL_PREVIEW_IMAGE_PATH = "/images/edicut-homepage-share-2026.png";
 
 export type SeoRouteArgs = {
   location: { pathname: string };
@@ -19,6 +19,19 @@ type SeoPageContext = {
   pathname?: string;
   crawlingEnabled?: boolean;
   maintenanceModeEnabled?: boolean;
+  titleTemplate?: string;
+  defaultDescription?: string;
+  pageOverride?: SeoMetaPageOverride | null;
+};
+
+export type SeoMetaPageOverride = {
+  title?: string;
+  description?: string;
+  canonicalPath?: string;
+  socialImageUrl?: string;
+  socialTitle?: string;
+  socialDescription?: string;
+  indexable?: boolean;
 };
 
 const INDEXABLE_PUBLIC_PATHS = new Set(PUBLIC_PAGE_PATHS);
@@ -79,37 +92,74 @@ export function shouldIndexPage({
 
 export function createPageMeta(title: string, description: string, context: SeoPageContext = {}): MetaDescriptor[] {
   const appUrl = context.appUrl;
-  const canonicalUrl = getCanonicalUrl(appUrl, context.pathname ?? "/");
-  const robots = shouldIndexPage({
+  const pageOverride = context.pageOverride;
+  const pageTitle = pageOverride?.title?.trim() || applySeoTitleTemplate(title, context.titleTemplate);
+  const pageDescription = pageOverride?.description?.trim() || description || context.defaultDescription || DEFAULT_SEO_DESCRIPTION;
+  const canonicalPath = pageOverride?.canonicalPath || context.pathname || "/";
+  const canonicalUrl = getCanonicalUrl(appUrl, canonicalPath);
+  const canIndexBySitePolicy = shouldIndexPage({
     pathname: context.pathname ?? "/",
     crawlingEnabled: context.crawlingEnabled ?? true,
     maintenanceModeEnabled: context.maintenanceModeEnabled ?? false,
     appUrl,
   })
-    ? "index, follow"
-    : "noindex, nofollow, noarchive";
-  const socialImageUrl = `${getCanonicalSiteOrigin(appUrl)}${SOCIAL_PREVIEW_IMAGE_PATH}`;
+    && pageOverride?.indexable !== false;
+  const robots = canIndexBySitePolicy ? "index, follow" : "noindex, nofollow, noarchive";
+  const socialTitle = pageOverride?.socialTitle?.trim() || pageTitle;
+  const socialDescription = pageOverride?.socialDescription?.trim() || pageDescription;
+  const socialImageUrl = getSafeSocialImageUrl(pageOverride?.socialImageUrl, appUrl);
 
   return [
-    { title },
-    { name: "description", content: description },
+    { title: pageTitle },
+    { name: "description", content: pageDescription },
     { name: "robots", content: robots },
     { tagName: "link", rel: "canonical", href: canonicalUrl },
     { property: "og:site_name", content: "EdiCut" },
     { property: "og:type", content: "website" },
     { property: "og:url", content: canonicalUrl },
-    { property: "og:title", content: title },
-    { property: "og:description", content: description },
+    { property: "og:title", content: socialTitle },
+    { property: "og:description", content: socialDescription },
     { property: "og:image", content: socialImageUrl },
     { property: "og:image:type", content: "image/png" },
     { property: "og:image:width", content: "1200" },
     { property: "og:image:height", content: "630" },
-    { property: "og:image:alt", content: "EdiCut — You create. We handle the edit. YouTube, podcasts, Shorts, and thumbnails." },
+    { property: "og:image:alt", content: pageOverride?.socialImageUrl ? "EdiCut social preview image." : "Screenshot of the current EdiCut homepage for YouTube video editing." },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:image", content: socialImageUrl },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    { name: "twitter:title", content: socialTitle },
+    { name: "twitter:description", content: socialDescription },
   ];
+}
+
+export function applySeoTitleTemplate(title: string, template?: string) {
+  const fallbackTemplate = "%s | EdiCut";
+  const selectedTemplate = template?.trim() || fallbackTemplate;
+  if (!selectedTemplate.includes("%s")) return title;
+
+  // The default template must not duplicate the EdiCut brand already present in
+  // most route titles. Custom templates replace an existing leading/trailing
+  // brand marker before formatting so changing the template remains useful.
+  if (selectedTemplate === fallbackTemplate && /\bedicut\b/i.test(title)) return title;
+  const baseTitle = selectedTemplate === fallbackTemplate
+    ? title
+    : title
+      .replace(/^\s*EdiCut\s*[|:]\s*/i, "")
+      .replace(/\s*[|:]\s*EdiCut\s*$/i, "")
+      .trim();
+  return selectedTemplate.replace("%s", baseTitle || title).trim();
+}
+
+export function getSafeSocialImageUrl(value: string | undefined, appUrl?: string) {
+  if (!value) return `${getCanonicalSiteOrigin(appUrl)}${SOCIAL_PREVIEW_IMAGE_PATH}`;
+  try {
+    const url = new URL(value, `${getCanonicalSiteOrigin(appUrl)}/`);
+    if (url.protocol !== "https:" || url.username || url.password || url.hash) {
+      return `${getCanonicalSiteOrigin(appUrl)}${SOCIAL_PREVIEW_IMAGE_PATH}`;
+    }
+    return url.toString();
+  } catch {
+    return `${getCanonicalSiteOrigin(appUrl)}${SOCIAL_PREVIEW_IMAGE_PATH}`;
+  }
 }
 
 export function createRouteMeta(args: SeoRouteArgs, title: string, description: string) {
@@ -117,6 +167,9 @@ export function createRouteMeta(args: SeoRouteArgs, title: string, description: 
     appUrl?: string;
     searchCrawlingEnabled?: boolean;
     maintenanceModeEnabled?: boolean;
+    seoTitleTemplate?: string;
+    seoDefaultDescription?: string;
+    seoPageOverride?: SeoMetaPageOverride | null;
   } | undefined;
 
   return createPageMeta(title, description, {
@@ -124,6 +177,9 @@ export function createRouteMeta(args: SeoRouteArgs, title: string, description: 
     pathname: args.location.pathname,
     crawlingEnabled: rootData?.searchCrawlingEnabled !== false && args.error == null,
     maintenanceModeEnabled: rootData?.maintenanceModeEnabled === true,
+    titleTemplate: rootData?.seoTitleTemplate,
+    defaultDescription: rootData?.seoDefaultDescription,
+    pageOverride: rootData?.seoPageOverride,
   });
 }
 

@@ -23,6 +23,7 @@ describe("getSiteSettingsSnapshot", () => {
       adminToolbarEnabled: true,
       searchCrawlingEnabled: true,
       maintenanceModeEnabled: false,
+      errorDiagnosticsEnabled: false,
       promoBarSettings: {
         enabled: false,
         message: "Welcome to EdiCut! Black Friday Special: 20% off all packages.",

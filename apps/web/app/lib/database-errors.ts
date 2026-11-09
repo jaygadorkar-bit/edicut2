@@ -5,7 +5,7 @@ export function isDatabaseConnectionError(error: unknown) {
   while (current && typeof current === "object" && !seen.has(current)) {
     seen.add(current);
     const item = current as { code?: string; name?: string; message?: string; cause?: unknown; sourceError?: unknown };
-    if (["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET", "08000", "08001", "08003", "08006", "57P03"].includes(item.code ?? "")
+    if (["CONNECT_TIMEOUT", "CONNECTION_CLOSED", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET", "08000", "08001", "08003", "08006", "57P03"].includes(item.code ?? "")
       || item.name === "TimeoutError" || (item.name === "TypeError" && item.message === "fetch failed")) return true;
     current = item.cause ?? item.sourceError;
   }

@@ -24,8 +24,14 @@ function createDatabase(url: string): DatabaseClient {
     // Hyperdrive supplies the production connection pool and terminates TLS to
     // Supabase. Keep its internal socket plain and use prepared statements;
     // Postgres.js prepare:false can hang with Hyperdrive transaction pooling.
-    max: 1,
+    // Dashboard loaders run several independent reads concurrently. Allow the
+    // request-local client to spread them across Hyperdrive connections so one
+    // closed socket does not fail every queued query in that request.
+    max: 5,
     prepare: true,
+    // Hyperdrive already provides a pooled connection. The schema uses built-in
+    // types, so avoid an extra catalog query before the first application read.
+    ...(isHyperdrive ? { fetch_types: false } : {}),
     ssl: isLocalDatabase || isHyperdrive ? false : "require",
     connect_timeout: 10,
     idle_timeout: 20,

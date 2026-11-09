@@ -51,6 +51,16 @@ describe("admin toolbar identity", () => {
   it("does not show the toolbar to ordinary customers", async () => {
     expect(await access({ userId: "user-1" })).toBe("none");
   });
+  it("hides the toolbar when verification fails without blocking the page", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      mocks.user.mockRejectedValueOnce(new Error("private query details"));
+      expect(await access({ userId: "user-1", verifiedUserAdminId: admin.id })).toBe("none");
+      expect(log).toHaveBeenCalledWith("Admin toolbar identity could not be verified.");
+    } finally {
+      log.mockRestore();
+    }
+  });
   it.each([{ ...admin, active: false }, { ...admin, role: "customer" }, undefined])("rejects an inactive, non-admin or missing administrator: %j", async (record) => {
     mocks.byId.mockResolvedValue(record);
     expect(await access({ adminUserId: admin.id, userId: "user-1", verifiedUserAdminId: admin.id })).toBe("none");

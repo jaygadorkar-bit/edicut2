@@ -3,13 +3,17 @@ import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { getDbFromContext } from "../lib/db.server";
 import { getPricingPackages, publicPricingPackages } from "../lib/pricing.server";
 import { resolveWebEnv } from "../lib/context.server";
-import { escapeXml, getCanonicalSiteOrigin, isProductionSiteUrl } from "../lib/seo";
+import { escapeXml, getCanonicalSiteOrigin, isProductionSiteUrl, normalizePublicPath } from "../lib/seo";
 import { PUBLIC_PAGE_PATHS } from "../lib/public-pages";
 import { getSiteSettingsSnapshot } from "../lib/site-settings.server";
+import { getSeoAdminSettings, type SeoAdminSettings } from "../lib/seo-admin.server";
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = getSupabaseClient(context) ? null : getDbFromContext(context ?? {});
-  const { searchCrawlingEnabled, maintenanceModeEnabled } = await getSiteSettingsSnapshot(db, context);
+  const [{ searchCrawlingEnabled, maintenanceModeEnabled }, seoSettings] = await Promise.all([
+    getSiteSettingsSnapshot(db, context),
+    getSeoAdminSettings(db, context),
+  ]);
   const appUrl = resolveWebEnv(context).APP_URL;
 
   if (!searchCrawlingEnabled || maintenanceModeEnabled || !isProductionSiteUrl(appUrl)) {
@@ -29,7 +33,8 @@ export async function loader({ context }: LoaderFunctionArgs) {
     ...PUBLIC_PAGE_PATHS,
     ...packages.map((item) => `/pricing/${item.slug}`),
   ];
-  const locations = [...new Set(paths)].map((path) => escapeXml(new URL(path, `${origin}/`).toString()));
+  const canonicalPaths = filterIndexableSitemapPaths(paths, seoSettings);
+  const locations = canonicalPaths.map((path) => escapeXml(new URL(path, `${origin}/`).toString()));
   const body = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -43,5 +48,17 @@ export async function loader({ context }: LoaderFunctionArgs) {
       "Cache-Control": "public, max-age=300, s-maxage=300",
       "Content-Type": "application/xml; charset=utf-8",
     },
+  });
+}
+
+export function filterIndexableSitemapPaths(paths: readonly string[], settings: Pick<SeoAdminSettings, "pageOverrides" | "redirects">) {
+  const overridesByPath = new Map(settings.pageOverrides.map((override) => [override.path, override]));
+  const activeRedirectSources = new Set(settings.redirects.filter((item) => item.enabled).map((item) => item.from));
+  return [...new Set(paths)].filter((path) => {
+    const normalized = normalizePublicPath(path);
+    const override = overridesByPath.get(normalized);
+    return override?.indexable !== false
+      && (!override?.canonicalPath || normalizePublicPath(override.canonicalPath) === normalized)
+      && !activeRedirectSources.has(normalized);
   });
 }

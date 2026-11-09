@@ -469,16 +469,49 @@ export function SiteFooter() {
           <div className="neo-footer__utility-rail">
             <div className="neo-footer__social">
               <div className="flex gap-3" aria-label="Social media icons">
+                <a
+                  href="https://www.facebook.com/edicut.media"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Visit EdiCut on Facebook"
+                  className="neo-footer-social-icon neo-footer-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  <HerlanSocialIcon name="Facebook" />
+                </a>
                 {[
-                  "Facebook",
                   "Instagram",
-                  "TikTok",
-                  "YouTube",
                 ].map((label) => (
                   <span key={label} role="img" aria-label={label} className="neo-footer-social-icon neo-footer-ink">
                     <HerlanSocialIcon name={label} />
                   </span>
                 ))}
+                <a
+                  href="https://www.tiktok.com/@edicut.studio"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Visit EdiCut on TikTok"
+                  className="neo-footer-social-icon neo-footer-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  <HerlanSocialIcon name="TikTok" />
+                </a>
+                <a
+                  href="https://www.youtube.com/@EdiCut-studio"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Visit EdiCut on YouTube"
+                  className="neo-footer-social-icon neo-footer-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  <HerlanSocialIcon name="YouTube" />
+                </a>
+                <a
+                  href="https://www.linkedin.com/company/edicut-studio/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Visit EdiCut on LinkedIn"
+                  className="neo-footer-social-icon neo-footer-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  <HerlanSocialIcon name="LinkedIn" />
+                </a>
               </div>
             </div>
 
@@ -487,11 +520,12 @@ export function SiteFooter() {
             </div>
 
             <div className="neo-footer__payments">
-              <div>
-                <p className="neo-footer__utility-label">Pay with</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="neo-footer-payment">Cryptocurrency via Cryptomus</span>
+              <p className="neo-footer__utility-label">Pay with crypto</p>
+              <div className="neo-footer__payment-options" role="group" aria-label="Visa, Mastercard, and Amex payments coming soon">
+                <span className="neo-footer-payment">Visa</span>
+                <span className="neo-footer-payment">Mastercard</span>
+                <span className="neo-footer-payment">Amex</span>
+                <span className="neo-footer-payment neo-footer-payment--status">Coming soon</span>
               </div>
             </div>
           </div>
@@ -504,6 +538,14 @@ export function SiteFooter() {
 }
 
 function HerlanSocialIcon({ name }: { name: string }) {
+  if (name === "LinkedIn") {
+    return (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.852 0-2.136 1.445-2.136 2.939v5.667H9.341V9h3.414v1.561h.049c.476-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286ZM5.337 7.433a2.062 2.062 0 1 1 .001-4.123 2.062 2.062 0 0 1-.001 4.123ZM7.119 20.452H3.555V9h3.564v11.452ZM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.226.792 24 1.771 24h20.451C23.2 24 24 23.226 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003Z" fill="currentColor" />
+      </svg>
+    );
+  }
+
   if (name === "Facebook") {
     return (
       <svg width="25" height="25" viewBox="0 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">

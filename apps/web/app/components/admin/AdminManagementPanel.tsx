@@ -32,6 +32,7 @@ export default function AdminManagementPanel() {
     adminToolbarEnabled,
     searchCrawlingEnabled,
     maintenanceModeEnabled,
+    errorDiagnosticsEnabled,
     promoBarSettings,
     roleFeatureAccess,
     cloudinaryImages,
@@ -373,6 +374,7 @@ export default function AdminManagementPanel() {
               adminToolbarEnabled={adminToolbarEnabled}
               searchCrawlingEnabled={searchCrawlingEnabled}
               maintenanceModeEnabled={maintenanceModeEnabled}
+              errorDiagnosticsEnabled={errorDiagnosticsEnabled}
               promoBarSettings={promoBarSettings}
               actionData={actionData}
               navigationState={navigation.state}
@@ -954,6 +956,7 @@ function SettingsPanel({
   adminToolbarEnabled,
   searchCrawlingEnabled,
   maintenanceModeEnabled,
+  errorDiagnosticsEnabled,
   promoBarSettings,
   actionData,
   navigationState,
@@ -961,6 +964,7 @@ function SettingsPanel({
   adminToolbarEnabled: boolean;
   searchCrawlingEnabled: boolean;
   maintenanceModeEnabled: boolean;
+  errorDiagnosticsEnabled: boolean;
   promoBarSettings: { enabled: boolean; message: string };
   actionData: { error?: string; success?: string } | undefined;
   navigationState: "idle" | "submitting" | "loading";
@@ -973,6 +977,36 @@ function SettingsPanel({
     <div className="max-w-4xl space-y-6">
       {actionError ? <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-600" role="alert">{actionError}</div> : null}
       {actionSuccess ? <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm font-bold text-emerald-700" role="status" aria-live="polite">{actionSuccess}</div> : null}
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+              <span className="material-symbols-outlined text-[22px]">bug_report</span>
+            </div>
+            <p className="mt-5 text-xs font-black uppercase tracking-widest text-slate-500">Production security</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-900">Error diagnostics</h3>
+            <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+              Show request references and safe failure details on error pages for signed-in administrators. Keep this off on the live site when you are not actively diagnosing an issue.
+            </p>
+          </div>
+
+          <Form method="post" className="w-full rounded-2xl bg-rose-50 p-5 md:w-80">
+            <input type="hidden" name="intent" value="update-error-diagnostics" />
+            <label className="flex cursor-pointer items-center justify-between gap-4">
+              <span>
+                <span className="block text-sm font-black text-slate-900">Enable diagnostics</span>
+                <span className="mt-1 block text-xs font-bold text-slate-500">{errorDiagnosticsEnabled ? "Currently enabled for admins" : "Currently off"}</span>
+              </span>
+              <input name="errorDiagnosticsEnabled" type="checkbox" defaultChecked={errorDiagnosticsEnabled} className="h-5 w-5 accent-rose-700" />
+            </label>
+            <button type="submit" disabled={isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 text-sm font-black text-white disabled:opacity-50">
+              <span className="material-symbols-outlined text-[18px]">save</span>
+              {isSubmitting ? "Saving..." : "Save Diagnostics"}
+            </button>
+          </Form>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">

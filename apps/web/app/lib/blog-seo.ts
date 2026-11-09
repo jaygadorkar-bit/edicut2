@@ -1,12 +1,15 @@
 import type { MetaDescriptor } from "react-router";
 import type { BlogPost } from "./blog";
-import { createPageMeta, createSiteStructuredData, getCanonicalSiteOrigin, serializeJsonLd, type SeoRouteArgs } from "./seo";
+import { createPageMeta, createSiteStructuredData, getCanonicalSiteOrigin, getSafeSocialImageUrl, serializeJsonLd, type SeoMetaPageOverride, type SeoRouteArgs } from "./seo";
 
 type BlogSeoContext = {
   appUrl?: string;
   pathname?: string;
   crawlingEnabled?: boolean;
   maintenanceModeEnabled?: boolean;
+  titleTemplate?: string;
+  defaultDescription?: string;
+  pageOverride?: SeoMetaPageOverride | null;
 };
 
 const BLOG_TITLE = "Video Editing Guides & Studio Insights | EdiCut Blog";
@@ -18,7 +21,9 @@ function blogMeta(title: string, description: string, imagePath: string, imageAl
     ...context,
     pathname: context.pathname ?? "/blog",
   });
-  const imageUrl = `${getCanonicalSiteOrigin(context.appUrl)}${socialImagePath}`;
+  const imageUrl = context.pageOverride?.socialImageUrl
+    ? getSafeSocialImageUrl(context.pageOverride.socialImageUrl, context.appUrl)
+    : `${getCanonicalSiteOrigin(context.appUrl)}${socialImagePath}`;
   const adjusted = base.map((descriptor) => {
     const item = descriptor as Record<string, unknown>;
     if (item.tagName === "link" || !("property" in item || "name" in item)) return descriptor;
@@ -48,12 +53,18 @@ export function blogSeoContext(args: SeoRouteArgs): BlogSeoContext {
     appUrl?: string;
     searchCrawlingEnabled?: boolean;
     maintenanceModeEnabled?: boolean;
+    seoTitleTemplate?: string;
+    seoDefaultDescription?: string;
+    seoPageOverride?: SeoMetaPageOverride | null;
   } | undefined;
   return {
     appUrl: rootData?.appUrl,
     pathname: args.location.pathname,
     crawlingEnabled: rootData?.searchCrawlingEnabled !== false && args.error == null,
     maintenanceModeEnabled: rootData?.maintenanceModeEnabled === true,
+    titleTemplate: rootData?.seoTitleTemplate,
+    defaultDescription: rootData?.seoDefaultDescription,
+    pageOverride: rootData?.seoPageOverride,
   };
 }
 

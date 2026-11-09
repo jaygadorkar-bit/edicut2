@@ -36,7 +36,16 @@ const mocks = vi.hoisted(() => {
 });
 vi.mock("../lib/db.server", () => ({ getDbFromContext: () => mocks.db, hasReturnedRows: (rows: unknown[]) => rows.length > 0 }));
 vi.mock("@edicut/db/repositories/users", () => ({ findUserById: mocks.findUserById }));
-vi.mock("../lib/session.server", () => ({ requireUserId: mocks.requireUserId, getSession: vi.fn(), destroySession: vi.fn() }));
+vi.mock("../lib/session.server", () => ({
+  requireUserId: mocks.requireUserId,
+  requireUserProfile: async () => {
+    const profile = await mocks.findUserById();
+    if (!profile?.active || profile.deletedAt) throw new Response(null, { status: 302 });
+    return profile;
+  },
+  getSession: vi.fn(),
+  destroySession: vi.fn(),
+}));
 vi.mock("../lib/site-settings.server", () => ({ getRoleFeatureAccessSettings: async () => ({}), getSiteSetting: mocks.getSiteSetting }));
 vi.mock("../lib/role-feature-access", () => ({
   canAccessDashboardFeature: (_role: string, feature: string) => mocks.allowedFeatures.includes(feature),
@@ -91,6 +100,7 @@ describe("workspace reads without the optional marketing migration", () => {
   });
   it("loads existing dashboard projects and real summary counts", async () => {
     const result = await dashboardLoader(args());
+    expect(mocks.findUserById).toHaveBeenCalledOnce();
     expect(result.workspaceReady).toBe(true);
     expect(result.projects).toEqual([mocks.project]);
     expect(result).toMatchObject({ projectCount: 2, activeCount: 1, reviewCount: 1, fileCount: 3 });
@@ -98,6 +108,16 @@ describe("workspace reads without the optional marketing migration", () => {
     for (const [filter] of mocks.where.mock.calls) {
       expect(new PgDialect().sqlToQuery(filter).params).toContain("owner-1");
     }
+  });
+
+  it("retries customer project reads once after a transient Hyperdrive connection close", async () => {
+    const closedConnection = Object.assign(new Error("socket closed"), { code: "CONNECTION_CLOSED" });
+    mocks.db.select.mockImplementationOnce(() => { throw closedConnection; });
+
+    const result = await dashboardLoader(args());
+
+    expect(result).toMatchObject({ workspaceReady: true, projectCount: 2, fileCount: 3 });
+    expect(mocks.db.select).toHaveBeenCalledTimes(4);
   });
 
   it("loads manager dashboard data through project assignments and team summaries", async () => {

@@ -3,7 +3,7 @@ import { ADMIN_BASE_PATH } from "./admin-paths";
 import { safeAdminRedirect, safeRedirectPath } from "./safe-redirect";
 
 describe("redirect boundaries", () => {
-  it.each(["//attacker.test", "/\\attacker.test", "/\t/attacker.test", "/\n/attacker.test", "https://attacker.test", "javascript:alert(1)", null, new File(["/dashboard"], "redirect")])("rejects an unsafe or non-text return path: %s", value => {
+  it.each(["//attacker.test", "/a/..//attacker.test", "/a/%2e%2e//attacker.test", "/\\attacker.test", "/\t/attacker.test", "/\n/attacker.test", "https://attacker.test", "javascript:alert(1)", null, new File(["/dashboard"], "redirect")])("rejects an unsafe or non-text return path: %s", value => {
     expect(safeRedirectPath(value)).toBe("/dashboard");
   });
   it("preserves internal queries, fragments and Unicode after normalization", () => {

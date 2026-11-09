@@ -33,7 +33,7 @@ describe("optional package add-ons", () => {
   it("prefills monthly quote requests using known package and extra details", () => {
     expect(monthlyAddOnQuoteHref("creator-plus", "thumbnail-bundle")).toBe("/custom-quote?package=creator-plus&monthly-addon=thumbnail-bundle");
     expect(monthlyAddOnQuotePrefill(SUBSCRIPTION_PACKAGES[1], "thumbnail-bundle")).toMatchObject({
-      title: "Growth: Monthly thumbnail bundle", requestType: "recurring", cadence: "monthly", services: ["thumbnails"],
+      title: "Pro: Monthly thumbnail bundle", requestType: "recurring", cadence: "monthly", services: ["thumbnails"],
       brief: expect.stringContaining("110 editing hours per month"),
     });
     expect(monthlyAddOnQuotePrefill(SUBSCRIPTION_PACKAGES[0], "extra-editing-hours")?.services).toEqual(["cuts"]);

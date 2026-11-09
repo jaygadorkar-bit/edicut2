@@ -77,6 +77,41 @@ describe("SEO helpers", () => {
     expect(meta).toContainEqual({ name: "robots", content: "index, follow" });
   });
 
+  it("applies SEO admin overrides while preserving site-wide no-index policy", () => {
+    const meta = createPageMeta("Contact EdiCut", "Talk to our team.", {
+      appUrl: "https://edicut.com",
+      pathname: "/contact",
+      crawlingEnabled: true,
+      titleTemplate: "%s | EdiCut Studio",
+      pageOverride: {
+        title: "Talk to the editing team",
+        description: "Plan your next video edit with EdiCut.",
+        canonicalPath: "/services",
+        socialTitle: "Send EdiCut your video brief",
+        socialDescription: "Share your footage, goals, and timeline.",
+        socialImageUrl: "/images/contact-share.png",
+        indexable: false,
+      },
+    });
+
+    expect(meta).toContainEqual({ title: "Talk to the editing team" });
+    expect(meta).toContainEqual({ name: "description", content: "Plan your next video edit with EdiCut." });
+    expect(meta).toContainEqual({ tagName: "link", rel: "canonical", href: "https://edicut.com/services" });
+    expect(meta).toContainEqual({ property: "og:title", content: "Send EdiCut your video brief" });
+    expect(meta).toContainEqual({ property: "og:description", content: "Share your footage, goals, and timeline." });
+    expect(meta).toContainEqual({ property: "og:image", content: "https://edicut.com/images/contact-share.png" });
+    expect(meta).toContainEqual({ name: "robots", content: "noindex, nofollow, noarchive" });
+  });
+
+  it("applies a global title template to unbranded route titles", () => {
+    const meta = createPageMeta("Podcast Video Editing Services", "Plan your episode edit.", {
+      appUrl: "https://edicut.com",
+      pathname: "/services/podcast-video-editing",
+      titleTemplate: "%s | EdiCut Studio",
+    });
+    expect(meta).toContainEqual({ title: "Podcast Video Editing Services | EdiCut Studio" });
+  });
+
   it("adds canonical and noindex metadata to local-rendered route metadata", () => {
     const meta = createRouteMeta({
       location: { pathname: "/contact" },

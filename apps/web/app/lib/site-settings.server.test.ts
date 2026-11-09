@@ -23,12 +23,14 @@ vi.mock("../integrations/supabase/client.server", () => ({
 
 import {
   getSiteSetting,
+  getSiteSettingsSnapshot,
   getRoleFeatureAccessSettings,
   saveAdminToolbarEnabled,
   saveMaintenanceModeEnabled,
   savePromoBarSettings,
   saveRoleFeatureAccessSettings,
   saveSearchCrawlingEnabled,
+  saveErrorDiagnosticsEnabled,
 } from "./site-settings.server";
 import { DEFAULT_ROLE_FEATURE_ACCESS } from "./role-feature-access";
 
@@ -44,12 +46,13 @@ describe("site settings persistence", () => {
     await saveAdminToolbarEnabled(null, false);
     await saveSearchCrawlingEnabled(null, false);
     await saveMaintenanceModeEnabled(null, true);
+    await saveErrorDiagnosticsEnabled(null, false);
     await savePromoBarSettings(null, true, "Scheduled maintenance tonight");
     await saveRoleFeatureAccessSettings(null, DEFAULT_ROLE_FEATURE_ACCESS);
 
-    expect(mocks.getSupabaseClient).toHaveBeenCalledTimes(6);
-    expect(mocks.getSupabaseAdmin).toHaveBeenCalledTimes(6);
-    expect(mocks.adminFrom).toHaveBeenCalledTimes(6);
+    expect(mocks.getSupabaseClient).toHaveBeenCalledTimes(7);
+    expect(mocks.getSupabaseAdmin).toHaveBeenCalledTimes(7);
+    expect(mocks.adminFrom).toHaveBeenCalledTimes(7);
 
     const values = mocks.upsert.mock.calls.flatMap(([payload]) =>
       Array.isArray(payload) ? payload : [payload],
@@ -58,6 +61,7 @@ describe("site settings persistence", () => {
       expect.objectContaining({ key: "admin_toolbar_enabled", value: "false" }),
       expect.objectContaining({ key: "search_crawling_enabled", value: "false" }),
       expect.objectContaining({ key: "maintenance_mode_enabled", value: "true" }),
+      expect.objectContaining({ key: "error_diagnostics_enabled", value: "false" }),
       expect.objectContaining({ key: "promo_bar_enabled", value: "true" }),
       expect.objectContaining({ key: "promo_bar_message", value: "Scheduled maintenance tonight" }),
       expect.objectContaining({
@@ -90,6 +94,15 @@ describe("site settings persistence", () => {
     expect(mocks.clientFrom).not.toHaveBeenCalled();
     expect(mocks.select).toHaveBeenCalledWith("key, value");
     expect(mocks.selectIn).toHaveBeenCalledWith("key", ["role_feature_access"]);
+  });
+
+  it("keeps error diagnostics disabled unless an admin settings read opts in and the saved value is true", async () => {
+    mocks.readRows.push({ key: "error_diagnostics_enabled", value: "true" });
+
+    await expect(getSiteSettingsSnapshot(null)).resolves.toMatchObject({ errorDiagnosticsEnabled: false });
+    await expect(getSiteSettingsSnapshot(null, undefined, { includeErrorDiagnostics: true }))
+      .resolves.toMatchObject({ errorDiagnosticsEnabled: true });
+    expect(mocks.selectIn).toHaveBeenLastCalledWith("key", expect.arrayContaining(["error_diagnostics_enabled"]));
   });
 
   it("can fail closed when a pricing settings read fails", async () => {

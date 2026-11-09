@@ -25,6 +25,8 @@ import { createSignOutCsrfToken, getAdminSession, getSession } from "./lib/sessi
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./lib/admin-paths";
 import { getDbFromContext } from "./lib/db.server";
 import { getSiteSettingsSnapshot } from "./lib/site-settings.server";
+import { findSeoPageOverride, getSeoAdminSettings } from "./lib/seo-admin.server";
+import type { SeoAdminSettings } from "./lib/seo-admin.server";
 import { getAdminToolbarAccess, type AdminToolbarAccess } from "./lib/admin-toolbar-access.server";
 import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 import { getSupabaseClient } from "./integrations/supabase/client.server";
@@ -32,13 +34,16 @@ import { SmoothScroll } from "./components/site/SmoothScroll.js";
 import { shouldEnableSiteMotion, shouldTransitionBetweenRoutes, shouldUseWorkspaceLoader } from "./lib/site-motion";
 import { WorkspaceLoadingOverlay } from "./components/WorkspaceLoadingOverlay";
 import { shouldLoadPromoBarSettings, shouldLoadRootSiteSettings, shouldShowAdminToolbar } from "./lib/root-data-requirements";
-import { getRouteErrorDebugDetails, getRouteErrorPresentation } from "./lib/route-error-presentation";
+import { getRouteErrorDebugDetails, getRouteErrorPresentation, getSafeRouteErrorDiagnostics } from "./lib/route-error-presentation";
+import { getRequestReference } from "./lib/request-reference";
+import { scheduleApplicationErrorCapture } from "./lib/application-error-log.server";
 import { MATERIAL_SYMBOLS_FONT_URL } from "./lib/material-symbols";
 import {
   createPageMeta,
   createSiteStructuredData,
   DEFAULT_SEO_DESCRIPTION,
   DEFAULT_SEO_TITLE,
+  isIndexablePublicPath,
   serializeJsonLd,
   shouldIndexPage,
 } from "./lib/seo";
@@ -69,7 +74,7 @@ export function links() {
   ];
 }
 
-export async function loader({
+async function loadRoot({
   request,
   context,
 }: {
@@ -77,6 +82,7 @@ export async function loader({
   context?: LoaderContext;
 }) {
   const url = new URL(request.url);
+  const isAdminArea = url.pathname.startsWith(ADMIN_BASE_PATH);
   const legacyAuthMode = url.searchParams.get("auth");
   if (url.pathname === "/" && (legacyAuthMode === "signin" || legacyAuthMode === "signup")) {
     const params = new URLSearchParams({ mode: legacyAuthMode });
@@ -117,7 +123,6 @@ export async function loader({
   const storedAdminImage = adminSession.get("profileImageUrl");
   const storedAdminEmail = adminSession.get("profileEmail");
 
-  const isAdminArea = url.pathname.startsWith(ADMIN_BASE_PATH);
   const isAdminLogin = url.pathname === ADMIN_LOGIN_PATH;
   const isMaintenancePage = url.pathname === "/maintenance";
   const isAuthenticationRoute =
@@ -134,7 +139,13 @@ export async function loader({
     url.pathname === "/sitemap.xml";
 
   // Authorization remains fresh and completes before any privileged reads.
-  const [adminProfile, { pendingOrderCount, unreadEnquiryCount }, siteSettings] = await Promise.all([
+  const shouldLoadSeoSettings = shouldLoadRootSiteSettings(url.pathname) && shouldCheckSeoRoute(url.pathname);
+  const defaultSeoSettings: SeoAdminSettings = {
+    globalMetadata: { titleTemplate: "%s | EdiCut", defaultDescription: DEFAULT_SEO_DESCRIPTION },
+    pageOverrides: [],
+    redirects: [],
+  };
+  const [adminProfile, { pendingOrderCount, unreadEnquiryCount }, siteSettings, seoSettings] = await Promise.all([
     isAdminSignedIn && (isAdminPanelPath || url.pathname === "/dashboard/messages")
       ? getAdminProfileImage(getRootDb(), adminUserId || userAdminUserId).then(profile => profile
         ?? (typeof storedAdminImage === "string" && storedAdminImage.startsWith("https://") && storedAdminImage.length <= 2048 && typeof storedAdminEmail === "string"
@@ -150,16 +161,34 @@ export async function loader({
           {
             includeAdminToolbar: isAdminSignedIn,
             includePromoBar: shouldLoadPromoBarSettings(url.pathname),
+            includeErrorDiagnostics: isAdminSignedIn,
           },
         )
       : {
         adminToolbarEnabled: false,
         searchCrawlingEnabled: false,
         maintenanceModeEnabled: false,
+        errorDiagnosticsEnabled: false,
         promoBarSettings: { enabled: false, message: "" },
       },
+    shouldLoadSeoSettings
+      ? getSeoAdminSettings(getSupabaseClient(context) ? null : getRootDb(), context).catch(() => {
+          console.error("Public SEO settings could not be loaded; built-in metadata will be used.");
+          return defaultSeoSettings;
+        })
+      : defaultSeoSettings,
   ]);
-  const { adminToolbarEnabled, searchCrawlingEnabled, maintenanceModeEnabled, promoBarSettings } = siteSettings;
+
+  const redirectPath = url.pathname.replace(/\/+$/, "") || "/";
+  const seoRedirect = request.method === "GET" || request.method === "HEAD"
+    ? seoSettings.redirects.find((item) => item.enabled && item.from === redirectPath)
+    : undefined;
+  if (seoRedirect) throw redirect(seoRedirect.to, { status: seoRedirect.status });
+
+  const seoPageOverride = isIndexablePublicPath(url.pathname)
+    ? findSeoPageOverride(seoSettings.pageOverrides, url.pathname) ?? null
+    : null;
+  const { adminToolbarEnabled, searchCrawlingEnabled, maintenanceModeEnabled, errorDiagnosticsEnabled, promoBarSettings } = siteSettings;
   const appUrl = env.APP_URL ?? "http://localhost:3002";
 
   const maintenanceBlocksRequest =
@@ -184,11 +213,15 @@ export async function loader({
         maintenanceModeEnabled: maintenanceModeEnabled || isMaintenancePage,
         appUrl,
       })
+      && seoPageOverride?.indexable !== false
       ? "index, follow"
       : "noindex, nofollow, noarchive";
 
   return data({
     appName: "EdiCut",
+    requestReference: isAdminSignedIn && errorDiagnosticsEnabled
+      ? getRequestReference(request.headers.get("cf-ray"))
+      : null,
     appUrl,
     nodeApiBaseUrl: env.NODE_API_BASE_URL ?? "http://localhost:8787/api/node",
     isSignedIn: Boolean(userId),
@@ -203,15 +236,65 @@ export async function loader({
     adminToolbarEnabled,
     searchCrawlingEnabled,
     maintenanceModeEnabled,
+    seoTitleTemplate: seoSettings.globalMetadata.titleTemplate,
+    seoDefaultDescription: seoSettings.globalMetadata.defaultDescription,
+    seoPageOverride,
     promoBarSettings,
     recaptchaSiteKey: getRecaptchaSiteKey(context),
-    debugEnabled: env.DEBUG_MODE === "true" && (env.APP_URL?.includes("localhost") || isAdminSignedIn),
+    debugEnabled: isAdminSignedIn && errorDiagnosticsEnabled,
   }, {
     headers: {
       ...(robotsContent ? { "X-Robots-Tag": robotsContent } : {}),
-      ...(isAdminSignedIn && (isAdminPanelPath || url.pathname === "/dashboard/messages") ? { "Cache-Control": "private, no-store" } : {}),
+      ...(isAdminSignedIn && (errorDiagnosticsEnabled || isAdminPanelPath || url.pathname === "/dashboard/messages")
+        ? { "Cache-Control": "private, no-store" }
+        : {}),
     },
   });
+}
+
+function shouldCheckSeoRoute(pathname: string) {
+  if (/\.(?:avif|css|gif|ico|jpe?g|js|map|mjs|png|svg|ttf|webp|woff2?|xml|txt)$/i.test(pathname)) return false;
+  return ![
+    "/api",
+    "/auth",
+    "/checkout",
+    "/dashboard",
+    "/forgot-password",
+    "/maintenance",
+    "/signin",
+    "/signout",
+    "/site",
+    "/update-password",
+  ].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+export async function loader(args: { request: Request; context?: LoaderContext }) {
+  try {
+    return await loadRoot(args);
+  } catch (error) {
+    if (error instanceof Response && error.status < 500) throw error;
+    const cause = error instanceof Error ? error.cause ?? error : error;
+    const code = cause && typeof cause === "object" && "code" in cause ? cause.code : undefined;
+    const databaseCode = typeof code === "string" && /^(?:[A-Z0-9]{5}|CONNECT_TIMEOUT|CONNECTION_CLOSED|ECONNRESET|ECONNREFUSED|ETIMEDOUT)$/.test(code) ? code : undefined;
+    const requestReference = getRequestReference(args.request.headers.get("cf-ray"));
+    console.error("Root loader failed.", {
+      route: "root",
+      requestReference,
+      stage: "root-loader",
+      status: error instanceof Response ? error.status : 500,
+      errorType: cause instanceof Error ? cause.name : cause instanceof Response ? "Response" : "UnknownError",
+      ...(databaseCode ? { databaseCode } : {}),
+    });
+    scheduleApplicationErrorCapture(args.context, args.request, cause);
+    throw data({ diagnostics: {
+      requestReference,
+      route: "root",
+      stage: "root-loader",
+      status: error instanceof Response ? error.status : 500,
+      errorType: cause instanceof Error ? cause.name : cause instanceof Response ? "Response" : "UnknownError",
+      ...(databaseCode ? { databaseCode } : {}),
+    } }, { status: error instanceof Response ? error.status : 500 });
+  }
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData: rootData, location, error }) => {
@@ -220,6 +303,9 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData: rootData, locati
     pathname: location.pathname,
     crawlingEnabled: rootData?.searchCrawlingEnabled !== false && error == null,
     maintenanceModeEnabled: rootData?.maintenanceModeEnabled === true,
+    titleTemplate: rootData?.seoTitleTemplate,
+    defaultDescription: rootData?.seoDefaultDescription,
+    pageOverride: rootData?.seoPageOverride,
   });
 };
 
@@ -536,9 +622,11 @@ function NavigationRecovery() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
-  const rootData = useRouteLoaderData("root") as { debugEnabled?: boolean } | undefined;
+  const rootData = useRouteLoaderData("root") as { debugEnabled?: boolean; requestReference?: string | null } | undefined;
   const presentation = getRouteErrorPresentation(error);
   const debugEnabled = import.meta.env.DEV || rootData?.debugEnabled === true;
+  const diagnostics = debugEnabled ? getSafeRouteErrorDiagnostics(error) : null;
+  const requestReference = diagnostics?.requestReference ?? rootData?.requestReference ?? null;
   const debugDetails = debugEnabled ? getRouteErrorDebugDetails(error) : null;
 
   return (
@@ -547,6 +635,23 @@ export function ErrorBoundary() {
         <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{presentation.label}</p>
         <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">{presentation.title}</h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">{presentation.message}</p>
+        {debugEnabled && (requestReference || diagnostics) ? (
+          <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700" aria-label="Safe diagnostic information">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500">Diagnostic information</p>
+            <dl className="mt-3 grid gap-x-5 gap-y-2 sm:grid-cols-[max-content_1fr]">
+              <dt className="font-bold">Request reference</dt>
+              <dd><code className="select-all break-all">{requestReference ?? "Unavailable"}</code></dd>
+              {diagnostics ? <>
+                <dt className="font-bold">Route</dt><dd><code>{diagnostics.route}</code></dd>
+                <dt className="font-bold">Failure stage</dt><dd><code>{diagnostics.stage}</code></dd>
+                <dt className="font-bold">HTTP status</dt><dd><code>{diagnostics.status}</code></dd>
+                <dt className="font-bold">Error type</dt><dd><code>{diagnostics.errorType}</code></dd>
+                {diagnostics.databaseCode ? <><dt className="font-bold">Database code</dt><dd><code>{diagnostics.databaseCode}</code></dd></> : null}
+              </> : null}
+            </dl>
+            <p className="mt-3 text-xs leading-5 text-slate-600">Share this reference with EdiCut support to find the matching server log. Private account and query data are not shown here.</p>
+          </section>
+        ) : null}
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <button
             type="button"

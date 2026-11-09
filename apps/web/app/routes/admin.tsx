@@ -58,6 +58,7 @@ import {
   savePromoBarSettings,
   saveMaintenanceModeEnabled,
   saveSearchCrawlingEnabled,
+  saveErrorDiagnosticsEnabled,
   getSiteSettingsSnapshot,
   getRoleFeatureAccessSettings,
   saveRoleFeatureAccessSettings,
@@ -553,11 +554,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     requirements.stats ? db.select({ count: drizzleCount() }).from(adminUsersTable).where(eq(adminUsersTable.active, true)) : Promise.resolve([{ count: 0 }]),
     requirements.pricingPackages ? getPricingPackages(db) : Promise.resolve([]),
     requirements.siteSettings
-      ? getSiteSettingsSnapshot(db, context, { includeAdminToolbar: true, includePromoBar: true })
+      ? getSiteSettingsSnapshot(db, context, { includeAdminToolbar: true, includePromoBar: true, includeErrorDiagnostics: true })
       : Promise.resolve({
           adminToolbarEnabled: false,
           searchCrawlingEnabled: false,
           maintenanceModeEnabled: false,
+          errorDiagnosticsEnabled: false,
           promoBarSettings: { enabled: false, message: "" },
         }),
     requirements.roleFeatureAccess ? getRoleFeatureAccessSettings(db, context) : Promise.resolve(DEFAULT_ROLE_FEATURE_ACCESS),
@@ -604,6 +606,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     adminToolbarEnabled: siteSettingsSnapshot.adminToolbarEnabled,
     searchCrawlingEnabled: siteSettingsSnapshot.searchCrawlingEnabled,
     maintenanceModeEnabled: siteSettingsSnapshot.maintenanceModeEnabled,
+    errorDiagnosticsEnabled: siteSettingsSnapshot.errorDiagnosticsEnabled,
     promoBarSettings: siteSettingsSnapshot.promoBarSettings,
     roleFeatureAccess,
     portfolioSections,
@@ -1333,6 +1336,15 @@ export async function action({ request, context }: ActionFunctionArgs): Promise<
       return { success: "Maintenance mode settings saved." };
     } catch (error) {
       return adminSettingsSaveError("Maintenance mode", error);
+    }
+  }
+
+  if (intent === "update-error-diagnostics") {
+    try {
+      await saveErrorDiagnosticsEnabled(db, formData.get("errorDiagnosticsEnabled") === "on", context);
+      return { success: "Error diagnostics settings saved." };
+    } catch (error) {
+      return adminSettingsSaveError("Error diagnostics", error);
     }
   }
 

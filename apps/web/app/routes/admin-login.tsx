@@ -23,7 +23,7 @@ import {
   supabaseAuthEnabled,
 } from "../integrations/supabase/auth.server";
 import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
-import { readMutationForm } from "../lib/mutation-request.server";
+import { isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
@@ -143,6 +143,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (!isSameSiteMutation(request)) {
+    return { error: "Admin request origin was rejected." };
+  }
+
   if (requestBodyExceedsLimit(request, 64 * 1024)) {
     return { error: "Admin sign-in request is too large. Please try again." };
   }
@@ -273,26 +277,6 @@ export default function AdminLoginRoute() {
     }
   }
 
-  async function handleGoogleSubmit(event: FormEvent<HTMLFormElement>) {
-    const form = event.currentTarget;
-    event.preventDefault();
-    if (isSubmitting) return;
-
-    setSecurityError(null);
-    setSecurityPending(true);
-    try {
-      if (!isLocalDevelopmentHostname(window.location.hostname)) {
-        const { executeInvisibleRecaptcha } = await import("../lib/recaptcha.client");
-        await executeInvisibleRecaptcha(form, "admin_google_login");
-      }
-      form.submit();
-    } catch (error) {
-      setSecurityError(error instanceof Error ? error.message : "Security check failed. Please try again.");
-    } finally {
-      setSecurityPending(false);
-    }
-  }
-
   return (
     <main className="min-h-screen bg-[#F6F7F8] px-5 py-8 text-foreground sm:px-6">
       <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 lg:grid-cols-[0.9fr_1fr]">
@@ -341,23 +325,6 @@ export default function AdminLoginRoute() {
                   : "Security check failed. Please try again.")}
             </div>
           ) : null}
-
-          <form method="post" action="/auth/google" className="mt-6" onSubmit={handleGoogleSubmit}>
-            <input type="hidden" name="csrfToken" value={csrfToken} />
-            <input type="hidden" name="mode" value="admin" />
-            <input type="hidden" name="returnTo" value={redirectTo} />
-            <input type="hidden" name="g-recaptcha-response" value="" />
-            <button type="submit" disabled={isSubmitting} className="inline-flex h-12 w-full items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white px-5 text-sm font-black text-foreground shadow-sm transition hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
-              <img src="/icons/google-g.png" alt="" className="h-5 w-auto shrink-0" aria-hidden="true" />
-              Continue with Google
-            </button>
-          </form>
-
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs font-black uppercase text-muted-foreground">or</span>
-            <div className="h-px flex-1 bg-gray-200" />
-          </div>
 
           <Form method="post" action={ADMIN_LOGIN_PATH} className="grid gap-4" onSubmit={handleSubmit}>
             <input type="hidden" name="csrfToken" value={csrfToken} />

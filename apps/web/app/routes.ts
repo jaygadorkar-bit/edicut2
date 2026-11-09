@@ -33,6 +33,7 @@ export default [
     route("site/node-logmin", "routes/admin.tsx"),
     route("site/node-logmin/analytics", "routes/admin-analytics.tsx"),
     route("site/node-logmin/error-log", "routes/admin-error-log.tsx"),
+    route("site/node-logmin/seo", "routes/admin-seo.tsx"),
     route("site/node-logmin/threat-log", "routes/admin-threat-log.tsx"),
     route("site/node-logmin/infrastructure", "routes/admin-infrastructure.tsx"),
     route("site/node-logmin/update", "routes/admin-update.tsx"),

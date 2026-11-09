@@ -18,6 +18,7 @@ const PROMO_BAR_MESSAGE_KEY = "promo_bar_message";
 const ROLE_FEATURE_ACCESS_KEY = "role_feature_access";
 const SEARCH_CRAWLING_ENABLED_KEY = "search_crawling_enabled";
 const MAINTENANCE_MODE_ENABLED_KEY = "maintenance_mode_enabled";
+const ERROR_DIAGNOSTICS_ENABLED_KEY = "error_diagnostics_enabled";
 const DEFAULT_PROMO_BAR_MESSAGE = "Welcome to EdiCut! Black Friday Special: 20% off all packages.";
 type SiteSettingsReadOptions = { failOnError?: boolean };
 
@@ -25,6 +26,7 @@ export type SiteSettingsSnapshot = {
   adminToolbarEnabled: boolean;
   searchCrawlingEnabled: boolean;
   maintenanceModeEnabled: boolean;
+  errorDiagnosticsEnabled: boolean;
   promoBarSettings: { enabled: boolean; message: string };
 };
 
@@ -69,12 +71,13 @@ export async function getSiteSettings(
 export async function getSiteSettingsSnapshot(
   db: DatabaseClient | null | undefined,
   context?: SupabaseRuntimeContext,
-  options: { includeAdminToolbar?: boolean; includePromoBar?: boolean } = {},
+  options: { includeAdminToolbar?: boolean; includePromoBar?: boolean; includeErrorDiagnostics?: boolean } = {},
 ): Promise<SiteSettingsSnapshot> {
   const keys = [
     ...(options.includeAdminToolbar ? [ADMIN_TOOLBAR_ENABLED_KEY] : []),
     SEARCH_CRAWLING_ENABLED_KEY,
     MAINTENANCE_MODE_ENABLED_KEY,
+    ...(options.includeErrorDiagnostics ? [ERROR_DIAGNOSTICS_ENABLED_KEY] : []),
     ...(options.includePromoBar ? [PROMO_BAR_ENABLED_KEY, PROMO_BAR_MESSAGE_KEY] : []),
   ];
   const values = await getSiteSettings(db, keys, context);
@@ -83,6 +86,7 @@ export async function getSiteSettingsSnapshot(
     adminToolbarEnabled: options.includeAdminToolbar === true && values[ADMIN_TOOLBAR_ENABLED_KEY] !== "false",
     searchCrawlingEnabled: values[SEARCH_CRAWLING_ENABLED_KEY] !== "false",
     maintenanceModeEnabled: values[MAINTENANCE_MODE_ENABLED_KEY] === "true",
+    errorDiagnosticsEnabled: options.includeErrorDiagnostics === true && values[ERROR_DIAGNOSTICS_ENABLED_KEY] === "true",
     promoBarSettings: options.includePromoBar
       ? {
           enabled: values[PROMO_BAR_ENABLED_KEY] === "true",
@@ -169,6 +173,10 @@ export async function getMaintenanceModeEnabled(db: DatabaseClient | null | unde
 
 export async function saveMaintenanceModeEnabled(db: DatabaseClient | null | undefined, enabled: boolean, context?: SupabaseRuntimeContext) {
   await saveSetting(db, MAINTENANCE_MODE_ENABLED_KEY, enabled ? "true" : "false", context);
+}
+
+export async function saveErrorDiagnosticsEnabled(db: DatabaseClient | null | undefined, enabled: boolean, context?: SupabaseRuntimeContext) {
+  await saveSetting(db, ERROR_DIAGNOSTICS_ENABLED_KEY, enabled ? "true" : "false", context);
 }
 
 export async function getPromoBarSettings(db: DatabaseClient | null | undefined, context?: SupabaseRuntimeContext) {

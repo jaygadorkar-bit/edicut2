@@ -3,6 +3,7 @@ import { findAdminUserById } from "@edicut/db/repositories/admin-users";
 import { findUserById } from "@edicut/db/repositories/users";
 import { hasCurrentSessionCredentials, isAdminRole, type SessionContext } from "./session.server";
 import { getSupabaseUserByAccessToken } from "../integrations/supabase/client.server";
+import { retryDatabaseRead } from "./database-errors";
 
 export type AdminToolbarAccess = "none" | "verified";
 
@@ -17,16 +18,33 @@ export async function getAdminToolbarAccess(db: DatabaseClient, identity: {
   verifiedUserAdminId?: unknown;
   verifiedUserAdminCredentialVersion?: unknown;
 }, context?: SessionContext): Promise<AdminToolbarAccess> {
+  try {
+    return await verifyAdminToolbarAccess(db, identity, context);
+  } catch {
+    // Toolbar availability must not block the workspace. The admin routes
+    // independently validate access, and the toolbar stays hidden on error.
+    console.error("Admin toolbar identity could not be verified.");
+    return "none";
+  }
+}
+
+async function verifyAdminToolbarAccess(
+  db: DatabaseClient,
+  identity: Parameters<typeof getAdminToolbarAccess>[1],
+  context?: SessionContext,
+): Promise<AdminToolbarAccess> {
   if (typeof identity.adminUserId === "string" && identity.adminUserId) {
-    const admin = await findAdminUserById(db, identity.adminUserId);
+    const id = identity.adminUserId;
+    const admin = await retryDatabaseRead(() => findAdminUserById(db, id));
     if (admin?.active && isAdminRole(admin.role) && await hasCurrentSessionCredentials(identity.adminCredentialVersion, admin, context, "admin")
       && await validProviderIdentity(identity.adminAccessToken, admin.email, context)) return "verified";
   }
   if (typeof identity.userId !== "string" || !identity.userId ||
       typeof identity.verifiedUserAdminId !== "string" || !identity.verifiedUserAdminId) return "none";
+  const { userId, verifiedUserAdminId } = identity;
   const [user, admin] = await Promise.all([
-    findUserById(db, identity.userId),
-    findAdminUserById(db, identity.verifiedUserAdminId),
+    retryDatabaseRead(() => findUserById(db, userId)),
+    retryDatabaseRead(() => findAdminUserById(db, verifiedUserAdminId)),
   ]);
   if (!user?.active || user.deletedAt || !admin?.active || !isAdminRole(admin.role)) return "none";
   return user.email.trim().toLowerCase() === admin.email.trim().toLowerCase()

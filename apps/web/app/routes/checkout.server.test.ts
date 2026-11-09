@@ -86,7 +86,7 @@ beforeEach(() => {
   mocks.saveCryptomusInvoice.mockResolvedValue(true);
   mocks.getCryptomusConfig.mockReturnValue({ merchantId: "merchant-id", paymentApiKey: "private-test-key", appUrl: "https://edicut.test" });
   mocks.createCryptomusInvoice.mockResolvedValue({ uuid: "9d4d98aa-f971-4d85-9f21-2b4b2fb99360", url: "https://pay.cryptomus.com/pay/test", expiresAt: new Date(Date.now() + 60_000) });
-  mocks.saveUnpaidSubscription.mockResolvedValue({ id: "saved-id", planName: "Studio", amountCents: 314900, currency: "USD" });
+  mocks.saveUnpaidSubscription.mockResolvedValue({ id: "saved-id", planName: "Max", amountCents: 314900, currency: "USD" });
 });
 
 describe("payment-first checkout", () => {
@@ -225,7 +225,7 @@ describe("payment-first checkout", () => {
   });
   it("loads plan review from the configured package catalog", async () => {
     const result = await loader(args());
-    expect(result.editingPackage.name).toBe("Studio");
+    expect(result.editingPackage.name).toBe("Max");
     expect(result.total).toBe(3149);
     expect(result.paymentStep).toBe(false);
     expect(mocks.getPricingPackages).toHaveBeenCalledOnce();
@@ -411,7 +411,7 @@ describe("payment-first checkout", () => {
     expect(response).toBeInstanceOf(Response);
     expect((response as Response).headers.get("Location")).toBe("/checkout/creator-pro?step=payment&subscription=saved-id");
     expect(mocks.saveUnpaidSubscription).toHaveBeenCalledWith(expect.anything(), {
-      ownerId: "user-1", packageSlug: "creator-pro", planName: "Studio", country: "BD", phone: "+8801712345678",
+      ownerId: "user-1", packageSlug: "creator-pro", planName: "Max", country: "BD", phone: "+8801712345678",
       subtotalCents: 314900, amountCents: 314900, discountCents: 0, couponCode: null, purchaseType: "monthly",
       affiliateId: "affiliate-1", affiliateCode: "PARTNER-1", affiliateCommissionBps: 1250,
       addOns: [],
@@ -420,7 +420,7 @@ describe("payment-first checkout", () => {
       phone: "+8801712345678", country: "Bangladesh", updatedAt: expect.any(Date),
     }));
     expect(mocks.queueTelegramOrderNotice).toHaveBeenCalledWith({}, {
-      orderId: "saved-id", kind: "subscription", summary: "Monthly editing package: Studio", amountCents: 314900, currency: "USD",
+      orderId: "saved-id", kind: "subscription", summary: "Monthly editing package: Max", amountCents: 314900, currency: "USD",
     });
   });
 

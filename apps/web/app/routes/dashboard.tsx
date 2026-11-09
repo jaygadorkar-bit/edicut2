@@ -1,9 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, redirect, useLoaderData } from "react-router";
+import { data, Link, redirect, useLoaderData } from "react-router";
 import { count as drizzleCount, desc, eq, sql } from "drizzle-orm";
 import { workspaceProjectFiles, workspaceProjects } from "@edicut/db/schema";
-import { findUserById } from "@edicut/db/repositories/users";
-import { requireUserId, getSession, destroySession } from "../lib/session.server";
+import { requireUserProfile, getSession, destroySession } from "../lib/session.server";
 import { getDbFromContext } from "../lib/db.server";
 import { getRoleFeatureAccessSettings } from "../lib/site-settings.server";
 import { canAccessDashboardFeature, getAllowedDashboardFeatures, getDashboardLandingPath, type DashboardFeature } from "../lib/role-feature-access";
@@ -23,6 +22,29 @@ import { ClientBalance } from "../components/ClientBalance";
 import { isMissingClientWorkspaceSchema, loadClientWorkspace } from "../lib/client-workspace.server";
 import { createChatStore } from "../lib/chat-store.server";
 import { importMissingClientProjectManagers } from "../lib/client-project-managers.server";
+import { scheduleApplicationErrorCapture } from "../lib/application-error-log.server";
+import { getRequestReference } from "../lib/request-reference";
+import { retryDatabaseRead } from "../lib/database-errors";
+
+const dashboardStages = ["session-profile", "role-feature-access", "customer-project-list", "customer-project-summary", "customer-file-count", "customer-projects", "client-balance", "staff-overview", "affiliate-overview"] as const;
+type DashboardStage = typeof dashboardStages[number];
+
+class DashboardStageError extends Error {
+  constructor(readonly stage: DashboardStage, cause: unknown) {
+    super(`Dashboard ${stage} stage failed`, { cause });
+    this.name = "DashboardStageError";
+  }
+}
+
+async function atDashboardStage<T>(stage: DashboardStage, action: () => Promise<T>) {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof DashboardStageError) throw error;
+    if (error instanceof Response && error.status < 500) throw error;
+    throw new DashboardStageError(stage, error);
+  }
+}
 
 const navItems = [
   { label: "Dashboard", icon: "dashboard_customize", path: "/dashboard", feature: "overview" as DashboardFeature },
@@ -61,14 +83,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
   });
 }
 
-export async function loader({ request, context }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request, context);
+async function loadDashboard({ request, context }: LoaderFunctionArgs) {
+  const user = await atDashboardStage("session-profile", () => requireUserProfile(request, context));
+  const userId = user.id;
   const db = getDbFromContext(context);
-  const [user, roleFeatureAccess] = await Promise.all([findUserById(db, userId), getRoleFeatureAccessSettings(db, context)]);
-  if (!user?.active || user.deletedAt) {
-    const session = await getSession(request.headers.get("Cookie"), context);
-    throw redirect("/signin?redirectTo=/dashboard", { headers: { "Set-Cookie": await destroySession(session, context) } });
-  }
+  const roleFeatureAccess = await atDashboardStage("role-feature-access", () => getRoleFeatureAccessSettings(db, context));
 
   const allowedFeatures = getAllowedDashboardFeatures(user.role, roleFeatureAccess);
 
@@ -121,10 +140,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     try {
       const ownerFilter = eq(workspaceProjects.ownerId, userId);
       const recentProjectsPromise: Promise<WorkspaceProjectSummary[]> = canViewProjects
-        ? db.select(workspaceProjectSummaryColumns).from(workspaceProjects).where(ownerFilter).orderBy(desc(workspaceProjects.updatedAt)).limit(5)
+        ? atDashboardStage("customer-project-list", () => retryDatabaseRead(() => db.select(workspaceProjectSummaryColumns).from(workspaceProjects).where(ownerFilter).orderBy(desc(workspaceProjects.updatedAt)).limit(5)))
         : Promise.resolve([]);
       const projectSummaryPromise = canViewProjects || canViewReviews
-        ? db.select({
+        ? atDashboardStage("customer-project-summary", () => retryDatabaseRead(() => db.select({
             total: canViewProjects ? drizzleCount() : sql<number>`0`.mapWith(Number),
             active: canViewProjects
               ? sql<number>`count(*) filter (where ${workspaceProjects.status} <> 'delivered')`.mapWith(Number)
@@ -132,10 +151,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
             reviews: canViewReviews
               ? sql<number>`count(*) filter (where ${workspaceProjects.status} in ('review', 'client_review'))`.mapWith(Number)
               : sql<number>`0`.mapWith(Number),
-          }).from(workspaceProjects).where(ownerFilter)
+          }).from(workspaceProjects).where(ownerFilter)))
         : Promise.resolve([{ total: 0, active: 0, reviews: 0 }]);
       const fileSummaryPromise = canViewUploads
-        ? db.select({ count: drizzleCount() }).from(workspaceProjectFiles).where(eq(workspaceProjectFiles.ownerId, userId))
+        ? atDashboardStage("customer-file-count", () => retryDatabaseRead(() => db.select({ count: drizzleCount() }).from(workspaceProjectFiles).where(eq(workspaceProjectFiles.ownerId, userId))))
         : Promise.resolve([{ count: 0 }]);
       const [recentProjects, projectSummary, fileSummary] = await Promise.all([
         recentProjectsPromise,
@@ -150,7 +169,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       if (canViewReviews) reviewCount = projectSummary[0]?.reviews ?? 0;
       if (canViewUploads) fileCount = fileSummary[0]?.count ?? 0;
     } catch (error) {
-      if (!isMissingWorkspaceSchema(error)) throw error;
+      const cause = error instanceof DashboardStageError ? error.cause : error;
+      if (!isMissingWorkspaceSchema(cause)) throw error;
       workspaceReady = false;
     }
   };
@@ -213,16 +233,50 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     }
   };
   const [, { clientBalance, balanceReady }] = await Promise.all([
-    loadCustomerOverview(),
-    loadBalance(),
-    loadStaffOverview(),
-    loadAffiliateOverview(),
+    atDashboardStage("customer-projects", loadCustomerOverview),
+    atDashboardStage("client-balance", loadBalance),
+    atDashboardStage("staff-overview", loadStaffOverview),
+    atDashboardStage("affiliate-overview", loadAffiliateOverview),
   ]);
   return {
     user: toPublicUser(user), allowedFeatures, projects, projectCount, activeCount, reviewCount,
     deliveredCount, fileCount, workspaceReady, noDashboardAccess: false, clientBalance, balanceReady,
     assignedProjects, unassignedProjectCount, editors, managerTasks, affiliateData, affiliateReady,
   };
+}
+
+export async function loader(args: LoaderFunctionArgs) {
+  try {
+    return await loadDashboard(args);
+  } catch (error) {
+    if (error instanceof Response && error.status < 500) throw error;
+    const stageError = error instanceof DashboardStageError ? error : null;
+    const cause = stageError?.cause ?? error;
+    const status = cause instanceof Response && cause.status >= 500 ? cause.status : 500;
+    const requestReference = getRequestReference(args.request.headers.get("cf-ray"));
+    // Worker observability captures this structured record. Keep request data,
+    // session values, SQL text, and provider credentials out of production logs.
+    const errorCause = cause instanceof Error ? cause.cause ?? cause : cause;
+    const code = errorCause && typeof errorCause === "object" && "code" in errorCause ? errorCause.code : undefined;
+    const databaseCode = typeof code === "string" && /^(?:[A-Z0-9]{5}|CONNECT_TIMEOUT|CONNECTION_CLOSED|ECONNRESET|ECONNREFUSED|ETIMEDOUT)$/.test(code) ? code : undefined;
+    console.error("Dashboard load failed.", {
+      route: "dashboard",
+      requestReference,
+      stage: stageError?.stage ?? "dashboard-loader",
+      status,
+      errorType: cause instanceof Error ? cause.name : cause instanceof Response ? "Response" : "UnknownError",
+      ...(databaseCode ? { databaseCode } : {}),
+    });
+    scheduleApplicationErrorCapture(args.context, args.request, cause);
+    throw data({ diagnostics: {
+      requestReference,
+      route: "dashboard",
+      stage: stageError?.stage ?? "dashboard-loader",
+      status,
+      errorType: cause instanceof Error ? cause.name : cause instanceof Response ? "Response" : "UnknownError",
+      ...(databaseCode ? { databaseCode } : {}),
+    } }, { status });
+  }
 }
 
 export default function DashboardRoute() {

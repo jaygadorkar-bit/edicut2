@@ -4,6 +4,7 @@ import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./lib/admin-paths";
 const mocks = vi.hoisted(() => ({
   db: {}, database: vi.fn(), access: vi.fn(), profile: vi.fn(), counts: vi.fn(), settings: vi.fn(),
   userSession: vi.fn(), adminSession: vi.fn(),
+  captureError: vi.fn(),
 }));
 vi.mock("./lib/db.server", () => ({ getDbFromContext: mocks.database }));
 vi.mock("./lib/session.server", () => ({
@@ -16,6 +17,7 @@ vi.mock("./lib/admin-profile.server", () => ({ getAdminProfileImage: mocks.profi
 vi.mock("./lib/admin-navigation-counts.server", () => ({ getAdminNavigationCounts: mocks.counts }));
 vi.mock("./lib/site-settings.server", () => ({ getSiteSettingsSnapshot: mocks.settings }));
 vi.mock("./integrations/supabase/client.server", () => ({ getSupabaseClient: () => null, getRecaptchaSiteKey: () => "" }));
+vi.mock("./lib/application-error-log.server", () => ({ scheduleApplicationErrorCapture: mocks.captureError }));
 import { headers as rootHeaders, links as rootLinks, loader, meta as rootMeta } from "./root";
 
 function deferred<T>() {
@@ -95,12 +97,34 @@ describe("fresh root admin data", () => {
     expect(result.data).toMatchObject({ isAdminSignedIn: false, adminProfile: null, pendingOrderCount: 0, unreadEnquiryCount: 0 });
     expect(mocks.profile).not.toHaveBeenCalled();
     expect(mocks.counts).not.toHaveBeenCalled();
-    expect(mocks.settings).toHaveBeenCalledWith(mocks.db, undefined, { includeAdminToolbar: false, includePromoBar: false });
+    expect(mocks.settings).toHaveBeenCalledWith(mocks.db, undefined, {
+      includeAdminToolbar: false,
+      includePromoBar: false,
+      includeErrorDiagnostics: false,
+    });
   });
 
   it("skips badge reads on admin sign-in", async () => {
     await load(ADMIN_LOGIN_PATH);
     expect(mocks.counts).not.toHaveBeenCalled();
+  });
+
+  it("returns safe root loader diagnostics with a request reference on server failures", async () => {
+    mocks.access.mockResolvedValue("none");
+    mocks.settings.mockRejectedValue(Object.assign(new Error("private connection detail"), { code: "08006" }));
+    const error = await loader({
+      request: new Request("https://edicut.com/dashboard", { headers: { "cf-ray": "a577a90c4ec041fc-DAC" } }),
+    }).catch((value) => value);
+
+    expect(error).toMatchObject({ init: { status: 500 }, data: { diagnostics: {
+      requestReference: "a577a90c4ec041fc-DAC",
+      route: "root",
+      stage: "root-loader",
+      status: 500,
+      errorType: "Error",
+      databaseCode: "08006",
+    } } });
+    expect(mocks.captureError).toHaveBeenCalledOnce();
   });
 
   it("still redirects non-admin visitors during maintenance", async () => {

@@ -3,6 +3,7 @@ import { isRouteErrorResponse } from "react-router";
 import { getDbFromContext } from "./db.server";
 import type { LoaderContext } from "../types";
 import type { AdminSecurityLogRange } from "./provider-usage.server";
+import { getRequestReference } from "./request-reference";
 
 const MAX_SIGNATURES_PER_ISOLATE = 128;
 const MAX_WRITES_PER_MINUTE = 20;
@@ -243,7 +244,14 @@ export async function recordApplicationError(context: unknown, request: Request,
   const decision = rateLimiter.acquire(fingerprint);
   if (!decision.allowed) return;
 
-  const record = { fingerprint, ...diagnostic, route, method, occurrences: decision.occurrences };
+  const record = {
+    fingerprint,
+    ...diagnostic,
+    route,
+    method,
+    occurrences: decision.occurrences,
+    requestReference: getRequestReference(request.headers.get("cf-ray")),
+  };
   try {
     const db = getDbFromContext((context as LoaderContext | undefined) ?? {});
     await db.transaction(async (tx) => {
@@ -280,6 +288,7 @@ export async function recordApplicationError(context: unknown, request: Request,
       route,
       method,
       occurrences: record.occurrences,
+      requestReference: record.requestReference,
     }));
   } catch {
     // Reporting must not interrupt the failed request. The fallback is still
@@ -289,6 +298,7 @@ export async function recordApplicationError(context: unknown, request: Request,
       fingerprint,
       route,
       method,
+      requestReference: record.requestReference,
       name: diagnostic.name,
       message: diagnostic.message,
       stack: diagnostic.stack,

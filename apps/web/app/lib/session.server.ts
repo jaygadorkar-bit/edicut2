@@ -52,6 +52,18 @@ function isSecureCookie(context?: SessionContext) {
     || Boolean(env && (env.NODE_ENV !== "development" || env.APP_URL?.startsWith("https://")));
 }
 
+export function getGoogleOAuthCookie(context?: SessionContext) {
+  const secure = isSecureCookie(context);
+  return createCookie(secure ? "__Host-edicut_google_oauth" : "_edicut_google_oauth", {
+    httpOnly: true,
+    maxAge: 600,
+    path: secure ? "/" : "/api/auth/callback/google",
+    sameSite: "lax",
+    secure,
+    secrets: [`${readSessionSecret(context)}:google-oauth`],
+  });
+}
+
 function getUserSessionStorage(context?: SessionContext) {
   const secret = readSessionSecret(context);
   const cacheKey = `${secret}:${isSecureCookie(context)}`;
@@ -296,7 +308,7 @@ export async function revokeAuthenticatedSessions(session: AppSession, adminSess
   await Promise.all([revoke(session, "user"), revoke(adminSession, "admin")]);
 }
 
-export async function requireUserId(
+export async function requireUserProfile(
   request: Request,
   context?: SessionContext,
   redirectTo: string = new URL(request.url).pathname
@@ -344,9 +356,8 @@ export async function requireUserId(
           headers: { "Set-Cookie": await destroySession(session, context) },
         });
       }
-      return profile.id;
     }
-    return user.id;
+    return profile;
   }
 
   if (!userId || typeof userId !== "string") {
@@ -361,7 +372,11 @@ export async function requireUserId(
       headers: { "Set-Cookie": await destroySession(session, context) },
     });
   }
-  return userId;
+  return profile;
+}
+
+export async function requireUserId(request: Request, context?: SessionContext, redirectTo?: string) {
+  return (await requireUserProfile(request, context, redirectTo)).id;
 }
 
 export async function createUserSession({
