@@ -12,13 +12,20 @@ import { consumeUsageLimit } from "../lib/usage-protection.server";
 import { assignClientProjectManager, importMissingClientProjectManagers } from "../lib/client-project-managers.server";
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
 export function headers() { return { "Cache-Control": "no-store" }; }
-async function safely(operation: () => Promise<unknown>) {
+async function safely(operation: () => Promise<unknown>, request: Request) {
   try { const result = await operation(); return result instanceof Response ? result : json(result); }
   catch (error) {
     if (error instanceof Response) {
       if (error.status >= 300 && error.status < 400) {
+        const location = error.headers.get("Location");
+        const cookie = error.headers.get("Set-Cookie");
+        if (location && cookie && new URL(location, request.url).href === request.url) {
+          const headers = new Headers(error.headers);
+          headers.set("Cache-Control", "no-store");
+          return new Response(null, { status: 307, headers });
+        }
         const response = json({ error: "Your session needs refreshing. Reload this page to sign in again.", sessionExpired: true }, 401);
-        const cookie = error.headers.get("Set-Cookie"); if (cookie) response.headers.set("Set-Cookie", cookie);
+        if (cookie) response.headers.set("Set-Cookie", cookie);
         return response;
       }
       return json({ error: await error.text() }, error.status);
@@ -60,7 +67,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const at = url.searchParams.get("beforeAt"), id = url.searchParams.get("beforeId")?.toLowerCase();
     if ((at || id) && (!at || !chatId(id) || !Number.isFinite(Date.parse(at)))) throw new Response("Invalid message cursor.", { status: 400 });
     return chat.listChatMessages(actor, roomId, at && id ? { at, id } : undefined, search);
-  });
+  }, request);
 }
 export async function action({ request, context }: ActionFunctionArgs) {
   return safely(async () => {
@@ -191,5 +198,5 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return { message: { ...message, attachment: message.deletedAt || chatAttachmentIsRemoved(message.attachment) ? null : message.attachment }, cleanupPending };
     }
     throw new Response("Unknown chat action.", { status: 400 });
-  });
+  }, request);
 }

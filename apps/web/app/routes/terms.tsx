@@ -1,11 +1,12 @@
 import type { MetaFunction } from "react-router";
+import { Link } from "react-router";
 import { FileText } from "lucide-react";
 import { PageShell, TrustStrip } from "../components/site/Marketing.js";
 import { createRouteMeta } from "../lib/seo";
 
 export const meta: MetaFunction = (args) => createRouteMeta(args,
   "Terms of Service | EdiCut",
-  "Review EdiCut service scope, video editing plans, estimates, project billing, revisions, and cancellation terms.",
+  "Review EdiCut service scope, video editing plans, estimates, project billing, revisions, refunds, and cancellation terms.",
 );
 
 const sections = [
@@ -26,8 +27,8 @@ const sections = [
   },
   {
     icon: "credit_card",
-    title: "4. Estimates, Billing & Cancellation",
-    copy: "Published monthly package prices cover the listed scope. Submitting a project request does not start a subscription or collect payment. EdiCut confirms scope, price, billing cadence, and service terms with you before work begins. Contact support to change or cancel an active plan under its confirmed agreement.",
+    title: "4. Estimates, Billing, Cancellation & Refunds",
+    copy: <>Published monthly package prices cover the listed scope. Submitting a project request does not start a subscription or collect payment. EdiCut confirms scope, price, billing cadence, and service terms with you before work begins. If you are not satisfied with our work, <Link to="/contact" className="underline">contact our team</Link> and we will refund your payment. Contact support to change or cancel an active plan under its confirmed agreement.</>,
   },
   {
     icon: "verified_user",

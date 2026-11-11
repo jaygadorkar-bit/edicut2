@@ -28,6 +28,9 @@ describe("workspace shell header", () => {
     expect(html.indexOf("Admin panel")).toBeLessThan(html.indexOf("Client dashboard"));
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('aria-label="Open client dashboard"');
+    expect(html).toContain('href="/video-editor-partner"');
+    expect(html).toContain('aria-label="Open the video editor partner signup page"');
+    expect(html).toContain(">Partner signup</span>");
   });
 
   it.each([
@@ -38,6 +41,15 @@ describe("workspace shell header", () => {
     expect(html).not.toContain("Help and contact");
     expect(html).not.toContain(">help</span>");
     expect(html).toContain("Page content");
+  });
+
+  it("places the admin profile before sign out in the sidebar account area", () => {
+    const html = render(<AdminPanelShell title="Admin" activeTab="overview" account={{ name: "Admin", detail: "admin@example.test" }}>Page content</AdminPanelShell>);
+    const profileIndex = html.indexOf('aria-label="Open profile settings for Admin"');
+    const signOutIndex = html.indexOf('class="neo-workspace__signout-trigger"');
+
+    expect(profileIndex).toBeGreaterThanOrEqual(0);
+    expect(signOutIndex).toBeGreaterThan(profileIndex);
   });
 
   it("combines the bottom Profile link with account details and exposes Settings and Start project in the header", () => {

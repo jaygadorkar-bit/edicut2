@@ -9,7 +9,9 @@
   font-family: "Material Symbols Outlined";
   font-style: normal;
   font-weight: 100 700;
-  font-display: optional;
+  /* Keep the icon-only ligatures hidden while the local font loads; showing a
+     fallback would expose names such as "expand_more" as visible UI text. */
+  font-display: block;
   src: url("/assets/material-symbols-v383.woff2") format("woff2");
 }
 
@@ -1351,7 +1353,30 @@ a.neo-button:active {
   display: none;
 }
 
-@media (max-width: 639px) {
+.footer-mobile-toggle {
+  display: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.85rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.footer-mobile-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .footer-mobile-toggle {
+    display: inline-flex;
+  }
+
   .footer-mobile-chevron {
     display: inline-block;
   }
@@ -2048,10 +2073,89 @@ details[open] > .neo-faq-answer > .neo-faq-answer__content {
   .neo-admin-toolbar__affiliate-signup span {
     display: none;
   }
+
+  .neo-admin-toolbar__partner-signup span {
+    display: none;
+  }
 }
 
 @media (min-width: 640px) and (max-width: 1279px) {
   .neo-admin-toolbar__inner {
     padding-inline: 1.5rem;
   }
+}
+
+/* Minimal neomorphic 404: the digits rise directly from the page surface. */
+.neo-not-found {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100svh;
+  place-items: center;
+  overflow: hidden;
+  padding: 2rem;
+  background: #edf2f6;
+  color: #17202a;
+}
+
+.neo-not-found__content {
+  display: flex;
+  width: min(100%, 34rem);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.neo-not-found__number {
+  margin: 0;
+  color: #edf2f6;
+  font-size: clamp(9rem, 27vw, 19rem);
+  font-weight: 900;
+  letter-spacing: -0.105em;
+  line-height: 0.82;
+  text-shadow: 8px 8px 14px rgba(132, 148, 163, 0.62), -8px -8px 14px rgba(255, 255, 255, 0.98);
+  user-select: none;
+}
+
+.neo-not-found__title {
+  margin: 1.65rem 0 0;
+  color: #17202a;
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
+}
+
+.neo-not-found__button {
+  display: inline-flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1.65rem;
+  padding: 0.85rem 1.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: #c91d37;
+  box-shadow: 7px 7px 16px rgba(132, 148, 163, 0.28), -6px -6px 14px rgba(255, 255, 255, 0.82);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 750;
+  text-decoration: none;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.neo-not-found__button:hover {
+  transform: translateY(-1px);
+  background: #ad172f;
+}
+
+.neo-not-found__button:focus-visible {
+  outline: 3px solid #283f52;
+  outline-offset: 4px;
+}
+
+@media (max-width: 480px) {
+  .neo-not-found { padding: 1.25rem; }
+  .neo-not-found__number { font-size: clamp(7.5rem, 34vw, 10rem); }
+  .neo-not-found__title { margin-top: 1.25rem; }
+  .neo-not-found__button { margin-top: 1.35rem; }
 }

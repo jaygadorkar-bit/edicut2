@@ -11,6 +11,7 @@ import {
   requireUserId,
   isAdminRole,
   hasCurrentSessionCredentials,
+  requireAdminUser,
 } from "../lib/session.server";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "../lib/admin-paths";
 
@@ -24,6 +25,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const existingAdminSession = await getAdminSession(request.headers.get("Cookie"), context);
 
   if (typeof existingAdminSession.get("adminUserId") === "string") {
+    await requireAdminUser(request, getDbFromContext(context), context, returnTo);
     return redirect(returnTo);
   }
 

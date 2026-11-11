@@ -5,15 +5,14 @@
 
 .home-services__layout {
   display: grid;
-  align-items: center;
-  gap: 2rem;
+  gap: clamp(2rem, 4vw, 3rem);
   max-width: 74rem;
   margin-inline: auto;
 }
 
 .home-services__intro {
   min-width: 0;
-  max-width: 32rem;
+  max-width: 52rem;
   margin-inline: auto;
   text-align: center;
 }
@@ -24,7 +23,7 @@
 }
 
 .home-services__description {
-  max-width: 28rem;
+  max-width: 44rem;
   margin: 1.25rem auto 0;
   color: var(--neo-muted);
   font-size: 1rem;
@@ -32,40 +31,44 @@
   text-wrap: pretty;
 }
 
-.home-services__all {
+.home-services__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem 1.5rem;
   margin-top: 1.75rem;
 }
 
-.home-services__directory {
-  min-width: 0;
-  padding: 0.5rem;
-  border-radius: 1.75rem;
+.home-services__plans {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
 }
 
-.home-services__directory ul {
+.home-services__platforms {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.home-services__directory li + li {
-  border-top: 1px solid var(--neo-line);
+.home-services__platforms li {
+  min-width: 0;
 }
 
-.home-services__link {
-  display: flex;
-  min-height: 5.5rem;
-  align-items: center;
+.home-services__platform {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: 1rem;
-  padding: 1rem;
-  border-radius: 1.125rem;
-  color: var(--neo-ink);
-  text-decoration: none;
-  scroll-margin-block: 8rem 6rem;
-  transition: background-color 160ms ease;
+  min-width: 0;
+  padding: 1.25rem;
+  border-radius: 1.5rem;
 }
 
-.home-services__icon {
+.home-services__platform-icon {
   display: grid;
   width: 2.875rem;
   height: 2.875rem;
@@ -74,106 +77,73 @@
   border-radius: 0.875rem;
 }
 
+.home-services__platform-icon .home-services__brand-mark {
+  display: block;
+  width: 1.375rem;
+  height: 1.375rem;
+  color: #050505;
+}
+
 .home-services__copy {
-  flex: 1;
   min-width: 0;
 }
 
 .home-services__copy h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.0625rem;
   font-weight: 750;
   letter-spacing: -0.02em;
   line-height: 1.4;
 }
 
 .home-services__copy p {
-  margin-top: 0.3rem;
+  margin-top: 0.45rem;
   color: var(--neo-muted);
-  font-size: 0.875rem;
-  line-height: 1.5;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  text-wrap: pretty;
 }
 
-.home-services__arrow {
-  flex: none;
-  color: var(--neo-muted);
-  transition: color 160ms ease, transform 160ms ease;
-}
-
-.home-services__link:focus-visible,
-.home-services__all:focus-visible {
+.home-services__plans:focus-visible {
   outline: 2px solid var(--neo-ink);
   outline-offset: 3px;
 }
 
-.home-services__link:active {
-  background-color: var(--neo-inset);
-}
-
-@media (hover: hover) {
-  .home-services__link:hover {
-    background-color: var(--neo-inset);
-  }
-
-  .home-services__link:hover .home-services__arrow {
-    color: var(--color-icon-hover-ink);
-    transform: translate(2px, -2px);
-  }
-}
-
 @media (min-width: 960px) {
-  .home-services__layout {
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-    gap: clamp(2.5rem, 6vw, 5.5rem);
+  .home-services__intro h2 {
+    font-size: clamp(2rem, 3.5vw, 2.625rem);
   }
 
-  .home-services__intro {
-    margin: 0;
-    text-align: left;
+  .home-services__platforms {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .home-services__description {
-    margin-inline: 0;
-  }
-
-  .home-services__directory {
-    padding: 0.75rem;
-    border-radius: 2rem;
-  }
-
-  .home-services__link {
-    min-height: 5.75rem;
+  .home-services__platform {
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 1.125rem;
+    min-height: 100%;
+    padding: 1.5rem;
   }
 }
 
 @media (max-width: 479px) {
-  .home-services__link {
-    gap: clamp(0.5rem, 3vw, 0.75rem);
-    padding: 1rem 0.5rem;
+  .home-services__actions {
+    flex-direction: column;
+    gap: 1rem;
   }
 
-  .home-services__icon {
-    width: clamp(2.25rem, 10vw, 2.5rem);
-    height: clamp(2.25rem, 10vw, 2.5rem);
+  .home-services__platform {
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .home-services__platform-icon {
+    width: 2.5rem;
+    height: 2.5rem;
   }
 
   .home-services__copy h3 {
-    font-size: 0.9375rem;
-  }
-
-  .home-services__arrow {
-    width: 1rem;
-    height: 1rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .home-services__link,
-  .home-services__arrow {
-    transition: none;
-  }
-
-  .home-services__link:hover .home-services__arrow {
-    transform: none;
+    font-size: 1rem;
   }
 }

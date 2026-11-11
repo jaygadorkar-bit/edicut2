@@ -16,23 +16,19 @@ import { getPricingPackages, configuredEditingPackage, configuredPublicEditingPa
 import { getSupabaseClient } from "../integrations/supabase/client.server";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
 import { createRouteMeta } from "../lib/seo";
-import { formatPackagePrice, getCheckoutUrl, SHORT_FORM_PACKAGE_SLUG, type EditingPackage } from "../lib/subscriptions";
+import { formatPackagePrice, getCheckoutUrl, REQUIRED_PACKAGE_STAFFING, SHORT_FORM_PACKAGE_SLUG, type EditingPackage } from "../lib/subscriptions";
 
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: packageStyles }, { rel: "stylesheet", href: addOnStyles }];
 
 function getPackageSeoDescription(editingPackage: EditingPackage) {
   if (editingPackage.slug === SHORT_FORM_PACKAGE_SLUG) {
-    return `Order a ${formatPackagePrice(editingPackage.basePrice)} short-form video edit for TikTok, Instagram Reels, or YouTube Shorts. One vertical, captioned edit up to 60 seconds, with one revision included.`;
+    return `Order a ${formatPackagePrice(editingPackage.basePrice)} short-form video edit for TikTok, Instagram Reels, or YouTube Shorts. One vertical, captioned edit up to 60 seconds, one custom thumbnail, and at least ${editingPackage.revisionRounds} revision rounds are included.`;
   }
   if (editingPackage.packageType === "monthly") {
-    const hasSharedEditorStaffing = editingPackage.features.some((feature) => /\btwo\b.*\beditors?\b/i.test(feature));
-    const editorCapacity = hasSharedEditorStaffing
-      ? "shared by two dedicated video editors"
-      : "supported by a dedicated video editor";
-    return `${editingPackage.editingHoursPerMonth} editing hours per month at ${editingPackage.editingHoursPerWorkday} hours per workday across ${editingPackage.workingDaysPerMonth} working days, ${editorCapacity}. ${editingPackage.bestFor}`;
+    return `${editingPackage.name} includes ${editingPackage.editingHoursPerMonth} monthly editing hours with two dedicated video editors, at ${editingPackage.editingHoursPerWorkday} hours per workday, plus one custom thumbnail per edited video.`;
   }
 
-  return `${editingPackage.videoFormat}, ${editingPackage.finishedLength.toLowerCase()} finished from ${editingPackage.rawFootageLimit.toLowerCase()} of footage, with ${editingPackage.revisionRounds} ${editingPackage.revisionRounds === 1 ? "revision" : "revisions"}. See the current scope and price.`;
+  return `${editingPackage.videoFormat}, ${editingPackage.finishedLength.toLowerCase()} finished from ${editingPackage.rawFootageLimit.toLowerCase()} of footage, with ${editingPackage.revisionRounds} ${editingPackage.revisionRounds === 1 ? "revision" : "revisions"} and one custom thumbnail included. See the current scope and price.`;
 }
 
 export const meta: MetaFunction<typeof loader> = (args) => createRouteMeta(
@@ -65,9 +61,12 @@ export default function PackagePage() {
   const addOns = selectedPackageAddOns(searchParams.getAll("addon"), editingPackage.packageType, editingPackage.slug).map(item => item.id);
   const isMonthly = editingPackage.packageType === "monthly";
   const isShortForm = editingPackage.slug === SHORT_FORM_PACKAGE_SLUG;
+  const editorCount = editingPackage.features.includes(REQUIRED_PACKAGE_STAFFING[1]) ? 2 : 1;
   const facts = isMonthly ? [
     [Clock3, "Editing hours per month", `${editingPackage.editingHoursPerMonth} hours`],
     [Clock3, "Editing hours per workday", `${editingPackage.editingHoursPerWorkday} ${editingPackage.editingHoursPerWorkday === 1 ? "hour" : "hours"}`],
+    [Scissors, "Minimum revision rounds per edit", `At least ${editingPackage.revisionRounds}, within reserved hours`],
+    [UsersRound, "Included editors", `${editorCount} dedicated ${editorCount === 1 ? "editor" : "editors"}`],
     [CalendarDays, "Monthly planning basis", `${editingPackage.workingDaysPerMonth} working days`],
     [History, "Unused time", "Does not roll over"],
   ] as const : [
@@ -75,6 +74,7 @@ export default function PackagePage() {
     [Clock3, "Finished length", editingPackage.finishedLength],
     [FileVideo, "Raw footage limit", editingPackage.rawFootageLimit],
     [Scissors, "Included revisions", `${editingPackage.revisionRounds} ${editingPackage.revisionRounds === 1 ? "round" : "rounds"}`],
+    [UsersRound, "Included editors", `${editorCount} dedicated ${editorCount === 1 ? "editor" : "editors"}`],
   ] as const;
   const shortFormStructuredData = isShortForm ? JSON.stringify({
     "@context": "https://schema.org",
@@ -83,7 +83,7 @@ export default function PackagePage() {
         "@type": "Service",
         name: "Short-form video editing",
         serviceType: "Short-form video editing",
-        description: "One captioned vertical video edit up to 60 seconds for TikTok, Instagram Reels, or YouTube Shorts.",
+        description: "One captioned vertical video edit up to 60 seconds, with one custom thumbnail, for TikTok, Instagram Reels, or YouTube Shorts.",
         provider: { "@type": "Organization", name: "EdiCut", url: "https://edicut.com" },
         offers: {
           "@type": "Offer", url: "https://edicut.com/pricing/short-form-video-editing",
@@ -169,7 +169,7 @@ export default function PackagePage() {
               {([
                 ["01", "Share the moment", "Send the footage link, timestamps or exact clip, intended platform, and any caption or brand references."],
                 ["02", "We shape the short", "Your editor makes a vertical 9:16 cut with burned-in captions and basic color and audio finishing."],
-                ["03", "Review and approve", "A first-cut target of 48 hours applies after the brief and files are ready. One revision round is included."],
+                ["03", "Review and approve", `A first-cut target of 48 hours applies after the brief and files are ready. At least ${editingPackage.revisionRounds} revision rounds are included.`],
               ] as const).map(([number, title, description]) => <li key={number} className="neo-inset rounded-2xl p-5">
                 <p className="text-xs font-black tracking-widest text-primary">{number} / SHORT-FORM EDIT</p>
                 <h3 className="mt-2 text-lg font-black neo-ink">{title}</h3>
@@ -179,12 +179,12 @@ export default function PackagePage() {
           </div>
         </section>
         <FaqSection
-          title={<>Short-form video editing, clearly scoped.</>}
+          title={<>What’s included in short-form video editing?</>}
           description={`Know what one ${formatPackagePrice(editingPackage.basePrice)} short includes before you place an order.`}
           items={[
             { question: "How many short videos are included?", answer: "One edited vertical video up to 60 seconds. Place another order for another short; alternate aspect ratios, multiple versions, or several clips from one source need a separate scope." },
             { question: "What footage should I send?", answer: "Share the video files or a secure folder link, up to 15 minutes of source footage, and the exact clip or timestamps to edit. Selecting highlights from an extended recording is not included in this package." },
-            { question: `What does the ${formatPackagePrice(editingPackage.basePrice)} edit include?`, answer: "One 9:16 vertical export, burned-in captions, basic color and audio finishing, one revision round, and a first-cut target of 48 hours once your brief and files are ready." },
+            { question: `What does the ${formatPackagePrice(editingPackage.basePrice)} edit include?`, answer: `One 9:16 vertical export, burned-in captions, basic color and audio finishing, at least ${editingPackage.revisionRounds} revision rounds, and a first-cut target of 48 hours once your brief and files are ready.` },
             { question: "Will the edit go viral or guarantee more views?", answer: "No. Editing can make a clip easier to follow and publish, but reach depends on the content, audience, publishing choices, and platform distribution." },
           ]}
         />

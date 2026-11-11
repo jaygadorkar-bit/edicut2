@@ -1,7 +1,9 @@
 import { sql, type SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type { DatabaseClient } from "@edicut/db/client";
 import type { DashboardFeature } from "./role-feature-access";
 import { adminPath } from "./admin-paths";
+import { VIDEO_EDITOR_PARTNER_APPLICATION_TYPE } from "./contact-message-filters.server";
 import { isWorkspaceRecordId } from "./workspace";
 import {
   notificationKinds,
@@ -23,6 +25,24 @@ export type AdminWorkspaceEventReadRequest = { eventIds: string[]; read: boolean
 export type WorkspaceEventReadReceipt = { eventId: string; readAt: string };
 export type WorkspaceEventReadResult = { eventIds: string[]; readAt: string | null; readBy: string | null };
 export type AdminWorkspaceEventReadResult = WorkspaceEventReadResult;
+const notificationSqlDialect = new PgDialect();
+
+/**
+ * Drizzle's raw `db.execute()` uses unnamed Postgres.js queries (`prepare: false`).
+ * Cloudflare Hyperdrive can hang on those queries, so compile with Drizzle's
+ * dialect and opt in to prepared statements on the underlying Postgres client.
+ */
+async function executeNotificationQuery(db: DatabaseClient, statement: SQL) {
+  const client = db.$client;
+  if (client && typeof client.unsafe === "function") {
+    const query = notificationSqlDialect.sqlToQuery(statement);
+    return client.unsafe(query.sql, query.params as any[], { prepare: true });
+  }
+
+  // Lightweight test doubles may expose only Drizzle's public execute method.
+  return db.execute(statement);
+}
+
 type EventRow = {
   entityId: string;
   projectId?: string;
@@ -76,6 +96,7 @@ export function presentWorkspaceEvent(
   if (row.kind === "order" || row.kind === "payment")
     to = viewer.admin ? `${root}/orders?status=${row.status === "paid" ? "paid" : "unpaid"}&event=${row.entityId}` : `${root}/subscriptions?event=${row.entityId}`;
   if (row.kind === "enquiry") to = `/dashboard/messages?event=${row.entityId}`;
+  if (row.kind === "recruiting") to = adminPath("/recruiting-forms");
   if (row.kind === "quote") to = `${root}/quotes?event=${row.entityId}`;
   if (
     row.kind === "project" &&
@@ -94,6 +115,7 @@ export function presentWorkspaceEvent(
         order: "View order",
         payment: "View payment",
         enquiry: "Open enquiry",
+        recruiting: "Review application",
         quote: "Open quote",
         review: "Open feedback",
       }[row.kind];
@@ -132,12 +154,12 @@ export async function setAdminWorkspaceEventsRead(
 ): Promise<AdminWorkspaceEventReadResult> {
   const uniqueIds = [...new Set(eventIds)];
   if (!uniqueIds.length) return { eventIds: [], readAt: null, readBy: null };
-  await db.execute(sql`DELETE FROM admin_workspace_event_reads WHERE updated_at < ${new Date(now.getTime() - NOTIFICATION_HISTORY_DAYS * 86_400_000).toISOString()}::timestamptz`);
+  await executeNotificationQuery(db, sql`DELETE FROM admin_workspace_event_reads WHERE updated_at < ${new Date(now.getTime() - NOTIFICATION_HISTORY_DAYS * 86_400_000).toISOString()}::timestamptz`);
   // Persist unread tombstones too, so an older, slower read request cannot
   // resurrect a receipt after a newer mark-unread action.
   const timestamp = now.toISOString();
   const values = sql.join(uniqueIds.map((eventId) => sql`(${eventId},${read},${read ? timestamp : null}::timestamptz,${timestamp}::timestamptz,${adminId}::uuid)`), sql`, `);
-  await db.execute(sql`INSERT INTO admin_workspace_event_reads (event_id, is_read, read_at, updated_at, read_by) VALUES ${values}
+  await executeNotificationQuery(db, sql`INSERT INTO admin_workspace_event_reads (event_id, is_read, read_at, updated_at, read_by) VALUES ${values}
     ON CONFLICT (event_id, read_by) DO UPDATE SET
       is_read=EXCLUDED.is_read,
       read_at=EXCLUDED.read_at,
@@ -156,10 +178,10 @@ export async function setUserWorkspaceEventsRead(
 ): Promise<WorkspaceEventReadResult> {
   const uniqueIds = [...new Set(eventIds)];
   if (!uniqueIds.length) return { eventIds: [], readAt: null, readBy: null };
-  await db.execute(sql`DELETE FROM user_workspace_event_reads WHERE updated_at < ${new Date(now.getTime() - NOTIFICATION_HISTORY_DAYS * 86_400_000).toISOString()}::timestamptz`);
+  await executeNotificationQuery(db, sql`DELETE FROM user_workspace_event_reads WHERE updated_at < ${new Date(now.getTime() - NOTIFICATION_HISTORY_DAYS * 86_400_000).toISOString()}::timestamptz`);
   const timestamp = now.toISOString();
   const values = sql.join(uniqueIds.map((eventId) => sql`(${eventId},${read},${read ? timestamp : null}::timestamptz,${timestamp}::timestamptz,${userId}::uuid)`), sql`, `);
-  await db.execute(sql`INSERT INTO user_workspace_event_reads (event_id, is_read, read_at, updated_at, user_id) VALUES ${values}
+  await executeNotificationQuery(db, sql`INSERT INTO user_workspace_event_reads (event_id, is_read, read_at, updated_at, user_id) VALUES ${values}
     ON CONFLICT (event_id, user_id) DO UPDATE SET
       is_read=EXCLUDED.is_read,
       read_at=EXCLUDED.read_at,
@@ -188,7 +210,7 @@ export async function importAdminWorkspaceEventReads(
   const safeReceipts = validLegacyReceipts(receipts, now);
   if (!safeReceipts.length) return [];
   const values = sql.join(safeReceipts.map((receipt) => sql`(${receipt.eventId},true,${receipt.readAt}::timestamptz,${receipt.readAt}::timestamptz,${adminId}::uuid)`), sql`, `);
-  const result = await db.execute(sql`INSERT INTO admin_workspace_event_reads (event_id, is_read, read_at, updated_at, read_by) VALUES ${values}
+  const result = await executeNotificationQuery(db, sql`INSERT INTO admin_workspace_event_reads (event_id, is_read, read_at, updated_at, read_by) VALUES ${values}
     ON CONFLICT (event_id, read_by) DO NOTHING
     RETURNING event_id AS "eventId"`);
   return resultRows(result).map((row) => String(row.eventId));
@@ -204,7 +226,7 @@ export async function importUserWorkspaceEventReads(
   const safeReceipts = validLegacyReceipts(receipts, now);
   if (!safeReceipts.length) return [];
   const values = sql.join(safeReceipts.map((receipt) => sql`(${receipt.eventId},true,${receipt.readAt}::timestamptz,${receipt.readAt}::timestamptz,${userId}::uuid)`), sql`, `);
-  const result = await db.execute(sql`INSERT INTO user_workspace_event_reads (event_id, is_read, read_at, updated_at, user_id) VALUES ${values}
+  const result = await executeNotificationQuery(db, sql`INSERT INTO user_workspace_event_reads (event_id, is_read, read_at, updated_at, user_id) VALUES ${values}
     ON CONFLICT (event_id, user_id) DO NOTHING
     RETURNING event_id AS "eventId"`);
   return resultRows(result).map((row) => String(row.eventId));
@@ -215,7 +237,7 @@ async function attachAdminEventReadState(db: DatabaseClient, adminId: string, ev
   const ids = sql.join(events.map((event) => sql`${event.id}`), sql`, `);
   let result: unknown;
   try {
-    result = await db.execute(sql`SELECT event_id AS "eventId", read_at AS "readAt", read_by AS "readBy" FROM admin_workspace_event_reads WHERE is_read AND read_by=${adminId}::uuid AND event_id IN (${ids})`);
+    result = await executeNotificationQuery(db, sql`SELECT event_id AS "eventId", read_at AS "readAt", read_by AS "readBy" FROM admin_workspace_event_reads WHERE is_read AND read_by=${adminId}::uuid AND event_id IN (${ids})`);
   } catch (error) {
     if (!missingRelation(error)) throw error;
     // Event reads were added after the original notification feed. A missing
@@ -236,7 +258,7 @@ async function attachUserEventReadState(db: DatabaseClient, userId: string, even
   const ids = sql.join(events.map((event) => sql`${event.id}`), sql`, `);
   let result: unknown;
   try {
-    result = await db.execute(sql`SELECT event_id AS "eventId", read_at AS "readAt" FROM user_workspace_event_reads WHERE is_read AND user_id=${userId}::uuid AND event_id IN (${ids})`);
+    result = await executeNotificationQuery(db, sql`SELECT event_id AS "eventId", read_at AS "readAt" FROM user_workspace_event_reads WHERE is_read AND user_id=${userId}::uuid AND event_id IN (${ids})`);
   } catch (error) {
     if (!missingRelation(error)) throw error;
     return false;
@@ -309,7 +331,13 @@ export async function getWorkspaceNotificationFeed(
   if (viewer.admin || viewer.features.includes("support")) {
     sourceKinds.push("enquiry");
     sources.push(
-      sql`SELECT id AS "entityId",'enquiry' AS kind,'New enquiry' AS title,name || CASE WHEN project_type IS NULL THEN '' ELSE ' — ' || project_type END AS detail,created_at AS "occurredAt" FROM contact_messages WHERE ${time(sql`created_at`)} ORDER BY created_at DESC,id DESC LIMIT 100`,
+      sql`SELECT id AS "entityId",'enquiry' AS kind,'New enquiry' AS title,name || CASE WHEN project_type IS NULL THEN '' ELSE ' — ' || project_type END AS detail,created_at AS "occurredAt" FROM contact_messages WHERE project_type IS DISTINCT FROM ${VIDEO_EDITOR_PARTNER_APPLICATION_TYPE} AND ${time(sql`created_at`)} ORDER BY created_at DESC,id DESC LIMIT 100`,
+    );
+  }
+  if (viewer.admin) {
+    sourceKinds.push("recruiting");
+    sources.push(
+      sql`SELECT id AS "entityId",'recruiting' AS kind,'New partner application' AS title,name || ' — ' || email AS detail,created_at AS "occurredAt" FROM contact_messages WHERE project_type=${VIDEO_EDITOR_PARTNER_APPLICATION_TYPE} AND ${time(sql`created_at`)} ORDER BY created_at DESC,id DESC LIMIT 100`,
     );
   }
   // Only administrators can open the quote administration area.
@@ -340,7 +368,7 @@ export async function getWorkspaceNotificationFeed(
     );
   }
   const results = await Promise.allSettled(
-    sources.map((query) => db.execute(query)),
+    sources.map((query) => executeNotificationQuery(db, query)),
   );
   let partial = false;
   const unavailableKinds = new Set<NotificationKind>();

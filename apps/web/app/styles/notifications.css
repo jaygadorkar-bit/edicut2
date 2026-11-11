@@ -384,6 +384,10 @@
   background: #e0ebf7;
   color: #3c6a9b;
 }
+.notification-event__icon--recruiting {
+  background: #fde7eb;
+  color: #b4233f;
+}
 .notification-event__icon--quote {
   background: #f4e9d9;
   color: #886131;

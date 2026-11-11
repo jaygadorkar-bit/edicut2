@@ -64,6 +64,10 @@ export function getSupabaseClient(
   });
 }
 
+function isRejectedSessionCredential(error: { status?: number; code?: string }) {
+  return error.code !== "invalid_api_key" && [400, 401, 403].includes(error.status ?? 0);
+}
+
 let adminClient: SupabaseClient<Database> | undefined;
 let adminClientKey: string | undefined;
 
@@ -98,7 +102,13 @@ export async function getSupabaseUserByAccessToken(
   if (!client) return null;
 
   const { data, error } = await client.auth.getUser(accessToken);
-  return error || !data.user ? null : data.user;
+  if (error) {
+    // Expired or revoked credentials should trigger refresh. Provider outages,
+    // rate limits, and unexpected errors must not be mistaken for logout.
+    if (isRejectedSessionCredential(error)) return null;
+    throw new Error("Supabase Auth is temporarily unavailable.");
+  }
+  return data.user ?? null;
 }
 
 export async function refreshSupabaseSession(
@@ -109,7 +119,11 @@ export async function refreshSupabaseSession(
   if (!client) return null;
 
   const { data, error } = await client.auth.refreshSession({ refresh_token: refreshToken });
-  if (error || !data.session || !data.user) return null;
+  if (error) {
+    if (isRejectedSessionCredential(error)) return null;
+    throw new Error("Supabase Auth is temporarily unavailable.");
+  }
+  if (!data.session || !data.user) return null;
 
   return { session: data.session, user: data.user };
 }

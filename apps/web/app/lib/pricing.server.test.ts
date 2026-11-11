@@ -4,12 +4,12 @@ const mocks = vi.hoisted(() => ({ getSiteSetting: vi.fn() }));
 vi.mock("./site-settings.server", () => ({ getSiteSetting: mocks.getSiteSetting, saveSiteSetting: vi.fn() }));
 
 import { configuredEditingPackage, configuredPublicEditingPackages, defaultPricingPackages, getPricingPackages, publicPricingPackages } from "./pricing.server";
-import { REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING } from "./subscriptions";
+import { INCLUDED_PACKAGE_THUMBNAIL, REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING } from "./subscriptions";
 
 beforeEach(() => vi.clearAllMocks());
 
 describe("configured public editing catalog", () => {
-  it("removes included thumbnails from saved settings for all packages while preserving motion and custom prices", async () => {
+  it("includes one thumbnail with every package while preserving motion and custom prices", async () => {
     mocks.getSiteSetting.mockResolvedValue(JSON.stringify(defaultPricingPackages.map(item => ({
       ...item, price: "$399", features: ["One custom thumbnail and light template-based branded motion", "Custom sound design"], deliverables: ["1 custom thumbnail"],
     }))));
@@ -18,7 +18,10 @@ describe("configured public editing catalog", () => {
       expect(pack.basePrice).toBe(399);
       expect(pack.features).toContain("Light template-based branded motion");
       expect(pack.features).toContain("Custom sound design");
-      expect([...pack.features, ...pack.deliverables].join(" ")).not.toMatch(/thumbnail/i);
+      expect(pack.features).toContain(INCLUDED_PACKAGE_THUMBNAIL);
+      expect(pack.deliverables).toContain(INCLUDED_PACKAGE_THUMBNAIL);
+      expect(pack.features.filter(item => /thumbnail/i.test(item))).toHaveLength(1);
+      expect(pack.deliverables.filter(item => /thumbnail/i.test(item))).toHaveLength(1);
     }
   });
   it("publishes exactly three single-video and three monthly packages by default", () => {
@@ -29,6 +32,9 @@ describe("configured public editing catalog", () => {
     expect(configuredPublicEditingPackages(defaultPricingPackages).filter((item) => item.packageType === "monthly").map((item) => [item.editingHoursPerMonth, item.editingHoursPerWorkday])).toEqual([
       [88, 4], [110, 5], [110, 5],
     ]);
+    expect(configuredPublicEditingPackages(defaultPricingPackages).every(item =>
+      item.features.includes(INCLUDED_PACKAGE_THUMBNAIL) && item.deliverables.includes(INCLUDED_PACKAGE_THUMBNAIL),
+    )).toBe(true);
   });
 
   it("fails closed on malformed package settings when an admin is about to save them", async () => {
@@ -239,6 +245,8 @@ describe("configured public editing catalog", () => {
     const offer = configuredEditingPackage("creator-pro", packages);
     const studio = publicPackages.find((item) => item.slug === "creator-pro");
 
+    expect(publicPackages.every((item) => item.features.includes("Two dedicated video editors"))).toBe(true);
+    expect(publicPackages.every((item) => item.deliverables.includes("Two dedicated video editors"))).toBe(true);
     expect(publicPackages[0]?.features).toEqual(expect.arrayContaining([...REQUIRED_PACKAGE_STAFFING]));
     expect(publicPackages[0]?.deliverables).toEqual(expect.arrayContaining([...REQUIRED_PACKAGE_STAFFING]));
     expect(publicPackages[0]?.features).not.toContain("66 reserved editing hours per month");
@@ -248,6 +256,27 @@ describe("configured public editing catalog", () => {
     expect(offer?.features).not.toContain("Dedicated video editor");
     expect(offer?.features).toEqual(expect.arrayContaining([...STUDIO_PACKAGE_STAFFING]));
     expect(offer?.deliverables).toEqual(expect.arrayContaining([...STUDIO_PACKAGE_STAFFING]));
+  });
+
+  it("replaces stale saved editor and revision counts with the current package minimums", async () => {
+    const saved = defaultPricingPackages.map((item) => ({
+      ...item,
+      features: [...item.features, "Dedicated video editor", "One revision round per edit"],
+      deliverables: [...item.deliverables, "Dedicated video editor", "1 revision round per edit"],
+      revisions: "1 revision round",
+    }));
+    mocks.getSiteSetting.mockResolvedValue(JSON.stringify(saved));
+
+    const packages = publicPricingPackages(await getPricingPackages(null));
+
+    for (const pack of packages) {
+      expect(pack.features).toContain("Two dedicated video editors");
+      expect(pack.deliverables).toContain("Two dedicated video editors");
+      expect(pack.features.join(" ")).not.toMatch(/\b(?:one|1) revision round\b/i);
+      expect(pack.deliverables.join(" ")).not.toMatch(/\b(?:one|1) revision round\b/i);
+      expect(pack.features.some((feature) => /at least 2 revision rounds|three revision rounds/i.test(feature))).toBe(true);
+      expect(pack.revisions).toMatch(/(?:at least )?[23] revision rounds?/i);
+    }
   });
 
   it("refreshes outdated default capacity copy without replacing an admin-set price", async () => {

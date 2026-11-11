@@ -70,7 +70,7 @@
 .package-scope-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
 .package-scope-heading h2 { display: flex; align-items: center; gap: .55rem; font-size: .9375rem; font-weight: 650; }
 .package-scope-heading > p { display: flex; align-items: center; gap: .4rem; color: var(--package-copy); font-size: .8125rem; }
-.package-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+.package-facts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1rem; margin-top: 1.25rem; }
 .package-facts > div { min-width: 0; border-radius: 1rem; padding: 1rem; }
 .package-facts dt { display: flex; align-items: center; gap: .4rem; color: var(--package-copy); font-size: .75rem; font-weight: 500; }
 .package-facts dt > svg { flex-shrink: 0; }

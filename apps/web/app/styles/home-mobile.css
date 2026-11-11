@@ -89,23 +89,9 @@
     gap: 0.75rem;
   }
 
-  .neo-homepage .neo-hero-proof {
-    color: var(--neo-muted);
-    font-size: 0.75rem;
-    line-height: 1.3;
-  }
-
-  .neo-homepage .neo-hero-proof strong {
-    color: var(--neo-ink);
-    font-weight: 800;
-  }
-
-  .neo-homepage .neo-hero-proof__separator {
-    color: #8996a2;
-  }
-
-  .neo-homepage .neo-hero-metrics {
-    display: none;
+  .neo-homepage .home-hero-value-strip {
+    max-width: 26rem;
+    margin: 1rem auto 0;
   }
 
   .neo-homepage .neo-audience-grid {

@@ -440,18 +440,22 @@ export function SiteFooter() {
 
             return (
               <section key={section.label} className="neo-footer__group">
-                <button
-                  type="button"
-                  onClick={() => setOpenSection(isOpen ? null : section.label)}
-                  aria-expanded={isOpen}
-                  className="flex w-full items-center justify-between text-left text-sm font-bold neo-footer-ink md:pointer-events-none md:border-b md:border-[var(--neo-line)] md:pb-3"
-                >
-                  {section.label}
-                  <span className="footer-mobile-chevron material-symbols-outlined text-[20px] transition-transform duration-200" style={{ transform: isOpen ? "rotate(180deg)" : undefined }}>
-                    expand_more
-                  </span>
-                </button>
-                <nav className={`grid gap-2 overflow-hidden text-sm transition-[max-height,opacity,padding] duration-200 ${isOpen ? "max-h-48 pb-4 pt-3 opacity-100" : "max-h-0 opacity-0"} md:mt-3 md:max-h-none md:overflow-visible md:pb-0 md:opacity-100`} aria-label={section.label}>
+                <div className="neo-footer__group-heading flex w-full items-center justify-between border-b border-[var(--neo-line)] pb-3">
+                  <h2 className="text-sm font-bold neo-footer-ink">{section.label}</h2>
+                  <button
+                    type="button"
+                    onClick={() => setOpenSection(isOpen ? null : section.label)}
+                    aria-expanded={isOpen}
+                    aria-controls={`footer-links-${section.label.toLowerCase()}`}
+                    aria-label={`${isOpen ? "Hide" : "Show"} ${section.label} links`}
+                    className="footer-mobile-toggle"
+                  >
+                    <span className="footer-mobile-chevron material-symbols-outlined text-[20px] transition-transform duration-200" aria-hidden="true" style={{ transform: isOpen ? "rotate(180deg)" : undefined }}>
+                      expand_more
+                    </span>
+                  </button>
+                </div>
+                <nav id={`footer-links-${section.label.toLowerCase()}`} className={`grid gap-2 overflow-hidden text-sm transition-[max-height,opacity,padding] duration-200 ${isOpen ? "max-h-48 pb-4 pt-3 opacity-100 visible" : "max-h-0 opacity-0 invisible"} md:mt-3 md:max-h-none md:overflow-visible md:pb-0 md:opacity-100 md:visible`} aria-label={section.label}>
                   {section.links.map((item) => (
                     item.to.startsWith("/#") ? (
                       <a key={item.label} href={item.to} className="neo-footer-link transition-colors">{item.label}</a>
@@ -765,7 +769,7 @@ export function WorkflowSection() {
         <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
           <div>
             <p className="yt-tag neo-section-label"><Workflow size={16} aria-hidden="true" />How it works</p>
-            <h2 className="mt-3 max-w-xl yt-title neo-ink">A clear path from raw footage to a finished upload.</h2>
+            <h2 className="mt-3 max-w-xl yt-title neo-ink">How does video editing work?</h2>
             <p className="mt-5 max-w-xl yt-subtitle leading-8 neo-muted">
               Choose the right level of support, send us the project, and keep control through a focused review process.
             </p>
@@ -973,7 +977,7 @@ export function PortfolioSection({ full = false, sections, className = "" }: { f
         {full ? (
           <div className="portfolio-gallery-intro">
             <div>
-              <h2>Find your kind of edit.</h2>
+              <h2>What editing style fits your video?</h2>
               <p>Pick a format, then press play to explore the details.</p>
             </div>
             <span className="portfolio-gallery-note"><Film size={17} aria-hidden="true" /> Watch the full videos</span>
@@ -1463,6 +1467,9 @@ function PortfolioCard({
   responsiveThumbnail?: boolean;
 }) {
   const isCopy = useContext(PortfolioCopyContext);
+  const thumbnailAlt = item.title && item.creatorName
+    ? `Video thumbnail for ${item.title} by ${item.creatorName}`
+    : "Video editing reference thumbnail";
   const sizeClass = {
     hero: "aspect-[4/3] sm:aspect-video lg:aspect-auto lg:h-[514px]",
     slider: "h-[240px] w-full sm:h-[320px] lg:h-[340px]",
@@ -1483,7 +1490,7 @@ function PortfolioCard({
           <source media="(max-width: 767px)" srcSet={`https://i.ytimg.com/vi/${item.youtubeId}/hqdefault.jpg`} />
           <img
             src={item.thumbnailUrl}
-            alt={showCaption ? `${item.title} ${item.creatorName} video` : ""}
+            alt={thumbnailAlt}
             width={item.orientation === "vertical" ? 720 : 1280}
             height={item.orientation === "vertical" ? 1280 : 720}
             loading="lazy"
@@ -1500,7 +1507,7 @@ function PortfolioCard({
       ) : (
         <img
           src={item.thumbnailUrl}
-          alt={showCaption ? `${item.title} ${item.creatorName} video` : ""}
+          alt={thumbnailAlt}
           width={item.orientation === "vertical" ? 720 : 1280}
           height={item.orientation === "vertical" ? 1280 : 720}
           loading="lazy"
@@ -1555,8 +1562,8 @@ export function PricingSection({ comparison = false, plans }: { comparison?: boo
         <div className="neo-pricing-intro text-center">
           <p className="yt-tag neo-section-label"><CalendarDays size={16} aria-hidden="true" />Choose a monthly package</p>
           <h2 className="mx-auto mt-3 max-w-3xl yt-title neo-ink">
-            <span className="hidden sm:inline">Monthly editing time for a steadier publishing rhythm.</span>
-            <span className="sm:hidden">Monthly editing hours.</span>
+            <span className="hidden sm:inline">How much does monthly video editing cost?</span>
+            <span className="sm:hidden">Monthly video editing packages.</span>
           </h2>
         </div>
 
@@ -1649,7 +1656,7 @@ export function ComparisonTable({ plans }: { plans?: PricingPlanView[] } = {}) {
     <section aria-labelledby="package-comparison-title" className="neo-surface mt-8 rounded-[2rem] p-4 sm:p-6 lg:p-8">
       <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
         <aside className="min-w-0">
-          <h2 id="package-comparison-title" className="max-w-[230px] yt-title neo-ink">Compare packages</h2>
+          <h2 id="package-comparison-title" className="max-w-[230px] yt-title neo-ink">Compare monthly video editing packages</h2>
           <p className="mt-4 max-w-[280px] yt-small font-medium leading-6 text-slate-700">
             Compare reserved editing time, monthly planning basis, and finishing options across all three plans.
           </p>
@@ -1795,7 +1802,7 @@ export function ContactSection({ compact = false, page = false, status, action =
           <p className="yt-tag neo-section-label"><MessageCircle size={16} aria-hidden="true" />Contact us</p>
           <p className="neo-contact-invitation hidden">Have a question? Send it below—we’re happy to help.</p>
           <h2 className="neo-contact-title mt-3 max-w-2xl yt-title neo-ink">
-            Tell us what you are editing next.
+            Need a video editor for your next upload?
           </h2>
           <p className="neo-contact-description mt-5 max-w-2xl yt-subtitle leading-8 neo-muted">
             We will review your channel and match you with the most efficient editing lane for your upload rhythm.
@@ -1806,7 +1813,7 @@ export function ContactSection({ compact = false, page = false, status, action =
         </div> : null}
         <form method="post" action={action} data-analytics-form="contact_inquiry" className="neo-card contact-form grid gap-4 rounded-[2rem] p-5 sm:p-7" onSubmit={handleSubmit} aria-busy={submitting || navigation.state !== "idle"}>
           <input type="hidden" name="g-recaptcha-response" value="" />
-          {page ? <div className="contact-form-heading"><h2>What are you working on?</h2><p>Tell us a little about your project. We&apos;ll take it from here.</p></div> : null}
+          {page ? <div className="contact-form-heading"><h2>What video editing help do you need?</h2><p>Tell us a little about your project. We&apos;ll take it from here.</p></div> : null}
           <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
             <Input label={page ? "Your name" : "Name"} name="name" autoComplete="name" required compact={compact} minLength={2} maxLength={120} placeholder={page ? "Alex Morgan" : undefined} />
             <Input label={page ? "Email address" : "Email"} name="email" type="email" autoComplete="email" required compact={compact} maxLength={254} placeholder={page ? "you@example.com" : undefined} />

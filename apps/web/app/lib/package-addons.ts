@@ -2,7 +2,6 @@ import type { CustomQuoteInput } from "@edicut/shared/contracts/custom-quotes";
 import type { EditingPackage } from "./subscriptions";
 
 export const PACKAGE_ADD_ONS = [
-  { id: "thumbnail", label: "Custom thumbnail", description: "One thumbnail designed for your video.", amountCents: 2000 },
   { id: "short-form", label: "Short-form video", description: "One vertical cut from your supplied footage.", amountCents: 2000 },
 ] as const;
 
@@ -11,7 +10,6 @@ export type PackageAddOn = { id: PackageAddOnId; label: string; amountCents: num
 
 export const MONTHLY_PACKAGE_ADD_ONS = [
   { id: "extra-editing-hours", label: "Extra editing hours", description: "More reserved editing time for a busier month.", service: "cuts" },
-  { id: "thumbnail-bundle", label: "Monthly thumbnail bundle", description: "A set of thumbnails for your monthly publishing schedule.", service: "thumbnails" },
 ] as const;
 export type MonthlyPackageAddOnId = typeof MONTHLY_PACKAGE_ADD_ONS[number]["id"];
 export type MonthlyAddOnQuotePrefill = Pick<CustomQuoteInput, "title" | "brief" | "requestType" | "cadence" | "services">;
@@ -48,7 +46,7 @@ export function parsePackageAddOns(values: readonly unknown[], packageType: Edit
   return selectedPackageAddOns(values as string[], packageType, packageSlug);
 }
 
-export function packageAddOnTotal(addOns: readonly PackageAddOn[]) {
+export function packageAddOnTotal(addOns: readonly { amountCents: number }[]) {
   return addOns.reduce((total, item) => total + item.amountCents, 0);
 }
 
@@ -59,10 +57,12 @@ export function packageAddOnQuery(ids: readonly string[], packageType: EditingPa
 }
 
 // Saved snapshots retain their original prices even if the catalog changes later.
-export function savedPackageAddOns(value: unknown): PackageAddOn[] {
+export type SavedPackageAddOn = PackageAddOn | { id: "thumbnail"; label: string; amountCents: number };
+
+export function savedPackageAddOns(value: unknown): SavedPackageAddOn[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is PackageAddOn => item && typeof item === "object"
-    && PACKAGE_ADD_ONS.some(addOn => addOn.id === item.id)
+  return value.filter((item): item is SavedPackageAddOn => item && typeof item === "object"
+    && (item.id === "thumbnail" || PACKAGE_ADD_ONS.some(addOn => addOn.id === item.id))
     && typeof item.label === "string" && item.label.length <= 120
     && Number.isSafeInteger(item.amountCents) && item.amountCents >= 0);
 }

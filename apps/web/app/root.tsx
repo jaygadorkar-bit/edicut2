@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   Links,
+  Link,
   Meta,
   Outlet,
   Scripts,
@@ -15,6 +16,7 @@ import {
   useFetchers,
   useRouteLoaderData,
   useRouteError,
+  isRouteErrorResponse,
 } from "react-router";
 import { getAdminNavigationCounts } from "./lib/admin-navigation-counts.server";
 import { getAdminProfileImage } from "./lib/admin-profile.server";
@@ -31,6 +33,7 @@ import { getAdminToolbarAccess, type AdminToolbarAccess } from "./lib/admin-tool
 import { getRecaptchaSiteKey } from "./lib/recaptcha.server";
 import { getSupabaseClient } from "./integrations/supabase/client.server";
 import { SmoothScroll } from "./components/site/SmoothScroll.js";
+import { GoogleTagManager, GoogleTagManagerBootstrap, GoogleTagManagerScript } from "./components/site/GoogleTagManager";
 import { shouldEnableSiteMotion, shouldTransitionBetweenRoutes, shouldUseWorkspaceLoader } from "./lib/site-motion";
 import { WorkspaceLoadingOverlay } from "./components/WorkspaceLoadingOverlay";
 import { shouldLoadPromoBarSettings, shouldLoadRootSiteSettings, shouldShowAdminToolbar } from "./lib/root-data-requirements";
@@ -298,15 +301,20 @@ export async function loader(args: { request: Request; context?: LoaderContext }
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData: rootData, location, error }) => {
-  return createPageMeta(DEFAULT_SEO_TITLE, DEFAULT_SEO_DESCRIPTION, {
-    appUrl: rootData?.appUrl,
-    pathname: location.pathname,
-    crawlingEnabled: rootData?.searchCrawlingEnabled !== false && error == null,
-    maintenanceModeEnabled: rootData?.maintenanceModeEnabled === true,
-    titleTemplate: rootData?.seoTitleTemplate,
-    defaultDescription: rootData?.seoDefaultDescription,
-    pageOverride: rootData?.seoPageOverride,
-  });
+  const notFound = isRouteErrorResponse(error) && error.status === 404;
+  return createPageMeta(
+    notFound ? "Page not found | EdiCut" : DEFAULT_SEO_TITLE,
+    notFound ? "The EdiCut page you requested could not be found." : DEFAULT_SEO_DESCRIPTION,
+    {
+      appUrl: rootData?.appUrl,
+      pathname: location.pathname,
+      crawlingEnabled: rootData?.searchCrawlingEnabled !== false && error == null,
+      maintenanceModeEnabled: rootData?.maintenanceModeEnabled === true,
+      titleTemplate: rootData?.seoTitleTemplate,
+      defaultDescription: rootData?.seoDefaultDescription,
+      pageOverride: rootData?.seoPageOverride,
+    },
+  );
 };
 
 export const headers: HeadersFunction = ({ loaderHeaders, parentHeaders, errorHeaders }) => {
@@ -318,10 +326,12 @@ export const headers: HeadersFunction = ({ loaderHeaders, parentHeaders, errorHe
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <GoogleTagManagerBootstrap />
+        <GoogleTagManagerScript />
         <Meta />
         <script dangerouslySetInnerHTML={{ __html: COOKIE_CONSENT_BOOTSTRAP }} />
         <Links />
@@ -388,6 +398,7 @@ export default function AppRoot() {
 
   return (
     <>
+      <GoogleTagManager pathname={location.pathname} pendingPathname={navigation.location?.pathname} />
       {useSiteMotion ? <SmoothScroll /> : null}
       <div className={`neo-app-shell${showAdminToolbar ? " neo-app-shell--admin-toolbar" : ""}`}
         aria-busy={workspacePending || undefined}>
@@ -622,6 +633,8 @@ function NavigationRecovery() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
+  if (isRouteErrorResponse(error) && error.status === 404) return <NotFoundPage />;
+
   const rootData = useRouteLoaderData("root") as { debugEnabled?: boolean; requestReference?: string | null } | undefined;
   const presentation = getRouteErrorPresentation(error);
   const debugEnabled = import.meta.env.DEV || rootData?.debugEnabled === true;
@@ -674,6 +687,18 @@ export function ErrorBoundary() {
           </section>
         ) : null}
       </section>
+    </main>
+  );
+}
+
+function NotFoundPage() {
+  return (
+    <main className="neo-home neo-not-found" aria-labelledby="not-found-title">
+      <div className="neo-not-found__content">
+        <p className="neo-not-found__number" aria-hidden="true">404</p>
+        <h1 id="not-found-title" className="neo-not-found__title">Page not found</h1>
+        <Link to="/" className="neo-not-found__button">Go to homepage</Link>
+      </div>
     </main>
   );
 }

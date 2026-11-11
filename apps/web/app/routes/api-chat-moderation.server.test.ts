@@ -1,12 +1,12 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 const mocks = vi.hoisted(() => ({ actor: vi.fn(), store: vi.fn(), limit: vi.fn(), cleanup: vi.fn(), notify: vi.fn() }));
 vi.mock("../lib/chat-access.server", () => ({ requireChatActor: mocks.actor }));
 vi.mock("../lib/chat-store.server", () => ({ createChatStore: mocks.store, chatMigrationPaused: () => false, isMissingChatSchema: () => false }));
 vi.mock("../lib/usage-protection.server", () => ({ consumeUsageLimit: mocks.limit }));
 vi.mock("../lib/chat-moderation.server", () => ({ cleanupRemovedChatAttachment: mocks.cleanup }));
 vi.mock("../lib/chat-realtime.server", () => ({ notifyChatActors: mocks.notify, deferChatNotification: vi.fn() }));
-import { action } from "./api-chat";
+import { action, loader } from "./api-chat";
 const roomId = "20000000-0000-4000-8000-000000000002", messageId = "30000000-0000-4000-8000-000000000003";
 const admin = { id: "admin", key: "admin:admin", role: "admin", admin: true, name: "Admin" };
 const file = { publicId: "fixture", name: "brief.pdf", mime: "application/pdf", bytes: 100 };
@@ -60,4 +60,28 @@ it("reports pending cleanup without restoring a hidden file or prematurely clear
 it("does not delete storage when room or message authorization fails", async () => {
   store.changeChatMessage.mockRejectedValue(new Response("Forbidden", { status: 403 }));
   expect((await run("delete")).status).toBe(403); expect(mocks.cleanup).not.toHaveBeenCalled();
+});
+it("replays same-URL chat auth refresh redirects with 307 and the rotated cookie", async () => {
+  const url = "http://localhost:3002/api/chat?scope=admin&operation=unread";
+  mocks.actor.mockRejectedValueOnce(new Response(null, { status: 302, headers: { Location: url, "Set-Cookie": "_edicut_admin=rotated; Path=/" } }));
+  const response = await loader({ request: new Request(url), context: {}, params: {} } as LoaderFunctionArgs);
+  expect(response.status).toBe(307);
+  expect(response.headers.get("Location")).toBe(url);
+  expect(response.headers.get("Set-Cookie")).toContain("_edicut_admin=rotated");
+});
+it("replays chat mutation refresh redirects with 307 so the mutation method and body survive", async () => {
+  const url = "http://localhost:3002/api/chat?scope=admin";
+  mocks.actor.mockRejectedValueOnce(new Response(null, { status: 302, headers: { Location: url, "Set-Cookie": "_edicut_admin=rotated; Path=/" } }));
+  const response = await run("delete");
+  expect(response.status).toBe(307);
+  expect(response.headers.get("Location")).toBe("http://localhost:3002/api/chat?scope=admin");
+  expect(response.headers.get("Set-Cookie")).toContain("_edicut_admin=rotated");
+});
+it("returns terminal chat sign-in redirects as JSON 401 and clears the cookie", async () => {
+  mocks.actor.mockRejectedValueOnce(new Response(null, { status: 302, headers: { Location: "/signin?mode=signin", "Set-Cookie": "_edicut_admin=; Max-Age=0; Path=/" } }));
+  const response = await loader({ request: new Request("http://localhost:3002/api/chat?scope=admin&operation=unread"), context: {}, params: {} } as LoaderFunctionArgs);
+  expect(response.status).toBe(401);
+  expect(response.headers.get("Content-Type")).toContain("application/json");
+  expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+  expect(await response.json()).toMatchObject({ sessionExpired: true });
 });

@@ -77,6 +77,15 @@ beforeEach(() => {
   mocks.invalidate.mockResolvedValue(true);
 });
 describe("workspace notification endpoint", () => {
+  it("clears a rejected admin cookie after a receipt mutation needs reauthentication", async () => {
+    mocks.admin.mockRejectedValue(new Response(null, { status: 302, headers: { Location: "/signin", "Set-Cookie": "_edicut_admin=; Max-Age=0; Path=/" } }));
+    const input = args("admin");
+    input.request = new Request(input.request.url, { method: "PATCH", headers: { Origin: new URL(input.request.url).origin, "Content-Type": "application/json" }, body: JSON.stringify({ eventIds: [], read: true }) });
+    const response = await action(input);
+    expect(response.status).toBe(401);
+    expect(response.headers.get("Set-Cookie")).toContain("Max-Age=0");
+    expect(mocks.setRead).not.toHaveBeenCalled();
+  });
   it("allows an authenticated admin to update only event IDs in the current feed", async () => {
     mocks.feed.mockResolvedValueOnce({ events: [{ id: "enquiry:known" }] });
     const input = args("admin");

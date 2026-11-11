@@ -17,12 +17,13 @@ import {
 } from "../lib/cloudinary.server";
 import { MARKETING_ASSET_CATEGORIES, type MarketingAssetCategory } from "../lib/marketing-assets";
 import { optimizeCloudinaryUrl } from "../lib/cloudinary";
+import { MAX_MARKETING_UPLOAD_BODY_BYTES } from "../lib/usage-protection.server";
 import "../styles/admin-marketing-content.css";
 
 const MAX_UPLOAD_COUNT = 8;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_BATCH_BYTES = 40 * 1024 * 1024;
-const MAX_FORM_BYTES = MAX_BATCH_BYTES + 1024 * 1024;
+const MAX_FORM_BYTES = MAX_MARKETING_UPLOAD_BODY_BYTES;
 const MARKETING_FOLDER_PREFIX = "edicut/marketing/";
 
 const categoryLabels: Record<MarketingAssetCategory, string> = {

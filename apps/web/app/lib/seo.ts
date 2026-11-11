@@ -2,9 +2,9 @@ import type { MetaDescriptor } from "react-router";
 import { DEFAULT_CONTACT_EMAIL } from "./contact-email";
 import { PUBLIC_PAGE_PATHS } from "./public-pages";
 
-export const DEFAULT_SEO_TITLE = "EdiCut | Video Editing for YouTube Creators";
+export const DEFAULT_SEO_TITLE = "YouTube Video Editor for Creators | EdiCut";
 export const DEFAULT_SEO_DESCRIPTION =
-  "EdiCut edits YouTube videos, Shorts, podcasts, and thumbnails for creators, with a clear workflow for footage, reviews, and delivery.";
+  "Need a YouTube video editor? EdiCut edits long-form videos, Shorts, podcast episodes, and thumbnails with clear scope, revisions, and a managed review process.";
 export const DEFAULT_PUBLIC_SITE_ORIGIN = "https://edicut.com";
 export const SOCIAL_PREVIEW_IMAGE_PATH = "/images/edicut-homepage-share-2026.png";
 

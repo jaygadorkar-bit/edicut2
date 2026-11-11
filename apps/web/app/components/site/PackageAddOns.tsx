@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { ArrowUpRight, Clock3, Image, Plus } from "lucide-react";
+import { ArrowUpRight, Clock3, Plus } from "lucide-react";
 import { MONTHLY_PACKAGE_ADD_ONS, monthlyAddOnQuoteHref, packageAddOnsFor, type PackageAddOnId } from "../../lib/package-addons";
 import { formatPackagePrice, type EditingPackage } from "../../lib/subscriptions";
 
@@ -11,16 +11,16 @@ export function PackageAddOns({ editingPackage, selected, onChange, disabled = f
 }) {
   const isMonthly = editingPackage.packageType === "monthly";
   const options = packageAddOnsFor(editingPackage.packageType, editingPackage.slug);
+  if (!isMonthly && options.length === 0) return null;
   return <fieldset className="package-addons" disabled={disabled}>
       <legend><Plus size={15} aria-hidden="true" />{isMonthly ? "Monthly extras" : "Make it yours"} <span>{isMonthly ? "Quoted separately" : "Optional add-ons"}</span></legend>
       {isMonthly ? <>
         <p className="package-addons-note">We’ll confirm scope, availability, and pricing before work starts.</p>
         {MONTHLY_PACKAGE_ADD_ONS.map(item => {
-          const Icon = item.id === "extra-editing-hours" ? Clock3 : Image;
           return <Link key={item.id} to={monthlyAddOnQuoteHref(editingPackage.slug, item.id)} className="package-addon package-addon--quote"
             aria-label={`Request a quote for ${item.label.toLowerCase()} on the ${editingPackage.name} plan`}
             aria-disabled={disabled || undefined} tabIndex={disabled ? -1 : undefined} onClick={event => { if (disabled) event.preventDefault(); }}>
-            <span className="package-addon-icon neo-icon-badge"><Icon size={18} aria-hidden="true" /></span>
+            <span className="package-addon-icon neo-icon-badge"><Clock3 size={18} aria-hidden="true" /></span>
             <span className="package-addon-copy"><strong>{item.label}</strong><span>{item.description}</span></span>
             <span className="package-addon-price">Get quote <ArrowUpRight size={14} aria-hidden="true" /></span>
           </Link>;

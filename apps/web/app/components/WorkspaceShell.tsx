@@ -250,7 +250,7 @@ export function WorkspaceShell({
             <button
               type="button"
               onClick={() => setIsCollapsed((value) => !value)}
-              className={`neo-workspace__collapse-button ${isCollapsed ? "absolute left-[50px] top-5" : ""}`}
+              className={`neo-workspace__collapse-button ${isCollapsed ? "neo-workspace__collapse-button--collapsed" : ""}`}
               aria-label={isCollapsed ? "Expand navigation" : "Collapse navigation"}
               aria-pressed={isCollapsed}
               title={isCollapsed ? "Expand navigation" : "Collapse navigation"}

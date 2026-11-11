@@ -230,7 +230,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
           for (const [key, value] of Object.entries(headers)) refreshHeaders.set(key, value);
           return new Response(null, { status: error.status, headers: refreshHeaders });
         }
-        return Response.json({ error: "Sign in again to update notifications." }, { status: 401, headers });
+        const responseHeaders = new Headers(headers);
+        const setCookie = error.headers.get("Set-Cookie");
+        if (setCookie) responseHeaders.set("Set-Cookie", setCookie);
+        return Response.json({ error: "Sign in again to update notifications." }, { status: 401, headers: responseHeaders });
       }
       return Response.json({ error: "Notifications are unavailable for this account." }, { status: error.status, headers });
     }

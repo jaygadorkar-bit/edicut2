@@ -11,8 +11,8 @@ import { configuredPublicEditingPackages, getPricingPackages } from "../lib/pric
 import "../styles/portfolio.css";
 
 export const meta: MetaFunction = (args) => createRouteMeta(args,
-  "Video Editing Portfolio and Style References | EdiCut",
-  "Explore video editing styles for YouTube, podcasts, gaming, and more. Browse EdiCut's gallery with credited reference examples and editing package options.",
+  "Video Editing Examples for YouTube & Podcasts | EdiCut",
+  "Explore credited video editing references for YouTube, podcasts, gaming, and commercial formats. Use the examples to plan a style for your next edit.",
 );
 
 export async function loader({ context }: LoaderFunctionArgs) {
@@ -42,7 +42,7 @@ export default function PortfolioPage() {
         <div className="portfolio-container portfolio-hero-layout">
           <div className="portfolio-hero-copy">
             <p className="portfolio-kicker neo-section-label"><Film size={18} aria-hidden="true" /> Video editing examples</p>
-            <h1 id="portfolio-title">Video editing styles.<br />Ideas for your next cut.</h1>
+            <h1 id="portfolio-title">Where can I see video editing examples?</h1>
             <p className="portfolio-description">
               Explore YouTube, podcast, gaming, and commercial video formats.
               Reference examples are credited to their original channels.
@@ -64,13 +64,13 @@ export default function PortfolioPage() {
           <div className="portfolio-packs-panel">
             <div className="portfolio-packs-copy">
               <p className="portfolio-kicker neo-section-label"><Layers3 size={18} aria-hidden="true" /> Your next video starts here</p>
-              <h2 id="portfolio-packs-title">Your footage.<br />Our next edit.</h2>
+              <h2 id="portfolio-packs-title">Need video editing for your next upload?</h2>
               <p className="portfolio-description">
                 Put these ideas to work for your channel. Choose an editing pack
                 that fits your publishing schedule, and let us handle the cut.
               </p>
               <ul className="portfolio-packs-benefits">
-                {["Clear monthly scope", "Thumbnail add-on · $20", "Room for your feedback"].map((benefit) => (
+                {["Clear monthly scope", "One thumbnail included per video", "Room for your feedback"].map((benefit) => (
                   <li key={benefit}><Check size={17} aria-hidden="true" />{benefit}</li>
                 ))}
               </ul>

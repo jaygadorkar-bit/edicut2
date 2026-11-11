@@ -27,13 +27,13 @@ describe("authenticated custom quote route", () => {
   });
   it.each([
     ["extra-editing-hours", "Extra editing hours", "cuts"],
-    ["thumbnail-bundle", "Monthly thumbnail bundle", "thumbnails"],
   ])("prefills the %s quote for a monthly plan without creating a request", async (id, label, service) => {
     const result = await loader(args(undefined, `?package=creator-plus&monthly-addon=${id}`));
     expect(result.prefill).toMatchObject({ title: `Pro: ${label}`, requestType: "recurring", cadence: "monthly", services: [service] });
     expect(mocks.save).not.toHaveBeenCalled();
   });
   it.each([
+    "?package=creator-plus&monthly-addon=thumbnail-bundle",
     "?package=single-creator&monthly-addon=thumbnail-bundle",
     "?package=unknown&monthly-addon=extra-editing-hours",
     "?package=creator-plus&monthly-addon=free-upgrade&price=0&title=forged",

@@ -96,7 +96,7 @@ describe("payment-first checkout", () => {
     const result = await loader(args("?step=payment&subscription=existing-id&addon=thumbnail", undefined, "single-creator", demoContext));
 
     expect(result).toMatchObject({ paymentStep: true, demoMode: true, savedSubscription: null });
-    expect(result.addOns).toEqual([{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }]);
+    expect(result.addOns).toEqual([]);
     expect(mocks.getOwnedSubscription).not.toHaveBeenCalled();
     expect(mocks.getLatestCustomerContact).not.toHaveBeenCalled();
   });
@@ -160,7 +160,12 @@ describe("payment-first checkout", () => {
 
   it.each(["creator", "creator-plus", "creator-pro"])("rejects per-video add-ons for monthly package %s before pricing or saving", async slug => {
     for (const addon of ["thumbnail", "short-form"]) {
-      await expect(loader(args(`?addon=${addon}`, undefined, slug))).rejects.toMatchObject({ status: 400 });
+      if (addon === "thumbnail") {
+        const result = await loader(args(`?addon=${addon}`, undefined, slug));
+        expect(result.addOns).toEqual([]);
+      } else {
+        await expect(loader(args(`?addon=${addon}`, undefined, slug))).rejects.toMatchObject({ status: 400 });
+      }
       expect(await action(args("", { intent: "start-checkout", packageSlug: slug, country: "US", phone: "+12025550123", addon }, slug))).toMatchObject({ error: expect.stringContaining("valid package add-ons") });
     }
     expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
@@ -179,17 +184,18 @@ describe("payment-first checkout", () => {
     expect(result.total).toBe(3149);
     expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
   });
-  it("loads both add-ons at server prices and quotes the full subtotal", async () => {
+  it("ignores the retired thumbnail add-on and prices the remaining extra", async () => {
     const result = await loader(args("?addon=thumbnail&addon=short-form&coupon=SAVE10&amountCents=1", undefined, "single-creator"));
-    expect(result.total).toBe(149);
-    expect(result.addOns).toHaveLength(2);
-    expect(mocks.findCouponForQuote).toHaveBeenCalledWith(expect.anything(), "SAVE10", 14900, "user-1");
+    expect(result.total).toBe(129);
+    expect(result.addOns).toEqual([{ id: "short-form", label: "Short-form video", amountCents: 2000 }]);
+    expect(mocks.findCouponForQuote).toHaveBeenCalledWith(expect.anything(), "SAVE10", 12900, "user-1");
   });
-  it("saves priced add-on snapshots and includes them in the order notice", async () => {
+  it("rejects a new thumbnail add-on charge", async () => {
     mocks.saveUnpaidSubscription.mockResolvedValueOnce({ id: "saved-id", planName: "Creator Video", amountCents: 12900, currency: "USD" });
-    await action(args("", { intent: "start-checkout", packageSlug: "single-creator", country: "US", phone: "+12025550123", addon: "thumbnail", addOnPrice: "1", amountCents: "1" }, "single-creator"));
-    expect(mocks.saveUnpaidSubscription).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ subtotalCents: 12900, amountCents: 12900, addOns: [{ id: "thumbnail", label: "Custom thumbnail", amountCents: 2000 }] }));
-    expect(mocks.queueTelegramOrderNotice).toHaveBeenCalledWith({}, expect.objectContaining({ summary: "Single video edit: Creator Video + Custom thumbnail" }));
+    const result = await action(args("", { intent: "start-checkout", packageSlug: "single-creator", country: "US", phone: "+12025550123", addon: "thumbnail", addOnPrice: "1", amountCents: "1" }, "single-creator"));
+    expect(result).toMatchObject({ error: expect.stringContaining("valid package add-ons") });
+    expect(mocks.saveUnpaidSubscription).not.toHaveBeenCalled();
+    expect(mocks.queueTelegramOrderNotice).not.toHaveBeenCalled();
   });
   it("rejects unknown add-ons before any save or coupon lookup", async () => {
     expect(await action(args("", { intent: "start-checkout", packageSlug: "creator-pro", country: "US", phone: "+12025550123", addon: "free-upgrade" }))).toMatchObject({ error: expect.stringContaining("valid package add-ons") });

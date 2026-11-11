@@ -1,13 +1,252 @@
-import { SignInPage } from "../components/auth/SignInPage";
-import { useLoaderData, type LoaderFunctionArgs } from "react-router";
-export { action } from "../lib/auth-disabled.server";
+import { safeRedirectPath } from "../lib/safe-redirect";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { AuthPage } from "../components/auth/AuthModal";
+import { data, useLoaderData } from "react-router";
+import { users } from "@edicut/db/schema";
+import { findUserByEmail } from "@edicut/db/repositories/users";
+import { findAdminUserByEmail } from "@edicut/db/repositories/admin-users";
+import bcrypt from "bcryptjs";
+import { createUserSession, isAdminRole, issueAuthCsrfToken, verifyAuthCsrfToken } from "../lib/session.server";
+import { getDbFromContext } from "../lib/db.server";
+import { verifyPassword } from "../lib/password.server";
+import { verifyRecaptchaToken } from "../lib/recaptcha.server";
+import { isLocalDevelopmentHostname } from "../lib/recaptcha.shared";
+import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
+import { consumeUsageLimit, hashUsageLimitKey, requestBodyExceedsLimit } from "../lib/usage-protection.server";
+import {
+  signInWithSupabase,
+  signUpWithSupabase,
+  supabaseAuthEnabled,
+} from "../integrations/supabase/auth.server";
 
-export function loader({ request }: LoaderFunctionArgs) {
-  const error = new URL(request.url).searchParams.get("error");
-  return { error: error === "google-unavailable" ? "Google sign-in could not be completed. Please try again." : null };
+export const meta: MetaFunction = () => [
+  { title: "Sign in - EdiCut" },
+  { name: "description", content: "Sign in or create an account with EdiCut" },
+  { name: "robots", content: "noindex, nofollow, noarchive" },
+];
+
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  const csrf = await issueAuthCsrfToken(request, context);
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  if (csrf.setCookie) headers.append("Set-Cookie", csrf.setCookie);
+  return data({ csrfToken: csrf.token }, { headers });
 }
 
-export default function SignInRoute() {
-  const { error } = useLoaderData<typeof loader>();
-  return <SignInPage error={error} />;
+export async function action({ request, context }: ActionFunctionArgs) {
+  if (!isSameSiteMutation(request)) return forbiddenMutation();
+  if (requestBodyExceedsLimit(request, 64 * 1024)) {
+    return { error: "Sign-in request is too large. Please try again.", intent: "signin" };
+  }
+
+  const formData = await readMutationForm(request, 64 * 1024);
+  if (!formData) return { error: "Sign-in request could not be read. Please try again.", intent: "signin" };
+  const intent = String(formData.get("intent") || "");
+  if (!await verifyAuthCsrfToken(request, formData.get("csrfToken"), context)) {
+    const csrf = await issueAuthCsrfToken(request, context);
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    if (csrf.setCookie) headers.append("Set-Cookie", csrf.setCookie);
+    return data({
+      error: "This sign-in form expired. Please try again.",
+      intent,
+      csrfToken: csrf.token,
+    }, { headers });
+  }
+  const rawEmail = formData.get("email");
+  const rawPassword = formData.get("password");
+  const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
+  const password = typeof rawPassword === "string" ? rawPassword : "";
+  const remember = formData.get("remember") === "on";
+  const redirectTo = safeRedirectPath(formData.get("redirectTo"));
+
+  if (!(["signin", "signup"] as const).includes(intent as "signin" | "signup") || !email || email.length > 254 || !password || password.length < 6 || password.length > 1024) {
+    return { error: "Invalid email or password (min 6 characters).", intent };
+  }
+
+  if (intent === "signup" && (password.length < 12 || new TextEncoder().encode(password).byteLength > 72)) {
+    return { error: "Use at least 12 characters and a password no longer than 72 bytes.", intent };
+  }
+
+  const identityKey = await hashUsageLimitKey(email);
+  const authLimit = await consumeUsageLimit({
+    context,
+    request,
+    bindingName: "AUTH_IDENTITY_LIMITER",
+    key: identityKey,
+    localLimit: 5,
+    localPeriodSeconds: 60,
+  });
+
+  if (authLimit !== "allowed") {
+    return {
+      error: authLimit === "limited"
+        ? "Too many attempts for this account. Wait a minute and try again."
+        : "Sign-in protection is temporarily unavailable. Please try again shortly.",
+      intent,
+    };
+  }
+
+  const rawName = formData.get("name");
+  const name = typeof rawName === "string" ? rawName.trim() : "";
+  if (intent === "signup" && name.length > 120) {
+    return { error: "Your name must be 120 characters or fewer.", intent };
+  }
+
+  // Localhost testing still keeps request and identity rate limits, but Google CAPTCHA tokens
+  // are not reliable for loopback hosts and can prevent developers from testing authentication.
+  const captcha = isLocalDevelopmentHostname(new URL(request.url).hostname)
+    ? { success: true as const }
+    : await verifyRecaptchaToken({
+        context,
+        token: formData.get("g-recaptcha-response"),
+      });
+
+  if (!captcha.success) {
+    return { error: captcha.error, intent };
+  }
+
+  const db = getDbFromContext(context);
+  const adminUser = intent === "signin" ? await findAdminUserByEmail(db, email) : null;
+  const useSupabase = supabaseAuthEnabled(context);
+  const adminCredentialsVerified = Boolean(
+    !useSupabase &&
+    adminUser?.active &&
+    isAdminRole(adminUser.role) &&
+    adminUser.passwordHash &&
+    await verifyPassword(password, adminUser.passwordHash),
+  );
+
+  if (intent === "signup") {
+    if (useSupabase) {
+      const result = await signUpWithSupabase({
+        context,
+        email,
+        password,
+        name,
+      });
+
+      if (result.error) {
+        return { error: result.error, intent };
+      }
+
+      if (!result.user || !result.session) {
+        return {
+          error: "Account created. Check your email to confirm the account before signing in.",
+          intent,
+        };
+      }
+
+      return createUserSession({
+        request,
+        context,
+        userId: result.profileId ?? result.user.id,
+        remember,
+        redirectTo,
+        accessToken: result.session.access_token,
+        refreshToken: result.session.refresh_token,
+      });
+    }
+
+    const existing = await findUserByEmail(db, email);
+    if (existing) {
+      return { error: "User with this email already exists.", intent };
+    }
+
+    const salt = bcrypt.genSaltSync(10);
+    const passwordHash = bcrypt.hashSync(password, salt);
+
+    const [user] = await db.insert(users).values({
+      email,
+      name: name || null,
+      passwordHash,
+    }).returning();
+
+    return createUserSession({ request, context, userId: user.id, remember, redirectTo });
+  }
+
+  if (intent === "signin") {
+    if (useSupabase) {
+      const result = await signInWithSupabase({ context, email, password });
+
+      if (!result.error && result.user && result.session) {
+        const verifiedAdminIdentity = Boolean(
+          adminUser?.active &&
+          isAdminRole(adminUser.role) &&
+          result.user.email?.trim().toLowerCase() === adminUser.email.toLowerCase() &&
+          result.user.email_confirmed_at,
+        );
+
+        return createUserSession({
+          request,
+          context,
+          userId: result.profileId ?? result.user.id,
+          remember,
+          redirectTo,
+          accessToken: result.session.access_token,
+          refreshToken: result.session.refresh_token,
+          adminUserId: verifiedAdminIdentity ? adminUser?.id : undefined,
+          adminAccessVerified: verifiedAdminIdentity,
+        });
+      }
+
+      // A provider rejection must not be bypassed with an older local password.
+      if (result.error) return { error: "Invalid credentials.", intent };
+
+      return { error: "Supabase did not return an authenticated session.", intent };
+    }
+
+    const user = await findUserByEmail(db, email);
+    if (!user || !user.passwordHash) {
+      if (adminUser?.active && isAdminRole(adminUser.role) && adminUser.passwordHash && await verifyPassword(password, adminUser.passwordHash)) {
+        const existingProfile = user || await findUserByEmail(db, email);
+        if (existingProfile && (!existingProfile.active || existingProfile.deletedAt)) {
+          return { error: "Invalid credentials.", intent };
+        }
+        const [profile] = existingProfile
+          ? [existingProfile]
+          : await db.insert(users).values({
+              email,
+              name: adminUser.name,
+              role: "customer",
+              active: true,
+              passwordHash: adminUser.passwordHash,
+            }).returning();
+
+        if (profile) {
+          return createUserSession({
+            request,
+            context,
+            userId: profile.id,
+            remember,
+            redirectTo,
+            adminUserId: adminUser.id,
+            adminAccessVerified: true,
+          });
+        }
+      }
+
+      return { error: "Invalid credentials.", intent };
+    }
+
+    const isValid = await verifyPassword(password, user.passwordHash);
+    if (!isValid || !user.active || user.deletedAt) {
+      return { error: "Invalid credentials.", intent };
+    }
+
+    return createUserSession({
+      request,
+      context,
+      userId: user.id,
+      remember,
+      redirectTo,
+      adminUserId: adminCredentialsVerified ? adminUser?.id : undefined,
+      adminAccessVerified: adminCredentialsVerified,
+    });
+  }
+
+  return { error: "Unknown intent", intent };
+}
+
+export default function SigninPage() {
+  const { csrfToken } = useLoaderData<typeof loader>();
+  return <AuthPage csrfToken={csrfToken} />;
 }

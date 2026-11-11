@@ -11,8 +11,8 @@ import pricingStyles from "../styles/pricing.css?url";
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: pricingStyles }];
 
 export const meta: MetaFunction = (args) => createRouteMeta(args,
-  "Video Editing Prices: Single Videos and Monthly Packages | EdiCut",
-  "Choose a single video edit or a monthly package from EdiCut. Compare clear scope, editing capacity, delivery targets, and prices.",
+  "Video Editing Cost & Packages | EdiCut",
+  "Compare video editing costs for single videos and monthly packages. Review footage limits, turnaround targets, and included revision rounds before choosing.",
 );
 
 export async function loader({ context }: LoaderFunctionArgs) {

@@ -6,7 +6,7 @@ vi.mock("@edicut/db/repositories/users", () => ({ findUserById: mocks.user }));
 vi.mock("../lib/db.server", () => ({ getDbFromContext: () => ({}) }));
 
 import { loader } from "./admin-access";
-import { commitSession, getAdminSession, getSession, getSessionCredentialVersion } from "../lib/session.server";
+import { commitSession, createAdminSession, getAdminSession, getSession, getSessionCredentialVersion } from "../lib/session.server";
 import { ADMIN_ACCESS_PATH, ADMIN_BASE_PATH } from "../lib/admin-paths";
 
 const context = { cloudflare: { env: { SESSION_SECRET: "admin-access-test-only-secret" } } };
@@ -34,6 +34,14 @@ async function openPanel(verified: boolean) {
 }
 
 describe("verified workspace admin panel access", () => {
+  it("validates an existing dedicated cookie before opening the requested panel", async () => {
+    const request = new Request(`http://localhost:3002${ADMIN_ACCESS_PATH}?returnTo=${encodeURIComponent(`${ADMIN_BASE_PATH}/orders`)}`);
+    const signedIn = await createAdminSession({ request, context, userId: admin.id, redirectTo: ADMIN_BASE_PATH });
+    mocks.admin.mockResolvedValue({ ...admin, active: false });
+    const response = await loader({ request: new Request(request.url, { headers: { Cookie: signedIn.headers.get("Set-Cookie")!.split(";")[0] } }), context, params: {} } as Parameters<typeof loader>[0]).catch(error => error as Response);
+    expect(response.headers.get("Location")).toContain("/signin");
+    expect(response.headers.get("Set-Cookie")).toContain("Expires=Thu, 01 Jan 1970");
+  });
   it("opens the panel without another sign-in and creates the dedicated admin session", async () => {
     const response = await openPanel(true);
     expect(response.headers.get("Location")).toBe(ADMIN_BASE_PATH);

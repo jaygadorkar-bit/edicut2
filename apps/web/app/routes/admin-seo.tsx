@@ -282,19 +282,19 @@ function getPageDefaults(pricingPackages: ReturnType<typeof publicPricingPackage
     } else if (post) {
       add({ path, label: post.title, title: post.seoTitle, description: post.description, focusKeyword: post.primaryKeyword, socialTitle: post.seoTitle, socialImageUrl: post.socialImage });
     } else if (path === "/") {
-      add({ path, label: "Home", title: DEFAULT_SEO_TITLE, description: DEFAULT_SEO_DESCRIPTION, focusKeyword: "video editing for YouTube creators" });
+      add({ path, label: "Home", title: DEFAULT_SEO_TITLE, description: DEFAULT_SEO_DESCRIPTION, focusKeyword: "video editor for YouTube creators" });
     } else if (path === "/why-hire-us") {
-      add({ path, label: "Why hire EdiCut", title: "Why Hire EdiCut: Studio Reliability vs. Freelancer Risk | YouTube Video Editing", description: "Meet your dedicated editor and project manager, get studio-reviewed edits, and manage projects, feedback, and downloads in one EdiCut dashboard." });
+      add({ path, label: "Why hire EdiCut", title: "Why Hire a YouTube Video Editor? | EdiCut", description: "Get a dedicated video editor, project manager, and studio review. See how EdiCut supports your YouTube channel from the brief through final delivery.", focusKeyword: "hire a YouTube video editor" });
     } else if (path === "/services") {
-      add({ path, label: "Services", title: "Video Editing & YouTube Thumbnail Services | EdiCut", description: "Explore EdiCut services for YouTube videos, podcasts, Shorts, Reels, gaming, and thumbnails. Find the right editing approach for your next upload." });
+      add({ path, label: "Services", title: "Video Editing Services for YouTube & Podcasts | EdiCut", description: "Compare video editing services for YouTube, podcasts, Shorts, gaming, and thumbnails. See each service's scope and choose support for your next upload.", focusKeyword: "video editing services" });
     } else if (path === "/pricing") {
-      add({ path, label: "Pricing", title: "Video Editing Prices: Single Videos and Monthly Packages | EdiCut", description: "Choose a single video edit or a monthly package from EdiCut. Compare clear scope, editing capacity, delivery targets, and prices." });
+      add({ path, label: "Pricing", title: "Video Editing Cost & Packages | EdiCut", description: "Compare video editing costs for single videos and monthly packages. Review footage limits, turnaround targets, and included revision rounds before choosing.", focusKeyword: "video editing cost" });
     } else if (path === "/portfolio") {
-      add({ path, label: "Portfolio", title: "Video Editing Portfolio and Style References | EdiCut", description: "Explore video editing styles for YouTube, podcasts, gaming, and more. Browse EdiCut's gallery with credited reference examples and editing package options." });
+      add({ path, label: "Portfolio", title: "Video Editing Examples for YouTube & Podcasts | EdiCut", description: "Explore credited video editing references for YouTube, podcasts, gaming, and commercial formats. Use the examples to plan a style for your next edit.", focusKeyword: "video editing examples" });
     } else if (path === "/faq") {
-      add({ path, label: "FAQs", title: "YouTube Video Editing FAQs: Pricing, Process, and Delivery | EdiCut", description: "Answers about EdiCut video editing plans, project setup, footage handoff, revisions, turnaround, thumbnails, and account security." });
+      add({ path, label: "FAQs", title: "Video Editing FAQs: Pricing & Process | EdiCut", description: "Find answers about video editing packages, footage, revisions, turnaround, and delivery for YouTube videos, Shorts, podcasts, and gaming.", focusKeyword: "video editing FAQs" });
     } else if (path === "/contact") {
-      add({ path, label: "Contact", title: "Contact EdiCut | Video Editing for YouTube Creators", description: "Tell EdiCut about your YouTube, podcast, or short-form video project and get matched with an editing plan for your workflow." });
+      add({ path, label: "Contact", title: "Contact a Video Editor for YouTube | EdiCut", description: "Tell EdiCut about your YouTube, podcast, Shorts, or gaming video. We will recommend a video editing service and package for your footage and schedule.", focusKeyword: "video editor for YouTube" });
     } else if (path === "/privacy") {
       add({ path, label: "Privacy policy", title: "Privacy Policy | EdiCut", description: "Read how EdiCut handles account details, creator project data, source-footage links, billing information, and confidential materials." });
     } else if (path === "/terms") {
@@ -333,12 +333,10 @@ function getPageDefaults(pricingPackages: ReturnType<typeof publicPricingPackage
 
 function getPackageSeoDescription(editingPackage: EditingPackage) {
   if (editingPackage.slug === SHORT_FORM_PACKAGE_SLUG) {
-    return `Order a ${formatPackagePrice(editingPackage.basePrice)} short-form video edit for TikTok, Instagram Reels, or YouTube Shorts. One vertical, captioned edit up to 60 seconds, with one revision included.`;
+    return `Order a ${formatPackagePrice(editingPackage.basePrice)} short-form video edit for TikTok, Instagram Reels, or YouTube Shorts. One vertical, captioned edit up to 60 seconds, with at least ${editingPackage.revisionRounds} revision rounds included.`;
   }
   if (editingPackage.packageType === "monthly") {
-    const hasSharedEditorStaffing = editingPackage.features.some((feature) => /\btwo\b.*\beditors?\b/i.test(feature));
-    const editorCapacity = hasSharedEditorStaffing ? "shared by two dedicated video editors" : "supported by a dedicated video editor";
-    return `${editingPackage.editingHoursPerMonth} editing hours per month at ${editingPackage.editingHoursPerWorkday} hours per workday across ${editingPackage.workingDaysPerMonth} working days, ${editorCapacity}. ${editingPackage.bestFor}`;
+    return `${editingPackage.editingHoursPerMonth} editing hours per month at ${editingPackage.editingHoursPerWorkday} hours per workday across ${editingPackage.workingDaysPerMonth} working days, with two dedicated video editors. ${editingPackage.bestFor}`;
   }
   return `${editingPackage.videoFormat}, ${editingPackage.finishedLength.toLowerCase()} finished from ${editingPackage.rawFootageLimit.toLowerCase()} of footage, with ${editingPackage.revisionRounds} ${editingPackage.revisionRounds === 1 ? "revision" : "revisions"}. See the current scope and price.`;
 }

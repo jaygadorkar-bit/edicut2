@@ -1,5 +1,6 @@
 export const ADMIN_BASE_PATH = "/site/node-logmin";
 export const ADMIN_LOGIN_PATH = `${ADMIN_BASE_PATH}/login`;
+export const ADMIN_GOOGLE_LOGIN_PATH = `${ADMIN_LOGIN_PATH}/google`;
 export const ADMIN_ACCESS_PATH = `${ADMIN_BASE_PATH}/access`;
 
 export function adminPath(path: string = "") {

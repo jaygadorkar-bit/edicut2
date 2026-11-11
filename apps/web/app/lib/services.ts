@@ -22,7 +22,7 @@ export const SERVICE_PAGES: readonly ServicePage[] = [
     title: "YouTube video editing",
     heading: "Hire a YouTube video editor for your channel",
     metaTitle: "YouTube Video Editor for Creators | EdiCut",
-    description: "Looking for a video editor for your YouTube channel? EdiCut edits tutorials, commentary, reviews, educational videos, and vlogs. See the process and current package scope.",
+    description: "Looking for a video editor for your YouTube channel? EdiCut edits tutorials, commentary, reviews, education, and vlogs with clear scope and package options.",
     summary: "Done-for-you YouTube video editing for tutorials, commentary, reviews, educational videos, and vlogs, with scope agreed before work begins.",
     introduction: "EdiCut is a done-for-you YouTube video editing service for creators. Share your footage, brief, and channel references; the team shapes talking-head videos, educational content, product reviews, commentary, and vlogs into a first cut you can review in your workspace. We agree on footage limits, finished length, visual treatment, delivery schedule, and revisions before editing starts.",
     audience: "Creators and small teams publishing tutorials, commentary, reviews, educational videos, and vlogs on YouTube.",
@@ -48,7 +48,7 @@ export const SERVICE_PAGES: readonly ServicePage[] = [
       { question: "Is EdiCut a video editing app or a service?", answer: "EdiCut is a done-for-you video editing service for YouTube creators, not self-editing software. Share your footage and brief, choose a single-video or monthly package, and review the cut through your project workspace." },
       { question: "What should I compare before hiring a YouTube video editor?", answer: "Review work the editor actually produced, then compare raw-footage and finished-length limits, included services, revision rounds, delivery timing, and how you leave feedback. EdiCut's current package scope is listed on the pricing page; the team confirms your brief before editing." },
       { question: "Can you follow my existing channel's editing style?", answer: "Share examples from your channel and explain what you want to keep or change, such as pacing, caption style, music, and recurring graphics. We use those references to agree on a direction before editing." },
-      { question: "Are thumbnails and Shorts included with a YouTube edit?", answer: "Thumbnails and short-form cutdowns have their own scope. Review the current package options on the pricing page or ask the team to include them in your quote." },
+      { question: "Are thumbnails and Shorts included with a YouTube edit?", answer: "Every video edit includes one custom thumbnail at no extra charge. Short-form cutdowns have separate scope; see the package options or ask the team for a quote." },
       { question: "Which editing package should I choose?", answer: "Compare your raw-footage length, expected finished length, and revision needs with the current package limits. For a regular publishing schedule, ask whether reserved monthly editing hours suit your workload." },
     ],
     relatedSlugs: ["youtube-thumbnail-design", "short-form-video-editing", "podcast-video-editing"],
@@ -143,7 +143,7 @@ export const SERVICE_PAGES: readonly ServicePage[] = [
     process: [
       { title: "Agree on the story", description: "Explain the challenge, match, or progression behind the footage. Confirm the total recording length and whether locating highlights is part of the work." },
       { title: "Check timing and context", description: "Review that the edit preserves what happened in the game and gives reactions enough space. Flag cuts that make mechanics or the sequence of events unclear." },
-      { title: "Finish for your channel", description: "Approve the sound mix, visual style, and agreed export. Request any vertical highlights or thumbnail work as additional deliverables when setting the scope." },
+      { title: "Finish for your channel", description: "Approve the sound mix, visual style, included custom thumbnail, and agreed export. Request vertical highlights or additional thumbnail concepts separately." },
     ],
     questions: [
       { question: "Can you work with a full stream recording?", answer: "Share its duration and explain whether you will provide highlight timestamps. Searching a long stream and editing selected moments take different amounts of work, so the team will confirm the scope and footage limits." },
@@ -179,7 +179,7 @@ export const SERVICE_PAGES: readonly ServicePage[] = [
       { title: "Approve the final artwork", description: "Review the agreed revisions and delivery file. If you want alternate concepts for a platform test, request those variants in the scope." },
     ],
     questions: [
-      { question: "Is a thumbnail included with a video editing package?", answer: "Thumbnail design is an optional add-on. The pricing page lists current package options; ask the team to confirm the included concept and revision scope for your project." },
+      { question: "Is a thumbnail included with a video editing package?", answer: "Yes. Every video editing package includes one custom thumbnail per edited video at no extra charge. This page also covers standalone thumbnail design; ask for a quote if you need additional concepts or variants." },
       { question: "Can I order several thumbnail concepts?", answer: "Ask for the number of distinct concepts or variants you need before work begins. Additional concepts and A/B testing sets can be quoted separately." },
       { question: "Will a new thumbnail guarantee more clicks?", answer: "No. A clearer design can help communicate a video's subject, but clicks also depend on the title, topic, audience, and where the video appears. Assess a design using your channel's actual publishing data." },
     ],

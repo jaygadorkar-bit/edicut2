@@ -23,6 +23,7 @@ export default [
   route("terms", "routes/terms.tsx"),
   route("affiliate-signup", "routes/affiliate-signup.tsx"),
   route("maintenance", "routes/maintenance.tsx"),
+  route("site/node-logmin/login/google", "routes/admin-google-login.ts"),
   route("site/node-logmin/login", "routes/admin-login.tsx"),
   route("site/node-logmin/access", "routes/admin-access.ts"),
   layout("routes/workspace-layout.tsx", [

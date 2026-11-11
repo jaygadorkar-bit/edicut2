@@ -71,4 +71,11 @@ describe("deployed response security", () => {
     expect(policy).toMatch(/script-src[^;]*https:\/\/static\.cloudflareinsights\.com/);
     expect(policy).toMatch(/connect-src[^;]*'self'/);
   });
+  it("allows the consent-gated Google Tag Manager loader and Analytics collection endpoints", () => {
+    const response = withSecurityHeaders(new Response("page"), new Request("https://edicut.com/"));
+    const policy = response.headers.get("Content-Security-Policy") ?? "";
+    expect(policy).toMatch(/script-src[^;]*https:\/\/www\.googletagmanager\.com/);
+    expect(policy).toMatch(/connect-src[^;]*https:\/\/\*\.google-analytics\.com/);
+    expect(policy).toMatch(/connect-src[^;]*https:\/\/analytics\.google\.com/);
+  });
 });

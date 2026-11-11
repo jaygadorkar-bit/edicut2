@@ -1,6 +1,6 @@
 import type { DatabaseClient } from "@edicut/db/client";
 import type { SupabaseRuntimeContext } from "../integrations/supabase/client.server";
-import { ALL_EDITING_PACKAGES, formatPackagePrice, getCatalogPackage, parsePackagePrice, REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING, type EditingPackage } from "./subscriptions";
+import { ALL_EDITING_PACKAGES, formatPackagePrice, getCatalogPackage, parsePackagePrice, REQUIRED_PACKAGE_STAFFING, type EditingPackage } from "./subscriptions";
 import { getSiteSetting, saveSiteSetting } from "./site-settings.server";
 import { withoutIncludedThumbnails } from "./package-addons";
 import { canonicalPricingPackageSlug } from "./pricing-slugs";
@@ -47,7 +47,7 @@ export const defaultPricingPackages: PricingPackage[] = ALL_EDITING_PACKAGES.map
     ? `${editingPackage.editingHoursPerWorkday} editing ${editingPackage.editingHoursPerWorkday === 1 ? "hour" : "hours"} per workday`
     : `First cut within ${editingPackage.firstCutHours} hours`,
   revisions: editingPackage.packageType === "monthly"
-    ? "Editing and revisions use the reserved monthly hours"
+    ? `At least ${editingPackage.revisionRounds} revision rounds per edit, within the reserved hours`
     : `${editingPackage.revisionRounds} revision ${editingPackage.revisionRounds === 1 ? "round" : "rounds"}`,
   badge: editingPackage.badge,
   popular: editingPackage.slug === "creator-plus" || editingPackage.slug === "single-creator",
@@ -89,21 +89,22 @@ function migrateLegacyMonthlyPackageName(slug: string, name: string) {
 
 function includePackageRequirements(items: string[], catalogPackage: EditingPackage, list: "features" | "deliverables") {
   items = withoutIncludedThumbnails(items);
-  const isStudio = catalogPackage.slug === "creator-pro";
-  const withoutSupersededEditorCount = isStudio
-    ? items.filter((item) => item.toLocaleLowerCase() !== "dedicated video editor")
-    : items;
+  const revisionRoundCount = /\b(?:at least\s+)?(?:one|two|three|\d+)\s+revision rounds?\b/i;
+  const withoutSupersededCounts = items.filter((item) =>
+    !/\bdedicated video editor\b/i.test(item) && !revisionRoundCount.test(item),
+  );
   const capacityLine = /\bediting hours?\s+per\s+(?:month|standard workday|workday across \d+ working days)\b/i;
   const withoutStaleCapacity = catalogPackage.packageType === "monthly"
-    ? withoutSupersededEditorCount.filter((item) => !capacityLine.test(item))
-    : withoutSupersededEditorCount;
+    ? withoutSupersededCounts.filter((item) => !capacityLine.test(item))
+    : withoutSupersededCounts;
   const currentCapacity = catalogPackage.packageType === "monthly"
     ? catalogPackage[list].filter((item) => capacityLine.test(item))
     : [];
-  const requiredStaffing = isStudio ? STUDIO_PACKAGE_STAFFING : REQUIRED_PACKAGE_STAFFING;
-  const combined = [...withoutStaleCapacity, ...currentCapacity];
+  const currentRevisionPolicy = catalogPackage[list].filter((item) => revisionRoundCount.test(item));
+  const currentThumbnail = catalogPackage[list].filter((item) => /\bthumbnail\b/i.test(item));
+  const combined = [...withoutStaleCapacity, ...currentCapacity, ...currentRevisionPolicy, ...currentThumbnail];
   const included = new Set(combined.map((item) => item.toLocaleLowerCase()));
-  return [...combined, ...requiredStaffing.filter((item) => !included.has(item.toLocaleLowerCase()))];
+  return [...combined, ...REQUIRED_PACKAGE_STAFFING.filter((item) => !included.has(item.toLocaleLowerCase()))];
 }
 
 function normalizePackage(value: unknown, index: number): PricingPackage | null {
@@ -134,7 +135,9 @@ function normalizePackage(value: unknown, index: number): PricingPackage | null 
     galleryImages: stringList(row.galleryImages),
     bestFor: String(row.bestFor || "").trim(),
     turnaround: String(row.turnaround || "").trim(),
-    revisions: String(row.revisions || "").trim(),
+    revisions: catalogPackage.packageType === "monthly"
+      ? `At least ${catalogPackage.revisionRounds} revision rounds per edit, within the reserved hours`
+      : `${catalogPackage.revisionRounds} revision ${catalogPackage.revisionRounds === 1 ? "round" : "rounds"}`,
     badge: String(row.badge || "").trim(),
     popular: Boolean(row.popular),
     active: row.active !== false,

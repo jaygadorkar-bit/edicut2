@@ -88,6 +88,13 @@
   border-radius: 0.75rem;
 }
 
+.neo-workspace__collapse-button--collapsed {
+  position: absolute;
+  inset-inline-start: calc(100% - 1rem);
+  top: 1.25rem;
+  z-index: 1;
+}
+
 .neo-workspace__collapse-button:hover,
 .neo-workspace__icon-button:hover {
   color: var(--workspace-ink);

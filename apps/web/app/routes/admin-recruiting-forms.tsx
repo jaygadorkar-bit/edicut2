@@ -1,9 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useLoaderData, useNavigation } from "react-router";
+import { useState } from "react";
 import { and, count, desc, eq, ilike, or } from "drizzle-orm";
 import { contactMessages } from "@edicut/db/schema";
 import { ArrowUpRight, BriefcaseBusiness, ChevronLeft, ChevronRight, FileVideo, Search, Trash2 } from "lucide-react";
 import { AdminPanelShell } from "../components/AdminPanelShell";
+import { useMarkNotificationRead } from "../components/WorkspaceNotifications";
 import { getDbFromContext } from "../lib/db.server";
 import { adminPath } from "../lib/admin-paths";
 import { getPageWithinRange, getPositivePage } from "../lib/admin-data-requirements";
@@ -94,6 +96,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 export default function AdminRecruitingFormsPage() {
   const { admin, records, query, page, total, totalPages, deleted, error } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
+  const markNotificationRead = useMarkNotificationRead();
+  const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null);
   const makePageHref = (nextPage: number) => {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
@@ -140,43 +144,105 @@ export default function AdminRecruitingFormsPage() {
               </div>
             </div>
           ) : (
-            <div className="recruiting-records">
-              {records.map((record) => (
-                <article className="recruiting-record" key={record.id}>
-                  <header className="recruiting-record__header">
-                    <div>
-                      <h2>{record.name}</h2>
-                      <a href={`mailto:${record.email}`}>{record.email}</a>
-                    </div>
-                    <div className="recruiting-record__actions">
-                      <time dateTime={new Date(record.createdAt).toISOString()}>{formatDate(record.createdAt)}</time>
-                      <Form method="post" className="recruiting-delete-form" onSubmit={(event) => {
-                        if (!window.confirm(`Permanently delete ${record.name}’s application? This cannot be undone.`)) event.preventDefault();
-                      }}>
-                        <input type="hidden" name="applicationId" value={record.id} />
-                        <input type="hidden" name="q" value={query} />
-                        <input type="hidden" name="page" value={page} />
-                        <button type="submit" className="recruiting-delete" disabled={navigation.state !== "idle"} aria-label={`Delete ${record.name}’s application`}>
-                          <Trash2 size={15} aria-hidden="true" />Delete
-                        </button>
-                      </Form>
-                    </div>
-                  </header>
-                  <details className="recruiting-record__details">
-                    <summary>View application answers <span aria-hidden="true">({record.answers.length})</span></summary>
-                    {record.answers.length ? (
-                      <dl className="recruiting-answers">
-                        {record.answers.map((answer, index) => (
-                          <div className="recruiting-answer" key={`${record.id}-${index}`}>
-                            <dt>{answer.label}</dt>
-                            <dd>{answer.value || "Not provided"}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : <p className="recruiting-no-answers">No saved answers were found for this application.</p>}
-                  </details>
-                </article>
-              ))}
+            <div className="recruiting-sheet-wrap" role="region" aria-label="Applications spreadsheet" tabIndex={0}>
+              <table className="recruiting-sheet">
+                <caption className="sr-only">Video editor partner applications, with candidate details and review actions</caption>
+                <colgroup>
+                  <col className="recruiting-sheet__col-candidate" />
+                  <col className="recruiting-sheet__col-arrangement" />
+                  <col className="recruiting-sheet__col-experience" />
+                  <col className="recruiting-sheet__col-thumbnails" />
+                  <col className="recruiting-sheet__col-submitted" />
+                  <col className="recruiting-sheet__col-answers" />
+                  <col className="recruiting-sheet__col-actions" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col">Candidate</th>
+                    <th scope="col">Work arrangement</th>
+                    <th scope="col">Editing experience</th>
+                    <th scope="col">Thumbnail design</th>
+                    <th scope="col">Submitted</th>
+                    <th scope="col">Application</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                {records.map((record) => {
+                  const isExpanded = expandedRecordId === record.id;
+                  return (
+                    <tbody key={record.id}>
+                      <tr className="recruiting-sheet__row">
+                        <th scope="row" className="recruiting-sheet__candidate">
+                          <span>{record.name}</span>
+                          <a href={`mailto:${record.email}`}>{record.email}</a>
+                        </th>
+                        <td>{getAnswerValue(record.answers, "Work arrangement")}</td>
+                        <td>{getAnswerValue(record.answers, "Editing experience")}</td>
+                        <td>{getAnswerValue(record.answers, "Designs thumbnails")}</td>
+                        <td><time dateTime={new Date(record.createdAt).toISOString()}>{formatDate(record.createdAt)}</time></td>
+                        <td>
+                          <button
+                            type="button"
+                            className="recruiting-review-toggle"
+                            aria-expanded={isExpanded}
+                            aria-controls={`recruiting-answers-${record.id}`}
+                            onClick={() => {
+                              if (!isExpanded) markNotificationRead("recruiting", record.id);
+                              setExpandedRecordId(isExpanded ? null : record.id);
+                            }}
+                          >
+                            {isExpanded ? "Hide answers" : "View answers"}<span>({record.answers.length})</span>
+                          </button>
+                        </td>
+                        <td>
+                          <Form method="post" className="recruiting-delete-form" onSubmit={(event) => {
+                            if (!window.confirm(`Permanently delete ${record.name}’s application? This cannot be undone.`)) event.preventDefault();
+                          }}>
+                            <input type="hidden" name="applicationId" value={record.id} />
+                            <input type="hidden" name="q" value={query} />
+                            <input type="hidden" name="page" value={page} />
+                            <button type="submit" className="recruiting-delete" disabled={navigation.state !== "idle"} aria-label={`Delete ${record.name}’s application`}>
+                              <Trash2 size={15} aria-hidden="true" /><span>Delete</span>
+                            </button>
+                          </Form>
+                        </td>
+                      </tr>
+                      <tr className="recruiting-sheet__expanded" id={`recruiting-answers-${record.id}`} hidden={!isExpanded}>
+                        <td colSpan={7}>
+                          {record.answers.length ? (
+                            <div className="recruiting-answer-sheet-wrap" role="region" aria-label={`${record.name} application answers`} tabIndex={0}>
+                              <table className="recruiting-answer-sheet">
+                                <caption className="sr-only">Submitted application answers for {record.name}</caption>
+                                <colgroup>
+                                  <col className="recruiting-answer-sheet__col-number" />
+                                  <col className="recruiting-answer-sheet__col-field" />
+                                  <col />
+                                </colgroup>
+                                <thead>
+                                  <tr>
+                                    <th scope="col">#</th>
+                                    <th scope="col">Field</th>
+                                    <th scope="col">Response</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {record.answers.map((answer, index) => (
+                                    <tr key={`${record.id}-${index}`}>
+                                      <td className="recruiting-answer-sheet__row-number">{index + 1}</td>
+                                      <th scope="row">{answer.label}</th>
+                                      <td>{answer.value || "Not provided"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : <p className="recruiting-no-answers">No saved answers were found for this application.</p>}
+                        </td>
+                      </tr>
+                    </tbody>
+                  );
+                })}
+              </table>
             </div>
           )}
 
@@ -204,6 +270,10 @@ function parseApplicationAnswers(message: string) {
       if (separator < 0) return { label: "Additional detail", value: line };
       return { label: line.slice(0, separator).trim(), value: line.slice(separator + 1).trim() };
     });
+}
+
+function getAnswerValue(answers: ReturnType<typeof parseApplicationAnswers>, label: string) {
+  return answers.find((answer) => answer.label.toLocaleLowerCase() === label.toLocaleLowerCase())?.value || "—";
 }
 
 function formatDate(value: string | Date) {

@@ -20,15 +20,18 @@ describe("Material Symbols stylesheet", () => {
     expect(materialSymbolNames).toContain("security");
     expect(materialSymbolNames).toContain("system_update_alt");
     expect(materialSymbolNames).toContain("tune");
+    expect(materialSymbolNames).toContain("person");
+    expect(materialSymbolNames).toContain("expand_more");
+    expect(materialSymbolNames).toContain("arrow_forward");
   });
 
-  it("defines optional-display ligatures in the main stylesheet", () => {
+  it("uses the local font and avoids showing ligature names during font loading", () => {
     const fontPath = new URL("../../public/assets/material-symbols-v383.woff2", import.meta.url);
     const stylesheetPath = new URL("../styles/global.css", import.meta.url);
     const stylesheet = readFileSync(stylesheetPath, "utf8");
 
     expect(existsSync(fontPath)).toBe(true);
-    expect(stylesheet).toContain("font-display: optional;");
+    expect(stylesheet).toContain("font-display: block;");
     expect(stylesheet).toContain(`url("${MATERIAL_SYMBOLS_FONT_URL}")`);
     expect(stylesheet).toContain("-webkit-font-feature-settings: \"liga\"");
   });

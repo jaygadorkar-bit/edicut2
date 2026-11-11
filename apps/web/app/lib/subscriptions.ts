@@ -13,6 +13,7 @@ export type PackageBase = {
 
 export type SubscriptionPackage = PackageBase & {
   packageType: "monthly";
+  revisionRounds: number;
   editingHoursPerMonth: number;
   editingHoursPerWorkday: number;
   workingDaysPerMonth: 22;
@@ -29,11 +30,12 @@ export type SingleVideoPackage = PackageBase & {
 };
 
 export const SHORT_FORM_PACKAGE_SLUG = "short-form-video-editing";
+export const INCLUDED_PACKAGE_THUMBNAIL = "One custom thumbnail included with each video edit";
 
 export type EditingPackage = SubscriptionPackage | SingleVideoPackage;
 
-export const REQUIRED_PACKAGE_STAFFING = ["Personal project manager", "Dedicated video editor"] as const;
-export const STUDIO_PACKAGE_STAFFING = ["Personal project manager", "Two dedicated video editors"] as const;
+export const REQUIRED_PACKAGE_STAFFING = ["Personal project manager", "Two dedicated video editors"] as const;
+export const STUDIO_PACKAGE_STAFFING = REQUIRED_PACKAGE_STAFFING;
 
 export const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
   {
@@ -43,11 +45,12 @@ export const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
     description: "Four editing hours each workday, with clear monthly capacity for a steady publishing schedule.",
     badge: "Start steady",
     bestFor: "Solo creators who want dependable editing help without reserving a full-time editor.",
+    revisionRounds: 2,
     editingHoursPerMonth: 88,
     editingHoursPerWorkday: 4,
     workingDaysPerMonth: 22,
-    features: ["88 reserved editing hours per month", "4 editing hours per standard workday", "Captions, basic color and audio cleanup", "1 revision round per edit, within the monthly hours", "Unused hours do not roll over", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["88 editing hours per month", "4 editing hours per workday across 22 working days", "Captions, basic color and audio cleanup", "1 revision round per edit, included in the reserved hours", ...REQUIRED_PACKAGE_STAFFING],
+    features: ["88 reserved editing hours per month", "4 editing hours per standard workday", "Captions, basic color and audio cleanup", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds per edit, within the monthly hours", "Unused hours do not roll over", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["88 editing hours per month", "4 editing hours per workday across 22 working days", "Captions, basic color and audio cleanup", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds per edit, included in the reserved hours", ...REQUIRED_PACKAGE_STAFFING],
     basePrice: 2149,
   },
   {
@@ -57,11 +60,12 @@ export const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
     description: "Five editing hours each workday for creators who want a reliable weekly rhythm and room to repurpose footage.",
     badge: "Most popular",
     bestFor: "Creators and small teams with a steady pipeline of long-form and short-form edits.",
+    revisionRounds: 2,
     editingHoursPerMonth: 110,
     editingHoursPerWorkday: 5,
     workingDaysPerMonth: 22,
-    features: ["110 reserved editing hours per month", "5 editing hours per standard workday", "Captions, color and audio finishing", "Licensed stock and B-roll from our included asset library", "Editing and revisions draw from the monthly hours", "Unused hours do not roll over", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["110 editing hours per month", "5 editing hours per workday across 22 working days", "Captions, color and audio finishing", "Licensed stock and B-roll from our included asset library", "Editing and revisions draw from the monthly hours", ...REQUIRED_PACKAGE_STAFFING],
+    features: ["110 reserved editing hours per month", "5 editing hours per standard workday", "Captions, color and audio finishing", "Licensed stock and B-roll from our included asset library", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds per edit, within the monthly hours", "Editing and revisions draw from the monthly hours", "Unused hours do not roll over", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["110 editing hours per month", "5 editing hours per workday across 22 working days", "Captions, color and audio finishing", "Licensed stock and B-roll from our included asset library", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds per edit, within the monthly hours", "Editing and revisions draw from the monthly hours", ...REQUIRED_PACKAGE_STAFFING],
     basePrice: 2649,
   },
   {
@@ -71,11 +75,12 @@ export const SUBSCRIPTION_PACKAGES: SubscriptionPackage[] = [
     description: "Five editing hours each workday shared by two editors for established channels with a larger production pipeline.",
     badge: "More capacity",
     bestFor: "Established creators and production teams with regular editing work throughout the month.",
+    revisionRounds: 2,
     editingHoursPerMonth: 110,
     editingHoursPerWorkday: 5,
     workingDaysPerMonth: 22,
-    features: ["110 reserved editing hours per month shared by two editors", "5 editing hours per standard workday", "Captions, color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "Editing and revisions draw from the monthly hours", "Unused hours do not roll over", ...STUDIO_PACKAGE_STAFFING],
-    deliverables: ["110 editing hours per month shared by two editors", "5 editing hours per workday across 22 working days", "Captions, color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "Editing and revisions draw from the monthly hours", ...STUDIO_PACKAGE_STAFFING],
+    features: ["110 reserved editing hours per month shared by two editors", "5 editing hours per standard workday", "Captions, color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds per edit, within the monthly hours", "Editing and revisions draw from the monthly hours", "Unused hours do not roll over", ...STUDIO_PACKAGE_STAFFING],
+    deliverables: ["110 editing hours per month shared by two editors", "5 editing hours per workday across 22 working days", "Captions, color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds per edit, within the monthly hours", "Editing and revisions draw from the monthly hours", ...STUDIO_PACKAGE_STAFFING],
     basePrice: 3149,
   },
 ];
@@ -92,10 +97,10 @@ export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
     finishedLength: "Up to 60 seconds",
     maxFinishedSeconds: 60,
     rawFootageLimit: "Up to 15 minutes",
-    revisionRounds: 1,
+    revisionRounds: 2,
     firstCutHours: 48,
-    features: ["Vertical 9:16 export for TikTok, Instagram Reels, or YouTube Shorts", "Readable burned-in captions", "Clean cuts and basic color and audio finishing", "One revision round", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["1 vertical short-form video up to 60 seconds", "9:16 export for TikTok, Instagram Reels, or YouTube Shorts", "Burned-in captions", "Basic color and audio finishing", "1 revision round", ...REQUIRED_PACKAGE_STAFFING],
+    features: ["Vertical 9:16 export for TikTok, Instagram Reels, or YouTube Shorts", "Readable burned-in captions", "Clean cuts and basic color and audio finishing", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["1 vertical short-form video up to 60 seconds", "9:16 export for TikTok, Instagram Reels, or YouTube Shorts", "Burned-in captions", "Basic color and audio finishing", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
     basePrice: 25,
   },
   {
@@ -109,10 +114,10 @@ export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
     finishedLength: "Up to 8 minutes",
     maxFinishedSeconds: 8 * 60,
     rawFootageLimit: "Up to 60 minutes",
-    revisionRounds: 1,
+    revisionRounds: 2,
     firstCutHours: 48,
-    features: ["Captions, pacing, and clean cuts", "Basic color and audio finishing", "One revision round", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["1 edited video up to 8 minutes", "Captions", "Basic color and audio finishing", "1 revision round", ...REQUIRED_PACKAGE_STAFFING],
+    features: ["Captions, pacing, and clean cuts", "Basic color and audio finishing", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["1 edited video up to 8 minutes", "Captions", "Basic color and audio finishing", INCLUDED_PACKAGE_THUMBNAIL, "At least 2 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
     basePrice: 109,
   },
   {
@@ -128,8 +133,8 @@ export const SINGLE_VIDEO_PACKAGES: SingleVideoPackage[] = [
     rawFootageLimit: "Up to 240 minutes",
     revisionRounds: 3,
     firstCutHours: 48,
-    features: ["Narrative structure and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "Three revision rounds", ...REQUIRED_PACKAGE_STAFFING],
-    deliverables: ["1 edited video up to 30 minutes", "Narrative structure and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", "3 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+    features: ["Narrative structure and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", INCLUDED_PACKAGE_THUMBNAIL, "Three revision rounds", ...REQUIRED_PACKAGE_STAFFING],
+    deliverables: ["1 edited video up to 30 minutes", "Narrative structure and advanced pacing", "Color and audio finishing", "Licensed stock and B-roll from our included asset library", "Light template-based branded motion", INCLUDED_PACKAGE_THUMBNAIL, "3 revision rounds", ...REQUIRED_PACKAGE_STAFFING],
     basePrice: 249,
   },
 ];

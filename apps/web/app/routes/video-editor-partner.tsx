@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type MouseEvent, type ReactNode } from "react";
 import type { ActionFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useNavigation, useSearchParams, useSubmit } from "react-router";
 import { z } from "zod";
@@ -9,6 +9,18 @@ import { Select } from "../components/Select";
 import { submitContactInquiry } from "../lib/contact-intake.server";
 import { forbiddenMutation, isSameSiteMutation, readMutationForm } from "../lib/mutation-request.server";
 import "../styles/video-editor-partner.css";
+
+const REFERENCE_VIDEO_DURATION = "11:14";
+
+const partnerSteps = [
+  { number: "01", title: "Your details", description: "A few basics so we know who we’re speaking with." },
+  { number: "02", title: "Your editing work", description: "Show us what you enjoy editing and where we can see it." },
+  { number: "03", title: "Your work arrangement", description: "Tell us how you work with clients and your preferred arrangement." },
+  { number: "04", title: "Pricing", description: "Review the reference video, then share your turnaround, rate, and how your work compares." },
+] as const;
+
+type PartnerFormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+type PartnerFocusTarget = HTMLElement & { reportValidity?: () => boolean };
 
 const applicationSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -56,15 +68,15 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const candidate = parsed.data;
   const details = [
     "Video editor partner application",
-    `Phone: ${candidate.phone}`,
+    `WhatsApp: ${candidate.phone}`,
     `Address: ${candidate.address}`,
     `Portfolio / reel: ${candidate.portfolioUrl}`,
     `Editing experience: ${experienceLabels[candidate.experience]}`,
     `Designs thumbnails: ${candidate.thumbnailDesign === "yes" ? "Yes" : "No"}`,
     `Typical thumbnail rate: ${candidate.thumbnailDesign === "yes" ? candidate.thumbnailRate : "Not applicable"}`,
     `Can create a video at the reference quality: ${referenceCapabilityLabels[candidate.referenceCapability]}`,
-    `Editing turnaround for an 18:47 video: ${editingTurnaroundLabels[candidate.editingTurnaround]}`,
-    `Price for an 18:47 video at the reference level: ${priceRangeLabels[candidate.priceRange]}`,
+    `Editing turnaround for an ${REFERENCE_VIDEO_DURATION} video: ${editingTurnaroundLabels[candidate.editingTurnaround]}`,
+    `Price for an ${REFERENCE_VIDEO_DURATION} video at the reference level: ${priceRangeLabels[candidate.priceRange]}`,
     `AI tools: ${candidate.aiTools || "Not provided"}`,
     `Previous client work storage: ${candidate.storageMethods.map((value) => storageMethodLabels[value]).join(", ")}${candidate.otherStorage ? `; other: ${candidate.otherStorage}` : ""}`,
     `Work arrangement: ${workArrangementLabels[candidate.workArrangement]}`,
@@ -121,7 +133,11 @@ export default function VideoEditorPartnerPage() {
   const submit = useSubmit();
   const alertRef = useRef<HTMLDivElement>(null);
   const submittingRef = useRef(false);
+  const stepSectionsRef = useRef<Array<HTMLElement | null>>([]);
+  const stepHeadingsRef = useRef<Array<HTMLHeadingElement | null>>([]);
+  const pendingStepFocusRef = useRef<{ step: number; target: PartnerFocusTarget; reportValidity: boolean } | null>(null);
   const [clientError, setClientError] = useState("");
+  const [activeStep, setActiveStep] = useState(0);
   const [thumbnailDesign, setThumbnailDesign] = useState<"yes" | "no" | "">("");
   const sent = searchParams.get("sent") === "1";
   const errorCode = searchParams.get("error");
@@ -142,18 +158,106 @@ export default function VideoEditorPartnerPage() {
     if (formError) alertRef.current?.focus();
   }, [formError]);
 
+  useEffect(() => {
+    const pendingFocus = pendingStepFocusRef.current;
+    if (!pendingFocus || pendingFocus.step !== activeStep) return;
+    pendingStepFocusRef.current = null;
+    pendingFocus.target.focus();
+    if (pendingFocus.reportValidity) pendingFocus.target.reportValidity?.();
+  }, [activeStep]);
+
+  function focusStep(step: number, target?: HTMLElement, reportValidity = false) {
+    const focusTarget = target ?? stepHeadingsRef.current[step];
+    if (!focusTarget) {
+      setActiveStep(step);
+      return;
+    }
+
+    if (step === activeStep) {
+      focusTarget.focus();
+      if (reportValidity) (focusTarget as PartnerFocusTarget).reportValidity?.();
+      return;
+    }
+
+    pendingStepFocusRef.current = {
+      step,
+      target: focusTarget as PartnerFocusTarget,
+      reportValidity,
+    };
+    setActiveStep(step);
+  }
+
+  function findInvalidControl(step: number) {
+    const section = stepSectionsRef.current[step];
+    if (!section) return null;
+    const controls = section.querySelectorAll("input:not([type='hidden']), select, textarea") as unknown as NodeListOf<PartnerFormControl>;
+    return [...controls].find((control) => control.willValidate && !control.checkValidity()) ?? null;
+  }
+
+  function findMissingStorageGroup(step: number) {
+    if (step !== 1) return null;
+    const section = stepSectionsRef.current[step];
+    if (!section || section.querySelector('input[name="storageMethods"]:checked')) return null;
+    return section.querySelector("#storageMethods") as unknown as HTMLElement | null;
+  }
+
+  function validateCurrentStep() {
+    const invalidControl = findInvalidControl(activeStep);
+    if (invalidControl) {
+      invalidControl.reportValidity();
+      return false;
+    }
+
+    const missingStorageGroup = findMissingStorageGroup(activeStep);
+    if (missingStorageGroup) {
+      setClientError("Choose at least one storage option before continuing.");
+      missingStorageGroup.focus();
+      return false;
+    }
+
+    setClientError("");
+    return true;
+  }
+
+  function validateAllSteps() {
+    for (let step = 0; step < partnerSteps.length; step += 1) {
+      const invalidControl = findInvalidControl(step);
+      if (invalidControl) {
+        setClientError(`Complete the required answers in “${partnerSteps[step].title}” before sending your application.`);
+        focusStep(step, invalidControl as unknown as HTMLElement, true);
+        return false;
+      }
+
+      const missingStorageGroup = findMissingStorageGroup(step);
+      if (missingStorageGroup) {
+        setClientError("Choose at least one storage option before sending your application.");
+        focusStep(step, missingStorageGroup);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function handleNextStep(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    if (!validateCurrentStep()) return;
+    focusStep(Math.min(activeStep + 1, partnerSteps.length - 1));
+  }
+
+  function handlePreviousStep() {
+    setClientError("");
+    focusStep(Math.max(activeStep - 1, 0));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submittingRef.current) return;
+    if (!validateAllSteps()) return;
     submittingRef.current = true;
     setClientError("");
     const form = event.currentTarget;
     try {
-      if (!form.querySelector('input[name="storageMethods"]:checked')) {
-        setClientError("Choose at least one storage option before sending your application.");
-        submittingRef.current = false;
-        return;
-      }
       const { executeInvisibleRecaptcha } = await import("../lib/recaptcha.client");
       await executeInvisibleRecaptcha(form, "partner_application");
       await submit(form, { method: "post", action: "/video-editor-partner" });
@@ -183,30 +287,48 @@ export default function VideoEditorPartnerPage() {
 
           {formError ? <div ref={alertRef} className="partner-alert" role="alert" tabIndex={-1}>{formError}</div> : null}
 
-          <Form method="post" action="/video-editor-partner" className="partner-form" onSubmit={handleSubmit} aria-busy={busy || undefined} aria-label="Video editor partner application">
+          <Form method="post" action="/video-editor-partner" className="partner-form" onSubmit={handleSubmit} aria-busy={busy || undefined} aria-label="Video editor partner application" noValidate>
+            <div
+              className="partner-progress"
+              role="progressbar"
+              aria-label="Application progress"
+              aria-valuemin={1}
+              aria-valuemax={partnerSteps.length}
+              aria-valuenow={activeStep + 1}
+              aria-valuetext={`Step ${activeStep + 1} of ${partnerSteps.length}: ${partnerSteps[activeStep].title}`}
+            >
+              <div className="partner-progress__meta">
+                <span>Step {activeStep + 1} of {partnerSteps.length}</span>
+              </div>
+              <div className="partner-progress__track" aria-hidden="true">
+                {partnerSteps.map((step, index) => (
+                  <span key={step.number} className={index <= activeStep ? "is-complete" : undefined} />
+                ))}
+              </div>
+            </div>
             <input type="hidden" name="g-recaptcha-response" value="" />
 
-            <FormSection number="01" title="Your details" description="A few basics so we know who we’re speaking with.">
-              <TextField id="name" name="name" label="Full name" autoComplete="name" required maxLength={120} />
+            <FormSection {...partnerSteps[0]} active={activeStep === 0} sectionRef={(node) => { stepSectionsRef.current[0] = node; }} headingRef={(node) => { stepHeadingsRef.current[0] = node; }}>
+              <TextField id="name" name="name" label="Full name" autoComplete="name" required minLength={2} maxLength={120} />
               <TextField id="email" name="email" label="Email address" type="email" autoComplete="email" required maxLength={254} />
-              <TextField id="phone" name="phone" label="Phone number" type="tel" inputMode="tel" pattern="[+0-9(). -]{7,64}" autoComplete="tel" placeholder="Include your country code" help="Enter a phone number with its country code." required maxLength={64} />
-              <TextField id="address" name="address" label="Address" autoComplete="street-address" placeholder="Street, city, country" help="Your current mailing address." required maxLength={240} wide />
+              <TextField id="phone" name="phone" label="WhatsApp number" type="tel" inputMode="tel" pattern="[+0-9(). -]{7,64}" autoComplete="tel" placeholder="e.g. +1 555 123 4567" help="Enter the number linked to your WhatsApp account, including your country code." required minLength={7} maxLength={64} />
+              <TextField id="address" name="address" label="Address" autoComplete="street-address" placeholder="Street, city, country" help="Your current mailing address." required minLength={5} maxLength={240} />
             </FormSection>
 
-            <FormSection number="02" title="Your editing work" description="Show us what you enjoy editing and where we can see it.">
+            <FormSection {...partnerSteps[1]} active={activeStep === 1} sectionRef={(node) => { stepSectionsRef.current[1] = node; }} headingRef={(node) => { stepHeadingsRef.current[1] = node; }}>
               <TextField id="portfolioUrl" name="portfolioUrl" label="Portfolio or showreel link" placeholder="Paste your portfolio or showreel link" help="Share a link where we can review your work." required maxLength={300} />
               <SelectField id="experience" name="experience" label="Years of video editing experience" options={experienceOptions} required />
               <RadioGroup id="thumbnailDesign" label="Do you design thumbnails?" options={[
                 { value: "yes", label: "Yes" },
                 { value: "no", label: "No" },
               ]} required onChange={(event) => setThumbnailDesign(event.currentTarget.value as "yes" | "no")} />
-              {thumbnailDesign === "yes" ? <TextField id="thumbnailRate" name="thumbnailRate" label="What is your typical rate per thumbnail?" help="Include your currency." required maxLength={160} /> : null}
+              {thumbnailDesign === "yes" ? <TextField id="thumbnailRate" name="thumbnailRate" label="What is your typical rate per thumbnail?" help="Include your currency." required minLength={2} maxLength={160} /> : null}
               <TextField id="aiTools" name="aiTools" label="Which AI tools do you use?" optional placeholder="e.g. Descript, Runway, Adobe Enhance" help="Share how you use them in your workflow, if relevant." maxLength={240} />
               <ChoiceGroup id="storageMethods" label="Where do you store previous client work?" help="Choose all that apply." options={storageMethodOptions} required />
               <TextField id="otherStorage" name="otherStorage" label="Other storage details" optional placeholder="Describe your storage setup" maxLength={120} />
             </FormSection>
 
-            <FormSection number="03" title="Your work arrangement" description="Tell us how you work with clients and your preferred arrangement.">
+            <FormSection {...partnerSteps[2]} active={activeStep === 2} sectionRef={(node) => { stepSectionsRef.current[2] = node; }} headingRef={(node) => { stepHeadingsRef.current[2] = node; }}>
               <RadioGroup id="workArrangement" label="Which best describes you?" options={[
                 { value: "agency", label: "Agency" },
                 { value: "freelancer", label: "Freelancer" },
@@ -214,34 +336,47 @@ export default function VideoEditorPartnerPage() {
               ]} required />
             </FormSection>
 
-            <FormSection number="04" title="Pricing" description="Review the reference video, then share your turnaround, rate, and how your work compares.">
+            <FormSection {...partnerSteps[3]} active={activeStep === 3} sectionRef={(node) => { stepSectionsRef.current[3] = node; }} headingRef={(node) => { stepHeadingsRef.current[3] = node; }}>
               <figure className="partner-video-reference partner-field--wide">
                 <div className="partner-video-reference__frame">
                   <iframe
-                    src="https://www.youtube-nocookie.com/embed/FVR8zz8ci2k?rel=0"
-                    title="StudioBinder: 6 Ways to Edit Any Scene (18 minutes 47 seconds)"
+                    src="https://www.youtube-nocookie.com/embed/t5Z-Q1bg1tU?rel=0"
+                    title="How To Become A Master Storyteller — Kallaway"
                     loading="lazy"
                     referrerPolicy="strict-origin-when-cross-origin"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                   />
                 </div>
-                <figcaption className="partner-field__help">StudioBinder’s editing techniques breakdown · 18:47. <a href="https://www.youtube.com/watch?v=FVR8zz8ci2k" target="_blank" rel="noreferrer noopener">Open on YouTube</a></figcaption>
+                <figcaption className="partner-field__help">Kallaway’s “How To Become A Master Storyteller” video. <a href="https://www.youtube.com/watch?v=t5Z-Q1bg1tU" target="_blank" rel="noreferrer noopener">Open on YouTube</a></figcaption>
               </figure>
               <RadioGroup id="referenceCapability" label="Can you create a video at the same quality as this reference?" help="Choose the option closest to your current work." options={[
                 { value: "no", label: "No" },
                 { value: "yes", label: "Yes" },
                 { value: "better", label: "I can create better-quality videos" },
               ]} required wide />
-              <RadioGroup id="editingTurnaround" label="How long would you take to edit an 18:47 video to this standard?" help="Choose your typical turnaround after receiving the footage and brief." options={editingTurnaroundOptions} required wide />
-              <RadioGroup id="priceRange" label="How much would you charge to edit an 18:47 video to this standard?" help="Choose the price range that includes your typical rate in Bangladeshi taka." options={priceRangeOptions} required wide />
+              <RadioGroup id="editingTurnaround" label={`How long would you take to edit an ${REFERENCE_VIDEO_DURATION} video to this standard?`} help="Choose your typical turnaround after receiving the footage and brief." options={editingTurnaroundOptions} required wide />
+              <RadioGroup id="priceRange" label={`How much would you charge to edit an ${REFERENCE_VIDEO_DURATION} video to this standard?`} help="Choose the price range that includes your typical rate in Bangladeshi taka." options={priceRangeOptions} required wide />
             </FormSection>
 
             <div className="partner-form__footer">
-              <button className="partner-submit" type="submit" disabled={busy}>
-                {busy ? "Sending application…" : "Send my application"}
-                <ArrowRight size={17} aria-hidden="true" />
-              </button>
+              <div className="partner-form__actions">
+                {activeStep > 0 ? (
+                  <button className="partner-step-button partner-step-button--back" type="button" onClick={handlePreviousStep} disabled={busy}>
+                    Back
+                  </button>
+                ) : null}
+                {activeStep < partnerSteps.length - 1 ? (
+                  <button key="next-step" className="partner-step-button partner-step-button--next" type="button" onClick={handleNextStep} disabled={busy}>
+                    Next <ArrowRight size={17} aria-hidden="true" />
+                  </button>
+                ) : (
+                  <button key="submit-application" className="partner-submit" type="submit" disabled={busy}>
+                    {busy ? "Sending application…" : "Send my application"}
+                    <ArrowRight size={17} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
             </div>
           </Form>
         </section>
@@ -250,12 +385,20 @@ export default function VideoEditorPartnerPage() {
   );
 }
 
-function FormSection({ number, title, description, children }: { number: string; title: string; description: string; children: ReactNode }) {
+function FormSection({ number, title, description, children, active, sectionRef, headingRef }: {
+  number: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+  active: boolean;
+  sectionRef: (node: HTMLElement | null) => void;
+  headingRef: (node: HTMLHeadingElement | null) => void;
+}) {
   return (
-    <section className="partner-form-section" aria-labelledby={`partner-section-${number}`}>
+    <section ref={sectionRef} className="partner-form-section" aria-labelledby={`partner-section-${number}`} hidden={!active}>
       <div className="partner-form-section__heading">
         <span aria-hidden="true">{number}</span>
-        <div><h3 id={`partner-section-${number}`}>{title}</h3><p>{description}</p></div>
+        <div><h3 id={`partner-section-${number}`} ref={headingRef} tabIndex={-1}>{title}</h3><p>{description}</p></div>
       </div>
       <div className="partner-fields">{children}</div>
     </section>

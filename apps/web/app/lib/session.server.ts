@@ -5,7 +5,8 @@ import type { DatabaseClient } from "@edicut/db/client";
 import { findUserById } from "@edicut/db/repositories/users";
 import { getDbFromContext } from "./db.server";
 import { retryDatabaseRead } from "./database-errors";
-import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH } from "./admin-paths";
+import { ADMIN_ACCESS_PATH, ADMIN_BASE_PATH } from "./admin-paths";
+import { safeAdminRedirect } from "./safe-redirect";
 import {
   getSupabaseUserByAccessToken,
   refreshSupabaseSession,
@@ -24,9 +25,14 @@ const USER_SESSION_SECONDS = 12 * 60 * 60;
 const REMEMBERED_SESSION_SECONDS = 7 * 24 * 60 * 60;
 const ADMIN_SESSION_SECONDS = 2 * 60 * 60;
 const AUTH_CSRF_TOKEN_SECONDS = 2 * 60 * 60;
+const REFRESH_SESSION_RESULT_CACHE_MS = 15_000;
+const MAX_CACHED_REFRESH_SESSIONS = 100;
 const userStorageCache = new Map<string, ReturnType<typeof createCookieSessionStorage>>();
 const adminStorageCache = new Map<string, ReturnType<typeof createCookieSessionStorage>>();
 const authCsrfCookieCache = new Map<string, ReturnType<typeof createCookie>>();
+type RefreshedSupabaseSession = Awaited<ReturnType<typeof refreshSupabaseSession>>;
+type RefreshSessionEntry = { promise: Promise<RefreshedSupabaseSession>; cacheUntil: number | null };
+const refreshSessionCache = new Map<string, RefreshSessionEntry>();
 
 function readSessionSecret(context?: SessionContext) {
   const secret =
@@ -123,26 +129,29 @@ async function credentialKey(context?: SessionContext) {
   return crypto.subtle.importKey("raw", new TextEncoder().encode(readSessionSecret(context)), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 
-function signOutCsrfData(cookieHeader: string | null) {
-  const authCookies = (cookieHeader ?? "")
-    .split(";")
-    .map(value => value.trim())
-    .filter(value => value.startsWith("_session=") || value.startsWith("_edicut_admin="))
-    .sort();
-  if (!authCookies.length) return null;
-  return new TextEncoder().encode(`edicut-signout-v1\n${authCookies.join(";")}`);
+async function signOutCsrfData(cookieHeader: string | null, context?: SessionContext) {
+  const [user, admin]: [AppSession, AppSession] = await Promise.all([
+    getUserSessionStorage(context).getSession(cookieHeader),
+    getAdminSessionStorage(context).getSession(cookieHeader),
+  ]);
+  const kind = user.has("userId") ? "user" : "admin";
+  const session = kind === "user" ? user : admin;
+  const id = session.get(kind === "user" ? "userId" : "adminUserId");
+  if (typeof id !== "string" || !id) return null;
+  // Provider token rotation and profile display updates do not change the login.
+  return new TextEncoder().encode(JSON.stringify(["edicut-signout-v2", kind, id, session.get("authExpiresAt"), session.get("authCredentialVersion")]));
 }
 
 /** Bind the sign-out form token to the signed browser sessions without exposing cookie contents. */
 export async function createSignOutCsrfToken(cookieHeader: string | null, context?: SessionContext) {
-  const data = signOutCsrfData(cookieHeader);
+  const data = await signOutCsrfData(cookieHeader, context);
   if (!data) return null;
   const signature = new Uint8Array(await crypto.subtle.sign("HMAC", await credentialKey(context), data));
   return btoa(String.fromCharCode(...signature)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 export async function verifySignOutCsrfToken(token: unknown, cookieHeader: string | null, context?: SessionContext) {
-  const data = signOutCsrfData(cookieHeader);
+  const data = await signOutCsrfData(cookieHeader, context);
   if (!data || typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
   try {
     const signature = Uint8Array.from(atob(token.replaceAll("-", "+").replaceAll("_", "/") + "="), character => character.charCodeAt(0));
@@ -169,6 +178,66 @@ function sessionHasExpired(session: AppSession, identityKey: string) {
   if (!session.has(identityKey)) return false;
   const expiresAt = session.get("authExpiresAt");
   return !Number.isSafeInteger(expiresAt) || expiresAt <= Date.now();
+}
+
+/** Reuse one rotated provider session across parallel loaders sharing an old cookie. */
+function refreshSupabaseSessionOnce(context: SessionContext | undefined, refreshToken: string) {
+  const now = Date.now();
+  for (const [token, entry] of refreshSessionCache) {
+    if (entry.cacheUntil !== null && entry.cacheUntil <= now) refreshSessionCache.delete(token);
+  }
+
+  const cached = refreshSessionCache.get(refreshToken);
+  if (cached) return cached.promise;
+
+  const entry: RefreshSessionEntry = { promise: Promise.resolve(null), cacheUntil: null };
+  const promise = refreshSupabaseSession(context, refreshToken).then(
+    refreshed => {
+      if (!refreshed) {
+        refreshSessionCache.delete(refreshToken);
+        return null;
+      }
+
+      entry.cacheUntil = Date.now() + REFRESH_SESSION_RESULT_CACHE_MS;
+      if (refreshSessionCache.size > MAX_CACHED_REFRESH_SESSIONS) {
+        for (const [token, cachedEntry] of refreshSessionCache) {
+          if (cachedEntry.cacheUntil !== null && token !== refreshToken) {
+            refreshSessionCache.delete(token);
+            break;
+          }
+        }
+      }
+      return refreshed;
+    },
+    error => {
+      refreshSessionCache.delete(refreshToken);
+      throw error;
+    },
+  );
+  entry.promise = promise;
+  refreshSessionCache.set(refreshToken, entry);
+  return promise;
+}
+
+function adminReauthenticationPath(redirectTo: string, error: "auth-required" | "session-expired") {
+  const returnTo = safeAdminRedirect(redirectTo, ADMIN_BASE_PATH);
+  const accessPath = `${ADMIN_ACCESS_PATH}?returnTo=${encodeURIComponent(returnTo)}`;
+  const params = new URLSearchParams({ mode: "signin", redirectTo: accessPath, error });
+  return `/signin?${params}`;
+}
+
+async function redirectAdminToMainSignIn(
+  session: AppSession,
+  context: SessionContext | undefined,
+  redirectTo: string,
+  error: "auth-required" | "session-expired",
+): Promise<never> {
+  throw redirect(adminReauthenticationPath(redirectTo, error), {
+    headers: {
+      "Cache-Control": "no-store",
+      "Set-Cookie": await destroyAdminSession(session, context),
+    },
+  });
 }
 
 async function prepareSession(session: AppSession, maximumSeconds: number, kind: SessionKind, context?: SessionContext) {
@@ -322,12 +391,13 @@ export async function requireUserProfile(
     if (!user) {
       const refreshToken = session.get("supabaseRefreshToken");
       if (typeof refreshToken === "string" && refreshToken.length > 0) {
-        const refreshed = await refreshSupabaseSession(context, refreshToken);
+        const refreshed = await refreshSupabaseSessionOnce(context, refreshToken);
         if (refreshed) {
           session.set("userId", typeof userId === "string" ? userId : refreshed.user.id);
           session.set("supabaseAccessToken", refreshed.session.access_token);
           session.set("supabaseRefreshToken", refreshed.session.refresh_token);
           throw redirect(request.url, {
+            status: request.method === "GET" ? 302 : 307,
             headers: {
               "Set-Cookie": await commitSession(session, undefined, context),
             },
@@ -436,7 +506,7 @@ export async function requireAdminUser(
   request: Request,
   db: DatabaseClient,
   context?: SessionContext,
-  redirectTo: string = new URL(request.url).pathname
+  redirectTo: string = `${new URL(request.url).pathname}${new URL(request.url).search}`
 ) {
   const session = await getAdminSession(request.headers.get("Cookie"), context);
   const adminUserId = session.get("adminUserId");
@@ -447,11 +517,12 @@ export async function requireAdminUser(
     if (!authUser?.email || !authUser.email_confirmed_at) {
       const refreshToken = session.get("supabaseRefreshToken");
       if (typeof refreshToken === "string" && refreshToken.length > 0) {
-        const refreshed = await refreshSupabaseSession(context, refreshToken);
+        const refreshed = await refreshSupabaseSessionOnce(context, refreshToken);
         if (refreshed?.user.email && refreshed.user.email_confirmed_at) {
           session.set("supabaseAccessToken", refreshed.session.access_token);
           session.set("supabaseRefreshToken", refreshed.session.refresh_token);
           throw redirect(request.url, {
+            status: request.method === "GET" ? 302 : 307,
             headers: {
               "Set-Cookie": await commitAdminSession(session, undefined, context),
             },
@@ -459,7 +530,7 @@ export async function requireAdminUser(
         }
       }
 
-      throw redirect(ADMIN_LOGIN_PATH);
+      return redirectAdminToMainSignIn(session, context, redirectTo, "session-expired");
     }
 
     const supabaseAdmin = await findAdminUserByEmail(db, authUser.email);
@@ -467,18 +538,35 @@ export async function requireAdminUser(
       return supabaseAdmin;
     }
 
-    throw redirect(ADMIN_LOGIN_PATH);
+    return redirectAdminToMainSignIn(session, context, redirectTo, "session-expired");
   }
 
   if (!adminUserId || typeof adminUserId !== "string") {
-    const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
-    throw redirect(`${ADMIN_LOGIN_PATH}?${searchParams}`);
+    // The main workspace login can outlive the dedicated admin cookie. Restore
+    // only the same explicitly verified admin grant, checking both accounts fresh.
+    const workspaceSession = await getSession(request.headers.get("Cookie"), context);
+    const verifiedAdminId = workspaceSession.get("adminUserId");
+    if (workspaceSession.get("adminAccessVerified") === true && typeof verifiedAdminId === "string" && verifiedAdminId) {
+      const profile = await requireUserProfile(request, context);
+      const admin = await retryDatabaseRead(() => findAdminUserById(db, verifiedAdminId));
+      if (admin?.active && isAdminRole(admin.role)
+        && profile.email.trim().toLowerCase() === admin.email.trim().toLowerCase()
+        && await hasCurrentSessionCredentials(workspaceSession.get("adminCredentialVersion"), admin, context, "admin")) {
+        const restored = await getAdminSession(null, context);
+        restored.set("adminUserId", admin.id);
+        throw redirect(request.url, {
+          status: request.method === "GET" ? 302 : 307,
+          headers: { "Cache-Control": "no-store", "Set-Cookie": await commitAdminSession(restored, undefined, context) },
+        });
+      }
+    }
+    return redirectAdminToMainSignIn(session, context, redirectTo, "auth-required");
   }
 
   const user = await findAdminUserById(db, adminUserId);
 
   if (!user || !user.active || !isAdminRole(user.role) || !await hasCurrentSessionCredentials(session.get("authCredentialVersion"), user, context, "admin")) {
-    throw redirect(ADMIN_LOGIN_PATH);
+    return redirectAdminToMainSignIn(session, context, redirectTo, "session-expired");
   }
 
   return user;

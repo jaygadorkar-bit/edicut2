@@ -7,8 +7,8 @@ import { createRouteMeta, getCanonicalSiteOrigin, serializeJsonLd } from "../lib
 import "../styles/services.css";
 
 export const meta: MetaFunction = (args) => createRouteMeta(args,
-  "Video Editing & YouTube Thumbnail Services | EdiCut",
-  "Explore EdiCut services for YouTube videos, podcasts, Shorts, Reels, gaming, and thumbnails. Find the right editing approach for your next upload.",
+  "Video Editing Services for YouTube & Podcasts | EdiCut",
+  "Compare video editing services for YouTube, podcasts, Shorts, gaming, and thumbnails. See each service's scope and choose support for your next upload.",
 );
 
 const serviceIcons = [Film, Mic2, Smartphone, Gamepad2, Image];
@@ -41,7 +41,7 @@ export default function ServicesPage() {
         </nav>
         <section className="services-hero" aria-labelledby="services-title">
           <div>
-            <h1 id="services-title">Video editing for the way you create.</h1>
+            <h1 id="services-title">Looking for video editing services for YouTube?</h1>
             <p className="services-lead">A YouTube story, a long conversation, a moment worth clipping. Explore the work behind each format and find the right approach for your next upload.</p>
             <div className="services-actions">
               <Link to="/pricing" className="neo-button neo-button--primary">Explore editing packages</Link>
@@ -49,13 +49,13 @@ export default function ServicesPage() {
             </div>
           </div>
           <aside className="services-hero-note" aria-label="How to choose an editing service">
-            <h2>Start with your footage.</h2>
+            <h2>Need a video editing service?</h2>
             <p>Tell us what you are making, how much material you have, and where it will be published. We can help you choose a scope that fits.</p>
             <Link to="/contact" className="services-text-link">Discuss your project <ArrowUpRight size={17} aria-hidden="true" /></Link>
           </aside>
         </section>
         <section className="services-directory" aria-labelledby="services-directory-title">
-          <h2 id="services-directory-title">Explore our services</h2>
+          <h2 id="services-directory-title">What kind of video editing can we help with?</h2>
           <div>
             {SERVICE_PAGES.map((service, index) => {
               const Icon = serviceIcons[index] ?? Film;
@@ -73,7 +73,7 @@ export default function ServicesPage() {
           </div>
         </section>
         <section className="services-closing" aria-labelledby="services-closing-title">
-          <div><h2 id="services-closing-title">One upload or a regular publishing rhythm?</h2><p>Compare the current editing packages and their footage, length, and revision allowances. For a different brief, talk with the team before choosing.</p></div>
+          <div><h2 id="services-closing-title">Do you need one video edit or ongoing video editing?</h2><p>Compare the current editing packages and their footage, length, and revision allowances. For a different brief, talk with the team before choosing.</p></div>
           <Link to="/pricing" className="neo-button neo-button--primary">Compare packages</Link>
         </section>
       </div>

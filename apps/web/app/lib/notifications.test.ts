@@ -6,6 +6,7 @@ import {
   groupNotificationEvents,
   mergeNotificationReads,
   mergeNotificationDismissals,
+  notificationEventForEntity,
   notificationDayGroup,
   notificationTime,
   validNotificationDismissals,
@@ -21,6 +22,67 @@ const now = Date.parse("2026-10-14T08:00:00Z"),
   id = "11111111-1111-4111-8111-111111111111";
 const viewer = { id, role: "admin", admin: true, features: [] };
 describe("notification read state and presentation", () => {
+  it("separates partner applications from enquiries and links them to recruiting forms", async () => {
+    const timestamp = new Date(now).toISOString();
+    const applicationId = "22222222-2222-4222-8222-222222222222";
+    const dialect = new PgDialect();
+    const execute = vi.fn(async (statement: SQL) => {
+      const query = dialect.sqlToQuery(statement);
+      if (query.sql.includes("FROM contact_messages") && query.sql.includes("'enquiry' AS kind")) {
+        return [{ entityId: id, kind: "enquiry", title: "New enquiry", detail: "Creator — YouTube editing", occurredAt: timestamp }];
+      }
+      if (query.sql.includes("FROM contact_messages") && query.sql.includes("'recruiting' AS kind")) {
+        return [{ entityId: applicationId, kind: "recruiting", title: "New partner application", detail: "Taylor Editor — taylor@example.test", occurredAt: timestamp }];
+      }
+      return [];
+    });
+    const db = { execute } as unknown as DatabaseClient;
+
+    const feed = await getWorkspaceNotificationFeed(db, viewer, new Date(now));
+    const enquiryQuery = execute.mock.calls.map(([statement]) => dialect.sqlToQuery(statement).sql).find((query) => query.includes("'enquiry' AS kind"));
+    const recruitingQuery = execute.mock.calls.map(([statement]) => dialect.sqlToQuery(statement).sql).find((query) => query.includes("'recruiting' AS kind"));
+    const application = feed.events.find((event) => event.kind === "recruiting");
+
+    expect(enquiryQuery).toContain("project_type IS DISTINCT FROM");
+    expect(recruitingQuery).toContain("project_type=");
+    expect(feed.kinds).toContain("recruiting");
+    expect(feed.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "enquiry", title: "New enquiry", to: `/dashboard/messages?event=${id}` }),
+    ]));
+    expect(application).toMatchObject({
+      kind: "recruiting",
+      title: "New partner application",
+      to: "/site/node-logmin/recruiting-forms",
+      actionLabel: "Review application",
+    });
+    expect(notificationEventForEntity(feed.events, "recruiting", applicationId)).toBe(application);
+    expect(notificationEventForEntity(feed.events, "recruiting", id)).toBeUndefined();
+    expect(notificationEventForEntity(feed.events, "enquiry", applicationId)).toBeUndefined();
+    expect(feed.events.some((event) => event.kind === "enquiry" && event.detail.includes("partner application"))).toBe(false);
+  });
+
+  it("runs notification raw SQL with prepared statements on Postgres.js", async () => {
+    const unsafe = vi.fn(async (..._args: unknown[]) => []);
+    const db = {
+      dialect: new PgDialect(),
+      $client: { unsafe },
+    } as unknown as DatabaseClient;
+
+    await getWorkspaceNotificationFeed(
+      db,
+      { id, role: "customer", admin: false, features: ["projects"] },
+      new Date(now),
+    );
+
+    expect(unsafe).toHaveBeenCalledTimes(3);
+    expect(
+      unsafe.mock.calls.every(([, , options]) =>
+        (options as { prepare?: boolean } | undefined)?.prepare === true,
+      ),
+    ).toBe(true);
+    expect(unsafe.mock.calls[0]?.[0]).toContain("FROM project_review_members");
+  });
+
   it("loads only the current admin's persisted event receipts", async () => {
     const timestamp = new Date(now).toISOString();
     const otherAdminId = "22222222-2222-4222-8222-222222222222";

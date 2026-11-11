@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCookieSessionStorage } from "react-router";
-const mocks = vi.hoisted(() => ({ user: vi.fn(), admin: vi.fn(), update: vi.fn(), revokeProvider: vi.fn() }));
+const mocks = vi.hoisted(() => ({ user: vi.fn(), admin: vi.fn(), update: vi.fn(), revokeProvider: vi.fn(), verifyProvider: vi.fn(), refreshProvider: vi.fn() }));
 vi.mock("@edicut/db/repositories/users", () => ({ findUserById: mocks.user }));
 vi.mock("@edicut/db/repositories/admin-users", () => ({ findAdminUserById: mocks.admin, findAdminUserByEmail: mocks.admin }));
 vi.mock("./db.server", () => ({ getDbFromContext: () => ({ update: mocks.update }) }));
-vi.mock("../integrations/supabase/client.server", () => ({ getSupabaseUserByAccessToken: vi.fn(), refreshSupabaseSession: vi.fn(), revokeSupabaseSession: mocks.revokeProvider }));
-import { commitAdminSession, commitSession, createAdminSession, createUserSession, getAdminSession, getSession, requireAdminUser, requireUserId, revokeAuthenticatedSessions } from "./session.server";
+vi.mock("../integrations/supabase/client.server", () => ({ getSupabaseUserByAccessToken: mocks.verifyProvider, refreshSupabaseSession: mocks.refreshProvider, revokeSupabaseSession: mocks.revokeProvider }));
+import { commitAdminSession, commitSession, createAdminSession, createUserSession, createSignOutCsrfToken, verifySignOutCsrfToken, getAdminSession, getSession, requireAdminUser, requireUserId, revokeAuthenticatedSessions } from "./session.server";
 import type { DatabaseClient } from "@edicut/db/client";
 import { users } from "@edicut/db/schema";
 
@@ -21,6 +21,8 @@ const beginning = new Date("2026-10-13T00:00:00Z").valueOf();
 beforeEach(() => {
   vi.useFakeTimers(); vi.setSystemTime(beginning); vi.clearAllMocks();
   mocks.user.mockResolvedValue(user); mocks.admin.mockResolvedValue(admin);
+  mocks.verifyProvider.mockResolvedValue(null);
+  mocks.refreshProvider.mockResolvedValue(null);
   mocks.revokeProvider.mockResolvedValue(undefined);
   mocks.update.mockImplementation(table => ({ set: (values: Record<string, unknown>) => ({ where: async () => {
     if (table === users) mocks.user.mockResolvedValue({ ...user, ...values });
@@ -30,6 +32,50 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe("authentication session security", () => {
+  it("keeps sign-out CSRF tokens valid through provider cookie rotation but rejects a different login", async () => {
+    const original = cookie(await startUser());
+    const csrf = await createSignOutCsrfToken(original, context);
+    const session = await getSession(original, context);
+    session.set("supabaseAccessToken", "rotated-access");
+    session.set("supabaseRefreshToken", "rotated-refresh");
+    const rotated = (await commitSession(session, undefined, context)).split(";")[0];
+    expect(await verifySignOutCsrfToken(csrf, rotated, context)).toBe(true);
+    vi.setSystemTime(beginning + 1000);
+    expect(await verifySignOutCsrfToken(csrf, cookie(await startUser()), context)).toBe(false);
+  });
+  it.each(["GET", "POST", "PATCH"])("restores a missing admin cookie from a freshly verified workspace login for %s", async method => {
+    const matchingAdmin = { ...admin, email: user.email };
+    mocks.admin.mockResolvedValue(matchingAdmin);
+    const userCookie = cookie(await createUserSession({ request: request(), context, userId: user.id, remember: true,
+      redirectTo: "/dashboard", adminUserId: admin.id, adminAccessVerified: true }));
+    const resource = new Request("https://edicut.com/api/notifications?scope=admin", { method, headers: { Cookie: userCookie } });
+    const response = await requireAdminUser(resource, {} as DatabaseClient, context).catch(error => error as Response);
+    expect(response.status).toBe(method === "GET" ? 302 : 307);
+    expect(response.headers.get("Location")).toBe(resource.url);
+    const adminCookie = cookie(response);
+    expect((await getAdminSession(adminCookie, context)).get("adminUserId")).toBe(admin.id);
+    expect(await requireAdminUser(new Request(resource.url, { headers: { Cookie: `${userCookie}; ${adminCookie}` } }), {} as DatabaseClient, context)).toEqual(matchingAdmin);
+  });
+  it.each(["unverified", "revoked", "email-mismatch", "inactive"])("does not restore admin access from a %s workspace grant", async condition => {
+    const matchingAdmin = { ...admin, email: user.email };
+    mocks.admin.mockResolvedValue(matchingAdmin);
+    const userCookie = cookie(await createUserSession({ request: request(), context, userId: user.id, remember: true,
+      redirectTo: "/dashboard", adminUserId: admin.id, adminAccessVerified: condition !== "unverified" }));
+    if (condition === "revoked") mocks.admin.mockResolvedValue({ ...matchingAdmin, sessionVersion: crypto.randomUUID() });
+    if (condition === "email-mismatch") mocks.admin.mockResolvedValue(admin);
+    if (condition === "inactive") mocks.user.mockResolvedValue({ ...user, active: false });
+    const response = await requireAdminUser(request(userCookie), {} as DatabaseClient, context).catch(error => error as Response);
+    expect(response.headers.get("Location")).toContain("/signin");
+    expect((await getAdminSession(response.headers.get("Set-Cookie"), context)).get("adminUserId")).toBeUndefined();
+  });
+  it("preserves form submissions when refreshing an expired provider token", async () => {
+    const userCookie = cookie(await createUserSession({ request: request(), context, userId: user.id, remember: false,
+      redirectTo: "/dashboard", accessToken: "expired-form-access", refreshToken: "form-refresh" }));
+    mocks.refreshProvider.mockResolvedValue({ user: { id: user.id }, session: { access_token: "new-form-access", refresh_token: "new-form-refresh" } });
+    const response = await requireUserId(new Request("https://edicut.com/dashboard/profile", { method: "POST", headers: { Cookie: userCookie } }), context).catch(error => error as Response);
+    expect(response.status).toBe(307);
+    expect(response.headers.get("Set-Cookie")).toContain("_session=");
+  });
   it("revokes copied local/Google session cookies on logout and rejects replayed revocations", async () => {
     const copiedCookie = cookie(await startUser());
     const session = await getSession(copiedCookie, context), emptyAdmin = await getAdminSession(null, context);
@@ -92,6 +138,60 @@ describe("authentication session security", () => {
     const oldCookie = cookie(await startAdmin());
     mocks.admin.mockResolvedValue({ ...admin, passwordHash: "new-admin-hash" });
     await expect(requireAdminUser(request(oldCookie), {} as DatabaseClient, context)).rejects.toMatchObject({ status: 302 });
+  });
+  it("sends expired admin sessions to the main sign-in page and preserves the requested admin route", async () => {
+    const oldCookie = cookie(await startAdmin());
+    const target = "/site/node-logmin/recruiting-forms?tab=pending";
+    const adminRequest = new Request(`https://edicut.com${target}`, { headers: { Cookie: oldCookie } });
+    mocks.admin.mockResolvedValue({ ...admin, sessionVersion: "33333333-3333-4333-8333-333333333333" });
+
+    const response = await requireAdminUser(adminRequest, {} as DatabaseClient, context).catch(error => error);
+    expect(response).toBeInstanceOf(Response);
+    const redirectUrl = new URL((response as Response).headers.get("Location")!, adminRequest.url);
+    expect(redirectUrl.pathname).toBe("/signin");
+    expect(redirectUrl.searchParams.get("mode")).toBe("signin");
+    expect(redirectUrl.searchParams.get("error")).toBe("session-expired");
+    const accessUrl = new URL(redirectUrl.searchParams.get("redirectTo")!, adminRequest.url);
+    expect(accessUrl.pathname).toBe("/site/node-logmin/access");
+    expect(new URLSearchParams(accessUrl.search).get("returnTo")).toBe(target);
+    expect((response as Response).headers.get("Set-Cookie")).toContain("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+  });
+  it("coalesces concurrent Supabase refreshes for the same expired customer cookie", async () => {
+    const oldCookie = cookie(await createUserSession({
+      request: request(), context, userId: user.id, remember: false, redirectTo: "/dashboard",
+      accessToken: "expired-access-token", refreshToken: "shared-refresh-token",
+    }));
+    const refreshed = {
+      user: { id: user.id },
+      session: { access_token: "new-access-token", refresh_token: "new-refresh-token" },
+    };
+    let releaseRefresh!: (value: typeof refreshed) => void;
+    let markRefreshStarted!: () => void;
+    const refreshStarted = new Promise<void>(resolve => { markRefreshStarted = resolve; });
+    const refreshGate = new Promise<typeof refreshed>(resolve => { releaseRefresh = resolve; });
+    mocks.verifyProvider.mockImplementation(async () => {
+      await Promise.resolve();
+      return null;
+    });
+    mocks.refreshProvider.mockImplementation(() => {
+      markRefreshStarted();
+      return refreshGate;
+    });
+
+    const first = requireUserId(request(oldCookie), context);
+    const second = requireUserId(request(oldCookie), context);
+    await refreshStarted;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(mocks.refreshProvider).toHaveBeenCalledTimes(1);
+
+    releaseRefresh(refreshed);
+    const results = await Promise.allSettled([first, second]);
+    const redirects = results.map(result => result.status === "rejected" ? result.reason as Response : null);
+    expect(redirects.every(response => response?.status === 302)).toBe(true);
+    const refreshedSession = await getSession(cookie(redirects[0]!), context);
+    expect(refreshedSession.get("supabaseAccessToken")).toBe("new-access-token");
+    expect(refreshedSession.get("supabaseRefreshToken")).toBe("new-refresh-token");
   });
   it("sets Secure and HttpOnly in Workers without NODE_ENV", async () => {
     vi.stubEnv("NODE_ENV", "");

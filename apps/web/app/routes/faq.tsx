@@ -9,8 +9,8 @@ import faqPageStyles from "../styles/faq-page.css?url";
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: faqPageStyles }];
 
 export const meta: MetaFunction = (args) => createRouteMeta(args,
-  "YouTube Video Editing FAQs: Pricing, Process, and Delivery | EdiCut",
-  "Answers about EdiCut video editing plans, project setup, footage handoff, revisions, turnaround, thumbnails, and account security.",
+  "Video Editing FAQs: Pricing & Process | EdiCut",
+  "Find answers about video editing packages, footage, revisions, turnaround, and delivery for YouTube videos, Shorts, podcasts, and gaming.",
 );
 
 const categories = ["All", "Workflow", "Pricing", "Footage", "Thumbnails", "Security"];
@@ -39,7 +39,7 @@ const allFaqs = [
   {
     category: "Pricing",
     question: "What happens if my video is longer than the included package limit?",
-    answer: "Single-video packages list finished-length and raw-footage limits and revision rounds. Monthly packages reserve editing hours. Work outside those allowances is quoted before editing begins. A custom thumbnail or an additional short-form video is available as a $20 add-on with any package.",
+    answer: "Single-video packages list finished-length and raw-footage limits and revision rounds. Monthly packages reserve editing hours. Every video edit includes one custom thumbnail at no extra charge. Extra short-form cutdowns and work outside the package allowances are scoped and priced separately.",
   },
   {
     category: "Footage",
@@ -49,7 +49,7 @@ const allFaqs = [
   {
     category: "Thumbnails",
     question: "Are custom YouTube thumbnails included in the packages?",
-    answer: "Custom thumbnails are optional with every package: add one for $20 when choosing your plan. Thumbnails are not included in the base package price. Additional concepts or A/B thumbnail sets can be quoted separately.",
+    answer: "Yes. Every video editing package includes one custom thumbnail for each edited video at no extra charge. Additional concepts or A/B thumbnail sets can be quoted separately.",
   },
   {
     category: "Security",

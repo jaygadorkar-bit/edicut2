@@ -20,6 +20,7 @@ const MAX_LOCAL_RATE_LIMIT_KEYS = 10_000;
 export const MAX_DEFAULT_BODY_BYTES = 1 * 1024 * 1024;
 export const MAX_SMALL_FORM_BODY_BYTES = 64 * 1024;
 export const MAX_ADMIN_UPLOAD_BODY_BYTES = 56 * 1024 * 1024;
+export const MAX_MARKETING_UPLOAD_BODY_BYTES = 41 * 1024 * 1024;
 
 type BoundedRequest = {
   request: Request;
@@ -209,6 +210,11 @@ export function getMaximumBodyBytes(pathname: string, method: string, request: R
     return request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data")
       ? MAX_ADMIN_UPLOAD_BODY_BYTES
       : MAX_DEFAULT_BODY_BYTES;
+  }
+  if (pathname === "/site/node-logmin/marketing-content") {
+    return request.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data")
+      ? MAX_MARKETING_UPLOAD_BODY_BYTES
+      : MAX_SMALL_FORM_BODY_BYTES;
   }
   if (pathname.startsWith("/site/node-logmin/users/")) return 2 * 1024 * 1024;
   if (pathname.startsWith("/site/node-logmin/")) return MAX_SMALL_FORM_BODY_BYTES;

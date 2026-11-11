@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_EDITING_PACKAGES, getFinishedLengthLimitSeconds, getPackageIndex, getCheckoutUrl, getProjectFulfillmentPackage, parsePackagePrice, REQUIRED_PACKAGE_STAFFING, SHORT_FORM_PACKAGE_SLUG, SINGLE_VIDEO_PACKAGES, STUDIO_PACKAGE_STAFFING, SUBSCRIPTION_PACKAGES } from "./subscriptions";
+import { ALL_EDITING_PACKAGES, getFinishedLengthLimitSeconds, getPackageIndex, getCheckoutUrl, getProjectFulfillmentPackage, parsePackagePrice, REQUIRED_PACKAGE_STAFFING, SHORT_FORM_PACKAGE_SLUG, SINGLE_VIDEO_PACKAGES, SUBSCRIPTION_PACKAGES } from "./subscriptions";
 
 describe("editing package catalog", () => {
   it("contains three one-time video edits and three monthly packages", () => {
@@ -8,21 +8,22 @@ describe("editing package catalog", () => {
     expect(SUBSCRIPTION_PACKAGES).toHaveLength(3);
     expect(SUBSCRIPTION_PACKAGES.map((item) => item.name)).toEqual(["Essential", "Pro", "Max"]);
     expect(new Set(ALL_EDITING_PACKAGES.map((item) => item.slug)).size).toBe(6);
-    expect(SUBSCRIPTION_PACKAGES.map((item) => [item.editingHoursPerMonth, item.editingHoursPerWorkday])).toEqual([[88, 4], [110, 5], [110, 5]]);
+    expect(SUBSCRIPTION_PACKAGES.map((item) => [item.editingHoursPerMonth, item.editingHoursPerWorkday, item.revisionRounds])).toEqual([[88, 4, 2], [110, 5, 2], [110, 5, 2]]);
+    expect(ALL_EDITING_PACKAGES.every((item) => item.revisionRounds >= 2)).toBe(true);
     expect(ALL_EDITING_PACKAGES.map((item) => item.basePrice)).toEqual([2149, 2649, 3149, 25, 109, 249]);
     expect(SINGLE_VIDEO_PACKAGES.map((item) => item.slug)).toEqual([SHORT_FORM_PACKAGE_SLUG, "single-creator", "single-feature"]);
-    expect(SINGLE_VIDEO_PACKAGES[0]).toMatchObject({ name: "Short-form Video", finishedLength: "Up to 60 seconds", maxFinishedSeconds: 60, rawFootageLimit: "Up to 15 minutes", revisionRounds: 1, basePrice: 25 });
+    expect(SINGLE_VIDEO_PACKAGES[0]).toMatchObject({ name: "Short-form Video", finishedLength: "Up to 60 seconds", maxFinishedSeconds: 60, rawFootageLimit: "Up to 15 minutes", revisionRounds: 2, basePrice: 25 });
     expect(getFinishedLengthLimitSeconds(SINGLE_VIDEO_PACKAGES[0]!)).toBe(60);
     expect(getFinishedLengthLimitSeconds(SINGLE_VIDEO_PACKAGES[1]!)).toBe(8 * 60);
     expect(getProjectFulfillmentPackage("single-studio")).toMatchObject({ name: "Studio Video", basePrice: 179, maxFinishedSeconds: 900 });
     expect(SINGLE_VIDEO_PACKAGES[2]).toMatchObject({ name: "Feature Video", finishedLength: "Up to 30 minutes", rawFootageLimit: "Up to 240 minutes", revisionRounds: 3, basePrice: 249 });
   });
 
-  it("includes a personal project manager and dedicated editor in every offer", () => {
+  it("includes a personal project manager and two dedicated editors in every offer", () => {
     for (const pack of ALL_EDITING_PACKAGES) {
-      const requiredStaff = pack.slug === "creator-pro" ? STUDIO_PACKAGE_STAFFING : REQUIRED_PACKAGE_STAFFING;
-      expect(pack.features).toEqual(expect.arrayContaining([...requiredStaff]));
-      expect(pack.deliverables).toEqual(expect.arrayContaining([...requiredStaff]));
+      expect(pack.features).toEqual(expect.arrayContaining([...REQUIRED_PACKAGE_STAFFING]));
+      expect(pack.deliverables).toEqual(expect.arrayContaining([...REQUIRED_PACKAGE_STAFFING]));
+      expect(pack.revisionRounds).toBeGreaterThanOrEqual(2);
     }
   });
 

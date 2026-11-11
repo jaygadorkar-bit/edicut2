@@ -5,6 +5,7 @@ import {
   getMaximumBodyBytes,
   hashUsageLimitKey,
   limitRequestBody,
+  MAX_MARKETING_UPLOAD_BODY_BYTES,
   normalizePathname,
   requestBodyExceedsLimit,
 } from "./usage-protection.server";
@@ -170,6 +171,10 @@ describe("Worker request limits", () => {
       .toBe(2 * 1024 * 1024);
     expect(getMaximumBodyBytes("/site/node-logmin", "POST", form("https://edicut.com/site/node-logmin", "multipart/form-data; boundary=test")))
       .toBe(56 * 1024 * 1024);
+    expect(getMaximumBodyBytes("/site/node-logmin/marketing-content", "POST", form("https://edicut.com/site/node-logmin/marketing-content", "multipart/form-data; boundary=test")))
+      .toBe(MAX_MARKETING_UPLOAD_BODY_BYTES);
+    expect(getMaximumBodyBytes("/site/node-logmin/marketing-content", "POST", form("https://edicut.com/site/node-logmin/marketing-content")))
+      .toBe(64 * 1024);
     expect(getMaximumBodyBytes("/dashboard/messages", "POST", form("https://edicut.com/dashboard/messages")))
       .toBe(1024 * 1024);
     expect(getMaximumBodyBytes("/signin", "GET", new Request("https://edicut.com/signin"))).toBeNull();

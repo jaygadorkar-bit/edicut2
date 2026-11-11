@@ -3,6 +3,7 @@ export const notificationKinds = {
   order: { label: "Orders", icon: "receipt_long" },
   payment: { label: "Payments", icon: "payments" },
   enquiry: { label: "Enquiries", icon: "mail" },
+  recruiting: { label: "Recruiting forms", icon: "description" },
   quote: { label: "Custom quotes", icon: "description" },
   review: { label: "Video reviews", icon: "rate_review" },
 } as const;
@@ -43,6 +44,16 @@ export type NotificationReads = Record<string, number>;
 export type NotificationDismissals = Record<string, number>;
 export const NOTIFICATION_HISTORY_DAYS = 90;
 export const NOTIFICATION_FEED_LIMIT = 100;
+
+export function notificationEventForEntity(
+  events: readonly WorkspaceEvent[],
+  kind: NotificationKind,
+  entityId: string,
+) {
+  const prefix = `${kind}:${entityId}:`;
+  return events.find((event) => event.kind === kind && event.id.startsWith(prefix));
+}
+
 const notificationDayFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: "Asia/Dhaka",
   year: "numeric",

@@ -7,12 +7,12 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self' https://accounts.google.com",
-  "script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.youtube.com https://static.cloudflareinsights.com",
+  "script-src 'self' 'unsafe-inline' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://www.googletagmanager.com https://www.youtube.com https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' data: blob: https: https://*.cloudinary.com https://res.cloudinary.com",
-  "connect-src 'self' wss://edicut.com https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://*.cloudinary.com https://www.google.com",
+  "connect-src 'self' wss://edicut.com https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://*.cloudinary.com https://www.google.com https://www.googletagmanager.com https://*.google-analytics.com https://analytics.google.com",
   "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/",
 ].join("; ");
 

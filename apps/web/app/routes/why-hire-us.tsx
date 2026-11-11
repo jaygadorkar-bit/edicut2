@@ -28,8 +28,8 @@ export const links: LinksFunction = () => [
 export const meta: MetaFunction = (args) =>
   createRouteMeta(
     args,
-    "Why Hire EdiCut: Studio Reliability vs. Freelancer Risk | YouTube Video Editing",
-    "Meet your dedicated editor and project manager, get studio-reviewed edits, and manage projects, feedback, and downloads in one EdiCut dashboard.",
+    "Why Hire a YouTube Video Editor? | EdiCut",
+    "Get a dedicated video editor, project manager, and studio review. See how EdiCut supports your YouTube channel from the brief through final delivery.",
   );
 
 const comparisonRows = [
@@ -44,7 +44,7 @@ const comparisonRows = [
 const benefits = [
   { artwork: TeamArtwork, title: "An editor who knows your channel.", copy: "Your dedicated editor learns your pacing, references, and personality. A shared style guide keeps your videos consistent, even when a backup editor steps in.", note: "Dedicated editor + replacement coverage", icon: UsersRound },
   { artwork: QualityArtwork, title: "A second pair of expert eyes.", copy: "Your creative director checks the story, sound, captions, and brand details before a draft reaches you. Spend your review time on the creative decisions.", note: "Two stages of internal review", icon: ShieldCheck },
-  { artwork: DeliveryArtwork, title: "An upload schedule you can keep.", copy: "A clear first-cut timeline and one place for your footage and feedback keep production moving. Add Shorts, podcast edits, or thumbnails as your channel grows.", note: "48-hour first-cut target", icon: Clock },
+  { artwork: DeliveryArtwork, title: "An upload schedule you can keep.", copy: "A clear first-cut timeline and one place for your footage and feedback keep production moving. Each video edit includes a custom thumbnail; add Shorts or podcast edits as your channel grows.", note: "48-hour first-cut target", icon: Clock },
 ];
 
 const faqs = [
@@ -61,7 +61,7 @@ export default function WhyHireUsPage() {
       <section className="studio-opening studio-container" aria-label="Why hire the EdiCut studio">
         <WhyHireUsFilm />
         <div className="studio-intro">
-          <div><p className="studio-kicker neo-section-label"><UsersRound size={15} aria-hidden="true" />Your team</p><h1>You create.<br />We handle the edit.</h1></div>
+          <div><p className="studio-kicker neo-section-label"><UsersRound size={15} aria-hidden="true" />Your team</p><h1>Why hire a video editor<br />for your YouTube channel?</h1></div>
           <div className="studio-intro__copy">
             <p>A dedicated editor who gets your vision. A whole studio keeping it on track. Make better videos without making post-production your full-time job.</p>
           </div>
@@ -75,7 +75,7 @@ export default function WhyHireUsPage() {
       </section>
 
       <section className="studio-benefits studio-container" aria-labelledby="studio-benefits-title">
-        <div className="studio-section-heading"><h2 id="studio-benefits-title">Personal attention.<br />Studio-level support.</h2><p>Keep the creative connection of a dedicated editor, with the people and process to make it dependable.</p></div>
+        <div className="studio-section-heading"><h2 id="studio-benefits-title">What makes a YouTube video editor worth hiring?</h2><p>Keep the creative connection of a dedicated editor, with the people and process to make it dependable.</p></div>
         <div className="studio-benefits__grid">{benefits.map(({ artwork: Artwork, title, copy, note, icon: Icon }) => (
           <article className="studio-benefit neo-surface group" key={title}><div className="studio-benefit__artwork"><Artwork /></div><h3>{title}</h3><p>{copy}</p><span className="studio-benefit__note neo-icon-badge"><Icon size={16} aria-hidden="true" />{note}</span></article>
         ))}</div>
@@ -83,7 +83,7 @@ export default function WhyHireUsPage() {
 
       <section className="studio-comparison" aria-labelledby="studio-comparison-title">
         <div className="studio-container">
-          <div className="studio-section-heading"><div><p className="studio-kicker neo-section-label"><Columns2 size={15} aria-hidden="true" />Studio advantage</p><h2 id="studio-comparison-title">More support.<br />Less to manage.</h2></div><p>Great editing is only part of the job. Here’s how the studio model supports everything around it.</p></div>
+          <div className="studio-section-heading"><div><p className="studio-kicker neo-section-label"><Columns2 size={15} aria-hidden="true" />Studio advantage</p><h2 id="studio-comparison-title">Video editing studio or freelance editor?</h2></div><p>Great editing is only part of the job. Here’s how the studio model supports everything around it.</p></div>
           <div className="studio-comparison__table-wrap neo-surface"><table className="studio-comparison__table"><caption className="studio-sr-only">Working with a solo freelancer compared with the EdiCut studio</caption>
             <thead><tr><th scope="col"><span className="studio-sr-only">Service</span></th><th scope="col">Solo freelancer<span>An individual approach</span></th><th scope="col"><span className="studio-comparison__brand">EdiCut studio <ShieldCheck size={18} aria-hidden="true" /></span><span>A team in your corner</span></th></tr></thead>
             <tbody>{comparisonRows.map((row) => <tr key={row.category}><th scope="row">{row.category}</th><td>{row.solo}</td><td><span className="studio-comparison__answer"><Check size={17} aria-hidden="true" />{row.studio}</span></td></tr>)}</tbody>
@@ -106,7 +106,7 @@ export default function WhyHireUsPage() {
       <FaqSection items={faqs.map(({ q, a }) => ({ question: q, answer: a }))} />
 
       <section className="studio-closing studio-container" aria-labelledby="studio-closing-title">
-        <div className="studio-closing__panel neo-surface group"><div><h2 id="studio-closing-title">Your next video.<br />Our next great edit.</h2><p>Start with one video, or find a monthly plan that fits your publishing rhythm.</p></div><div className="studio-closing__actions"><Link to="/pricing" className="studio-button neo-button neo-button--primary">See plans and pricing <ArrowRight size={17} aria-hidden="true" /></Link><Link to="/contact" className="studio-button neo-button neo-button--secondary">Let’s talk about your channel</Link><span>Single videos and monthly plans available.</span></div></div>
+        <div className="studio-closing__panel neo-surface group"><div><h2 id="studio-closing-title">Ready to hire a YouTube video editor?</h2><p>Start with one video, or find a monthly plan that fits your publishing rhythm.</p></div><div className="studio-closing__actions"><Link to="/pricing" className="studio-button neo-button neo-button--primary">See plans and pricing <ArrowRight size={17} aria-hidden="true" /></Link><Link to="/contact" className="studio-button neo-button neo-button--secondary">Let’s talk about your channel</Link><span>Single videos and monthly plans available.</span></div></div>
       </section>
     </PageShell>
   );

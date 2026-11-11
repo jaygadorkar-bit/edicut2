@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { Handshake, LayoutDashboard, LogOut, ShieldCheck } from "lucide-react";
+import { Handshake, LayoutDashboard, LogOut, ShieldCheck, TicketPercent } from "lucide-react";
 import { ADMIN_BASE_PATH, adminAccessPath } from "../../lib/admin-paths";
 import { ConfirmSignOutButton } from "../ConfirmSignOutButton";
 
@@ -40,8 +40,18 @@ export function AdminToolbar() {
           aria-label="Open the affiliate program signup page"
           className="neo-admin-toolbar__action neo-admin-toolbar__affiliate-signup"
         >
-          <Handshake size={16} strokeWidth={1.75} aria-hidden="true" />
+          <TicketPercent size={16} strokeWidth={1.75} aria-hidden="true" />
           <span>Affiliate signup</span>
+        </Link>
+        <Link
+          to="/video-editor-partner"
+          reloadDocument
+          title="Open the video editor partner signup page"
+          aria-label="Open the video editor partner signup page"
+          className="neo-admin-toolbar__action neo-admin-toolbar__partner-signup"
+        >
+          <Handshake size={16} strokeWidth={1.75} aria-hidden="true" />
+          <span>Partner signup</span>
         </Link>
         <ConfirmSignOutButton wrapperClassName="neo-admin-toolbar__signout" buttonClassName="neo-admin-toolbar__action">
           <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />

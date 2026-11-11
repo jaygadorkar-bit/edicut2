@@ -9,7 +9,8 @@ import {
 } from "react";
 import { Link, useLocation } from "react-router";
 import { FormSelect } from "./FormSelect";
-import { adminPath } from "../lib/admin-paths";
+import { adminAccessPath, adminPath } from "../lib/admin-paths";
+import { safeAdminRedirect, safeRedirectPath } from "../lib/safe-redirect";
 import { startAdminNavigationPolling } from "../lib/admin-navigation-live";
 import { subscribeWorkspaceRealtime } from "../lib/workspace-realtime.client";
 import {
@@ -18,6 +19,7 @@ import {
   notificationTime,
   groupNotificationEvents,
   mergeNotificationDismissals,
+  notificationEventForEntity,
   validNotificationReads,
   validNotificationDismissals,
   type NotificationFeed,
@@ -35,6 +37,8 @@ type NotificationsContextValue = {
   dismissed: NotificationDismissals;
   loading: boolean;
   error: string;
+  authRequired: boolean;
+  signInTo: string;
   storageAvailable: boolean;
   importantKinds: NotificationKind[];
   refresh: () => void;
@@ -110,6 +114,7 @@ function WorkspaceNotificationsStateProvider({ scope, children }: {
   const [dismissed, setDismissed] = useState<NotificationDismissals>({});
   const [loading, setLoading] = useState(true),
     [error, setError] = useState("");
+  const [authRequired, setAuthRequired] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [importantKinds, setImportantKindsState] = useState<NotificationKind[]>(
     [...DEFAULT_IMPORTANT_KINDS],
@@ -147,7 +152,11 @@ function WorkspaceNotificationsStateProvider({ scope, children }: {
           setReads({});
           setDismissed({});
           identityRef.current = "";
-          setError("Sign in again to view notifications.");
+          const requiresSignIn = response.status === 401;
+          setAuthRequired(requiresSignIn);
+          setError(requiresSignIn
+            ? "Sign in again to view notifications."
+            : "This account doesn’t have permission to view notifications.");
           return false;
         }
         if (!response.ok) throw new Error("Unavailable");
@@ -188,6 +197,7 @@ function WorkspaceNotificationsStateProvider({ scope, children }: {
         setDismissed(savedDismissals(next.identity));
         setFeed(next);
         setError("");
+        setAuthRequired(false);
         if (legacyReceipts.length && !legacyReadImportInFlight.current) {
           legacyReadImportInFlight.current = true;
           void fetch(`/api/notifications?scope=${scope}`, {
@@ -410,6 +420,14 @@ function WorkspaceNotificationsStateProvider({ scope, children }: {
     dismissed,
     loading,
     error,
+    authRequired,
+    signInTo: (() => {
+      const currentPath = `${location.pathname}${location.search}`;
+      const destination = scope === "admin"
+        ? adminAccessPath(safeAdminRedirect(currentPath))
+        : safeRedirectPath(currentPath);
+      return `/signin?mode=signin&redirectTo=${encodeURIComponent(destination)}`;
+    })(),
     storageAvailable,
     importantKinds,
     refresh: () => {
@@ -494,6 +512,51 @@ export function useUnreadNotificationCount(kind?: NotificationKind) {
     ).length ?? 0
   );
 }
+
+export function useMarkNotificationRead() {
+  const context = useContext(NotificationsContext);
+  const feed = context?.feed;
+  const reads = context?.reads;
+  const mark = context?.mark;
+  const loading = context?.loading ?? false;
+  const hasContext = context !== null;
+  const refreshRef = useRef(context?.refresh);
+  refreshRef.current = context?.refresh;
+  const pendingReads = useRef(new Map<string, { kind: NotificationKind; entityId: string }>());
+
+  useEffect(() => {
+    if (!feed || !reads || !mark || !pendingReads.current.size) return;
+    const matchingEvents: WorkspaceEvent[] = [];
+    for (const [key, pending] of pendingReads.current) {
+      const event = notificationEventForEntity(feed.events, pending.kind, pending.entityId);
+      if (event) {
+        if (!reads[event.id]) matchingEvents.push(event);
+        pendingReads.current.delete(key);
+      } else if (!loading && !feed.unavailableKinds?.includes(pending.kind)) {
+        pendingReads.current.delete(key);
+      }
+    }
+    if (matchingEvents.length) mark(matchingEvents, true);
+  }, [feed, loading, mark, reads]);
+
+  return useCallback((kind: NotificationKind, entityId: string) => {
+    if (!hasContext) return;
+    if (!feed) {
+      const key = `${kind}:${entityId}`;
+      pendingReads.current.set(key, { kind, entityId });
+      if (pendingReads.current.size > 100) {
+        const oldest = pendingReads.current.keys().next().value;
+        if (oldest !== undefined) pendingReads.current.delete(oldest);
+      }
+      if (!loading) refreshRef.current?.();
+      return;
+    }
+    if (!reads || !mark) return;
+    const event = notificationEventForEntity(feed.events, kind, entityId);
+    if (event && !reads[event.id]) mark([event], true);
+  }, [feed, hasContext, loading, mark, reads]);
+}
+
 function EventList({
   events,
   close,
@@ -893,6 +956,7 @@ function NotificationDialog({
       {context.error ? (
         <p className="notification-notice" role="alert">
           {context.error}{" "}
+          {context.authRequired ? <Link to={context.signInTo}>Sign in</Link> : null}{" "}
           <button type="button" onClick={context.refresh}>
             Retry
           </button>
@@ -1110,6 +1174,7 @@ export function AdminRecentEvents() {
       {context.error ? (
         <p className="notification-notice" role="alert">
           {context.error}{" "}
+          {context.authRequired ? <Link to={context.signInTo}>Sign in</Link> : null}{" "}
           <button type="button" onClick={context.refresh}>
             Retry
           </button>

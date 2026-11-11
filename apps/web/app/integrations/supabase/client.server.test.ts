@@ -7,11 +7,12 @@ const mocks = vi.hoisted(() => ({
   updateUserById: vi.fn(),
   deleteUser: vi.fn(),
   setSession: vi.fn(), signOut: vi.fn(), adminSignOut: vi.fn(),
+  getUser: vi.fn(), refreshSession: vi.fn(),
 }));
 
 vi.mock("@supabase/supabase-js", () => ({ createClient: mocks.createClient }));
 
-import { deleteSupabaseUsersByEmail, revokeSupabaseSession, updateSupabaseUserEmailByEmail, updateSupabaseUserPasswordByEmail } from "./client.server";
+import { deleteSupabaseUsersByEmail, getSupabaseUserByAccessToken, refreshSupabaseSession, revokeSupabaseSession, updateSupabaseUserEmailByEmail, updateSupabaseUserPasswordByEmail } from "./client.server";
 
 let keySequence = 0;
 function context() {
@@ -27,7 +28,7 @@ const authUser = { id: "auth-user-id", email: "client@example.com" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.createClient.mockImplementation(() => ({ auth: { setSession: mocks.setSession, signOut: mocks.signOut, admin: {
+  mocks.createClient.mockImplementation(() => ({ auth: { getUser: mocks.getUser, refreshSession: mocks.refreshSession, setSession: mocks.setSession, signOut: mocks.signOut, admin: {
     getUserById: mocks.getUserById,
     listUsers: mocks.listUsers,
     updateUserById: mocks.updateUserById,
@@ -38,10 +39,29 @@ beforeEach(() => {
   mocks.listUsers.mockResolvedValue({ data: { users: [] }, error: null });
   mocks.updateUserById.mockResolvedValue({ error: null });
   mocks.deleteUser.mockResolvedValue({ error: null });
+  mocks.getUser.mockResolvedValue({ data: { user: authUser }, error: null });
+  mocks.refreshSession.mockResolvedValue({ data: { user: authUser, session: { access_token: "new-access", refresh_token: "new-refresh" } }, error: null });
   mocks.setSession.mockResolvedValue({ error: null }); mocks.signOut.mockResolvedValue({ error: null }); mocks.adminSignOut.mockResolvedValue({ error: null });
 });
 
 describe("server-side Supabase Auth account updates", () => {
+  it.each([400, 401, 403])("treats rejected access tokens (%i) as refreshable", async status => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: { status } });
+    await expect(getSupabaseUserByAccessToken(context(), "expired-access-token")).resolves.toBeNull();
+  });
+  it("keeps transient Auth API failures from becoming false sign-outs", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: { status: 503 } });
+    await expect(getSupabaseUserByAccessToken(context(), "access-token")).rejects.toThrow("Supabase Auth is temporarily unavailable.");
+  });
+  it("does not treat an invalid Supabase API key as an expired user session", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: { status: 401, code: "invalid_api_key" } });
+    await expect(getSupabaseUserByAccessToken(context(), "access-token")).rejects.toThrow("Supabase Auth is temporarily unavailable.");
+  });
+  it("keeps rate-limited refresh attempts from becoming false sign-outs", async () => {
+    mocks.refreshSession.mockResolvedValue({ data: { session: null, user: null }, error: { status: 429 } });
+    await expect(refreshSupabaseSession(context(), "refresh-token")).rejects.toThrow("Supabase Auth is temporarily unavailable.");
+  });
+
   it("revokes the current provider session after refreshing expired access credentials", async () => {
     await revokeSupabaseSession(context(), "access-token", "refresh-token");
     expect(mocks.setSession).toHaveBeenCalledWith({ access_token: "access-token", refresh_token: "refresh-token" });

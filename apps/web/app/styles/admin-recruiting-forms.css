@@ -15,32 +15,54 @@
 .recruiting-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--neo-text, #17212f); font: inherit; font-size: 13px; }
 .recruiting-search input:focus-visible { outline: 2px solid var(--neo-accent, #bd1f2d); outline-offset: 2px; border-radius: 3px; }
 .recruiting-search button { min-height: 34px; border: 1px solid rgb(255 255 255 / 88%); border-radius: 9px; padding: 0 13px; background: linear-gradient(145deg, #f8fafb, #e6edf3); box-shadow: 2px 2px 5px rgb(132 148 163 / 15%), -2px -2px 5px rgb(255 255 255 / 80%); color: var(--neo-text, #17212f); cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; }
-.recruiting-search button:focus-visible, .recruiting-pagination a:focus-visible, .recruiting-record__details summary:focus-visible { outline: 3px solid var(--neo-accent, #bd1f2d); outline-offset: 3px; }
+.recruiting-search button:focus-visible, .recruiting-pagination a:focus-visible { outline: 3px solid var(--neo-accent, #bd1f2d); outline-offset: 3px; }
 .recruiting-results-count { color: var(--neo-muted, #617085); font-size: 12px; white-space: nowrap; }
-.recruiting-records { display: grid; }
-.recruiting-record { border-bottom: 1px solid var(--neo-line, #d4dde6); padding: 20px; }
-.recruiting-record:last-child { border-bottom: 0; }
-.recruiting-record__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-.recruiting-record__actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
-.recruiting-record__header h2 { margin: 0 0 5px; font-size: 16px; line-height: 1.4; }
-.recruiting-record__header a { color: var(--neo-muted, #617085); font-size: 13px; text-decoration-thickness: 1px; text-underline-offset: 3px; overflow-wrap: anywhere; }
-.recruiting-record__header a:hover { color: var(--neo-accent, #bd1f2d); }
-.recruiting-record__header time { color: var(--neo-muted, #617085); font-size: 12px; white-space: nowrap; }
+.recruiting-sheet-wrap { max-width: 100%; overflow: auto; outline: none; scrollbar-color: #aab6c2 #e8eef3; scrollbar-width: thin; }
+.recruiting-sheet-wrap:focus-visible { outline: 3px solid var(--neo-accent, #bd1f2d); outline-offset: -3px; }
+.recruiting-sheet { width: 100%; min-width: 900px; table-layout: fixed; border-collapse: separate; border-spacing: 0; color: var(--neo-text, #17212f); font-size: 12px; line-height: 1.45; text-align: left; }
+.recruiting-sheet__col-candidate { width: 162px; }
+.recruiting-sheet__col-arrangement { width: 112px; }
+.recruiting-sheet__col-experience { width: 118px; }
+.recruiting-sheet__col-thumbnails { width: 114px; }
+.recruiting-sheet__col-submitted { width: 136px; }
+.recruiting-sheet__col-answers { width: 146px; }
+.recruiting-sheet__col-actions { width: 112px; }
+.recruiting-sheet th, .recruiting-sheet td { border-right: 1px solid var(--neo-line, #d4dde6); border-bottom: 1px solid var(--neo-line, #d4dde6); padding: 11px 8px; vertical-align: middle; }
+.recruiting-sheet tr > :first-child { border-left: 1px solid var(--neo-line, #d4dde6); }
+.recruiting-sheet thead th { position: sticky; z-index: 1; top: 0; border-top: 1px solid var(--neo-line, #d4dde6); background: #e3eaf0; color: #526174; font-size: 10px; font-weight: 750; letter-spacing: .035em; white-space: nowrap; }
+.recruiting-sheet thead th:first-child { border-top-left-radius: 7px; }
+.recruiting-sheet thead th:last-child { border-top-right-radius: 7px; }
+.recruiting-sheet tbody:nth-of-type(even) .recruiting-sheet__row { background: #f5f8fa; }
+.recruiting-sheet__row { background: #fbfcfd; transition: background-color 120ms ease; }
+.recruiting-sheet__row:hover { background: #edf3f8 !important; }
+.recruiting-sheet__candidate { min-width: 0; font-weight: 700; }
+.recruiting-sheet__candidate span, .recruiting-sheet__candidate a { display: block; }
+.recruiting-sheet__candidate a { margin-top: 4px; color: var(--neo-muted, #617085); font-size: 11px; font-weight: 450; overflow-wrap: anywhere; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.recruiting-sheet__candidate a:hover { color: var(--neo-accent, #bd1f2d); }
+.recruiting-sheet time { color: var(--neo-muted, #617085); white-space: nowrap; }
+.recruiting-sheet__expanded[hidden] { display: none; }
+.recruiting-sheet__expanded > td { padding: 0; background: #f0f4f7; }
+.recruiting-review-toggle { display: inline-flex; min-height: 34px; align-items: center; gap: 6px; border: 1px solid #d5dee7; border-radius: 8px; padding: 0 9px; background: #f5f8fa; color: #26364a; cursor: pointer; font: inherit; font-weight: 700; white-space: nowrap; }
+.recruiting-review-toggle:hover { border-color: #aebdca; background: #fff; }
+.recruiting-review-toggle span { color: var(--neo-muted, #617085); font-weight: 550; }
+.recruiting-review-toggle:focus-visible { outline: 3px solid var(--neo-accent, #bd1f2d); outline-offset: 2px; }
 .recruiting-delete-form { margin: 0; }
 .recruiting-delete { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; gap: 7px; border: 1px solid rgb(189 31 45 / 24%); border-radius: 10px; padding: 0 12px; background: #fff8f8; color: #9e1c2a; cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; }
 .recruiting-delete:hover:not(:disabled) { border-color: rgb(189 31 45 / 45%); background: #fcebed; }
 .recruiting-delete:focus-visible { outline: 3px solid var(--neo-accent, #bd1f2d); outline-offset: 3px; }
 .recruiting-delete:disabled { cursor: wait; opacity: 0.6; }
-.recruiting-record__details { margin-top: 14px; }
-.recruiting-record__details summary { display: flex; align-items: center; gap: 6px; width: fit-content; min-height: 34px; color: var(--neo-accent, #bd1f2d); cursor: pointer; font-size: 12px; font-weight: 750; list-style: none; }
-.recruiting-record__details summary::-webkit-details-marker { display: none; }
-.recruiting-record__details summary::after { content: "⌄"; margin-left: 3px; font-size: 18px; line-height: 1; transition: transform 150ms ease; }
-.recruiting-record__details[open] summary::after { transform: rotate(180deg); }
-.recruiting-record__details summary span { color: var(--neo-muted, #617085); font-weight: 600; }
-.recruiting-answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 12px 0 0; overflow: hidden; border: 1px solid var(--neo-line, #d4dde6); border-radius: 12px; background: var(--neo-line, #d4dde6); }
-.recruiting-answer { min-width: 0; padding: 12px 14px; background: linear-gradient(145deg, #f5f8fb, #ebf0f5); }
-.recruiting-answer dt { margin-bottom: 6px; color: var(--neo-muted, #617085); font-size: 11px; font-weight: 750; }
-.recruiting-answer dd { margin: 0; color: var(--neo-text, #17212f); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.recruiting-answer-sheet-wrap { max-width: 100%; overflow: auto; outline: none; }
+.recruiting-answer-sheet-wrap:focus-visible { outline: 3px solid var(--neo-accent, #bd1f2d); outline-offset: -3px; }
+.recruiting-answer-sheet { width: 100%; min-width: 600px; table-layout: fixed; border-collapse: collapse; color: var(--neo-text, #17212f); font-size: 12px; line-height: 1.5; text-align: left; }
+.recruiting-answer-sheet__col-number { width: 48px; }
+.recruiting-answer-sheet__col-field { width: 30%; }
+.recruiting-answer-sheet th, .recruiting-answer-sheet td { border: 1px solid #cfd8e1; padding: 9px 12px; vertical-align: top; }
+.recruiting-answer-sheet thead th { background: #e1e8ee; color: #526174; font-size: 10px; font-weight: 750; letter-spacing: .035em; }
+.recruiting-answer-sheet tbody tr:nth-child(even) { background: #f4f7f9; }
+.recruiting-answer-sheet tbody tr:hover { background: #edf3f7; }
+.recruiting-answer-sheet tbody th { color: #536477; font-weight: 650; }
+.recruiting-answer-sheet tbody td:last-child { color: var(--neo-text, #17212f); overflow-wrap: anywhere; white-space: pre-wrap; }
+.recruiting-answer-sheet__row-number { background: #e9eef2; color: #66778a; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
 .recruiting-no-answers { color: var(--neo-muted, #617085); font-size: 13px; }
 .recruiting-empty { display: grid; min-height: 226px; grid-template-columns: auto minmax(0, 460px); align-items: center; justify-content: center; gap: 22px; padding: 44px 24px; }
 .recruiting-empty__icon { display: grid; width: 68px; height: 68px; place-items: center; border: 1px solid rgb(255 255 255 / 90%); border-radius: 20px; background: linear-gradient(145deg, #f7fafc, #e3ebf2); box-shadow: 6px 6px 13px rgb(132 148 163 / 18%), -6px -6px 13px rgb(255 255 255 / 88%); color: var(--neo-accent, #bd1f2d); }
@@ -60,13 +82,9 @@
   .recruiting-toolbar { align-items: stretch; flex-direction: column; padding: 14px; }
   .recruiting-search { width: 100%; }
   .recruiting-results-count { text-align: right; }
-  .recruiting-record { padding: 17px 14px; }
-  .recruiting-record__header { align-items: flex-start; flex-direction: column; gap: 12px; }
-  .recruiting-record__actions { width: 100%; justify-content: space-between; }
   .recruiting-empty { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 15px; padding: 38px 20px; text-align: center; }
   .recruiting-empty__copy { justify-items: center; }
-  .recruiting-answers { grid-template-columns: minmax(0, 1fr); }
   .recruiting-pagination { align-items: flex-start; flex-direction: column; padding: 14px; }
   .recruiting-pagination nav { width: 100%; justify-content: space-between; }
 }
-@media (prefers-reduced-motion: reduce) { .recruiting-record__details summary::after { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .recruiting-sheet__row { transition: none; } }

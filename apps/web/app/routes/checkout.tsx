@@ -12,7 +12,7 @@ import { consumeUsageLimit, requestBodyExceedsLimit } from "../lib/usage-protect
 import { findAffiliateByCode, findCouponForQuote, isMissingMarketingSchema, normalizeMarketingCode } from "../lib/marketing.server";
 import { readAffiliateReferral, isReferralWithinWindow } from "../lib/affiliate-referral.server";
 import { loadAffiliateProgram, attributeAffiliateSubscription, isMissingAffiliateSchema } from "../lib/affiliate-program.server";
-import { getCheckoutTotal, REQUIRED_PACKAGE_STAFFING, STUDIO_PACKAGE_STAFFING, type EditingPackage } from "../lib/subscriptions";
+import { getCheckoutTotal, REQUIRED_PACKAGE_STAFFING, type EditingPackage } from "../lib/subscriptions";
 import { configuredEditingPackage, getPricingPackages } from "../lib/pricing.server";
 import { countryCallingCode, countryName, updatePhoneForCountryChange, validateCheckoutContact } from "../lib/checkout-contact";
 import { isCheckoutDemoMode } from "../lib/checkout-demo.server";
@@ -106,7 +106,8 @@ export async function loader({ request, params, context }: LoaderFunctionArgs) {
     throw redirect(`/checkout/${editingPackage.slug}${review.size ? `?${review}` : ""}`);
   }
   if (savedSubscription?.status === "paid") throw redirect("/dashboard/projects");
-  const reviewAddOnIds = url.searchParams.has("addon") ? url.searchParams.getAll("addon")
+  // Old links may still contain the retired thumbnail add-on; thumbnails now come with every package.
+  const reviewAddOnIds = url.searchParams.has("addon") ? url.searchParams.getAll("addon").filter(id => id !== "thumbnail")
     : selectedPackageAddOns(savedPackageAddOns(savedSubscription?.addOns).map(item => item.id), editingPackage.packageType, editingPackage.slug).map(item => item.id);
   const addOns = paymentStep && savedSubscription ? savedPackageAddOns(savedSubscription.addOns)
     : parsePackageAddOns(reviewAddOnIds, editingPackage.packageType, editingPackage.slug);
@@ -335,7 +336,7 @@ function CheckoutContent() {
   const planQuery = packageAddOnQuery(selectedAddOnIds, editingPackage.packageType, new URLSearchParams(), editingPackage.slug);
   if (affiliateCode) planQuery.set("ref", affiliateCode);
   const planHref = `/pricing/${editingPackage.slug}${planQuery.size ? `?${planQuery}` : ""}`;
-  const includedTeam = editingPackage.slug === "creator-pro" ? STUDIO_PACKAGE_STAFFING : REQUIRED_PACKAGE_STAFFING;
+  const includedTeam = REQUIRED_PACKAGE_STAFFING;
 
   function applyCoupon() {
     setCouponRequestCode(normalizedCode);
@@ -429,6 +430,7 @@ function CheckoutContent() {
                 {editingPackage.packageType === "monthly" ? <>
                   <ScopeItem label="Editing hours per month" value={`${editingPackage.editingHoursPerMonth} hours`} />
                   <ScopeItem label="Editing hours per workday" value={`${editingPackage.editingHoursPerWorkday} ${editingPackage.editingHoursPerWorkday === 1 ? "hour" : "hours"}`} />
+                  <ScopeItem label="Minimum revision rounds per edit" value={`At least ${editingPackage.revisionRounds}, within reserved hours`} />
                   <ScopeItem label="Monthly planning basis" value={`${editingPackage.workingDaysPerMonth} working days`} />
                   <ScopeItem label="Unused hours" value="Do not roll over" />
                 </> : <>

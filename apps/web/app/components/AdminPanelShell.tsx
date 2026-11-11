@@ -61,12 +61,14 @@ export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount,
     to: tab === "messages" ? "/dashboard/messages" : ["clients", "orders", "analytics", "error-log", "threat-log", "infrastructure", "update", "subscriptions", "quotes", "recruiting-forms", "marketing-content", "chat", "tickets", "projects", "seo"].includes(tab) ? adminPath(`/${tab}`) : adminPath(`?tab=${tab}`),
     active: tab === activeTab,
     unreadCount: tab === "messages" ? counts.unreadEnquiryCount : tab === "update" ? counts.availableUpdateCount : undefined,
-    unreadLabel: tab === "orders"
-      ? "unread order notifications"
-      : tab === "update"
-        ? counts.availableUpdateCount === 1 ? "software update available" : "software updates available"
-        : "unread enquiries",
-    notificationKind: tab === "orders" ? "order" as const : undefined,
+    unreadLabel: tab === "recruiting-forms"
+      ? "unread recruiting forms"
+      : tab === "orders"
+        ? "unread order notifications"
+        : tab === "update"
+          ? counts.availableUpdateCount === 1 ? "software update available" : "software updates available"
+          : "unread enquiries",
+    notificationKind: tab === "recruiting-forms" ? "recruiting" as const : tab === "orders" ? "order" as const : undefined,
   }));
   return (
     <WorkspaceShell
@@ -81,6 +83,7 @@ export function AdminPanelShell({ title, activeTab, account, unreadEnquiryCount,
       hideHeaderTitle
       chatTo={conversationTo ?? adminPath("/chat")}
       ticketsTo={adminPath("/tickets")}
+      profileNavAtBottom
       profileTo={adminPath("/account")}
       settingsTo={adminPath("/account")}
       notificationsTo={adminPath("?tab=projects")}

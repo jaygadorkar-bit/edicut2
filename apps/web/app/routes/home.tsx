@@ -1,14 +1,13 @@
 import { useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
-import { UsersRound } from "lucide-react";
+import { Check, UsersRound } from "lucide-react";
 import {
   ButtonLink,
   ContactSection,
   FAQSection,
   PageShell,
   PortfolioSection,
-  TrustStrip,
   WhyHireUsSection,
 } from "../components/site/Marketing.js";
 import { HomePricingSection } from "../components/site/PricingPacks";
@@ -119,22 +118,22 @@ function SparklesIcon({ size = 54 }: { size?: number }) {
 }
 
 const topRowAudience = [
-  ["sports_esports", "Gaming", "Fast-paced cuts, highlights, reactions, and stream-to-video edits."],
-  ["podcasts", "Podcast", "Long-form conversations shaped into polished episodes and clips."],
-  ["fitness_center", "Health & fitness", "Clear, energetic edits for workouts, coaching, and wellness content."],
+  ["sports_esports", "Gaming video editing", "YouTube gameplay, stream highlights, reaction videos, and gaming Shorts."],
+  ["podcasts", "Podcast video editing", "Video podcast episodes, interview highlights, and short-form clips."],
+  ["fitness_center", "Fitness video editing", "Workout videos, exercise tutorials, coaching, and wellness content."],
 ] as const;
 
 const middleRowAudience = [
-  ["home_work", "Real estate", "Property tours, market updates, and social-ready listing videos."],
-  ["videocam", "Vlogs", "Story-driven pacing that keeps everyday footage engaging."],
-  ["sentiment_very_satisfied", "Comedy", "Tighter timing, punchlines, captions, and memorable moments."],
-  ["self_improvement", "Lifestyle", "Clean, stylish edits for routines, travel, beauty, and culture."],
+  ["home_work", "Real estate video editing", "Property tours, real estate listing videos, and agent social clips."],
+  ["videocam", "YouTube vlog editing", "Travel vlogs, daily vlogs, and creator videos with a clear story."],
+  ["sentiment_very_satisfied", "Comedy video editing", "Comedy sketches, reaction videos, captions, and punchier timing."],
+  ["self_improvement", "Lifestyle video editing", "Lifestyle videos about travel, beauty, routines, and everyday life."],
 ] as const;
 
 const bottomRowAudience = [
-  ["school", "Educational", "Explainers and lessons that are easy to follow and watch."],
-  ["rate_review", "Product reviews", "Clear demos, comparisons, b-roll, and buyer-focused storytelling."],
-  ["auto_awesome", "And more", "Tell us what you make and we will match the right editing lane."],
+  ["school", "Educational video editing", "Educational videos, online course lessons, tutorials, and explainers."],
+  ["rate_review", "Product review video editing", "Product reviews with demos, comparisons, and supporting B-roll."],
+  ["auto_awesome", "More video editing services", "YouTube Shorts, Reels, TikToks, and custom creator video formats."],
 ] as const;
 
 const heroParallax = {
@@ -151,8 +150,8 @@ const heroParallax = {
 export const meta: MetaFunction = (args) => {
   return createRouteMeta(
     args,
-    "EdiCut | Video Editing for YouTube Creators",
-    "EdiCut edits YouTube videos, Shorts, podcasts, and thumbnails for creators, with a clear workflow for footage, reviews, and delivery.",
+    "YouTube Video Editor for Creators | EdiCut",
+    "Need a YouTube video editor? EdiCut edits long-form videos, Shorts, podcast episodes, and thumbnails with clear scope, revisions, and a managed review process.",
   );
 };
 
@@ -391,7 +390,7 @@ export default function HomePage() {
           </div>
 
           {/* Center Editorial Core (Foreground with higher z-index) */}
-          <div className="relative z-10 mx-auto max-w-3xl text-center">
+          <div className="relative z-10 mx-auto max-w-4xl text-center">
             {/* Section Eyebrow Pill */}
             <div className="neo-pill inline-flex max-w-full items-center justify-center gap-2 rounded-full px-3 py-2 yt-tag neo-section-label sm:px-4">
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 shrink-0 opacity-90">
@@ -403,43 +402,33 @@ export default function HomePage() {
 
             {/* Main Hero Headline */}
             <h1 className="neo-hero-title mt-7 tracking-tight neo-ink">
-              <span className="neo-hero-title-line neo-hero-title-line--one">Video editing</span>{" "}
-              <span className="neo-hero-title-line neo-hero-title-line--two">for your next</span>{" "}
-              <span className="neo-hero-title-line neo-hero-title-line--three">YouTube upload.</span>
+              <span className="neo-hero-title-line neo-hero-title-line--one">Need a YouTube</span>{" "}
+              <span className="neo-hero-title-line neo-hero-title-line--two">video editor</span>{" "}
+              <span className="neo-hero-title-line neo-hero-title-line--three">for your channel?</span>
             </h1>
 
             {/* Subtitle */}
             <p className="neo-hero-subtitle yt-subtitle mx-auto mt-5 max-w-2xl leading-7 neo-muted sm:mt-6 sm:leading-8">
-              YouTube videos, podcast edits, Shorts, and thumbnails with a clear brief and a focused review process.
+              YouTube video editing for long-form uploads and Shorts, podcast video edits, and thumbnail design—with clear scope and focused reviews.
             </p>
 
             {/* Neomorphic CTA Action Buttons */}
             <div className="neo-hero-actions mt-8 flex flex-col items-center justify-center gap-3 sm:mt-9 sm:flex-row sm:gap-3.5">
               <ButtonLink to="/pricing">
-                See editing plans
+                See video editing plans
               </ButtonLink>
               <ButtonLink to="/portfolio">
-                Explore editing examples
+                Explore video editing examples
               </ButtonLink>
             </div>
 
-            <p className="neo-hero-proof mx-auto mt-4 flex items-center justify-center gap-2 text-xs font-semibold neo-muted sm:hidden">
-              <span><strong>48 hours</strong> first-cut target</span>
-              <span aria-hidden="true" className="neo-hero-proof__separator">·</span>
-              <span>Timestamped feedback</span>
-            </p>
-
-            {/* Key Metrics Neomorphic Badges */}
-            <div className="neo-hero-metrics mt-10 grid w-full max-w-md grid-cols-3 items-stretch gap-2 sm:mt-12 sm:flex sm:w-auto sm:max-w-none sm:items-center sm:justify-center sm:gap-3">
+            <div className="pack-value-strip home-hero-value-strip" role="list" aria-label="Video editing benefits">
               {[
                 ["48 hours", "first-cut target"],
-                ["Clear scope", "before editing starts"],
-                ["Your feedback", "in one workspace"],
+                ["Custom dashboard", "to manage all your videos"],
+                ["Clear pricing", "single videos & monthly plans"],
               ].map(([value, label]) => (
-                <div key={label} className="neo-pill min-w-0 rounded-2xl px-2 py-2.5 text-center sm:px-4">
-                  <p className="text-lg font-black tracking-tight neo-ink">{value}</p>
-                  <p className="text-[10px] font-black uppercase leading-4 tracking-[0.1em] neo-muted sm:leading-normal sm:tracking-[0.12em]">{label}</p>
-                </div>
+                <span key={label} role="listitem"><Check size={16} aria-hidden="true" />{value} {label}</span>
               ))}
             </div>
           </div>
@@ -452,13 +441,12 @@ export default function HomePage() {
             <div className="mx-auto max-w-2xl">
               <p className="yt-tag neo-section-label">
                 <UsersRound size={16} aria-hidden="true" />
-                <span className="hidden sm:inline">Who EdiCut is for</span>
-                <span className="sm:hidden">Who we edit for</span>
+                <span className="hidden sm:inline">Video editing by content type</span>
+                <span className="sm:hidden">Video editing services</span>
               </p>
               <h2 className="yt-title mt-3 neo-ink">
-                Built around what you create.
+                Video editing services for every creator format
               </h2>
-              <p className="mt-4 yt-small leading-6 neo-muted">From gameplay and podcasts to tutorials and property tours, we shape each edit around your audience.</p>
             </div>
 
             {/* 3 - 4 - 3 Centered Rows */}
@@ -509,7 +497,6 @@ export default function HomePage() {
         <HomePricingSection packages={packages} />
         <PortfolioSection sections={portfolioSections} />
         <HomeServicesSection />
-        <TrustStrip />
         <FAQSection />
         <ContactSection compact status={contactStatus} />
       </div>

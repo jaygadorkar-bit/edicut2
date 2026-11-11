@@ -18,12 +18,12 @@ beforeEach(() => {
   mocks.destroy.mockResolvedValue("expired-admin-cookie");
 });
 describe("stale admin sign-in sessions", () => {
-  it("clears a revoked session rather than looping between sign-in and the panel", async () => {
-    mocks.authorize.mockRejectedValue(new Response(null, { status: 302, headers: { Location: "/site/node-logmin/login" } }));
-    const result = await visit();
-    expect(result).toMatchObject({ data: { csrfToken: "csrf-token" } });
-    expect(result.init?.headers).toBeInstanceOf(Headers);
-    expect((result.init?.headers as Headers).get("Set-Cookie")).toContain("expired-admin-cookie");
+  it("sends a revoked admin session to the main sign-in page", async () => {
+    mocks.authorize.mockRejectedValue(new Response(null, { status: 302, headers: { Location: "/signin?mode=signin" } }));
+    const result = await visit().catch(error => error);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).headers.get("Location")).toBe("/signin?mode=signin");
+    expect(mocks.destroy).not.toHaveBeenCalled();
   });
   it("opens the panel for a valid, authorized session", async () => {
     mocks.authorize.mockResolvedValue({ id: "admin-id", active: true, role: "admin" });

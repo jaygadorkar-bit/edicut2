@@ -17,7 +17,7 @@ function FaqItem({ item, expanded, onToggle, headingLevel: Heading }: { item: Fa
   );
 }
 
-export function FaqSection({ items, title = <>Good questions.<br />Straight answers.</>, description = "Get to know your team, your edits, and how it all works.", id, headingLevel: Heading = "h2", introContent, emptyContent, className = "" }: {
+export function FaqSection({ items, title = <>Have questions about video editing?</>, description = "Get to know your team, your edits, and how it all works.", id, headingLevel: Heading = "h2", introContent, emptyContent, className = "" }: {
   items: readonly FaqEntry[];
   title?: ReactNode;
   description?: string;
